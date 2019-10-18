@@ -7,15 +7,15 @@ interface
 
 uses
   Classes, SysUtils, LResources, Forms, Controls, Graphics, Dialogs, StdCtrls,
-  ExtCtrls, LCLProc, Math,
-  FpDbgDisasX86;
+  ExtCtrls, lazstringutils, Math,
+  FpDbgDisasX86, FpDbgDisasAvr;
 
 type
 
   { TForm1 }
 
   TForm1 = class(TForm)
-    chk64Bit: TCheckBox;
+    asmTypeGroup: TRadioGroup;
     Timer1: TTimer;
     txtOutput: TEdit;
     Label1: TLabel;
@@ -71,7 +71,10 @@ begin
   if CodeIdx > 0
   then begin
     p := @Code;
-    Disassemble(p, chk64Bit.Checked, S, Line);
+    if asmTypeGroup.ItemIndex = 2 then
+      FpDbgDisasAvr.Disassemble(p, false, S, Line)
+    else if asmTypeGroup.ItemIndex in [0,1] then
+      FpDbgDisasX86.Disassemble(p, (asmTypeGroup.ItemIndex = 1), S, Line);
     txtOutput.Text := S + ' '+ Line;
   end
 //  else txtOutput.Text :='';
