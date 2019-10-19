@@ -50,6 +50,7 @@ type
   TElfFile = class(TObject)
   private
     FIs64Bit: boolean;
+    FIsAvr: boolean;
   protected
     function Load32BitFile(ALoader: TDbgFileLoader): Boolean;
     function Load64BitFile(ALoader: TDbgFileLoader): Boolean;
@@ -60,6 +61,7 @@ type
     function LoadFromFile(ALoader: TDbgFileLoader): Boolean;
     function FindSection(const Name: String): Integer;
     property Is64Bit: boolean read FIs64Bit;
+    property Is6Avr: boolean read FIsAvr;
   end;
 
   { TElfDbgSource }
@@ -129,12 +131,14 @@ begin
   Result := ALoader.Read(0, sizeof(hdr), @hdr) = sizeof(hdr);
   if not Result then Exit;
 
+  FIsAvr := (hdr.e_machine = EM_AVR);
+
   SetLength(sect, hdr.e_shnum);
   //ALoader.Position := hdr.e_shoff;
 
   sz := hdr.e_shetsize * hdr.e_shnum;
   if sz > LongWord(length(sect)*sizeof(Elf32_shdr)) then begin
-    debugln(['TElfFile.Load64BitFile Size of SectHdrs is ', sz, ' expected ', LongWord(length(sect)*sizeof(Elf32_shdr))]);
+    debugln(['TElfFile.Load32BitFile Size of SectHdrs is ', sz, ' expected ', LongWord(length(sect)*sizeof(Elf32_shdr))]);
     sz := LongWord(length(sect)*sizeof(Elf32_shdr));
   end;
   //ALoader.Read(sect[0], sz);
