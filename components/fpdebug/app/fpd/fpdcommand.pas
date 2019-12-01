@@ -36,9 +36,9 @@ unit FPDCommand;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils, Classes, fgl,
 {$ifdef windows}
-  Windows, fgl,
+  Windows,
 {$endif}
   LCLProc, FpDbgInfo, FpDbgClasses, DbgIntfBaseTypes, FpDbgUtil, CustApp,
   FpPascalParser,
