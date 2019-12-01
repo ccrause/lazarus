@@ -252,6 +252,7 @@ resourcestring
   lisPathOfTheMakeUtility = 'Path of the make utility';
   lisProjectMacroProperties = 'Project macro properties';
   lisOpenProject2 = 'Open project';
+  lisKMOpenRecentProject = 'Open recent project';
   lisFileHasNoProject = 'File has no project';
   lisTheFileIsNotALazarusProjectCreateANewProjectForThi =
      'The file "%s" is not a Lazarus project.'
@@ -1356,6 +1357,8 @@ resourcestring
   lisFilesInASCIIOrUTF8Encoding = 'Files in ASCII or UTF-8 encoding';
   lisFilesNotInASCIINorUTF8Encoding = 'Files not in ASCII nor UTF-8 encoding';
   podAddPackageUnitToUsesSection = 'Add package unit to uses section';
+  lisLPKCompatibilityModeCheckBox = 'Maximize compatibility of package file (LPK)';
+  lisLPKCompatibilityModeCheckBoxHint = 'Check this if you want to open your package in legacy (2.0 and older) Lazarus versions.';
   lisCodeBrowser = 'Code Browser';
 
   // IDE General options
@@ -1377,6 +1380,8 @@ resourcestring
     +'jump history and search results.';
   lisExportEnvironmentOptions = 'Export environment options';
   lisImportEnvironmentOptions = 'Import environment options';
+  lisComboBoxes = 'Combo Boxes';
+  lisDropDownCount = 'Drop Down Count';
 
   // Desktop options
   dlgManageDesktops = 'Manage desktops';
@@ -1902,6 +1907,7 @@ resourcestring
   dlgCopyWordAtCursorOnCopyNone = 'Copy current word when no selection exists';
   dlgHomeKeyJumpsToNearestStart = 'Home key jumps to nearest start';
   dlgEndKeyJumpsToNearestStart = 'End key jumps to nearest end';
+  dlgSelectAllNoScroll = 'Do not scroll on Select-All / Paragraph or To-Brace';
   dlgMultiCaretOnColumnSelection = 'Enable multi-caret for column selection';
   dlgMultiCaretColumnMode = 'Navigation keys move all carets (column-select)';
   dlgMultiCaretMode = 'Navigation keys move all carets';
@@ -2053,6 +2059,7 @@ resourcestring
   dlgIncludeWordsToIdentCompl_IncludeFromAllUnits = 'from all units';
   dlgIncludeWordsToIdentCompl_IncludeFromCurrentUnit = 'from current unit';
   dlgIncludeWordsToIdentCompl_DontInclude = 'don''t include';
+  dlgIncludeCodeTemplatesToIdentCompl = 'Include code templates';
 
   dlgMarkupUserDefined = 'User defined markup';
   dlgMarkupUserDefinedNoLists = 'No lists';
@@ -3113,6 +3120,16 @@ resourcestring
   srkmecCut                   = 'Cut';
   srkmecCopy                  = 'Copy';
   srkmecPaste                 = 'Paste';
+  srkmecCopyAdd               = 'Copy (Add to Clipboard)';
+  srkmecCutAdd                = 'Cut (Add to Clipboard)';
+  srkmecCopyCurrentLine       = 'Copy current line';
+  srkmecCopyAddCurrentLine    = 'Copy current line (Add to Clipboard)';
+  srkmecCutCurrentLine        = 'Cut current line';
+  srkmecCutAddCurrentLine     = 'Cut current line (Add to Clipboard)';
+  srkmecMoveLineUp            = 'Move one line up';
+  srkmecMoveLineDown          = 'Move one line down';
+  srkmecDuplicateLine         = 'Duplicate line (or lines in selection)';
+
   srkmecMultiPaste            = 'MultiPaste';
   srkmecScrollUp              = 'Scroll up one line';
   srkmecScrollDown            = 'Scroll down one line';
@@ -4130,6 +4147,7 @@ resourcestring
   lisKMNewPackage = 'New package';
   lisCompPalOpenPackage = 'Open package';
   lisKMOpenPackageFile = 'Open package file';
+  lisKMOpenRecentPackage = 'Open recent package';
   lisCPOpenPackage = 'Open Package %s';
   lisFilterAllMessagesOfType = 'Filter all messages of type %s';
   lisFilterAllMessagesOfCertainType = 'Filter all messages of certain type';
@@ -5096,6 +5114,7 @@ resourcestring
 
   // Standard File menu
   lisKMNewUnit = 'New Unit';
+  lisKMOpenRecent = 'Open Recent';
 
   // Standard Help menu
   lisMenuTemplateAbout = 'About';

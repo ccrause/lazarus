@@ -1,9 +1,11 @@
 {
   Todo:
+    - run (with debug):
+      - start compile server, keep running, restart when options change
+      - close on IDE quit
     - activate project when project is opened
     - deactivate project when project is closed
     - show active build mode
-    - auto load last group on IDE start when option enabled
 }
 unit ProjectGroupEditor;
 
@@ -15,7 +17,7 @@ uses
   Classes, SysUtils,
   // LCL
   Forms, Controls, Graphics, Dialogs, ComCtrls, Menus,
-  ActnList, LCLProc, Clipbrd, ImgList,
+  ActnList, LCLProc, Clipbrd, ImgList, LCLType,
   // LazUtils
   LazFileUtils, LazLoggerBase, LazFileCache,
   // IdeIntf
@@ -161,6 +163,7 @@ type
       Node: TTreeNode; {%H-}State: TCustomDrawState; Stage: TCustomDrawStage;
       var {%H-}PaintImages, {%H-}DefaultDraw: Boolean);
     procedure TVPGDblClick(Sender: TObject);
+    procedure TVPGKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure TVPGMouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure TVPGSelectionChanged(Sender: TObject);
@@ -413,11 +416,11 @@ procedure TProjectGroupEditorForm.Localize;
   end;
 
 begin
-  ConfigAction(AProjectGroupSave,'laz_save',lisProjectGroupSaveCaption,lisProjectGroupSaveHint,Nil);
-  ConfigAction(AProjectGroupSaveAs,'menu_saveas',lisProjectGroupSaveAsCaption,lisProjectGroupSaveAsHint,Nil);
-  ConfigAction(AProjectGroupNew,'laz_wand',lisProjectGroupNewCaption,lisProjectGroupNewHint,Nil);
-  ConfigAction(AProjectGroupAddExisting,'menu_project_open',lisProjectGroupAddExistingCaption,lisProjectGroupAddExistingHint,Nil);
-  ConfigAction(AProjectGroupAddCurrent,'menu_project_add',lisProjectGroupAddCurrentProjectCaption,lisProjectGroupAddCurrentProjectHint,Nil);
+  ConfigAction(AProjectGroupSave,'pg_save_simple',lisProjectGroupSaveCaption,lisProjectGroupSaveHint,Nil);
+  ConfigAction(AProjectGroupSaveAs,'pg_save_as_simple',lisProjectGroupSaveAsCaption,lisProjectGroupSaveAsHint,Nil);
+  ConfigAction(AProjectGroupNew,'pg_new',lisProjectGroupNewCaption,lisProjectGroupNewHint,Nil);
+  ConfigAction(AProjectGroupAddExisting,'pg_add_project_from_file',lisProjectGroupAddExistingCaption,lisProjectGroupAddExistingHint,Nil);
+  ConfigAction(AProjectGroupAddCurrent,'pg_add_project',lisProjectGroupAddCurrentProjectCaption,lisProjectGroupAddCurrentProjectHint,Nil);
   ConfigAction(AProjectGroupDelete,'laz_delete',lisProjectGroupDeleteCaption,lisProjectGroupDeleteHint,Nil);
   ConfigAction(AProjectGroupAddNew,'menu_project_new',lisProjectGroupAddNewCaption,lisProjectGroupAddNewHint,Nil);
   ConfigAction(ATargetEarlier,'arrow_up',lisTargetEarlierCaption,lisTargetEarlierHint,Nil);
@@ -741,6 +744,24 @@ begin
       end;
     end;
   end;
+end;
+
+procedure TProjectGroupEditorForm.TVPGKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  if Shift=[ssCtrl] then
+    case Key of
+      VK_UP:
+      begin
+        TBTargetUp.Click;
+        Key := 0;
+      end;
+      VK_DOWN:
+      begin
+        TBTargetLater.Click;
+        Key := 0;
+      end;
+    end;
 end;
 
 procedure TProjectGroupEditorForm.TVPGMouseDown(Sender: TObject;
@@ -1312,7 +1333,7 @@ end;
 
 procedure TProjectGroupEditorForm.LoadImages;
 begin
-  NIProjectGroup := IDEImages.GetImageIndex('projectgroup');
+  NIProjectGroup := IDEImages.GetImageIndex('pg_item');
   NITargetProject := IDEImages.GetImageIndex('item_project');
   NITargetPackage := IDEImages.GetImageIndex('item_package');
   NITargetProjectGroup := NIProjectGroup;

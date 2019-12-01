@@ -3325,6 +3325,20 @@ begin
       if (Modifiers = QtShiftModifier or QtControlModifier) then
         Text := '';
     end;
+  end else
+  if (Modifiers = QtShiftModifier or QtAltModifier) then
+  begin
+    ScanCode := QKeyEvent_nativeScanCode(QKeyEventH(Event));
+    if (length(Text) = 1) and (ScanCode in [10..19]) then
+    begin
+      if ScanCode = 19 then
+        ScanCode := 48
+      else
+        ScanCode := ScanCode + 39;
+      KeyMsg.CharCode := Word(ScanCode);
+      if (Modifiers = QtShiftModifier or QtAltModifier) then
+        Text := '';
+    end;
   end;
   {$ENDIF}
   {$ENDIF}
@@ -8694,9 +8708,11 @@ begin
     R1 := Rect(0, 0, 0, 0);
   Result := R;
   OffsetRect(Result, -Result.Left, -Result.Top);
+  {$IFNDEF HASX11}
   if testAttribute(QtWA_Mapped) and QWidget_testAttribute(FCentralWidget, QtWA_Mapped) then
     QWidget_rect(FCentralWidget, @Result)
   else
+  {$ENDIF}
   begin
     if Assigned(FCentralWidget) and not IsRectEmpty(R1) then
     begin

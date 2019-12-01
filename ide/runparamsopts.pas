@@ -55,7 +55,8 @@ uses
   // LazUtils
   LazFileUtils, LazFileCache, LazUTF8, Laz2_XMLCfg,
   // IDE
-  IDEProcs, MiscOptions, SysVarUserOverrideDlg, InputHistory, LazarusIDEStrConsts;
+  IDEProcs, MiscOptions, SysVarUserOverrideDlg, InputHistory, LazarusIDEStrConsts,
+  EnvironmentOpts;
 
 { The xml format version:
     When the format changes (new values, changed formats) we can distinguish old
@@ -112,7 +113,8 @@ type
     function LegacySave(XMLConfig: TXMLConfig; const Path: string;
       UsePathDelim: TPathDelimSwitch): TModalResult;
     function Save(XMLConfig: TXMLConfig; const Path: string;
-      UsePathDelim: TPathDelimSwitch; const ASaveIn: TRunParamsOptionsModeSave): TModalResult;
+      UsePathDelim: TPathDelimSwitch; const ASaveIn: TRunParamsOptionsModeSave;
+      const ALegacyList: Boolean): TModalResult;
     function GetActiveMode: TRunParamsOptionsMode;
   end;
 
@@ -366,16 +368,19 @@ function TRunParamsOptions.Load(XMLConfig: TXMLConfig; const Path: string;
 var
   Cnt, I: Integer;
   NewMode: TRunParamsOptionsMode;
-  ModePath, NewActiveModeName: string;
+  ModePath, NewActiveModeName, ModesPath: string;
+  IsLegacyList: Boolean;
 begin
-  //don't clear!  needed for merging lpi and lps
+  //don't clear! needed for merging lpi and lps
 
-  Cnt := XMLConfig.GetValue(Path + 'Modes/Count', 0);
+  ModesPath := Path + 'Modes/';
+  IsLegacyList := XMLConfig.IsLegacyList(ModesPath);
+  Cnt := XMLConfig.GetListItemCount(ModesPath, 'Mode', IsLegacyList);
   Result := mrOK;
 
   for I := 0 to Cnt-1 do
   begin
-    ModePath := Path+'Modes/Mode'+IntToStr(I)+'/';
+    ModePath := ModesPath+XMLConfig.GetListItemXPath('Mode', I, IsLegacyList, False)+'/';
     NewMode := Add(XMLConfig.GetValue(ModePath+'Name', '')) as TRunParamsOptionsMode;
     NewMode.SaveIn := ASaveIn;
     Result := NewMode.Load(XMLConfig, ModePath, AdjustPathDelims);
@@ -396,13 +401,15 @@ begin
 end;
 
 function TRunParamsOptions.Save(XMLConfig: TXMLConfig; const Path: string;
-  UsePathDelim: TPathDelimSwitch; const ASaveIn: TRunParamsOptionsModeSave
-  ): TModalResult;
+  UsePathDelim: TPathDelimSwitch; const ASaveIn: TRunParamsOptionsModeSave;
+  const ALegacyList: Boolean): TModalResult;
 var
   AMode: TRunParamsOptionsMode;
   I, Cnt: Integer;
+  ModesPath, ModePath: string;
 begin
   Result := mrOK;
+  ModesPath := Path+'Modes/';
 
   // save a format version to distinguish old formats
   XMLConfig.SetValue(Path + 'FormatVersion/Value',
@@ -415,14 +422,15 @@ begin
 
     if AMode.SaveIn=ASaveIn then
     begin
-      Result := AMode.Save(XMLConfig, Path+'Modes/Mode'+IntToStr(Cnt)+'/', UsePathDelim);
+      ModePath := ModesPath+XMLConfig.GetListItemXPath('Mode', Cnt, ALegacyList, False)+'/';
+      Result := AMode.Save(XMLConfig, ModePath, UsePathDelim);
       if Result<>mrOK then
         Exit;
       Inc(Cnt);
     end;
   end;
 
-  XMLConfig.SetValue(Path + 'Modes/Count', Cnt);
+  XMLConfig.SetListItemCount(ModesPath, Cnt, ALegacyList);
   if ASaveIn=rpsLPS then
     XMLConfig.SetValue(Path + 'Modes/ActiveMode', ActiveModeName);
 end;
@@ -926,6 +934,11 @@ end;
 
 procedure TRunParamsOptsDlg.FormCreate(Sender: TObject);
 begin
+  ModesComboBox.DropDownCount := EnvironmentOptions.DropDownCount;
+  SaveInComboBox.DropDownCount := EnvironmentOptions.DropDownCount;
+  CmdLineParametersComboBox.DropDownCount := EnvironmentOptions.DropDownCount;
+  UseLaunchingApplicationComboBox.DropDownCount := EnvironmentOptions.DropDownCount;
+  WorkingDirectoryComboBox.DropDownCount := EnvironmentOptions.DropDownCount;
 end;
 
 procedure TRunParamsOptsDlg.HelpButtonClick(Sender: TObject);

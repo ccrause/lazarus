@@ -29,7 +29,6 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Dialogs,
   LResources,
-  Printer4LazStrConst,
   Printers, OsPrinters;
 
 type
@@ -141,7 +140,8 @@ implementation
     {$IFDEF LCLCarbon}
       {$IFNDEF NativePrint}
         // add units as needed for carbon, for the moment use cups ones.
-        uses udlgSelectPrinter, udlgPropertiesPrinter, udlgPageSetup, FileUtil;
+        uses udlgSelectPrinter, udlgPropertiesPrinter, udlgPageSetup,
+          Printer4LazStrConst, FileUtil;
         {$I cupsprndialogs.inc}
       {$ELSE}
         uses Math, CarbonProc, MacOSAll, LCLProc;
@@ -161,7 +161,7 @@ implementation
       {$I qtprndialogs.inc}
     {$ENDIF}    
     {$IFDEF LCLGtk2}
-      uses udlgSelectPrinter, udlgPropertiesPrinter, udlgPageSetup;
+      uses udlgSelectPrinter, udlgPropertiesPrinter, udlgPageSetup, Printer4LazStrConst;
       {$I cupsprndialogs.inc}
     {$ENDIF}
   {$ELSE}
@@ -173,7 +173,7 @@ implementation
       uses qtobjects, qt5, qtint, LazUTF8;
       {$I qtprndialogs.inc}
     {$ELSE}    
-      uses udlgSelectPrinter, udlgPropertiesPrinter, udlgPageSetup;
+      uses udlgSelectPrinter, udlgPropertiesPrinter, udlgPageSetup, Printer4LazStrConst;
       {$I cupsprndialogs.inc}
     {$ENDIF}
     {$ENDIF}    

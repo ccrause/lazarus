@@ -42,7 +42,7 @@ uses
   // RTL, FCL
   Classes, SysUtils, typinfo, resource,
   // LCL
-  Graphics, LCLProc, LResources, Forms, Dialogs, ComCtrls, LCLType,
+  Graphics, LCLProc, LResources, Forms, Dialogs, ComCtrls, LCLType, Controls,
   // LazUtils
   FileUtil, LazFileUtils, LazUTF8, LazClasses, LazUTF8Classes, Laz2_XMLCfg,
   LazStringUtils,
@@ -1545,6 +1545,8 @@ type
     procedure Init;
     procedure Load;
     procedure Save;
+    function LoadCodeTemplates(AnAutoComplete: TSynEditAutoComplete): TModalResult;
+    function SaveCodeTemplates(AnAutoComplete: TSynEditAutoComplete): TModalResult;
     procedure TranslateResourceStrings;
     function GetAdditionalAttributeName(aha:TAdditionalHilightAttribute): string;
     function GetSynEditOptionName(SynOption: TSynEditorOption): string;
@@ -2329,13 +2331,16 @@ end;
 
 const
   EditOptsConfFileName = 'editoroptions.xml';
+  DciFileVersion = 1;
+  DciFileVersionName = '!FileVersion';
+  DciVersionName = '!Version';
 
 function BuildBorlandDCIFile(
   ACustomSynAutoComplete: TCustomSynAutoComplete): Boolean;
   // returns if something has changed
 var
   sl: TStringList;
-  i, sp, ep: Integer;
+  i, sp, ep, v: Integer;
   Token, Comment, Value: String;
   Attributes: TStrings;
 begin
@@ -2349,6 +2354,14 @@ begin
       Value := ACustomSynAutoComplete.CompletionValues[i];
       sl.Add('[' + Token + ' | ' + Comment + ']');
       Attributes:=ACustomSynAutoComplete.CompletionAttributes[i];
+
+      // Store DciFileVersion as attribute to first macro
+      v := Attributes.IndexOfName(DciFileVersionName);
+      if v >= 0 then
+        Attributes.Delete(v);
+      if i = 0 then
+        Attributes.Values[DciFileVersionName] := IntToStr(DciFileVersion);
+
       if (Attributes<>nil) and (Attributes.Count>0) then begin
         sl.Add(CodeTemplateAttributesStartMagic);
         sl.AddStrings(Attributes);
@@ -4610,8 +4623,6 @@ end;
 constructor TEditorOptions.Create;
 var
   ConfFileName: String;
-  fs: TFileStreamUTF8;
-  res: TResourceStream;
 begin
   inherited Create;
   InitLocale;
@@ -4641,23 +4652,6 @@ begin
   fCodeTemplateFileNameRaw :=
     TrimFilename(AppendPathDelim(GetPrimaryConfigPath)+DefaultCodeTemplatesFilename);
   CopySecondaryConfigFile(DefaultCodeTemplatesFilename);
-  if not FileExistsUTF8(CodeTemplateFileNameExpand) then
-  begin
-    res := TResourceStream.Create(HInstance, PChar('lazarus_dci_file'), PChar(RT_RCDATA));
-    try
-      InvalidateFileStateCache;
-      fs := TFileStreamUTF8.Create(CodeTemplateFileNameExpand, fmCreate);
-      try
-        fs.CopyFrom(res, res.Size);
-      finally
-        fs.Free;
-      end;
-    except
-      DebugLn('WARNING: unable to write code template file "',
-        CodeTemplateFileNameExpand, '"');
-    end;
-    res.Free;
-  end;
 
   FMultiWinEditAccessOrder := TEditorOptionsEditAccessOrderList.Create;
   FMultiWinEditAccessOrder.InitDefaults;
@@ -4843,7 +4837,7 @@ begin
           SynEditOptName := 'OverwriteBlock';
         eoAutoHideCursor:
           SynEditOptName := 'AutoHideCursor';
-        eoCaretMoveEndsSelection, eoPersistentCaretStopBlink:
+        eoCaretMoveEndsSelection, eoPersistentCaretStopBlink, eoNoScrollOnSelectRange:
           WriteStr(SynEditOptName, SynEditOpt2);
         else
           SynEditOptName := '';
@@ -5079,7 +5073,7 @@ begin
           SynEditOptName := 'OverwriteBlock';
         eoAutoHideCursor:
           SynEditOptName := 'AutoHideCursor';
-        eoCaretMoveEndsSelection, eoPersistentCaretStopBlink:
+        eoCaretMoveEndsSelection, eoPersistentCaretStopBlink, eoNoScrollOnSelectRange:
           WriteStr(SynEditOptName, SynEditOpt2);
         else
           SynEditOptName := '';
@@ -5228,6 +5222,93 @@ begin
   except
     on E: Exception do
       DebugLn('[TEditorOptions.Save] ERROR: ', e.Message);
+  end;
+end;
+
+function TEditorOptions.LoadCodeTemplates(AnAutoComplete: TSynEditAutoComplete
+  ): TModalResult;
+
+  function ResourceDCIAsText: String;
+  var
+    data: TResourceStream;
+    i: Int64;
+  begin
+    data := TResourceStream.Create(HInstance, PChar('lazarus_dci_file'), PChar(RT_RCDATA));
+    i := data.Size;
+    if i > 0 then begin
+      SetLength(Result, i);
+      data.Read(Result[1], i);
+    end;
+    data.Free;
+  end;
+
+var
+  s: String;
+  FileVersion, i, j, v: Integer;
+  NewAutoComplete: TSynEditAutoComplete;
+  Attr: TStringList;
+  Added: Boolean;
+begin
+  s := CodeTemplateFileNameExpand;
+  Result := mrAbort;
+  if FileExistsUTF8(s) then begin
+    try
+      LoadStringsFromFileUTF8(AnAutoComplete.AutoCompleteList, s);
+      Result := mrOK;
+    except
+      Result := mrAbort;
+    end;
+    if Result = mrAbort then
+      exit;
+
+    FileVersion := AnAutoComplete.Completions.Count;
+    if (FileVersion > 0) then begin
+      FileVersion := AnAutoComplete.CompletionAttributes[0].IndexOfName(DciFileVersionName);
+      if (FileVersion >= 0) then
+        FileVersion := StrToIntDef(AnAutoComplete.CompletionAttributes[0][FileVersion], 0);
+    end;
+    if FileVersion < DciFileVersion then begin
+      // Merge new entries
+      NewAutoComplete := TSynEditAutoComplete.Create(nil);
+      NewAutoComplete.AutoCompleteList.Text := ResourceDCIAsText;
+      Added := False;
+      for i := 0 to NewAutoComplete.Completions.Count - 1 do begin
+        j := NewAutoComplete.CompletionAttributes[i].IndexOfName(DciVersionName);
+        if j < 0 then
+          continue;
+        v := StrToIntDef(NewAutoComplete.CompletionAttributes[i][j], 0);
+        if v <= FileVersion then
+          continue;
+        if AnAutoComplete.Completions.IndexOf(NewAutoComplete.Completions[i]) >= 0 then
+          continue;
+        Attr := TStringList.Create;
+        Attr.Assign(NewAutoComplete.CompletionAttributes[i]); // will be owned by AnAutoComplete;
+        AnAutoComplete.AddCompletion(
+          NewAutoComplete.Completions[i],
+          NewAutoComplete.CompletionValues[i],
+          NewAutoComplete.CompletionComments[i],
+          Attr);
+        Added := True;
+      end;
+      NewAutoComplete.Free;
+      if Added then
+        if BuildBorlandDCIFile(AnAutoComplete) then
+          SaveCodeTemplates(AnAutoComplete);
+    end;
+  end
+  else begin
+    AnAutoComplete.AutoCompleteList.Text := ResourceDCIAsText;
+  end;
+end;
+
+function TEditorOptions.SaveCodeTemplates(AnAutoComplete: TSynEditAutoComplete
+  ): TModalResult;
+begin
+  try
+    SaveStringsToFileUTF8(AnAutoComplete.AutoCompleteList, CodeTemplateFileNameExpand);
+    Result := mrOK;
+  except
+    Result := mrAbort;
   end;
 end;
 

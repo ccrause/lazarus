@@ -201,7 +201,7 @@ type
 
     procedure TerminateProcess; override;
 
-    function AddrOffset: Int64; override;
+    function AddrOffset: TDBGPtr; override;
     function  AddLib(const AInfo: TLoadDLLDebugInfo): TDbgLibrary;
     procedure RemoveLib(const AInfo: TUnloadDLLDebugInfo);
   end;
@@ -644,7 +644,6 @@ var
 begin
 debugln(['TDbgWinProcess.Continue ',SingleStep]);
   if assigned(AThread) and not FThreadMap.HasId(AThread.ID) then begin
-    AThread.Free;
     AThread := nil;
   end;
 
@@ -1275,7 +1274,7 @@ begin
   FTerminated := True;
 end;
 
-function TDbgWinProcess.AddrOffset: Int64;
+function TDbgWinProcess.AddrOffset: TDBGPtr;
 begin
   Result:=0;//inherited AddrOffset - TDbgPtr(FInfo.lpBaseOfImage);
 end;

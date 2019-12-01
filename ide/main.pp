@@ -667,6 +667,7 @@ type
     function OIHelpProvider: TAbstractIDEHTMLProvider;
     procedure DoAddWordsToIdentCompletion(Sender: TIdentifierList;
       FilteredList: TFPList; PriorityCount: Integer);
+    procedure DoAddCodeTemplatesToIdentCompletion;
     // form editor and designer
     procedure DoBringToFrontFormOrUnit;
     procedure DoBringToFrontFormOrInspector(ForceInspector: boolean);
@@ -957,8 +958,8 @@ type
     // form editor and designer
     procedure DoShowDesignerFormOfCurrentSrc(AComponentPaletteClassSelected: Boolean); override;
     procedure DoShowDesignerFormOfSrc(AEditor: TSourceEditorInterface); override;
-    procedure DoShowMethod(AEditor: TSourceEditorInterface; const AMethodName: String); override;
     procedure DoShowDesignerFormOfSrc(AEditor: TSourceEditorInterface; out AForm: TCustomForm); override;
+    procedure DoShowMethod(AEditor: TSourceEditorInterface; const AMethodName: String); override;
     function CreateDesignerForComponent(AnUnitInfo: TUnitInfo;
                                         AComponent: TComponent): TCustomForm; override;
     // editor and environment options
@@ -2053,6 +2054,8 @@ procedure TMainIDE.CodeToolBossGatherUserIdentifiers(
   );
 begin
   FIdentifierWordCompletionEnabled := not (ilcfStartIsSubIdent in ContextFlags);
+  if not (ilcfStartIsSubIdent in ContextFlags) then
+    DoAddCodeTemplatesToIdentCompletion;
 end;
 
 procedure TMainIDE.CodeToolBossGatherUserIdentifiersToFilteredList(
@@ -2893,6 +2896,10 @@ procedure TMainIDE.LoadMenuShortCuts;
       ToolButton.ToolButtonClass := ToolButtonClass;
   end;
 
+  // See also in ToolBarIntf:
+  //  function GetCommand_DropDown
+  //  function GetCommand_ButtonDrop
+
 var
   xBtnItem: TIDEButtonCommand;
 begin
@@ -2903,6 +2910,7 @@ begin
     itmFileNewOther.Command:=GetCommand(ecNew);
     itmFileOpen.Command:=GetCommand(ecOpen, nil, TOpenFileToolButton);
     itmFileOpenUnit.Command:=GetCommand(ecOpenUnit);
+    GetCommand_ButtonDrop(ecOpenRecent, itmFileRecentOpen);
     itmFileRevert.Command:=GetCommand(ecRevert);
     itmFileSave.Command:=GetCommand(ecSave);
     itmFileSaveAs.Command:=GetCommand(ecSaveAs);
@@ -2955,11 +2963,12 @@ begin
     itmSetFreeBookmark.Command:=GetCommand(ecSetFreeBookmark);
     itmJumpToNextBookmark.Command:=GetCommand(ecNextBookmark);
     itmJumpToPrevBookmark.Command:=GetCommand(ecPrevBookmark);
-    itmJumpToInterface.Command:=GetCommand(ecJumpToInterface, nil, TJumpToSectionToolButton);
-    itmJumpToInterfaceUses.Command:=GetCommand(ecJumpToInterfaceUses, nil, TJumpToSectionToolButton);
-    itmJumpToImplementation.Command:=GetCommand(ecJumpToImplementation, nil, TJumpToSectionToolButton);
-    itmJumpToImplementationUses.Command:=GetCommand(ecJumpToImplementationUses, nil, TJumpToSectionToolButton);
-    itmJumpToInitialization.Command:=GetCommand(ecJumpToInitialization, nil, TJumpToSectionToolButton);
+    GetCommand_ButtonDrop(ecJumpToSection, itmJumpToSection);
+    itmJumpToInterface.Command:=GetCommand_DropDown(ecJumpToInterface, itmJumpToSection);
+    itmJumpToInterfaceUses.Command:=GetCommand_DropDown(ecJumpToInterfaceUses, itmJumpToSection);
+    itmJumpToImplementation.Command:=GetCommand_DropDown(ecJumpToImplementation, itmJumpToSection);
+    itmJumpToImplementationUses.Command:=GetCommand_DropDown(ecJumpToImplementationUses, itmJumpToSection);
+    itmJumpToInitialization.Command:=GetCommand_DropDown(ecJumpToInitialization, itmJumpToSection);
     GetCmdAndBtn(ecJumpToProcedureHeader, xBtnItem);
     xBtnItem.Caption := lisMenuJumpToProcedureHeader;
     xBtnItem.OnClick := @SourceEditorManager.JumpToProcedureHeaderClicked;
@@ -3047,7 +3056,8 @@ begin
     // project menu
     itmProjectNew.Command:=GetCommand(ecNewProject);
     itmProjectNewFromFile.Command:=GetCommand(ecNewProjectFromFile);
-    itmProjectOpen.Command:=GetCommand(ecOpenProject);
+    itmProjectOpen.Command:=GetCommand_DropDown(ecOpenProject, itmProjectRecentOpen);
+    GetCommand_ButtonDrop(ecOpenRecentProject, itmProjectRecentOpen);
     itmProjectClose.Command:=GetCommand(ecCloseProject);
     itmProjectSave.Command:=GetCommand(ecSaveProject);
     itmProjectSaveAs.Command:=GetCommand(ecSaveProjectAs);
@@ -3093,8 +3103,9 @@ begin
     // package menu
     itmPkgNewPackage.Command:=GetCommand(ecNewPackage);
     itmPkgOpenLoadedPackage.Command:=GetCommand(ecOpenPackage);
-    itmPkgOpenPackageFile.Command:=GetCommand(ecOpenPackageFile);
+    itmPkgOpenPackageFile.Command:=GetCommand_DropDown(ecOpenPackageFile, itmPkgOpenRecent);
     itmPkgOpenPackageOfCurUnit.Command:=GetCommand(ecOpenPackageOfCurUnit);
+    GetCommand_ButtonDrop(ecOpenRecentPackage, itmPkgOpenRecent);
     itmPkgAddCurFileToPkg.Command:=GetCommand(ecAddCurFileToPkg);
     itmPkgAddNewComponentToPkg.Command:=GetCommand(ecNewPkgComponent);
     itmPkgPkgGraph.Command:=GetCommand(ecPackageGraph);
@@ -3883,10 +3894,9 @@ begin
       begin
         if (rfInteractive in AFlags)
         and (IDEQuestionDialog(lisStopDebugging, lisStopTheDebugging,
-                 mtConfirmation, [mrYes, lisStop,
-                                  mrCancel, lisContinue]) <> mrYes)
+                 mtConfirmation, [mrYes,lisStop, mrCancel,lisContinue]) <> mrYes)
         then exit;
-        if (DebugBoss.DoStopProject = mrOK) and (ToolStatus = itDebugger) and (rfCloseOnDone in AFlags) then
+        if (DebugBoss.DoStopProject = mrOK) and (rfCloseOnDone in AFlags) then
           FWaitForClose := True;
         if rfSuccessOnTrigger in AFlags then
           exit(true);
@@ -5377,8 +5387,7 @@ begin
   begin
     // previous active form was designer form
     ShowDesignerForm(Screen.CustomFormsZOrdered[1]);
-    DoCallShowDesignerFormOfSourceHandler(lihtShowDesignerFormOfSource,
-                                       Screen.CustomFormsZOrdered[1], nil, True);
+    DoCallShowDesignerFormOfSourceHandler(Screen.CustomFormsZOrdered[1], nil, True);
   end else
     DoShowDesignerFormOfCurrentSrc(True);
 end;
@@ -5977,7 +5986,6 @@ end;
 function TMainIDE.DoSelectFrame: TComponentClass;
 var
   UnitList: TStringList;
-  dummy: Boolean;
   i: Integer;
   aFilename: String;
   AComponent: TComponent;
@@ -5985,10 +5993,7 @@ begin
   Result := nil;
   UnitList := TStringList.Create;
   try
-    dummy := false;
-    if SelectUnitComponents(lisSelectFrame,piFrame,UnitList, false, dummy) <> mrOk
-    then
-      exit;
+    if SelectUnitComponents(lisSelectFrame,piFrame,UnitList) <> mrOk then exit;
     for i := 0 to UnitList.Count-1 do
     begin
       aFilename:=UnitList[i];
@@ -6009,7 +6014,6 @@ end;
 function TMainIDE.DoViewUnitsAndForms(OnlyForms: boolean): TModalResult;
 const
   UseItemType: array[Boolean] of TIDEProjectItem = (piUnit, piComponent);
-  MultiSelectCheckedState: Array [Boolean] of Boolean = (True,True);
 var
   UnitList: TViewUnitEntries;
   AForm: TCustomForm;
@@ -6020,8 +6024,7 @@ begin
   Project1.UpdateIsPartOfProjectFromMainUnit;
   UnitList := TViewUnitEntries.Create;
   try
-    if SelectProjectItems(UnitList, UseItemType[OnlyForms],
-                          true, MultiSelectCheckedState[OnlyForms]) = mrOk then
+    if SelectProjectItems(UnitList, UseItemType[OnlyForms]) = mrOk then
     begin
       { This is where we check what the user selected. }
       AnUnitInfo := nil;
@@ -7294,6 +7297,24 @@ begin
       exit;
   end;
   AbortBuild;
+end;
+
+procedure TMainIDE.DoAddCodeTemplatesToIdentCompletion;
+var
+  New: TCodeTemplateIdentifierListItem;
+  I: Integer;
+begin
+  if not CodeToolsOpts.IdentComplIncludeCodeTemplates then
+    Exit;
+
+  for I := 0 to SourceEditorManager.CodeTemplateModul.Completions.Count-1 do
+  begin
+    New := TCodeTemplateIdentifierListItem.Create(CodeTemplateCompatibility, False, CodeTemplateHistoryIndex,
+      PChar(SourceEditorManager.CodeTemplateModul.Completions[I]),
+      CodeTemplateLevel, nil, nil, ctnCodeTemplate);
+    New.Comment := SourceEditorManager.CodeTemplateModul.CompletionComments[I];
+    CodeToolBoss.IdentifierList.Add(New);
+  end;
 end;
 
 procedure TMainIDE.DoCompile;
@@ -8686,7 +8707,8 @@ begin
           //DebugLn(['DoCheckFilesOnDisk IgnoreCurrentFileDateOnDisk']);
           CurUnit.IgnoreCurrentFileDateOnDisk;
           CurUnit.Modified:=True;
-          CurUnit.OpenEditorInfo[0].EditorComponent.Modified:=True;
+          if CurUnit.OpenEditorInfoCount > 0 then
+            CurUnit.OpenEditorInfo[0].EditorComponent.Modified:=True;
         end;
       end;
     end;
@@ -8988,7 +9010,7 @@ var
 begin
   DoShowDesignerFormOfSrc(SourceEditorManager.ActiveEditor, LForm);
   if LForm <> nil then
-    DoCallShowDesignerFormOfSourceHandler(lihtShowDesignerFormOfSource, LForm, SourceEditorManager.ActiveEditor, AComponentPaletteClassSelected);
+    DoCallShowDesignerFormOfSourceHandler(LForm, SourceEditorManager.ActiveEditor, AComponentPaletteClassSelected);
 end;
 
 procedure TMainIDE.DoShowDesignerFormOfSrc(AEditor: TSourceEditorInterface);
@@ -8996,6 +9018,59 @@ var
   LForm: TCustomForm;
 begin
   DoShowDesignerFormOfSrc(AEditor, LForm);
+end;
+
+procedure TMainIDE.DoShowDesignerFormOfSrc(AEditor: TSourceEditorInterface;
+  out AForm: TCustomForm);
+var
+  ActiveUnitInfo: TUnitInfo;
+  UnitCodeBuf: TCodeBuffer;
+  aFilename: String;
+begin
+  {$IFDEF VerboseIDEDisplayState}
+  debugln(['TMainIDE.DoShowDesignerFormOfCurrentSrc ']);
+  {$ENDIF}
+  AForm := nil;
+  GetUnit(TSourceEditor(AEditor), ActiveUnitInfo);
+  if (ActiveUnitInfo = nil) then exit;
+
+  if (ActiveUnitInfo.Component=nil)
+  and (ActiveUnitInfo.Source<>nil) then begin
+    if (CompareFileExt(ActiveUnitInfo.Filename,'.inc',false)=0) then begin
+      // include file => get unit
+      UnitCodeBuf:=CodeToolBoss.GetMainCode(ActiveUnitInfo.Source);
+      if (UnitCodeBuf<>nil) and (UnitCodeBuf<>ActiveUnitInfo.Source) then begin
+        // unit found
+        ActiveUnitInfo:=Project1.ProjectUnitWithFilename(UnitCodeBuf.Filename);
+        if (ActiveUnitInfo=nil) or (ActiveUnitInfo.OpenEditorInfoCount=0) then begin
+          // open unit in source editor and load form
+          DoOpenEditorFile(UnitCodeBuf.Filename,-1,-1,
+            [ofOnlyIfExists,ofRegularFile,ofVirtualFile,ofDoLoadResource]);
+          exit;
+        end;
+      end;
+    end;
+    if (CompareFileExt(ActiveUnitInfo.Filename,'.lfm',false)=0) then begin
+      // lfm file => get unit
+      aFilename:=GetUnitFileOfLFM(ActiveUnitInfo.Filename);
+      if aFilename<>'' then begin
+        DoOpenEditorFile(aFilename,-1,-1,
+          [ofOnlyIfExists,ofRegularFile,ofVirtualFile,ofDoLoadResource]);
+        exit;
+      end;
+    end;
+  end;
+
+  // load the form, if not already done
+  AForm:=GetDesignerFormOfSource(ActiveUnitInfo,true);
+  if AForm=nil then exit;
+  DisplayState:=dsForm;
+  LastFormActivated:=AForm;
+  ShowDesignerForm(AForm);
+  if TheControlSelection.SelectionForm<>AForm then begin
+    // select the new form (object inspector, formeditor, control selection)
+    TheControlSelection.AssignPersistent(ActiveUnitInfo.Component);
+  end;
 end;
 
 procedure TMainIDE.DoShowMethod(AEditor: TSourceEditorInterface;
@@ -9049,59 +9124,6 @@ begin
     DebugLn(['Error: (lazarus) TMainIDE.OnPropHookShowMethod failed finding the method in code']);
     DoJumpToCodeToolBossError;
     raise Exception.Create(lisUnableToShowMethod+' '+lisPleaseFixTheErrorInTheMessageWindow);
-  end;
-end;
-
-procedure TMainIDE.DoShowDesignerFormOfSrc(AEditor: TSourceEditorInterface;
-  out AForm: TCustomForm);
-var
-  ActiveUnitInfo: TUnitInfo;
-  UnitCodeBuf: TCodeBuffer;
-  aFilename: String;
-begin
-  {$IFDEF VerboseIDEDisplayState}
-  debugln(['TMainIDE.DoShowDesignerFormOfCurrentSrc ']);
-  {$ENDIF}
-  AForm := nil;
-  GetUnit(TSourceEditor(AEditor), ActiveUnitInfo);
-  if (ActiveUnitInfo = nil) then exit;
-
-  if (ActiveUnitInfo.Component=nil)
-  and (ActiveUnitInfo.Source<>nil) then begin
-    if (CompareFileExt(ActiveUnitInfo.Filename,'.inc',false)=0) then begin
-      // include file => get unit
-      UnitCodeBuf:=CodeToolBoss.GetMainCode(ActiveUnitInfo.Source);
-      if (UnitCodeBuf<>nil) and (UnitCodeBuf<>ActiveUnitInfo.Source) then begin
-        // unit found
-        ActiveUnitInfo:=Project1.ProjectUnitWithFilename(UnitCodeBuf.Filename);
-        if (ActiveUnitInfo=nil) or (ActiveUnitInfo.OpenEditorInfoCount=0) then begin
-          // open unit in source editor and load form
-          DoOpenEditorFile(UnitCodeBuf.Filename,-1,-1,
-            [ofOnlyIfExists,ofRegularFile,ofVirtualFile,ofDoLoadResource]);
-          exit;
-        end;
-      end;
-    end;
-    if (CompareFileExt(ActiveUnitInfo.Filename,'.lfm',false)=0) then begin
-      // lfm file => get unit
-      aFilename:=GetUnitFileOfLFM(ActiveUnitInfo.Filename);
-      if aFilename<>'' then begin
-        DoOpenEditorFile(aFilename,-1,-1,
-          [ofOnlyIfExists,ofRegularFile,ofVirtualFile,ofDoLoadResource]);
-        exit;
-      end;
-    end;
-  end;
-
-  // load the form, if not already done
-  AForm:=GetDesignerFormOfSource(ActiveUnitInfo,true);
-  if AForm=nil then exit;
-  DisplayState:=dsForm;
-  LastFormActivated:=AForm;
-  ShowDesignerForm(AForm);
-  if TheControlSelection.SelectionForm<>AForm then begin
-    // select the new form (object inspector, formeditor, control selection)
-    TheControlSelection.AssignPersistent(ActiveUnitInfo.Component);
   end;
 end;
 

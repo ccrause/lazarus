@@ -21,9 +21,6 @@ Type
                  pttCheckMismatchedOriginals);
   TPoTestTypes = Set of TPoTestType;
 
-  TPoTestOption = (ptoFindAllChildren);
-  TPoTestOptions = set of TPoTestOption;
-
 const
     optRunAllTests: TPoTestTypes = [];
 
@@ -44,6 +41,7 @@ Type
 
   TPoFamily = class
   private
+    FLangID: TLangID;
     FMaster: TPOFile;
     FChild: TPOFile;
     FMasterName: String;
@@ -51,7 +49,6 @@ Type
     FOnTestStart: TTestStartEvent;
     FOnTestEnd: TTestEndEvent;
     FPoFamilyStats: TPoFamilyStats;
-    FTestOptions: TPoTestOptions;
     FTestTypes: TPoTestTypes;
     procedure SetChildName(AValue: String);
     procedure SetMasterName(AValue: String);
@@ -61,7 +58,7 @@ Type
     procedure DoTestStart(const ATestName, APoFileName: String);
     procedure DoTestEnd(const ATestName: String; const ErrorCount: Integer);
   public
-    constructor Create(const AMasterName, AChildName: String);
+    constructor Create(const AMasterName, AChildName: String; ALangID: TLangID);
     destructor Destroy; override;
 
   protected
@@ -81,7 +78,6 @@ Type
     property MasterName: String read FMasterName write SetMasterName;
     property ChildName: String read FChildName write SetChildName;
     property TestTypes: TPoTestTypes read FTestTypes write FTestTypes;
-    property TestOptions: TPoTestOptions read FTestOptions write FTestOptions;
     property PoFamilyStats: TPoFamilyStats read FPoFamilyStats;
     property ShortMasterName: String read  GetShortMasterName;
     property ShortChildName: String read GetShortChildName;
@@ -102,7 +98,7 @@ Type
     FNrFuzzy: Integer;
     FNrErrors: Integer;
   public
-    constructor Create(APoName: String; ANrTotal, ANrTranslated, ANrUntranslated, ANrFuzzy, ANrErrors: Integer);
+    constructor Create(APoName: String; ANrTranslated, ANrUntranslated, ANrFuzzy, ANrErrors: Integer);
     function ShortPoName: String;
     property PoName: string read FPoName;
     property NrTotal: Integer read FNrTotal;
@@ -125,7 +121,7 @@ Type
     function GetItems(Index: Integer): TStat;
   public
     procedure Clear;
-    procedure Add(AName: String; ANrTotal, ANrTranslated, ANrUnTranslated, ANrFuzzy, ANrErrors: Integer);
+    procedure Add(AName: String; ANrTranslated, ANrUnTranslated, ANrFuzzy, ANrErrors: Integer);
     procedure AddItemsTo(APoFamilyStats: TPoFamilyStats);
     constructor Create;
     destructor Destroy; override;
@@ -145,13 +141,8 @@ implementation
 
 const
   sCommentIdentifier = '#: ';
-  //sCharSetIdentifier = '"Content-Type: text/plain; charset=';
   sMsgID = 'msgid "';
   sMsgStr = 'msgstr "';
-  //sMsgCtxt = 'msgctxt "';
-  //sFlags = '#, ';
-  //sPrevMsgID = '#| msgid "';
-  //sPrevStr = '#| "';
 
   Divider = '-------------------------------------------------------';
 
@@ -193,10 +184,10 @@ end;
 
 { TStat }
 
-constructor TStat.Create(APoName: String; ANrTotal, ANrTranslated, ANrUntranslated, ANrFuzzy, ANrErrors: Integer);
+constructor TStat.Create(APoName: String; ANrTranslated, ANrUntranslated, ANrFuzzy, ANrErrors: Integer);
 begin
   FPoName := APoName;
-  FNrTotal := ANrTotal;
+  FNrTotal := ANrTranslated + ANrUntranslated + ANrFuzzy;
   FNrTranslated := ANrTranslated;
   FNrUntranslated := ANrUntranslated;
   FNrFuzzy := ANrFuzzy;
@@ -255,9 +246,9 @@ begin
   FList.Clear;
 end;
 
-procedure TPoFamilyStats.Add(AName: String; ANrTotal, ANrTranslated, ANrUnTranslated, ANrFuzzy, ANrErrors: Integer);
+procedure TPoFamilyStats.Add(AName: String; ANrTranslated, ANrUnTranslated, ANrFuzzy, ANrErrors: Integer);
 begin
-  FList.Add(TStat.Create(AName, ANrTotal, ANrTranslated, ANrUntranslated, ANrFuzzy, ANrErrors));
+  FList.Add(TStat.Create(AName, ANrTranslated, ANrUntranslated, ANrFuzzy, ANrErrors));
 end;
 
 procedure TPoFamilyStats.AddItemsTo(APoFamilyStats: TPoFamilyStats);
@@ -268,7 +259,7 @@ begin
   for i := 0 to FList.Count - 1 do
   begin
     AStat := GetItems(i);
-    APoFamilyStats.Add(AStat.PoName, AStat.NrTotal, AStat.NrTranslated,
+    APoFamilyStats.Add(AStat.PoName, AStat.NrTranslated,
                        AStat.NrUntranslated, AStat.NrFuzzy, AStat.NrErrors);
   end;
 end;
@@ -358,7 +349,7 @@ begin
   FChildName := AValue;
 end;
 
-constructor TPoFamily.Create(const AMasterName, AChildName: String);
+constructor TPoFamily.Create(const AMasterName, AChildName: String; ALangID: TLangID);
 begin
   if (AMasterName <> '') then
   begin
@@ -372,6 +363,7 @@ begin
     FChildName := AChildName;
     //debugln('TPoFamily.Create: created ',FChildName);
   end;
+  FLangID := ALangID;
   FPoFamilyStats := TPoFamilyStats.Create;
 end;
 
@@ -646,7 +638,7 @@ begin
   NrTotal := NrTranslated + NrUntranslated + NrFuzzy;
   if (NrTotal > 0) then
   begin
-    FPoFamilyStats.Add(ChildName, NrTotal, NrTranslated, NrUntranslated, NrFuzzy, ErrorCnt);
+    FPoFamilyStats.Add(ChildName, NrTranslated, NrUntranslated, NrFuzzy, ErrorCnt);
   end;
   //debugln('TPoFamily.CheckIncompatibleFormatArgs: ',Dbgs(ErrorCount),' Errors');
 end;
@@ -698,7 +690,7 @@ begin
     end
   end;
 
-  if (ptoFindAllChildren in FTestOptions) then
+  if FLangID = lang_all then
   begin
     SL := FindAllTranslatedPoFiles(FMasterName);
     //We want current Child (if currently assigned) at index 0

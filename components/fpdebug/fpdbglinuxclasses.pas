@@ -522,6 +522,7 @@ begin
   else
   if wifexited(AWaitedStatus) and (ID <> Process.ProcessID) then begin
     Process.RemoveThread(ID); // Done, no postpone
+    Self.Free;
   end
 
   else
@@ -1029,8 +1030,6 @@ begin
     fpPTrace(PTRACE_KILL, AThread.ID, pointer(1), nil);
     TDbgLinuxThread(AThread).ResetPauseStates;
     Result := CheckNoError;
-    if not FThreadMap.HasId(AThread.ID) then
-      AThread.Free;
     exit;
   end;
 
@@ -1127,8 +1126,6 @@ begin
     Result := CheckNoError;
   end;
 
-  if not FThreadMap.HasId(AThread.ID) then
-    AThread.Free;
   {$IFDEF DebuglnLinuxDebugEvents}
   finally debuglnExit(['<<<<< TDbgLinuxProcess.Continue ' ]); end;
   {$ENDIF}
@@ -1137,7 +1134,6 @@ end;
 function TDbgLinuxProcess.WaitForDebugEvent(out ProcessIdentifier, ThreadIdentifier: THandle): boolean;
 var
   PID: THandle;
-  ThreadWithEvent: TDbgLinuxThread;
 begin
   ThreadIdentifier:=-1;
   ProcessIdentifier:=-1;

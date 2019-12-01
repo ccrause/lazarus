@@ -150,7 +150,7 @@ begin
   NewOwner := FNotebook.Owner;
   if NewOwner = nil then
     NewOwner := FNotebook;
-  NewPage := FNotebook.PageClass.Create(NewOwner);
+  NewPage := FNotebook.GetPageClass.Create(NewOwner);
   with NewPage do
     Caption := S;
 
@@ -240,20 +240,13 @@ end;
  ------------------------------------------------------------------------------}
 constructor TCustomTabControl.Create(TheOwner: TComponent);
 begin
-  if PageClass=nil then PageClass := GetPageClass;
-
   inherited Create(TheOwner);
-
   fCompStyle := csNoteBook;
-
   FAccess := GetListClass.Create(Self);
-
   FImageListChangeLink := TChangeLink.Create;
   FImageListChangeLink.OnChange := @DoImageListChange;
   FImageListChangeLink.OnDestroyResolutionHandle := @DoImageListDestroyResolutionHandle;
-
   FPageIndex := -1;
-
   ControlStyle := []; // do not add csAcceptsControls
   TabPosition := tpTop;
   TabStop := true;
@@ -1142,7 +1135,7 @@ begin
   if (FPageIndexOnLastChange >= 0) and (FPageIndexOnLastChange < PageCount) and
      (FPageIndexOnLastChange <> FPageIndex) then
   begin
-    if Assigned(CurPage) and HasFocusedControl(Page[FPageIndexOnLastChange]) then
+    if Assigned(CurPage) and CurPage.enabled and HasFocusedControl(Page[FPageIndexOnLastChange]) then
       CurPage.SetFocus;
     Page[FPageIndexOnLastChange].Visible := False;
   end;

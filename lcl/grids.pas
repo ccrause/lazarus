@@ -904,7 +904,6 @@ type
     function  ScrollGrid(Relative:Boolean; DCol,DRow: Integer): TPoint;
     procedure SetCol(AValue: Integer);
     procedure SetColWidths(Acol: Integer; Avalue: Integer);
-    procedure SetColCount(AValue: Integer);
     procedure SetColRowDragIndicatorColor(const AValue: TColor);
     procedure SetDefColWidth(AValue: Integer);
     procedure SetDefRowHeight(AValue: Integer);
@@ -1102,10 +1101,10 @@ type
     procedure InvalidateFromCol(ACol: Integer);
     procedure InvalidateGrid;
     procedure InvalidateFocused;
-    function  IsColumnIndexValid(AIndex: Integer): boolean; inline;
-    function  IsRowIndexValid(AIndex: Integer): boolean; inline;
-    function  IsColumnIndexVariable(AIndex: Integer): boolean; inline;
-    function  IsRowIndexVariable(AIndex: Integer): boolean; inline;
+    function  IsColumnIndexValid(AIndex: Integer): boolean;
+    function  IsRowIndexValid(AIndex: Integer): boolean;
+    function  IsColumnIndexVariable(AIndex: Integer): boolean;
+    function  IsRowIndexVariable(AIndex: Integer): boolean;
     function  GetIsCellTitle(aCol,aRow: Integer): boolean; virtual;
     function  GetIsCellSelected(aCol, aRow: Integer): boolean; virtual;
     function  IsEmptyRow(ARow: Integer): Boolean;
@@ -1151,6 +1150,7 @@ type
     procedure SelectEditor; virtual;
     function  SelectCell(ACol, ARow: Integer): Boolean; virtual;
     procedure SetCanvasFont(aFont: TFont);
+    procedure SetColCount(AValue: Integer); virtual;
     procedure SetColor(Value: TColor); override;
     procedure SetColRow(const ACol,ARow: Integer; withEvents: boolean = false);
     procedure SetCursor(AValue: TCursor); override;
@@ -1764,7 +1764,7 @@ type
     procedure CopyToClipboard(AUseSelection: boolean = false);
     procedure InsertRowWithValues(Index: Integer; Values: array of String);
     procedure LoadFromCSVStream(AStream: TStream; ADelimiter: Char=',';
-      UseTitles: boolean=true; FromLine: Integer=0; SkipEmptyLines: Boolean=true);
+      UseTitles: boolean=true; FromLine: Integer=0; SkipEmptyLines: Boolean=true); virtual;
     procedure LoadFromCSVFile(AFilename: string; ADelimiter: Char=',';
       UseTitles: boolean=true; FromLine: Integer=0; SkipEmptyLines: Boolean=true);
     procedure SaveToCSVStream(AStream: TStream; ADelimiter: Char=',';
@@ -3445,8 +3445,7 @@ var
 begin
   if HandleAllocated then begin
     {$Ifdef DbgScroll}
-    DebugLn('Scrollbar
-    Page: Which=',SbToStr(Which), ' Avalue=',dbgs(aPage));
+    DebugLn('Scrollbar Page: Which=',SbToStr(Which), ' Avalue=',dbgs(aPage));
     {$endif}
     ScrollInfo.cbSize := SizeOf(ScrollInfo);
     ScrollInfo.fMask := SIF_PAGE;
@@ -4094,8 +4093,7 @@ end;
 
 function TCustomGrid.SelectCell(ACol, ARow: Integer): Boolean;
 begin
-  Result:=true;
-  //Result:=MoveExtend(False, aCol, aRow);
+  Result := (ColWidths[aCol] > 0) and (RowHeights[aRow] > 0);
 end;
 
 procedure TCustomGrid.SetCanvasFont(aFont: TFont);
@@ -7833,13 +7831,10 @@ begin
     MoveNextSelectable(true, aCol, aRow);
 end;
 
-function TCustomGrid.MoveNextSelectable(Relative: Boolean; DCol, DRow: Integer
-  ): Boolean;
+function TCustomGrid.MoveNextSelectable(Relative: Boolean; DCol, DRow: Integer): Boolean;
 var
   CInc,RInc: Integer;
   NCol,NRow: Integer;
-  SelOk: Boolean;
-
 begin
   // Reference
   if not Relative then begin
@@ -7879,14 +7874,14 @@ begin
   else           RInc:= 0;
 
   // Calculate
-  SelOk:=SelectCell(NCol,NRow);
   Result:=False;
-  while not SelOk do begin
-    if not IsRowIndexVariable(NRow+RInc) or
-       not IsColumnIndexVariable(NCol+CInc) then Exit;
+  while ((ColWidths[NCol]=0)  and (CInc<>0))
+     or ((RowHeights[NRow]=0) and (RInc<>0)) do
+  begin
+    if not (IsRowIndexVariable(NRow+RInc) and IsColumnIndexVariable(NCol+CInc)) then
+      Exit;
     Inc(NCol, CInc);
     Inc(NRow, RInc);
-    SelOk:=SelectCell(NCol, NRow);
   end;
   Result:=MoveExtend(False, NCol, NRow, True);
 
@@ -9809,9 +9804,9 @@ begin
   FSpecialCursors[gcsRowHeightChanging] := crVSplit;
   FSpecialCursors[gcsDragging] := crMultiDrag;
 
-  varRubberSpace := MulDiv(constRubberSpace, Screen.PixelsPerInch, 96);
-  varCellPadding := MulDiv(constCellPadding, Screen.PixelsPerInch, 96);
-  varColRowBorderTolerance := MulDiv(constColRowBorderTolerance, Screen.PixelsPerInch, 96);
+  varRubberSpace := Scale96ToScreen(constRubberSpace);
+  varCellPadding := Scale96ToScreen(constCellPadding);
+  varColRowBorderTolerance := Scale96ToScreen(constColRowBorderTolerance);
 end;
 
 destructor TCustomGrid.Destroy;
@@ -10893,8 +10888,9 @@ end;
 
 function TCustomDrawGrid.SelectCell(aCol, aRow: Integer): boolean;
 begin
-  Result:= (ColWidths[aCol] > 0) and (RowHeights[aRow] > 0);
-  if Assigned(OnSelectCell) then OnSelectCell(Self, aCol, aRow, Result);
+  Result := inherited SelectCell(aCol, aRow);
+  if Assigned(OnSelectCell) then
+    OnSelectCell(Self, aCol, aRow, Result);
 end;
 
 procedure TCustomDrawGrid.SetColor(Value: TColor);
