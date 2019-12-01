@@ -64,6 +64,7 @@ type
     constructor Create(ACairo: Pcairo_t; AWidget: PGtkWidget = nil);
     constructor Create(ALogFont: TLogFont; const ALongFontName: String);
     destructor Destroy; override;
+    procedure UpdateLogFont;
     property FontName: String read FFontName write SetFontName;
     property Handle: PPangoFontDescription read FHandle;
     property Layout: PPangoLayout read FLayout;
@@ -238,6 +239,8 @@ type
       mask: PGdkPixBuf; maskRect: PRect);
     procedure drawImage(targetRect: PRect; image: PGdkPixBuf; sourceRect: PRect;
       mask: PGdkPixBuf; maskRect: PRect);
+    procedure drawImage1(targetRect: PRect; image: PGdkPixBuf; sourceRect: PRect;
+      mask: PGdkPixBuf; maskRect: PRect);
     procedure drawPixmap(p: PPoint; pm: PGdkPixbuf; sr: PRect);
     procedure drawPolyLine(P: PPoint; NumPts: Integer);
     procedure drawPolygon(P: PPoint; NumPts: Integer; FillRule: integer);
@@ -288,6 +291,8 @@ procedure Gtk3WordWrap(DC: HDC; AText: PChar;
 
 function Gtk3DefaultContext: TGtk3DeviceContext;
 function Gtk3ScreenContext: TGtk3DeviceContext;
+
+function ReplaceAmpersandsWithUnderscores(const S: string): string; inline;
 
 implementation
 uses math, gtk3int, gtk3procs;
@@ -425,6 +430,61 @@ begin
   FFontName:=AValue;
 end;
 
+procedure TGtk3Font.UpdateLogFont;
+var
+  sz:integer;
+  members:TPangoFontMask;
+  AStyle: TPangoStyle;
+  AGravity: TPangoGravity;
+begin
+  if not Assigned(fHandle) then exit;
+  fillchar(fLogFont,sizeof(fLogFont),0);
+  members:=fHandle^.get_set_fields;
+  if (PANGO_FONT_MASK_FAMILY and members<>0) then
+  begin
+    fLogFont.lfFaceName:=PChar(fHandle^.get_family);
+  end;
+  if (PANGO_FONT_MASK_STYLE and members<>0) then
+  begin
+    AStyle := fHandle^.get_style;
+    if AStyle = PANGO_STYLE_ITALIC then
+      fLogFont.lfItalic:=1;
+  end;
+  if (PANGO_FONT_MASK_WEIGHT and members<>0) then
+  begin
+    fLogFont.lfWeight:=fHandle^.get_weight();
+  end;
+  if (PANGO_FONT_MASK_GRAVITY and members<>0) then
+  begin
+    AGravity := fHandle^.get_gravity;
+    if AGravity = PANGO_GRAVITY_SOUTH then
+      fLogFont.lfOrientation := 0
+    else
+    if AGravity = PANGO_GRAVITY_EAST then
+      fLogFont.lfOrientation := 900
+    else
+    if AGravity = PANGO_GRAVITY_NORTH then
+      fLogFont.lfOrientation := 1800
+    else
+    if AGravity = PANGO_GRAVITY_WEST then
+      fLogFont.lfOrientation := 2700;
+  end;
+  if (PANGO_FONT_MASK_SIZE and members<>0) then
+  begin
+    sz:=fHandle^.get_size;
+    if fHandle^.get_size_is_absolute then
+    begin
+      sz:=12;// sz div PANGO_SCALE;
+    end else
+    begin
+      { in points }
+      sz:=round(96*sz/PANGO_SCALE/72);//round(2.03*sz/PANGO_SCALE);
+    end;
+
+    fLogFont.lfHeight:=sz;//round(sz/PANGO_SCALE);
+  end;
+end;
+
 constructor TGtk3Font.Create(ACairo: Pcairo_t; AWidget: PGtkWidget);
 var
   AContext: PPangoContext;
@@ -451,6 +511,7 @@ begin
     // writeln('**TGtk3Font.Create size is absolute ',FFontName,' size ',FHandle^.get_size);
   end else
   begin
+    FHandle^.set_size(FHandle^.get_size);
     // writeln('*TGtk3Font.Create size is not absolute ',FFontName,' size ',FHandle^.get_size);
   end;
 
@@ -464,9 +525,7 @@ end;
 constructor TGtk3Font.Create(ALogFont: TLogFont; const ALongFontName: String);
 var
   AContext: PPangoContext;
-  ADescription: PPangoFontDescription;
   AttrList: PPangoAttrList;
-  AttrListTemporary: Boolean;
   Attr: PPangoAttribute;
 begin
   FLogFont := ALogFont;
@@ -477,36 +536,23 @@ begin
     if Gtk3WidgetSet.DefaultAppFontName <> '' then
       FHandle := pango_font_description_from_string(PgChar(Gtk3WidgetSet.DefaultAppFontName))
     else
-    begin
-      ADescription := pango_context_get_font_description(AContext);
-      FHandle := pango_font_description_copy(ADescription);
-    end;
-    FFontName := FHandle^.get_family;
+      FHandle := pango_font_description_copy(pango_context_get_font_description(AContext));
   end else
-  begin
     FHandle := pango_font_description_from_string(PgChar(FFontName));
-    FFontName := FHandle^.get_family;
-  end;
+  FFontName := FHandle^.get_family;
   if ALogFont.lfHeight <> 0 then
     FHandle^.set_absolute_size(Abs(ALogFont.lfHeight) * PANGO_SCALE);
-
   if ALogFont.lfItalic > 0 then
     FHandle^.set_style(PANGO_STYLE_ITALIC);
-
   FHandle^.set_weight(ALogFont.lfWeight);
-
   FLayout := pango_layout_new(AContext);
   FLayout^.set_font_description(FHandle);
 
   if (ALogFont.lfUnderline<>0) or (ALogFont.lfStrikeOut<>0) then
   begin
-    AttrListTemporary := false;
     AttrList := pango_layout_get_attributes(FLayout);
     if (AttrList = nil) then
-    begin
       AttrList := pango_attr_list_new();
-      AttrListTemporary := True;
-    end;
     if ALogFont.lfUnderline <> 0 then
       Attr := pango_attr_underline_new(PANGO_UNDERLINE_SINGLE)
     else
@@ -515,13 +561,9 @@ begin
 
     Attr := pango_attr_strikethrough_new(ALogFont.lfStrikeOut<>0);
     pango_attr_list_change(AttrList, Attr);
-
     pango_layout_set_attributes(FLayout, AttrList);
-
-    if AttrListTemporary then
-      pango_attr_list_unref(AttrList);
+    pango_attr_list_unref(AttrList);
   end;
-
   g_object_unref(AContext);
 end;
 
@@ -1122,6 +1164,7 @@ begin
   begin
     AWindow := gdk_get_default_root_window;
     AWindow^.get_geometry(@x, @y, @w, @h);
+    w:=1; h:=1;
     // ParentPixmap := gdk_pixbuf_get_from_window(AWindow, x, y, w, h);
     // Widget := gdk_cairo_create(AWindow);
     // gdk_cairo_set_source_pixbuf(Widget, ParentPixmap, 0, 0);
@@ -1427,12 +1470,43 @@ begin
     // ASurface := cairo_image_surface_create_for_data(AData, CAIRO_FORMAT_ARGB32, gdk_pixbuf_get_width(pm), gdk_pixbuf_get_height(pm), gdk_pixbuf_get_rowstride(pm));
     // cairo_set_source_surface(Widget, ASurface, targetRect^.Left, targetRect^.Top);
     gdk_cairo_set_source_pixbuf(Widget, Image, 0, 0);
+    with targetRect^ do
+    cairo_rectangle(Widget, Left, Top, Right-Left, Bottom-Top);
     cairo_paint(Widget);
   finally
     // cairo_surface_destroy(ASurface);
     cairo_restore(Widget);
   end;
 end;
+
+procedure TGtk3DeviceContext.drawImage1(targetRect: PRect; image: PGdkPixBuf;
+  sourceRect: PRect; mask: PGdkPixBuf; maskRect: PRect);
+var
+  M: cairo_matrix_t;
+begin
+  {$IFDEF VerboseGtk3DeviceContext}
+  DebugLn('TGtk3DeviceContext.DrawImage ');
+  {$ENDIF}
+  cairo_save(Widget);
+  try
+    gdk_cairo_set_source_pixbuf(Widget, Image, 0, 0);
+    with targetRect^ do
+      cairo_rectangle(Widget, Left, Top, Right - Left, Bottom - Top);
+
+    cairo_matrix_init_identity(@M);
+    cairo_matrix_translate(@M, SourceRect^.Left, SourceRect^.Top);
+    cairo_matrix_scale(@M,  (sourceRect^.Right-sourceRect^.Left) / (targetRect^.Right-targetRect^.Left),
+        (sourceRect^.Bottom-sourceRect^.Top) / (targetRect^.Bottom-targetRect^.Top));
+    cairo_matrix_translate(@M, -targetRect^.Left, -targetRect^.Top);
+    cairo_pattern_set_matrix(cairo_get_source(Widget), @M);
+    //cairo_fill (Widget);
+    cairo_clip(Widget);
+    cairo_paint(Widget);
+  finally
+    cairo_restore(Widget);
+  end;
+end;
+
 
 procedure TGtk3DeviceContext.drawPixmap(p: PPoint; pm: PGdkPixbuf; sr: PRect);
 var
@@ -1861,6 +1935,11 @@ end;
 
 //various routines for text , copied from gtk2.
 
+function ReplaceAmpersandsWithUnderscores(const S: string): string; inline;
+begin
+  Result := StringReplace(S, '&', '_', [rfReplaceAll]);
+end;
+
 {-------------------------------------------------------------------------------
   function RemoveAmpersands(Src: PChar; LineLength : Longint) : PChar;
 
@@ -1940,7 +2019,7 @@ var
   AInkRect: TPangoRectangle;
   ALogicalRect: TPangoRectangle;
   AMetrics: PPangoFontMetrics;
-  ACharWidth: gint;
+  ACharWidth,ATextWidth,ATextHeight: gint;
 begin
   NewStr:=Str;
   // first check if Str contains an ampersand:
@@ -1973,8 +2052,10 @@ begin
     descent^ := AMetrics^.get_descent;
   if width <> nil then
   begin
-    ACharWidth := AMetrics^.get_approximate_char_width;
-    width^ := (StrLength * ACharWidth) div PANGO_SCALE;
+    {ACharWidth := AMetrics^.get_approximate_char_width;
+    width^ := (utf8length(Str, StrLength) * ACharWidth) div PANGO_SCALE;}
+    TheFont.Layout^.get_pixel_size(@ATextWidth, @ATextHeight);
+    width^:=ATextWidth;
   end;
   // PANGO_PIXELS(char_width)
 

@@ -2445,6 +2445,10 @@ msgid ""
 "Please confirm the desktop name:"
 msgstr ""
 
+#: lazarusidestrconsts.dlgincludecodetemplatestoidentcompl
+msgid "Include code templates"
+msgstr ""
+
 #: lazarusidestrconsts.dlgincludeidentifierscontainingprefix
 msgid "Include identifiers containing prefix"
 msgstr ""
@@ -3872,6 +3876,10 @@ msgstr ""
 
 #: lazarusidestrconsts.dlgselectallchildcontrols
 msgid "Select all child controls together with their parent."
+msgstr ""
+
+#: lazarusidestrconsts.dlgselectallnoscroll
+msgid "Do not scroll on Select-All / Paragraph or To-Brace"
 msgstr ""
 
 #: lazarusidestrconsts.dlgselectedtext
@@ -7379,6 +7387,10 @@ msgstr ""
 msgid "Visibility"
 msgstr ""
 
+#: lazarusidestrconsts.liscomboboxes
+msgid "Combo Boxes"
+msgstr ""
+
 #: lazarusidestrconsts.liscommandlineparameters
 msgctxt "lazarusidestrconsts.liscommandlineparameters"
 msgid "Command line parameters"
@@ -9441,6 +9453,10 @@ msgstr "שרטט קווי רשת"
 
 #: lazarusidestrconsts.lisdrawtheselectionfocusedevenifthemessageswindowhasn
 msgid "Draw the selection focused even if the Messages window has no focus. Use this if your theme has a hardly visible unfocused drawing."
+msgstr ""
+
+#: lazarusidestrconsts.lisdropdowncount
+msgid "Drop Down Count"
 msgstr ""
 
 #: lazarusidestrconsts.lisdsgcopycomponents
@@ -12252,6 +12268,19 @@ msgstr "הערה: כל המקשים יוגדרו לערכים של הסכמה ה
 #: lazarusidestrconsts.liskmopenpackagefile
 msgid "Open package file"
 msgstr "לפתוח קובץ חבילה"
+
+#: lazarusidestrconsts.liskmopenrecent
+msgctxt "lazarusidestrconsts.liskmopenrecent"
+msgid "Open Recent"
+msgstr ""
+
+#: lazarusidestrconsts.liskmopenrecentpackage
+msgid "Open recent package"
+msgstr ""
+
+#: lazarusidestrconsts.liskmopenrecentproject
+msgid "Open recent project"
+msgstr ""
 
 #: lazarusidestrconsts.liskmpastecomponentsfromclipboard
 #, fuzzy
@@ -22504,6 +22533,18 @@ msgctxt "lazarusidestrconsts.srkmeccopy"
 msgid "Copy"
 msgstr "העתק את הבחירה ללוח הזמני"
 
+#: lazarusidestrconsts.srkmeccopyadd
+msgid "Copy (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopyaddcurrentline
+msgid "Copy current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopycurrentline
+msgid "Copy current line"
+msgstr ""
+
 #: lazarusidestrconsts.srkmeccopyeditornewwindow
 msgid "Copy editor to new window"
 msgstr "העתק עורך חלון חדש"
@@ -22522,6 +22563,18 @@ msgstr "העתק עורך לחלון החופשי הקודם"
 msgctxt "lazarusidestrconsts.srkmeccut"
 msgid "Cut"
 msgstr "גזור את הבחירה אל הלוח הזמני"
+
+#: lazarusidestrconsts.srkmeccutadd
+msgid "Cut (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutaddcurrentline
+msgid "Cut current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutcurrentline
+msgid "Cut current line"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecdeletebol
 msgid "Delete to beginning of line"
@@ -22562,6 +22615,10 @@ msgstr "השווה"
 
 #: lazarusidestrconsts.srkmecdown
 msgid "Move cursor down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecduplicateline
+msgid "Duplicate line (or lines in selection)"
 msgstr ""
 
 #: lazarusidestrconsts.srkmeceditorbottom
@@ -22919,6 +22976,14 @@ msgstr "הזז את העורך ימינה"
 #: lazarusidestrconsts.srkmecmoveeditorrightmost
 msgid "Move editor rightmost"
 msgstr "הצמד את העורך ימינה"
+
+#: lazarusidestrconsts.srkmecmovelinedown
+msgid "Move one line down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmovelineup
+msgid "Move one line up"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecmultipaste
 msgctxt "lazarusidestrconsts.srkmecmultipaste"

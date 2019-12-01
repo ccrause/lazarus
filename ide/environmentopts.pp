@@ -85,6 +85,8 @@ const
   DefaultGuideLineColorLeftTop = clBlue;
   DefaultGuideLineColorRightBottom = clGreen;
 
+  DefaultDropDownCount = 8;
+
   //----------------------------------------------------------------------------
   
   { Backup }
@@ -565,6 +567,9 @@ type
     FLastSavedProjectFile: string;
     FLastOpenPackages: TLastOpenPackagesList;//list of filenames with open packages
 
+    // comboboxes
+    FDropDownCount: Integer;
+
     // designer
     FCreateComponentFocusNameProperty: boolean;
     FSwitchToFavoritesOITab: boolean;
@@ -740,8 +745,7 @@ type
     procedure SaveNonDesktop(Path: String);
     procedure SetCompilerFilename(const AValue: string);
     procedure SetCompilerMessagesFilename(AValue: string);
-    procedure SetCurrentDebuggerPropertiesOpt(AValue: TDebuggerPropertiesConfig
-      );
+    procedure SetCurrentDebuggerPropertiesOpt(AValue: TDebuggerPropertiesConfig);
     procedure SetDebuggerEventLogColors(AIndex: TDBGEventType;
       const AValue: TDebuggerEventLogColor);
     procedure SetDebuggerSearchPath(const AValue: string);
@@ -913,6 +917,7 @@ type
     property CompilerMessagesFilename: string read GetCompilerMessagesFilename
               write SetCompilerMessagesFilename; // non English translation file
     property CompilerMessagesFileHistory: TStringList read FCompilerMessagesFileHistory;
+    // ToDo: Remove this from trunk after Lazarus 2.2.0 is out. Now for backwards compatibility.
     property ManyBuildModesSelection: TStringList read FManyBuildModesSelection;
 
     // Primary-config verification
@@ -1038,7 +1043,8 @@ type
     // glyphs
     property ShowButtonGlyphs: TApplicationShowGlyphs read FShowButtonGlyphs write FShowButtonGlyphs;
     property ShowMenuGlyphs: TApplicationShowGlyphs read FShowMenuGlyphs write FShowMenuGlyphs;
-
+    // comboboxes
+    property DropDownCount: Integer read FDropDownCount write FDropDownCount;
     // default template for each 'new item' category: Name=Path, Value=TemplateName
     property NewUnitTemplate: string read FNewUnitTemplate write FNewUnitTemplate;
     property NewFormTemplate: string read FNewFormTemplate write FNewFormTemplate;
@@ -2149,6 +2155,9 @@ begin
   FShowButtonGlyphs := sbgSystem;
   FShowMenuGlyphs := sbgSystem;
 
+  // comboboxes
+  FDropDownCount:=DefaultDropDownCount;
+
   // files
   LazarusDirectory:='';
   FLazarusDirHistory:=TStringList.Create;
@@ -2642,6 +2651,9 @@ begin
     FShowMenuGlyphs := TApplicationShowGlyphs(FXMLCfg.GetValue(Path+'ShowMenuGlyphs/Value',
       Ord(sbgSystem)));
 
+    // comboboxes
+    FDropDownCount:=FXMLCfg.GetValue(Path+'ComboBoxes/DropDownCount',DefaultDropDownCount);
+
     // recent files and directories
     FMaxRecentOpenFiles:=FXMLCfg.GetValue(Path+'Recent/OpenFiles/Max',DefaultMaxRecentOpenFiles);
     LoadRecentList(FXMLCfg,FRecentOpenFiles,Path+'Recent/OpenFiles/',rltFile);
@@ -2818,7 +2830,7 @@ begin
   SaveRecentList(FXMLCfg,FCompilerMessagesFileHistory,Path+'CompilerMessagesFilename/History/');
   FXMLCfg.SetDeleteValue(Path+'FppkgConfigFile/Value',FppkgConfigFile,'');
   SaveRecentList(FXMLCfg,FFppkgConfigFileHistory,Path+'FppkgConfigFile/History/');
-  SaveRecentList(FXMLCfg,FManyBuildModesSelection,Path+'ManyBuildModesSelection/');
+  // Note: ManyBuildModesSelection is not stored here any more. Moved to project settings.
 
   // Primary-config verification
   FXMLCfg.SetDeleteValue(Path+'LastCalledByLazarusFullPath/Value',FLastCalledByLazarusFullPath,'');
@@ -3003,6 +3015,9 @@ begin
     // glyphs
     FXMLCfg.SetDeleteValue(Path+'ShowButtonGlyphs/Value',Ord(FShowButtonGlyphs), Ord(sbgSystem));
     FXMLCfg.SetDeleteValue(Path+'ShowMenuGlyphs/Value',Ord(FShowMenuGlyphs), Ord(sbgSystem));
+
+    // comboboxes
+    FXMLCfg.SetDeleteValue(Path+'ComboBoxes/DropDownCount',FDropDownCount,DefaultDropDownCount);
 
     // recent files and directories
     FXMLCfg.SetDeleteValue(Path+'Recent/OpenFiles/Max',FMaxRecentOpenFiles,DefaultMaxRecentOpenFiles);

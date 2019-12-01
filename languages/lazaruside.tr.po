@@ -2288,6 +2288,10 @@ msgstr ""
 "Aynı ada sahip bir masaüstü zaten var.\n"
 "Lütfen masaüstü adını doğrulayın:"
 
+#: lazarusidestrconsts.dlgincludecodetemplatestoidentcompl
+msgid "Include code templates"
+msgstr ""
+
 #: lazarusidestrconsts.dlgincludeidentifierscontainingprefix
 msgid "Include identifiers containing prefix"
 msgstr "Önek içeren tanımlayıcıları dahil et"
@@ -3618,6 +3622,10 @@ msgstr "Arama kapsamı"
 #: lazarusidestrconsts.dlgselectallchildcontrols
 msgid "Select all child controls together with their parent."
 msgstr "Tüm çocuk kontrollerini ebeveynleriyle birlikte seçin."
+
+#: lazarusidestrconsts.dlgselectallnoscroll
+msgid "Do not scroll on Select-All / Paragraph or To-Brace"
+msgstr ""
 
 #: lazarusidestrconsts.dlgselectedtext
 msgid "&Selected text"
@@ -6951,6 +6959,10 @@ msgstr "Dönüş"
 msgid "Visibility"
 msgstr "Görünürlük"
 
+#: lazarusidestrconsts.liscomboboxes
+msgid "Combo Boxes"
+msgstr ""
+
 #: lazarusidestrconsts.liscommandlineparameters
 msgctxt "lazarusidestrconsts.liscommandlineparameters"
 msgid "Command line parameters"
@@ -8937,6 +8949,10 @@ msgstr "Izgara çizgileri çiz"
 #: lazarusidestrconsts.lisdrawtheselectionfocusedevenifthemessageswindowhasn
 msgid "Draw the selection focused even if the Messages window has no focus. Use this if your theme has a hardly visible unfocused drawing."
 msgstr "Mesajlar penceresinin odağı olmasa bile seçimi odaklanmış olarak çizin. Temanızda neredeyse hiç net görünmeyen bir çizim varsa, bunu kullanın."
+
+#: lazarusidestrconsts.lisdropdowncount
+msgid "Drop Down Count"
+msgstr ""
 
 #: lazarusidestrconsts.lisdsgcopycomponents
 msgid "Copy selected components to clipboard"
@@ -11666,6 +11682,19 @@ msgstr "Not: Tüm tuşlar, seçilen şema değerlerine ayarlanacaktır."
 #: lazarusidestrconsts.liskmopenpackagefile
 msgid "Open package file"
 msgstr "Paket dosyası aç"
+
+#: lazarusidestrconsts.liskmopenrecent
+msgctxt "lazarusidestrconsts.liskmopenrecent"
+msgid "Open Recent"
+msgstr ""
+
+#: lazarusidestrconsts.liskmopenrecentpackage
+msgid "Open recent package"
+msgstr ""
+
+#: lazarusidestrconsts.liskmopenrecentproject
+msgid "Open recent project"
+msgstr ""
 
 #: lazarusidestrconsts.liskmpastecomponentsfromclipboard
 msgid "Paste Components"
@@ -21222,6 +21251,18 @@ msgctxt "lazarusidestrconsts.srkmeccopy"
 msgid "Copy"
 msgstr "Kopyala"
 
+#: lazarusidestrconsts.srkmeccopyadd
+msgid "Copy (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopyaddcurrentline
+msgid "Copy current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopycurrentline
+msgid "Copy current line"
+msgstr ""
+
 #: lazarusidestrconsts.srkmeccopyeditornewwindow
 msgid "Copy editor to new window"
 msgstr "Editörü yeni pencereye kopyala"
@@ -21238,6 +21279,18 @@ msgstr "Düzenleyiciyi önceki boş pencereye kopyala"
 msgctxt "lazarusidestrconsts.srkmeccut"
 msgid "Cut"
 msgstr "Kes"
+
+#: lazarusidestrconsts.srkmeccutadd
+msgid "Cut (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutaddcurrentline
+msgid "Cut current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutcurrentline
+msgid "Cut current line"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecdeletebol
 msgid "Delete to beginning of line"
@@ -21278,6 +21331,10 @@ msgstr "Diff"
 #: lazarusidestrconsts.srkmecdown
 msgid "Move cursor down"
 msgstr "İmleci aşağıya taşı"
+
+#: lazarusidestrconsts.srkmecduplicateline
+msgid "Duplicate line (or lines in selection)"
+msgstr ""
 
 #: lazarusidestrconsts.srkmeceditorbottom
 msgid "Move cursor to absolute end"
@@ -21594,6 +21651,14 @@ msgstr "Editörü sağa taşı"
 #: lazarusidestrconsts.srkmecmoveeditorrightmost
 msgid "Move editor rightmost"
 msgstr "Editörün en sağına git"
+
+#: lazarusidestrconsts.srkmecmovelinedown
+msgid "Move one line down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmovelineup
+msgid "Move one line up"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecmultipaste
 msgctxt "lazarusidestrconsts.srkmecmultipaste"

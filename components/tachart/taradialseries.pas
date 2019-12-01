@@ -661,11 +661,19 @@ begin
 end;
 
 function TCustomPieSeries.FindContainingSlice(const APoint: TPoint): Integer;
+const
+  Neighbors: array[0..7] of TPoint = (
+    (x:-1; y:-1), (x:0; y:-1), (x:1; y:-1),
+    (x:-1; y:0),               (x:1; y:0),
+    (x:-1; y:1),  (x:0; y:1),  (x:1; y:1)
+  );
 var
   c: TPoint;
   pointAngle: Double;
+  minAngle, maxAngle: Double;
   ps: TPieSlice;
   innerRadius: Integer;
+  neighbor: TPoint;
 begin
   innerRadius := CalcInnerRadius;
   for ps in FSlices do begin
@@ -680,7 +688,18 @@ begin
     if not InRange(sqr(c.X) + sqr(c.Y), sqr(innerRadius), sqr(FRadius)) then
       continue;
     pointAngle := NormalizeAngle(ArcTan2(-c.Y, c.X));
-    if ps.FNextAngle <= ps.FPrevAngle then begin
+    if ps.FNextAngle = ps.FPrevAngle then begin
+      minAngle := pointAngle;
+      maxAngle := pointAngle;
+      for neighbor in Neighbors do begin
+        pointAngle := NormalizeAngle(ArcTan2(-c.Y + neighbor.Y, c.X + neighbor.X));
+        minAngle := Min(minAngle, pointAngle);
+        maxAngle := Max(maxAngle, pointAngle);
+      end;
+      if InRange(ps.FPrevAngle, minAngle, maxAngle) then
+        exit(ps.FOrigIndex);
+    end else
+    if ps.FNextAngle < ps.FPrevAngle then begin
       if InRange(pointAngle, ps.FPrevAngle - TWO_PI, ps.FNextAngle) or
          InRange(pointAngle, ps.FPrevAngle, ps.FNextAngle + TWO_PI)
       then
@@ -1219,15 +1238,17 @@ var
       ADrawer.Brush := FBrush;
       if Styles <> nil then
         Styles.Apply(ADrawer, AYIndex);
-
       if fill then begin
         pts[cnt] := originPt;
         ADrawer.SetPenParams(psClear, clBlack);
         ADrawer.Polygon(pts, 0, cnt + 1);
       end;
+
       ADrawer.Pen := LinePen;
+      ADrawer.SetBrushParams(bsClear, clTAColor);
       if Styles <> nil then
-        Styles.Apply(ADrawer, AYIndex);
+        Styles.Apply(ADrawer, AYIndex, true);
+        // "true" avoids painting the gaps of non-solid lines in the brush color
       ADrawer.PolyLine(pts, 0, cnt);
     end;
 

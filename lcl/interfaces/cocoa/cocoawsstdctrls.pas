@@ -346,6 +346,9 @@ procedure ControlSetTextWithChangeEvent(ctrl: NSControl; const text: string);
 
 implementation
 
+uses
+  CocoaInt;
+
 const
   VerticalScrollerVisible: array[TScrollStyle] of boolean = (
  {ssNone          } false,
@@ -405,6 +408,7 @@ begin
   Result := TCocoaTextField.alloc.lclInitWithCreateParams(AParams);
   if Assigned(Result) then
   begin
+    Result.setFont(NSFont.systemFontOfSize(NSFont.systemFontSize));
     Result.callback := TLCLCommonCallback.Create(Result, ATarget);
     SetNSControlValue(Result, AParams.Caption);
   end;
@@ -415,6 +419,7 @@ begin
   Result := TCocoaSecureTextField.alloc.lclInitWithCreateParams(AParams);
   if Assigned(Result) then
   begin
+    Result.setFont(NSFont.systemFontOfSize(NSFont.systemFontSize));
     TCocoaSecureTextField(Result).callback := TLCLCommonCallback.Create(Result, ATarget);
     SetNSText(Result.currentEditor, AParams.Caption);
   end;
@@ -1900,7 +1905,7 @@ var
   btn: NSButton;
   cl: NSButtonCell;
 begin
-  btn := AllocButton(AWinControl, TLCLButtonCallBack, AParams, NSTexturedRoundedBezelStyle, NSToggleButton);
+  btn := AllocButton(AWinControl, TLCLButtonCallBack, AParams, CocoaToggleBezel, CocoaToggleType);
   cl := NSButtonCell(NSButton(btn).cell);
   cl.setShowsStateBy(cl.showsStateBy or NSContentsCellMask);
   Result := TLCLIntfHandle(btn);

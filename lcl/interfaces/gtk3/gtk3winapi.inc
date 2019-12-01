@@ -397,8 +397,6 @@ end;
 
 function TGtk3WidgetSet.CreateFontIndirectEx(const LogFont: TLogFont;
   const LongFontName: string): HFONT;
-var
-  ALogFontName: String;
 begin
   Result := HFONT(TGtk3Font.Create(LogFont, LongFontName));
 end;
@@ -630,6 +628,8 @@ var
   l: LongInt;
   Pt: TPoint;
   SavedRect: TRect; // if font orientation <> 0
+  LineHeight: Integer;
+  Size: TSize;
 
   function LeftOffset: Longint;
   begin
@@ -674,17 +674,13 @@ var
   procedure DoCalcRect;
   var
     AP: TSize;
-    J, MaxWidth,
-    LineWidth: Integer;
-    PR1, PR2: TPangoRectangle;
-    Alignment: Integer;
-    ADevOffset: TPoint;
+    J, MaxWidth, DefHeight,
+    LineWidth, LineHeight: Integer;
   begin
-
-
     theRect := Rect;
 
     MaxWidth := theRect.Right - theRect.Left;
+    DefHeight := theRect.Bottom - theRect.Top;
 
     (*
     if Flags and DT_CENTER  <> 0then
@@ -722,7 +718,10 @@ var
       TextExtentPoint(PChar(AStr), length(AStr), AP{%H-});
       theRect.Bottom := theRect.Top + TM.tmHeight;
       if (Flags and DT_CALCRECT)<>0 then
-        theRect.Right := theRect.Left +  AP.cX
+      begin
+        theRect.Right := theRect.Left +  AP.cX;
+        theRect.Bottom := theRect.Top + AP.cY;
+      end
       else
       begin
         theRect.Right := theRect.Left + Min(MaxWidth, AP.cX);
@@ -745,6 +744,7 @@ var
         // do not break at word boundaries
         TextExtentPoint(PChar(AStr), length(AStr), AP);
         MaxWidth := AP.cX;
+        DefHeight := AP.cY;
       end;
 
       Gtk3WordWrap(DC, PChar(AStr), MaxWidth, Lines, NumLines);
@@ -752,20 +752,25 @@ var
       if (Flags and DT_CALCRECT)<>0 then
       begin
         LineWidth := 0;
+        LineHeight := 0;
         if (Lines <> nil) then
         begin
           for J := 0 to NumLines - 1 do
           begin
             TextExtentPoint(Lines[J], StrLen(Lines[J]), AP);
             LineWidth := Max(LineWidth, AP.cX);
+            Inc(LineHeight, AP.cY);
           end;
         end;
         LineWidth := Min(MaxWidth, LineWidth);
       end else
+      begin
         LineWidth := MaxWidth;
+        LineHeight := NumLines*TM.tmHeight;
+      end;
 
       theRect.Right := theRect.Left + LineWidth;
-      theRect.Bottom := theRect.Top + NumLines*TM.tmHeight;
+      theRect.Bottom := theRect.Top + LineHeight;
       if NumLines>1 then
         Inc(theRect.Bottom, (NumLines-1)*TM.tmDescent);// space between lines
 
@@ -1022,12 +1027,17 @@ begin
       and (tm.tmHeight > (theRect.Bottom - theRect.Top))
       then Break;
 
-      if Lines[i] <> nil then begin
+      if Lines[i] <> nil then
+      begin
         l:=StrLen(Lines[i]);
         DrawLine(Lines[i], l, theRect.Top);
         dec(pIndex,l+length(LineEnding));
-      end;
-      Inc(theRect.Top, TM.tmDescent + TM.tmHeight);// space between lines
+        GetTextExtentPoint(DC, Lines[i], l, Size);
+        LineHeight := Size.cY;
+      end
+      else
+        LineHeight := TM.tmHeight;
+      Inc(theRect.Top, LineHeight + TM.tmDescent); // space between lines
     end;
 
   finally
@@ -1728,8 +1738,7 @@ begin
     if AData <> nil then
     begin
       // DebugLn('TGtk3WidgetSet.GetActiveWindow found window from data ...',dbgsName(TGtk3Widget(AData).LCLObject));
-      Result := HWND(AData);
-      exit;
+      exit(HWND(AData));
     end;
     for i := 0 to Screen.FormCount - 1 do
     begin
@@ -1819,7 +1828,7 @@ function TGtk3WidgetSet.GetClipBox(DC: hDC; lpRect: PRect): Longint;
 var
   GtkDC: TGtk3DeviceContext absolute DC;
   cr: Pcairo_t;
-  Pt: TPoint;
+  //Pt: TPoint;
   ARect: TGdkRectangle;
 begin
   //{$IFDEF GTK3DEBUGNOTIMPLEMENTED}
@@ -2242,7 +2251,7 @@ var
   aObject: TObject;
   ALogFont: PLogFont absolute Buf;
   ALogPen: PLogPen absolute Buf;
-  AExtLogPen: PExtLogPen absolute Buf;
+  //AExtLogPen: PExtLogPen absolute Buf;
   ALogBrush: PLogBrush absolute Buf;
 begin
   Result := 0;
@@ -2279,7 +2288,23 @@ begin
       ALogBrush^ := TGtk3Brush(AObject).LogBrush;
       // DebugLn('TGtk3WidgetSet.GetObject ',dbgsName(aObject),' ALogBrush ',dbgHex(PtrUInt(ALogBrush)));
     end;
-  end
+  end else
+  if aObject is TGtk3Font then
+  begin
+    if Buf = nil then
+    begin
+      // DebugLn('TGtk3WidgetSet.GetObject ',dbgsName(aObject),' Buffer is empty ',dbgHex(PtrUInt(ALogBrush)));
+      Result := SizeOf(TLogFont);
+    end else
+    if BufSize >= SizeOf(TLogFont) then
+    begin
+      Result := SizeOf(TLogFont);
+      // ALogBrush^ := TGtk3Brush(aObject).Color;
+       TGtk3Font(AObject).UpdateLogFont;
+      ALogFont^ := TGtk3Font(AObject).LogFont;
+      // DebugLn('TGtk3WidgetSet.GetObject ',dbgsName(aObject),' ALogBrush ',dbgHex(PtrUInt(ALogBrush)));
+    end;
+  end;
 end;
 
 function TGtk3WidgetSet.GetParent(Handle: HWND): HWND;
@@ -2716,16 +2741,9 @@ begin
     TM.tmBreakChar := '?';
 
     TM.tmItalic := Ord(AFont.Handle^.get_style = PANGO_STYLE_ITALIC);
-    AList := AFont.Layout^.get_attributes;
-    if AList <> nil then
-    begin
-      AList^.unref;
-    end;
     //  APangoMetrics^.get_underline_position;
     // TM.tmUnderlined :=
     // TM.tmStruckOut :=
-
-
     pango_font_metrics_unref(APangoMetrics);
     Result := True;
   end;
@@ -2796,7 +2814,8 @@ end;
 function TGtk3WidgetSet.GetWindowRect(Handle: hwnd; var ARect: TRect): Integer;
 var
   AWindow: PGdkWindow;
-  x, y, w, h: gint;
+  x, y: gint;
+  //w, h: gint;
   GRect: TGdkRectangle;
   Allocation: TGtkAllocation;
 begin
@@ -2807,8 +2826,8 @@ begin
     if AWindow <> nil then
     begin
       AWindow^.get_origin(@x, @y);
-      w := AWindow^.get_width;
-      h := AWindow^.get_height;
+      //w := AWindow^.get_width;
+      //h := AWindow^.get_height;
       AWindow^.get_frame_extents(@GRect);
       // R := RectFromGdkRect(GRect);
       ARect := Bounds(0, 0, GRect.width, GRect.Height);
@@ -2866,10 +2885,9 @@ begin
   end;
 end;
 
-function TGtk3WidgetSet.InvalidateRgn(Handle: HWND; Rgn: HRGN; Erase: Boolean
-  ): Boolean;
-var
-  R: TRect;
+function TGtk3WidgetSet.InvalidateRgn(Handle: HWND; Rgn: HRGN; Erase: Boolean): Boolean;
+//var
+//  R: TRect;
 begin
   Result := False; // inherited InvalidateRgn(Handle, Rgn, Erase);
   if IsValidHandle(Handle) then
@@ -2936,11 +2954,11 @@ end;
 
 function TGtk3WidgetSet.LPtoDP(DC: HDC; var Points; Count: Integer): BOOL;
 var
-  Matrix: cairo_matrix_t;
+  //Matrix: cairo_matrix_t;
   cr: PCairo_t;
   P: PPoint;
   dx, dy: Double;
-  Pt: TPoint;
+  //Pt: TPoint;
 begin
   {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
   // DebugLn('WARNING: TGtk3WidgetSet.LPtoDP not implemented ...');
@@ -3919,20 +3937,19 @@ function TGtk3WidgetSet.SetWindowOrgEx(dc: hdc; NewX, NewY: Integer;
   OldPoint: PPoint): Boolean;
 var
   Matrix: cairo_matrix_t;
-  dx: Double;
-  dy: Double;
+  //dx, dy: Double;
 begin
   Result := False; // inherited SetWindowOrgEx(dc, NewX, NewY, OldPoint);
   if IsValidDC(DC) then
   begin
     GetWindowOrgEx(dc, OldPoint);
     cairo_get_matrix(TGtk3DeviceContext(DC).Widget, @Matrix);
-    dx := 0;
-    dy := 0;
+    //dx := 0;
+    //dy := 0;
     // cairo_matrix_init_translate(Matrix, -NewX, -NewY);
     cairo_matrix_translate(@Matrix,
     	-NewX - TGtk3DeviceContext(DC).fncOrigin.x,
-      -NewY - TGtk3DeviceContext(DC).fncOrigin.Y);
+        -NewY - TGtk3DeviceContext(DC).fncOrigin.Y);
     cairo_transform(TGtk3DeviceContext(DC).Widget, @Matrix);
     // cairo_set_matrix(TGtk3DeviceContext(DC).Widget, Matrix);
     // DebugLn('TGtk3WidgetSet.SetWindowOrgEx NewX=',dbgs(NewX),' NewY=',dbgs(NewY));
@@ -3972,7 +3989,7 @@ function TGtk3WidgetSet.ShowScrollBar(Handle: HWND; wBar: Integer;
 var
   AWidget: TGtk3Widget;
   // AScrolledWin: PGtkScrolledWindow;
-  NewPolicy, OldPolicy: TGtkPolicyType;
+  NewPolicy: TGtkPolicyType;
 begin
   Result := IsValidHandle(Handle);
   if not Result then
@@ -4049,7 +4066,6 @@ var
   DestContext: TGtk3DeviceContext absolute DestDC;
   SrcContext: TGtk3DeviceContext absolute SrcDC;
   ATargetRect, ASrcRect: TRect;
-  AImage: PGdkPixbuf;
 begin
   Result := False;
   {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
@@ -4057,11 +4073,7 @@ begin
   {$ENDIF}
   ATargetRect := Rect(X, Y, Width + X, Height + Y);
   ASrcRect := Rect(XSrc, YSrc, SrcWidth + XSrc, SrcHeight + YSrc);
-  // AImage := gdk_pixbuf_new_subpixbuf();
-  // DestContext.drawImage(@ATargetRect, SrcContext.ParentPixmap, @ASrcRect, nil, nil);
-  // Ask for DestContext type of surface (surface/image) and then draw
-  DestContext.drawSurface(@ATargetRect, SrcContext.CairoSurface, @ASrcRect, nil, nil);
-  // DestContext.drawImage();
+  DestContext.drawImage1(@ATargetRect, PgdkPixbuf(SrcContext.CurrentImage.Handle) , @ASrcRect, nil, nil);
   // Result := True;
 end;
 

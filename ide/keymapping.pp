@@ -414,6 +414,15 @@ begin
     ecCut                     : Result:= srkmecCut;
     ecCopy                    : Result:= srkmecCopy;
     ecPaste                   : Result:= srkmecPaste;
+    ecCopyAdd                 : Result:= srkmecCopyAdd;
+    ecCutAdd                  : Result:= srkmecCutAdd;
+    ecCopyCurrentLine         : Result:= srkmecCopyCurrentLine;
+    ecCopyAddCurrentLine      : Result:= srkmecCopyAddCurrentLine;
+    ecCutCurrentLine          : Result:= srkmecCutCurrentLine;
+    ecCutAddCurrentLine       : Result:= srkmecCutAddCurrentLine;
+    ecMoveLineUp              : Result:= srkmecMoveLineUp;
+    ecMoveLineDown            : Result:= srkmecMoveLineDown;
+    ecDuplicateLine           : Result:= srkmecDuplicateLine;
     ecMultiPaste              : Result:= srkmecMultiPaste;
     ecScrollUp                : Result:= srkmecScrollUp;
     ecScrollDown              : Result:= srkmecScrollDown;
@@ -510,6 +519,7 @@ begin
     ecNewForm                 : Result:= lisMenuNewForm;
     ecOpen                    : Result:= lisMenuOpen;
     ecOpenUnit                : Result:= lisMenuOpenUnit;
+    ecOpenRecent              : Result:= lisKMOpenRecent;
     ecRevert                  : Result:= lisMenuRevert;
     ecSave                    : Result:= lisSave;
     ecSaveAs                  : Result:= lisMenuSaveAs;
@@ -580,6 +590,7 @@ begin
     ecJumpToNextError         : Result:= lisMenuJumpToNextError;
     ecJumpToPrevError         : Result:= lisMenuJumpToPrevError;
     ecGotoIncludeDirective    : Result:= srkmecGotoIncludeDirective;
+    ecJumpToSection           : Result:= lisMenuJumpTo;
     ecJumpToInterface         : Result:= lisMenuJumpToInterface;
     ecJumpToInterfaceUses     : Result:= lisMenuJumpToInterfaceUses;
     ecJumpToImplementation    : Result:= lisMenuJumpToImplementation;
@@ -653,6 +664,7 @@ begin
     ecNewProject              : Result:= lisMenuNewProject;
     ecNewProjectFromFile      : Result:= lisMenuNewProjectFromFile;
     ecOpenProject             : Result:= lisMenuOpenProject;
+    ecOpenRecentProject       : Result:= lisMenuOpenRecentProject;
     ecCloseProject            : Result:= lisMenuCloseProject;
     ecSaveProject             : Result:= lisMenuSaveProject;
     ecSaveProjectAs           : Result:= lisMenuSaveProjectAs;
@@ -706,6 +718,7 @@ begin
     ecOpenPackage             : Result:= lisMenuOpenPackage;
     ecOpenPackageFile         : Result:= lisMenuOpenPackageFile;
     ecOpenPackageOfCurUnit    : Result:= lisMenuOpenPackageOfCurUnit;
+    ecOpenRecentPackage       : Result:= lisMenuOpenRecentPkg;
     ecAddCurFileToPkg         : Result:= lisMenuAddCurFileToPkg;
     ecNewPkgComponent         : Result:= lisMenuPkgNewPackageComponent;
     ecPackageGraph            : Result:= lisMenuPackageGraph;
@@ -1004,6 +1017,18 @@ begin
   ecCopy:                SetSingle(VK_C,[XCtrl],         VK_Insert,[XCtrl]);
   ecCut:                 SetSingle(VK_X,[XCtrl],         VK_Delete,[ssShift]);
   ecPaste:               SetSingle(VK_V,[XCtrl],         VK_Insert,[ssShift]);
+
+  ecCopyAdd:             SetSingle(VK_C,[XCtrl, ssAlt]);
+  ecCutAdd:              SetSingle(VK_X,[XCtrl, ssAlt]);
+  ecCopyCurrentLine:     SetSingle(VK_Y,[ssAlt]);
+  ecCopyAddCurrentLine:  SetSingle(VK_Y,[ssAlt, ssShift]);
+  ecCutCurrentLine:      SetSingle(VK_D,[ssAlt]);
+  ecCutAddCurrentLine:   SetSingle(VK_D,[ssAlt, ssShift]);
+
+  ecMoveLineUp:          SetSingle(VK_UP,[XCtrl, ssShift, ssAlt]);
+  ecMoveLineDown:        SetSingle(VK_DOWN,[XCtrl, ssShift, ssAlt]);
+  ecDuplicateLine:       SetSingle(VK_INSERT,[XCtrl, ssShift, ssAlt]);
+
   ecMultiPaste:          SetSingle(VK_UNKNOWN,[]);
   ecNormalSelect:        SetSingle(VK_UNKNOWN,[]);
   ecColumnSelect:        SetSingle(VK_UNKNOWN,[]);
@@ -2665,6 +2690,12 @@ begin
   AddDefault(C, 'Copy selection to clipboard', srkmecCopy, ecCopy);
   AddDefault(C, 'Cut selection to clipboard', srkmecCut, ecCut);
   AddDefault(C, 'Paste clipboard to current position', srkmecPaste, ecPaste);
+  AddDefault(C, 'Copy - Add to Clipboard', srkmecCopyAdd, ecCopyAdd);
+  AddDefault(C, 'Cut - Add to Clipboard', srkmecCutAdd, ecCutAdd);
+  AddDefault(C, 'Copy current line', srkmecCopyCurrentLine, ecCopyCurrentLine);
+  AddDefault(C, 'Copy current line - Add to Clipboard', srkmecCopyAddCurrentLine, ecCopyAddCurrentLine);
+  AddDefault(C, 'Cut current line', srkmecCutCurrentLine, ecCutCurrentLine);
+  AddDefault(C, 'Cut current line - Add to Clipboard', srkmecCutAddCurrentLine, ecCutAddCurrentLine);
   AddDefault(C, 'Multi paste clipboard to current position', srkmecMultiPaste, ecMultiPaste);
   AddDefault(C, 'Normal selection mode', srkmecNormalSelect, ecNormalSelect);
   AddDefault(C, 'Column selection mode', srkmecColumnSelect, ecColumnSelect);
@@ -2762,6 +2793,9 @@ begin
   AddDefault(C, 'Delete whole text', srkmecClearAll, ecClearAll);
   AddDefault(C, 'Break line and move cursor', srkmecLineBreak, ecLineBreak);
   AddDefault(C, 'Break line, leave cursor', srkmecInsertLine, ecInsertLine);
+  AddDefault(C, 'Move one line up', srkmecMoveLineUp, ecMoveLineUp);
+  AddDefault(C, 'Move one line down', srkmecMoveLineDown, ecMoveLineDown);
+  AddDefault(C, 'Duplicate line or lines in selection', srkmecDuplicateLine, ecDuplicateLine);
   AddDefault(C, 'Enclose in $IFDEF', lisEncloseInIFDEF, ecSelectionEncloseIFDEF);
   AddDefault(C, 'Insert from Character Map', lisMenuInsertCharacter, ecInsertCharacter);
   AddDefault(C, 'Insert GPL notice', srkmecInsertGPLNotice, ecInsertGPLNotice);
@@ -2890,6 +2924,7 @@ begin
   AddDefault(C, 'Find block other end', srkmecFindBlockOtherEnd, ecFindBlockOtherEnd);
   AddDefault(C, 'Find block start', srkmecFindBlockStart, ecFindBlockStart);
   AddDefault(C, 'Goto include directive', lisMenuGotoIncludeDirective, ecGotoIncludeDirective);
+  AddDefault(C, 'Jump to Section', lisMenuJumpTo, ecJumpToSection);
   AddDefault(C, 'Jump to Interface', lisMenuJumpToInterface, ecJumpToInterface);
   AddDefault(C, 'Jump to Interface uses', lisMenuJumpToInterfaceUses, ecJumpToInterfaceUses);
   AddDefault(C, 'Jump to Implementation', lisMenuJumpToImplementation, ecJumpToImplementation);
@@ -3034,6 +3069,7 @@ begin
   AddDefault(C, 'NewForm', lisMenuNewForm, ecNewForm);
   AddDefault(C, 'Open', lisOpen, ecOpen);
   AddDefault(C, 'OpenUnit', lisOpenUnit, ecOpenUnit);
+  AddDefault(C, 'OpenRecent', lisKMOpenRecent, ecOpenRecent);
   AddDefault(C, 'Revert', lisMenuRevert, ecRevert);
   AddDefault(C, 'Save', lisSave, ecSave);
   AddDefault(C, 'SaveAs', lisKMSaveAs, ecSaveAs);
@@ -3081,6 +3117,7 @@ begin
   AddDefault(C, 'New project', lisKMNewProject, ecNewProject);
   AddDefault(C, 'New project from file', lisKMNewProjectFromFile, ecNewProjectFromFile);
   AddDefault(C, 'Open project', lisOpenProject2, ecOpenProject);
+  AddDefault(C, 'Open recent project', lisKMOpenRecentProject, ecOpenRecentProject);
   AddDefault(C, 'Close project', lisKMCloseProject, ecCloseProject);
   AddDefault(C, 'Save project', lisKMSaveProject, ecSaveProject);
   AddDefault(C, 'Save project as', lisKMSaveProjectAs, ecSaveProjectAs);
@@ -3136,6 +3173,7 @@ begin
   AddDefault(C, 'New package', lisKMNewPackage, ecNewPackage);
   AddDefault(C, 'Open package', lisCompPalOpenPackage, ecOpenPackage);
   AddDefault(C, 'Open package file', lisKMOpenPackageFile, ecOpenPackageFile);
+  AddDefault(C, 'Open recent package', lisKMOpenRecentPackage, ecOpenRecentPackage);
   AddDefault(C, 'Open package of current unit', lisMenuOpenPackageOfCurUnit, ecOpenPackageOfCurUnit);
   AddDefault(C, 'Add active unit to a package', lisMenuAddCurFileToPkg, ecAddCurFileToPkg);
   AddDefault(C, 'Add new component to a package', lisMenuPkgNewPackageComponent, ecNewPkgComponent);

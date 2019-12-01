@@ -24,8 +24,9 @@ interface
 uses
   Classes, SysUtils, types, math,
   // LCL
-  Controls, StdCtrls, ExtCtrls, ComCtrls, Graphics, Dialogs, Forms, Menus, ExtDlgs,
+  Controls, StdCtrls, ExtCtrls, Buttons, ComCtrls, Graphics, Dialogs, Forms, Menus, ExtDlgs,
   Spin, CheckLst, PairSplitter, LCLType, LCLProc, LMessages, LCLMessageGlue, LCLIntf,
+  graphtype,
   // GTK3
   LazGtk3, LazGdk3, LazGObject2, LazGLib2, LazCairo1, LazPango1, LazGdkPixbuf2,
   gtk3objects, gtk3procs, gtk3private, Gtk3CellRenderer;
@@ -355,6 +356,7 @@ type
     function getText: String; override;
     function CreateWidget(const Params: TCreateParams):PGtkWidget; override;
     procedure DestroyWidget; override;
+    function getClientOffset:TPoint;override;
   public
     function getClientRect: TRect; override;
   end;
@@ -469,7 +471,12 @@ type
   { TGtk3ToolBar }
 
   TGtk3ToolBar = class(TGtk3Container)
-  protected
+  private
+    fBmpList:TList;
+    procedure ButtonClicked(data: gPointer); cdecl;
+    procedure ClearGlyphs;
+  public
+    destructor Destroy;override;
     function CreateWidget(const Params: TCreateParams):PGtkWidget; override;
   end;
 
@@ -657,21 +664,25 @@ type
     FMargin: Integer;
     FLayout: Integer;
     FSpacing: Integer;
+    FImage: TBitmap;
     function getLayout: Integer;
     function getMargin: Integer;
     procedure SetLayout(AValue: Integer);
     procedure SetMargin(AValue: Integer);
     procedure SetSpacing(AValue: Integer);
   protected
+    procedure SetImage(AImage:TBitmap);
     function getText: String; override;
     procedure setText(const AValue: String); override;
     function CreateWidget(const Params: TCreateParams):PGtkWidget; override;
   public
+    destructor Destroy;override;
     function IsWidgetOk: Boolean; override;
     procedure SetDefault(const ADefault: Boolean);
     property Layout: Integer read getLayout write SetLayout;
     property Margin: Integer read getMargin write SetMargin;
     property Spacing: Integer read FSpacing write SetSpacing;
+    property Image:TBitmap read fImage write SetImage;
   end;
 
   { TGtk3ToggleButton }
@@ -817,7 +828,7 @@ function Gtk3WidgetEvent(widget: PGtkWidget; event: PGdkEvent; data: GPointer): 
 
 implementation
 
-uses gtk3int;
+uses gtk3int,imglist;
 
 const
   GDK_DEFAULT_EVENTS_MASK: TGdkEventMask =
@@ -3052,12 +3063,21 @@ end;
 procedure TGtk3Panel.DoBeforeLCLPaint;
 var
   DC: TGtk3DeviceContext;
+  NColor: TColor;
 begin
   inherited DoBeforeLCLPaint;
   // example how to paint borderstyle/bevels of TPanel before we send event to lcl
   DC := TGtk3DeviceContext(FContext);
   if not Visible then
     exit;
+
+  NColor := LCLObject.Color;
+  if (NColor <> clNone) and (NColor <> clDefault) then
+  begin
+    DC.CurrentBrush.Color := ColorToRGB(NColor);
+    DC.fillRect(0, 0, LCLObject.Width, LCLObject.Height);
+  end;
+
   if BorderStyle <> bsNone then
     DC.drawRect(0, 0, LCLObject.Width, LCLObject.Height, LCLObject.Color <> clDefault);
 end;
@@ -3926,7 +3946,7 @@ var
   AClass: PGTypeClass;
 begin
   inherited InitializeWidget;
-  //TODO: move hookers check variable code into Gtk3WidgetSet.
+  //TODO: move hook check variable code into Gtk3WidgetSet.
   if not AProgressClassHookInitialized then
   begin
     AProgressClassHookInitialized := True;
@@ -3949,14 +3969,110 @@ end;
 
 { TGtk3ToolBar }
 
+procedure TGtk3ToolBar.ClearGlyphs;
+var i:integer;
+begin
+  if Assigned(fBmpList) then
+  for i:=fBmpList.Count-1 downto 0 do
+    TObject(fBmpList[i]).Free;
+end;
+
+destructor TGtk3ToolBar.Destroy;
+begin
+  ClearGlyphs;
+  fBmpList.Free;
+  inherited Destroy;
+end;
+
+procedure TGtk3ToolBar.ButtonClicked(data: gPointer);cdecl;
+begin
+  if TObject(data) is TToolButton then
+  TToolButton(data).Click;
+end;
+
 function TGtk3ToolBar.CreateWidget(const Params: TCreateParams): PGtkWidget;
 var
+  i:integer;
   AToolBar: TToolBar;
+  btn:TToolButton;
+  gtb:PGtkToolItem;
+  wmenu,wicon:PGtkWidget;
+  pb:PGdkPixBuf;
+  bmp:TBitmap;
+  resolution:TCustomImageListResolution;
+  raw:TRawImage;
+  bs:string;
 begin
   AToolBar := TToolBar(LCLObject);
   FHasPaint := False;
   FWidgetType := [wtWidget, wtContainer];
   Result:=PGtkWidget(TGtkToolbar.new);
+
+  if not Assigned(fBmpList) then
+    fBmpList:=TList.Create;
+
+  ClearGlyphs;
+
+  // allocate appropriate number of tool items
+  for i:=0 to AToolbar.ButtonCount-1 do
+  begin
+    btn:=AToolBar.Buttons[i];
+    bs:= ReplaceAmpersandsWithUnderscores(btn.Caption);
+    wicon:=nil;
+    if btn is TToolButton then
+    begin
+      if (btn.ImageIndex>=0) and
+          assigned(AToolbar.Images) and
+          not (btn.Style in [tbsSeparator,tbsDivider]) then
+      begin
+        if Assigned(AToolBar.Images) and (btn.ImageIndex>=0) then
+        begin
+          bmp:=TBitmap.Create; { this carries gdk pixmap }
+          resolution:=Atoolbar.Images.Resolution[Atoolbar.Images.Width];
+          resolution.GetRawImage(btn.ImageIndex,raw);
+          { convince the bitmap it has actually another format }
+          bmp.BeginUpdate();
+          raw.Description.Init_BPP32_R8G8B8A8_BIO_TTB(resolution.Width,resolution.Height);
+          bmp.LoadFromRawImage(raw,false);
+          bmp.EndUpdate();
+          pb:=TGtk3Image(bmp.Handle).Handle;
+          wicon := TGtkImage.new_from_pixbuf(pb);
+          fBmpList.Add(bmp);
+        end
+        else
+          wicon := nil;
+      end;
+
+      case btn.Style of
+  	  tbsSeparator:
+    	  gtb:=TGtkSeparatorToolItem.new();
+      tbsDropDown:
+        begin
+        	gtb:=TGtkMenuToolButton.new(wicon,PgChar(bs));
+          if Assigned(btn.DropdownMenu) then
+          begin
+          	wmenu:=TGtk3Menu(btn.DropdownMenu.Handle).Widget;
+          	PGtkMenuToolButton(gtb)^.set_menu(wmenu);
+          end;
+        end;
+      tbsCheck:
+        begin
+          gtb:=TGtkToggleToolButton.new();
+          PGtkToolButton(gtb)^.set_label(PgChar(bs));
+        end
+  	  else
+    	  gtb:=TGtkToolButton.new(wicon,PgChar(bs));
+ 		  end;
+      gtb^.set_tooltip_text(PgChar(btn.Hint));
+      PgtkToolButton(gtb)^.set_use_underline(true);
+      PGtkToolBar(Result)^.add(gtb);
+
+      if not (btn.Style in [tbsSeparator,tbsDivider]) then
+      g_signal_connect_data(gtb,'clicked',
+        TGCallback(@TGtk3Toolbar.ButtonClicked), btn, nil, 0);
+    end;
+  end;
+
 end;
 
 { TGtk3Page }
@@ -3979,6 +4095,7 @@ function TGtk3Page.CreateWidget(const Params: TCreateParams): PGtkWidget;
 begin
   FWidgetType := FWidgetType + [wtContainer];
   FPageLabel:= TGtkLabel.new(PChar(Params.Caption));
+  Self.FHasPaint:=true;
   // ref it to save it in case TabVisble is set to false
   FPageLabel^.ref;
   Result := TGtkHBox.new(GTK_ORIENTATION_HORIZONTAL, 0);
@@ -3994,6 +4111,20 @@ begin
   // unref it to allow it to be destroyed
   FPageLabel^.unref;
 end;
+
+function TGtk3Page.getClientOffset: TPoint;
+var
+  Allocation: TGtkAllocation;
+  R: TRect;
+begin
+  Self.Widget^.get_allocation(@Allocation);
+  Result.X := -Allocation.X;
+  Result.Y := -Allocation.Y;
+
+  R := getClientBounds;
+  Result := Point(Result.x + R.Left, Result.y + R.Top);
+end;
+
 
 function TGtk3Page.getClientRect: TRect;
 var
@@ -4403,7 +4534,8 @@ begin
 
   if MenuItem.Caption <> cLineCaption then
   begin
-    PGtkMenuItem(Result)^.set_label(PgChar(MenuItem.Caption));
+    PGtkMenuItem(Result)^.use_underline := True;
+    PGtkMenuItem(Result)^.set_label(PgChar(ReplaceAmpersandsWithUnderscores(MenuItem.Caption)));
     PGtkMenuItem(Result)^.set_sensitive(MenuItem.Enabled);
     // there's nothing like this in Gtk3
     // if MenuItem.RightJustify then
@@ -5938,7 +6070,9 @@ var
   ACombo: TCustomComboBox;
   ListStore: PGtkListStore;
   ItemList: TGtkListStoreStringList;
-  Renderer : PGtkCellRenderer;
+  Renderer: PGtkCellRenderer;
+  bs: string;
+  pos: gint;
 begin
   FWidgetType := FWidgetType + [wtTreeModel, wtComboBox];
   ACombo := TCustomComboBox(LCLObject);
@@ -5959,6 +6093,11 @@ begin
     // do not allow combo button to get focus, entry should take focus
     if PGtkComboBox(Result)^.priv3^.button <> nil then
       PGtkComboBox(Result)^.priv3^.button^.set_can_focus(False);
+
+    bs := Self.LCLObject.Caption;
+    pos := 0;
+    PGtkEditable(PGtkComboBox(Result)^.get_child)^.insert_text(pgChar(PChar(bs)),length(bs),@pos);
+
     // set lclwidget data to entry
     g_object_set_data(PGtkComboBox(Result)^.get_child, 'lclwidget', Self);
     // when we scroll with mouse wheel over entry our scrollevent doesn't catch entry
@@ -6245,6 +6384,13 @@ begin
   end;
 end;
 
+procedure TGtk3Button.SetImage(AImage: TBitmap);
+begin
+  if Assigned(fImage) then
+    fImage.free;
+  fImage:=AImage;
+end;
+
 function TGtk3Button.getText: String;
 begin
   if IsWidgetOK then
@@ -6256,15 +6402,28 @@ end;
 procedure TGtk3Button.setText(const AValue: String);
 begin
   if IsWidgetOk then
-    PGtkButton(FWidget)^.set_label(PgChar(AValue));
+  begin
+    PGtkButton(FWidget)^.set_label(PgChar(ReplaceAmpersandsWithUnderscores(AValue)));
+  end;
 end;
 
 function TGtk3Button.CreateWidget(const Params: TCreateParams): PGtkWidget;
+var
+  btn:PGtkButton absolute Result;
 begin
   Result := PGtkWidget(TGtkButton.new);
+
+  btn^.set_use_underline(true);
+
   FMargin := -1;
   FLayout := GTK_POS_LEFT;
   FSpacing := 2; // default gtk3 spacing is 2
+end;
+
+destructor TGtk3Button.Destroy;
+begin
+  SetImage(nil);
+  inherited Destroy;
 end;
 
 function TGtk3Button.IsWidgetOk: Boolean;
@@ -6296,8 +6455,12 @@ begin
 end;
 
 function TGtk3ToggleButton.CreateWidget(const Params: TCreateParams): PGtkWidget;
+var
+  btn: PGtkToggleButton;
 begin
-  Result := PGtkWidget(TGtkToggleButton.new);
+  btn := TGtkToggleButton.new;
+  btn^.use_underline := True;
+  Result := PGtkWidget(btn);
 end;
 
 { TGtk3CheckBox }
@@ -6327,14 +6490,19 @@ begin
 end;
 
 function TGtk3CheckBox.CreateWidget(const Params: TCreateParams): PGtkWidget;
+var
+  check: PGtkCheckButton;
 begin
-  Result := PGtkWidget(TGtkCheckButton.new);
+  check := TGtkCheckButton.new;
+  Result := PGtkWidget(check);
+  check^.set_use_underline(True);
 end;
 
 { TGtk3RadioButton }
 
 function TGtk3RadioButton.CreateWidget(const Params: TCreateParams): PGtkWidget;
 var
+  btn: PGtkRadioButton;
   w: PGtkWidget;
   ctl, Parent: TWinControl;
   rb: TRadioButton;
@@ -6342,7 +6510,9 @@ var
 begin
   if Self.LCLObject.Name='HiddenRadioButton' then
     exit;
-  Result := PGtkWidget(TGtkRadioButton.new(nil));
+  btn := TGtkRadioButton.new(nil);
+  btn^.use_underline := True;
+  Result := PGtkWidget(btn);
   ctl := Self.LCLObject;
   if Assigned(ctl) then
   begin

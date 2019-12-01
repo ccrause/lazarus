@@ -56,7 +56,7 @@ uses
   LazStringUtils,
   // codetools
   BasicCodeTools, CodeBeautifier, CodeToolManager, CodeCache, SourceLog,
-  LinkScanner, CodeTree, SourceChanger,
+  LinkScanner, CodeTree, SourceChanger, IdentCompletionTool,
   // synedit
   SynEditLines, SynEditStrConst, SynEditTypes, SynEdit,
   SynEditHighlighter, SynEditAutoComplete, SynEditKeyCmds, SynCompletion,
@@ -1204,8 +1204,6 @@ type
     procedure OnSourceMarksAction(AMark: TSourceMark; {%H-}AAction: TMarksAction);
     procedure OnSourceMarksGetSynEdit(Sender: TObject; aFilename: string;
       var aSynEdit: TSynEdit);
-    property CodeTemplateModul: TSynEditAutoComplete
-                               read FCodeTemplateModul write FCodeTemplateModul;
     // goto dialog
     function GotoDialog: TfrmGoto;
   public
@@ -1216,6 +1214,8 @@ type
                              AnID: Integer = -1
                             ): TSourceNotebook;
     function SenderToEditor(Sender: TObject): TSourceEditor;
+    property CodeTemplateModul: TSynEditAutoComplete
+                               read FCodeTemplateModul write FCodeTemplateModul;
   private
     // Context-Menu
     procedure CloseOtherPagesClicked(Sender: TObject);
@@ -1370,9 +1370,7 @@ var
     SrcEditMenuClearFileBookmark: TIDEMenuCommand;
     SrcEditMenuClearAllBookmark: TIDEMenuCommand;
     SrcEditMenuGotoBookmark: array [TBookmarkNumRange] of TIDEMenuCommand;
-    SrcEditMenuGotoBookmarks: TIDEMenuCommand;
     SrcEditMenuToggleBookmark: array [TBookmarkNumRange] of TIDEMenuCommand;
-    SrcEditMenuToggleBookmarks: TIDEMenuCommand;
     // debugging
     SrcEditMenuToggleBreakpoint: TIDEMenuCommand;
     SrcEditMenuRunToCursor: TIDEMenuCommand;
@@ -1436,26 +1434,6 @@ var
   EnglishLGPLNotice: string;
   EnglishModifiedLGPLNotice: string;
   EnglishMITNotice: string;
-
-type
-
-  { TToolButton_GotoBookmarks }
-
-  TToolButton_GotoBookmarks = class(TIDEToolButton_ButtonDrop)
-  protected
-    procedure RefreshMenu; override;
-  public
-    class procedure ShowAloneMenu(Sender: TObject); static;
-  end;
-
-  { TToolButton_ToggleBookmarks }
-
-  TToolButton_ToggleBookmarks = class(TIDEToolButton_ButtonDrop)
-  protected
-    procedure RefreshMenu; override;
-  public
-    class procedure ShowAloneMenu(Sender: TObject); static;
-  end;
 
 
 implementation
@@ -1712,13 +1690,6 @@ begin
       SrcEditMenuPrevBookmark:=RegisterIDEMenuCommand(AParent,
           'Goto previous Bookmark',uemPrevBookmark, nil,
           @ExecuteIdeMenuClick, nil, 'menu_search_previous_bookmark');
-
-      {For toolbar only. Hidden in menu.}
-      SrcEditMenuGotoBookmarks:=RegisterIDEMenuCommand(AParent,
-          'Goto bookmarks', uemGotoBookmarks,
-          nil, TNotifyProcedure(@TToolButton_GotoBookmarks.ShowAloneMenu), nil,
-          'menu_goto_bookmarks');
-      SrcEditMenuGotoBookmarks.Visible:=False;
   {%endregion}
 
   {%region *** Toggle Bookmarks Submenu ***}
@@ -1740,13 +1711,6 @@ begin
           'Clear Bookmark for current file',srkmecClearBookmarkForFile, nil, @ExecuteIdeMenuClick, nil, 'menu_clear_file_bookmarks');
       SrcEditMenuClearAllBookmark:=RegisterIDEMenuCommand(AParent,
           'Clear all Bookmark',srkmecClearAllBookmark, nil, @ExecuteIdeMenuClick, nil, 'menu_clear_all_bookmarks');
-
-      {For toolbar only. Hidden in menu.}
-      SrcEditMenuToggleBookmarks:=RegisterIDEMenuCommand(AParent,
-          'Toggle bookmarks', uemToggleBookmarks,
-          nil, TNotifyProcedure(@TToolButton_ToggleBookmarks.ShowAloneMenu), nil,
-          'menu_toggle_bookmarks');
-      SrcEditMenuToggleBookmarks.Visible:=False;
   {%endregion}
 
   {%region *** Debug Section ***}
@@ -1853,51 +1817,6 @@ var
   SE1: TSourceEditorInterface absolute SrcEdit;
 begin
   Result:=CompareFilenames(AnsiString(FileNameStr),SE1.FileName);
-end;
-
-{ TToolButton_GotoBookmarks }
-
-procedure TToolButton_GotoBookmarks.RefreshMenu;
-begin
-  AddMenuItems(SrcEditMenuGotoBookmark);
-  DropdownMenu.Items.AddSeparator;
-  AddMenuItems([
-    SrcEditMenuPrevBookmark,
-    SrcEditMenuNextBookmark]);
-end;
-
-class procedure TToolButton_GotoBookmarks.ShowAloneMenu(Sender: TObject);  // on shortcuts only
-const
-  Btn: TToolButton_GotoBookmarks=nil;  // static var
-begin
-  if Btn = nil then
-    Btn := TToolButton_GotoBookmarks.Create(Application);
-  Btn.PopUpAloneMenu;
-  // Btn should not be destroyed immediately after PopUp
-end;
-
-
-{ TToolButton_ToggleBookmarks }
-
-procedure TToolButton_ToggleBookmarks.RefreshMenu;
-begin
-  AddMenuItems(SrcEditMenuToggleBookmark);
-  DropdownMenu.Items.AddSeparator;
-  AddMenuItem(SrcEditMenuSetFreeBookmark);
-  DropdownMenu.Items.AddSeparator;
-  AddMenuItems([
-    SrcEditMenuClearFileBookmark,
-    SrcEditMenuClearAllBookmark]);
-end;
-
-class procedure TToolButton_ToggleBookmarks.ShowAloneMenu(Sender: TObject);  // on shortcuts only
-const
-  Btn: TToolButton_ToggleBookmarks=nil;  // static var
-begin
-  if Btn = nil then
-    Btn := TToolButton_ToggleBookmarks.Create(Application);
-  Btn.PopUpAloneMenu;
-  // Btn should not be destroyed immediately after PopUp
 end;
 
 { TSourceEditorWordCompletion }
@@ -2508,6 +2427,7 @@ var
   OldCompletionType: TCompletionType;
   prototypeAdded: boolean;
   SourceNoteBook: TSourceNotebook;
+  IdentItem: TIdentifierListItem;
 Begin
   {$IFDEF VerboseIDECompletionBox}
   DebugLnEnter(['TSourceNotebook.ccComplete START']);
@@ -2525,22 +2445,29 @@ Begin
              SourceStart,SourceEnd,KeyChar,Shift);
           Manager.FActiveCompletionPlugin:=nil;
         end else begin
+          IdentItem:=CodeToolBoss.IdentifierList.FilteredItems[Position];
           // add to history
-          CodeToolBoss.IdentifierHistory.Add(
-            CodeToolBoss.IdentifierList.FilteredItems[Position]);
-          // get value
-          NewValue:=GetIdentCompletionValue(Self, KeyChar, ValueType, CursorToLeft);
-          if ValueType=icvIdentifier then ;
-          // insert value plus special chars like brackets, semicolons, ...
-          if ValueType <> icvNone then
-            Editor.TextBetweenPointsEx[SourceStart, SourceEnd, scamEnd] := NewValue;
-          if ValueType in [icvProcWithParams,icvIndexedProp] then
-            prototypeAdded := true;
-          if CursorToLeft>0 then
+          CodeToolBoss.IdentifierHistory.Add(IdentItem);
+          if IdentItem is TCodeTemplateIdentifierListItem then
           begin
-            NewCaretXY:=Editor.CaretXY;
-            dec(NewCaretXY.X,CursorToLeft);
-            Editor.CaretXY:=NewCaretXY;
+            if IdentItem.Identifier<>'' then
+              Manager.CodeTemplateModul.ExecuteCompletion(IdentItem.Identifier, Editor);
+          end else
+          begin
+            // get value
+            NewValue:=GetIdentCompletionValue(Self, KeyChar, ValueType, CursorToLeft);
+            if ValueType=icvIdentifier then ;
+            // insert value plus special chars like brackets, semicolons, ...
+            if ValueType <> icvNone then
+              Editor.TextBetweenPointsEx[SourceStart, SourceEnd, scamEnd] := NewValue;
+            if ValueType in [icvProcWithParams,icvIndexedProp] then
+              prototypeAdded := true;
+            if CursorToLeft>0 then
+            begin
+              NewCaretXY:=Editor.CaretXY;
+              dec(NewCaretXY.X,CursorToLeft);
+              Editor.CaretXY:=NewCaretXY;
+            end;
           end;
           ccSelection := '';
           Value:='';
@@ -4015,7 +3942,7 @@ begin
         Manager.AddJumpPointClicked(Self);
     end;
 
-  ecCopy,ecCut:
+  ecCopy,ecCut,ecCopyAdd,ecCutAdd:
     begin
       if (not FEditor.SelAvail) then begin
         // nothing selected
@@ -10325,21 +10252,8 @@ begin
 
   AutoStartCompletionBoxTimer.Interval:=EditorOpts.AutoDelayInMSec;
   // reload code templates
-  with CodeTemplateModul do begin
-    if FileExistsUTF8(EditorOpts.CodeTemplateFileNameExpand) then
-      LoadStringsFromFileUTF8(AutoCompleteList,EditorOpts.CodeTemplateFileNameExpand)
-    else begin
-      Filename:=EnvironmentOptions.GetParsedLazarusDirectory
-        +GetForcedPathDelims('ide/lazarus.dci');
-      if FileExistsUTF8(Filename) then begin
-        try
-          LoadStringsFromFileUTF8(AutoCompleteList,Filename);
-        except
-        end;
-      end;
-    end;
-    IndentToTokenStart:=EditorOpts.CodeTemplateIndentToTokenStart;
-  end;
+  EditorOpts.LoadCodeTemplates(CodeTemplateModul);
+  CodeTemplateModul.IndentToTokenStart:=EditorOpts.CodeTemplateIndentToTokenStart;
 
   FHints.AutoHintTimer.Interval:=EditorOpts.AutoHintDelayInMSec;
 
@@ -10732,6 +10646,10 @@ procedure TSourceEditorManager.SetupShortCuts;
       ToolButton.ToolButtonClass := ToolButtonClass;
   end;
 
+  // See also in ToolBarIntf:
+  //  function GetCommand_DropDown
+  //  function GetCommand_ButtonDrop
+
 var
   i: Integer;
 begin
@@ -10797,14 +10715,13 @@ begin
   SrcEditMenuClearFileBookmark.Command:=GetCommand(ecClearBookmarkForFile);
   SrcEditMenuClearAllBookmark.Command:=GetCommand(ecClearAllBookmark);
 
-  SrcEditMenuGotoBookmarks.Command:=GetCommand(ecGotoBookmarks, TToolButton_GotoBookmarks);
-  SrcEditMenuToggleBookmarks.Command:=GetCommand(ecToggleBookmarks, TToolButton_ToggleBookmarks);
-
   for i in TBookmarkNumRange do
     SrcEditMenuGotoBookmark[i].Command := GetCommand(ecGotoMarker0 + i);
+  GetCommand_ButtonDrop(ecGotoBookmarks ,SrcEditSubMenuGotoBookmarks);        // [ ▼]
 
   for i in TBookmarkNumRange do
     SrcEditMenuToggleBookmark[i].Command := GetCommand(ecToggleMarker0 + i);
+  GetCommand_ButtonDrop(ecToggleBookmarks ,SrcEditSubMenuToggleBookmarks);    // [ ▼]
 
   {%region *** Source Section ***}
     SrcEditMenuEncloseSelection.Command:=GetCommand(ecSelectionEnclose);
@@ -11222,8 +11139,6 @@ begin
 end;
 
 constructor TSourceEditorManager.Create(AOwner: TComponent);
-var
-  DCIFilename: String;
 begin
   inherited Create(AOwner);
 
@@ -11269,16 +11184,9 @@ begin
 
   // code templates
   FCodeTemplateModul:=TSynEditAutoComplete.Create(Self);
+
+  EditorOpts.LoadCodeTemplates(FCodeTemplateModul);
   with FCodeTemplateModul do begin
-    DCIFilename:=EditorOpts.CodeTemplateFileNameExpand;
-    if not FileExistsCached(DCIFilename) then
-      DCIFilename:=EnvironmentOptions.GetParsedLazarusDirectory
-        +GetForcedPathDelims('ide/lazarus.dci');
-    if FileExistsCached(DCIFilename) then
-      try
-        LoadStringsFromFileUTF8(AutoCompleteList,DCIFilename);
-      except
-      end;
     IndentToTokenStart := EditorOpts.CodeTemplateIndentToTokenStart;
     OnTokenNotFound := @OnCodeTemplateTokenNotFound;
     OnExecuteCompletion := @OnCodeTemplateExecuteCompletion;

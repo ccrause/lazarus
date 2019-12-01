@@ -5,7 +5,7 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "POT-Creation-Date: \n"
-"PO-Revision-Date: 2019-09-11 01:54+0300\n"
+"PO-Revision-Date: 2019-11-25 01:45+0300\n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
 "X-Poedit-Bookmarks: -1,-1,-1,-1,-1,-1,-1,3325,-1,-1\n"
@@ -2318,9 +2318,13 @@ msgstr ""
 "Рабочий стол с таким именем уже имеется.\n"
 "Подтвердите это имя:"
 
+#: lazarusidestrconsts.dlgincludecodetemplatestoidentcompl
+msgid "Include code templates"
+msgstr "Добавлять шаблоны кода"
+
 #: lazarusidestrconsts.dlgincludeidentifierscontainingprefix
 msgid "Include identifiers containing prefix"
-msgstr "Показывать идентификаторы, содержащие префикс"
+msgstr "Добавлять идентификаторы, содержащие префикс"
 
 #: lazarusidestrconsts.dlgincludesystemvariables
 msgid "Include system variables"
@@ -3653,6 +3657,10 @@ msgstr "Область поиска"
 #: lazarusidestrconsts.dlgselectallchildcontrols
 msgid "Select all child controls together with their parent."
 msgstr "Выделять все компоненты-потомки вместе с их родителями"
+
+#: lazarusidestrconsts.dlgselectallnoscroll
+msgid "Do not scroll on Select-All / Paragraph or To-Brace"
+msgstr "Не прокручивать при выделении текста полностью / абзаца / до скобки"
 
 #: lazarusidestrconsts.dlgselectedtext
 msgid "&Selected text"
@@ -6986,6 +6994,10 @@ msgstr "Тип результата"
 msgid "Visibility"
 msgstr "Видимость"
 
+#: lazarusidestrconsts.liscomboboxes
+msgid "Combo Boxes"
+msgstr "Раскрывающиеся списки"
+
 #: lazarusidestrconsts.liscommandlineparameters
 msgctxt "lazarusidestrconsts.liscommandlineparameters"
 msgid "Command line parameters"
@@ -8972,6 +8984,10 @@ msgstr "Отображать линии сетки"
 #: lazarusidestrconsts.lisdrawtheselectionfocusedevenifthemessageswindowhasn
 msgid "Draw the selection focused even if the Messages window has no focus. Use this if your theme has a hardly visible unfocused drawing."
 msgstr "Отрисовывать выделенное как находящееся в фокусе даже если окно сообщений фокуса не имеет. Воспользуйтесь этой возможностью, если используемая тема оформления имеет плохо заметную отрисовку элементов не в фокусе."
+
+#: lazarusidestrconsts.lisdropdowncount
+msgid "Drop Down Count"
+msgstr "Количество отображаемых элементов списка"
 
 #: lazarusidestrconsts.lisdsgcopycomponents
 msgid "Copy selected components to clipboard"
@@ -11701,6 +11717,19 @@ msgstr "Внимание: все клавиши получат значения 
 #: lazarusidestrconsts.liskmopenpackagefile
 msgid "Open package file"
 msgstr "Открыть файл пакета"
+
+#: lazarusidestrconsts.liskmopenrecent
+msgctxt "lazarusidestrconsts.liskmopenrecent"
+msgid "Open Recent"
+msgstr "Открыть недавний"
+
+#: lazarusidestrconsts.liskmopenrecentpackage
+msgid "Open recent package"
+msgstr "Открыть недавний пакет"
+
+#: lazarusidestrconsts.liskmopenrecentproject
+msgid "Open recent project"
+msgstr "Открыть недавний проект"
 
 #: lazarusidestrconsts.liskmpastecomponentsfromclipboard
 msgid "Paste Components"
@@ -21321,6 +21350,18 @@ msgctxt "lazarusidestrconsts.srkmeccopy"
 msgid "Copy"
 msgstr "Копировать"
 
+#: lazarusidestrconsts.srkmeccopyadd
+msgid "Copy (Add to Clipboard)"
+msgstr "Копировать (добавить к буферу обмена)"
+
+#: lazarusidestrconsts.srkmeccopyaddcurrentline
+msgid "Copy current line (Add to Clipboard)"
+msgstr "Копировать текущую строку (добавить к буферу обмена)"
+
+#: lazarusidestrconsts.srkmeccopycurrentline
+msgid "Copy current line"
+msgstr "Копировать текущую строку"
+
 #: lazarusidestrconsts.srkmeccopyeditornewwindow
 msgid "Copy editor to new window"
 msgstr "Копировать редактор в новое окно"
@@ -21337,6 +21378,18 @@ msgstr "Копировать редактор в предыдущее свобо
 msgctxt "lazarusidestrconsts.srkmeccut"
 msgid "Cut"
 msgstr "Вырезать"
+
+#: lazarusidestrconsts.srkmeccutadd
+msgid "Cut (Add to Clipboard)"
+msgstr "Вырезать (добавить к буферу обмена)"
+
+#: lazarusidestrconsts.srkmeccutaddcurrentline
+msgid "Cut current line (Add to Clipboard)"
+msgstr "Вырезать текущую строку (добавить к буферу обмена)"
+
+#: lazarusidestrconsts.srkmeccutcurrentline
+msgid "Cut current line"
+msgstr "Вырезать текущую строку"
 
 #: lazarusidestrconsts.srkmecdeletebol
 msgid "Delete to beginning of line"
@@ -21378,6 +21431,10 @@ msgstr "Разница Diff"
 #: lazarusidestrconsts.srkmecdown
 msgid "Move cursor down"
 msgstr "Переместить курсор вниз"
+
+#: lazarusidestrconsts.srkmecduplicateline
+msgid "Duplicate line (or lines in selection)"
+msgstr "Дублировать строку (или выделенные строки)"
 
 #: lazarusidestrconsts.srkmeceditorbottom
 msgid "Move cursor to absolute end"
@@ -21695,6 +21752,14 @@ msgstr "Сместить редактор вправо"
 #: lazarusidestrconsts.srkmecmoveeditorrightmost
 msgid "Move editor rightmost"
 msgstr "Поместить редактор справа"
+
+#: lazarusidestrconsts.srkmecmovelinedown
+msgid "Move one line down"
+msgstr "Переместить на одну строку вниз"
+
+#: lazarusidestrconsts.srkmecmovelineup
+msgid "Move one line up"
+msgstr "Переместить на одну строку вверх"
 
 #: lazarusidestrconsts.srkmecmultipaste
 msgctxt "lazarusidestrconsts.srkmecmultipaste"

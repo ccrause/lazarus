@@ -605,6 +605,7 @@ type
     FAssigning: Boolean;
     FSessionMatrixOptions: TBuildMatrixOptions;
     FSharedMatrixOptions: TBuildMatrixOptions;
+    FManyBuildModes: TStringList;  // User selection of many modes.
     fSavedChangeStamp: int64;
     fItems: TFPList;
     FLazProject: TProject;
@@ -667,6 +668,7 @@ type
     property Modified: boolean read GetModified write SetModified;
     property SharedMatrixOptions: TBuildMatrixOptions read FSharedMatrixOptions;
     property SessionMatrixOptions: TBuildMatrixOptions read FSessionMatrixOptions;
+    property ManyBuildModes: TStringList read FManyBuildModes;
   end;
 
   { TProjectIDEOptions }
@@ -791,11 +793,11 @@ type
     function GetUseLegacyLists: Boolean;
     function JumpHistoryCheckPosition(
                                 APosition:TProjectJumpHistoryPosition): boolean;
-    function OnUnitFileBackup(const Filename: string): TModalResult;
     procedure ClearSourceDirectories;
     procedure EmbeddedObjectModified(Sender: TObject);
-    procedure OnLoadSaveFilename(var AFilename: string; Load: boolean);
-    procedure OnUnitNameChange(AnUnitInfo: TUnitInfo;
+    function FileBackupHandler(const Filename: string): TModalResult;
+    procedure LoadSaveFilenameHandler(var AFilename: string; Load: boolean);
+    procedure UnitNameChangeHandler(AnUnitInfo: TUnitInfo;
                                const OldUnitName, NewUnitName: string;
                                CheckIfAllowed: boolean; var Allowed: boolean);
     procedure SetActiveBuildMode(const AValue: TProjectBuildMode);
@@ -969,8 +971,7 @@ type
 
     // Application.CreateForm statements
     function AddCreateFormToProjectFile(const AClassName, AName:string):boolean;
-    function RemoveCreateFormFromProjectFile(const {%H-}AClassName,
-                                                         AName: string):boolean;
+    function RemoveCreateFormFromProjectFile(const AName: string): boolean;
     function FormIsCreatedInProjectFile(const AClassname, AName:string):boolean;
     function GetAutoCreatedFormsList: TStrings;
     property TmpAutoCreatedForms: TStrings read FTmpAutoCreatedForms write FTmpAutoCreatedForms;
@@ -2704,7 +2705,7 @@ begin
   FFlags:=DefaultProjectFlags;
   FJumpHistory:=TProjectJumpHistory.Create;
   FJumpHistory.OnCheckPosition:=@JumpHistoryCheckPosition;
-  FJumpHistory.OnLoadSaveFilename:=@OnLoadSaveFilename;
+  FJumpHistory.OnLoadSaveFilename:=@LoadSaveFilenameHandler;
   fMainUnitID := -1;
   fProjectInfoFile := '';
   ProjectSessionFile:='';
@@ -2849,7 +2850,7 @@ begin
   for i := 0 to NewUnitCount - 1 do begin
     SubPath:=Path+'Units/'+FXMLConfig.GetListItemXPath('Unit', i, LegacyList)+'/';
     NewUnitFilename:=FXMLConfig.GetValue(SubPath+'Filename/Value','');
-    OnLoadSaveFilename(NewUnitFilename,true);
+    LoadSaveFilenameHandler(NewUnitFilename,true);
     // load unit and add it
     OldUnitInfo:=UnitInfoWithFilename(NewUnitFilename);
     if OldUnitInfo<>nil then begin
@@ -3216,7 +3217,7 @@ begin
   and (not (pwfSkipJumpPoints in FProjectWriteFlags)) then begin
     if (pfSaveJumpHistory in Flags) then begin
       FJumpHistory.DeleteInvalidPositions;
-      FJumpHistory.SaveToXMLConfig(FXMLConfig,Path);
+      FJumpHistory.SaveToXMLConfig(FXMLConfig,Path,UseLegacyLists);
     end
     else
       FXMLConfig.DeletePath(Path+'JumpHistory');
@@ -3276,10 +3277,10 @@ begin
   PublishOptions.SaveToXMLConfig(FXMLConfig,Path+'PublishOptions/',fCurStorePathDelim);
   // save the Run and Build parameter options
   RunParameterOptions.LegacySave(FXMLConfig,Path,fCurStorePathDelim);
-  RunParameterOptions.Save(FXMLConfig,Path+'RunParams/',fCurStorePathDelim,rpsLPI);
+  RunParameterOptions.Save(FXMLConfig,Path+'RunParams/',fCurStorePathDelim,rpsLPI, UseLegacyLists);
   // save dependencies
   SavePkgDependencyList(FXMLConfig,Path+'RequiredPackages/',
-    FFirstRequiredDependency,pdlRequires,fCurStorePathDelim);
+    FFirstRequiredDependency,pdlRequires,fCurStorePathDelim,pfCompatibilityMode in FFlags);
   // save units
   SaveUnits(Path,FSaveSessionInLPI);
 
@@ -3297,6 +3298,8 @@ begin
     CurFlags:=FProjectWriteFlags;
     if not FSaveSessionInLPI then
       CurFlags:=CurFlags+[pwfSkipSeparateSessionInfo];
+    if UseLegacyLists then
+      CurFlags:=CurFlags+[pwfCompatibilityMode];
     OnSaveProjectInfo(Self,FXMLConfig,CurFlags);
   end;
 
@@ -3341,9 +3344,9 @@ begin
   // save session info
   SaveSessionInfo(Path);
   // save the Run and Build parameter options
-  RunParameterOptions.Save(FXMLConfig,Path+'RunParams/',fCurStorePathDelim,rpsLPS);
+  RunParameterOptions.Save(FXMLConfig,Path+'RunParams/',fCurStorePathDelim,rpsLPS, UseLegacyLists);
   // save history lists
-  HistoryLists.SaveToXMLConfig(FXMLConfig,Path+'HistoryLists/');
+  HistoryLists.SaveToXMLConfig(FXMLConfig,Path+'HistoryLists/', UseLegacyLists);
 
   // Notifiy hooks
   if Assigned(OnSaveProjectInfo) then
@@ -3596,9 +3599,9 @@ begin
   NewIndex:=UnitCount;
   FUnitList.Add(AnUnit);
   AnUnit.Project:=Self;
-  AnUnit.OnFileBackup:=@OnUnitFileBackup;
-  AnUnit.OnLoadSaveFilename:=@OnLoadSaveFilename;
-  AnUnit.OnUnitNameChange:=@OnUnitNameChange;
+  AnUnit.OnFileBackup:=@FileBackupHandler;
+  AnUnit.OnLoadSaveFilename:=@LoadSaveFilenameHandler;
+  AnUnit.OnUnitNameChange:=@UnitNameChangeHandler;
 
   // lock the main unit (when it is changed on disk it must *not* auto revert)
   if MainUnitID=NewIndex then
@@ -3995,8 +3998,7 @@ end;
 function TProject.AddCreateFormToProjectFile(const AClassName, AName: string):boolean;
 begin
   if (pfMainUnitHasCreateFormStatements in Project1.Flags) then begin
-    Result:=CodeToolBoss.AddCreateFormStatement(MainUnitInfo.Source,
-      AClassName,AName);
+    Result:=CodeToolBoss.AddCreateFormStatement(MainUnitInfo.Source,AClassName,AName);
     if Result then begin
       MainUnitInfo.Modified:=true;
     end;
@@ -4005,12 +4007,11 @@ begin
   end;
 end;
 
-function TProject.RemoveCreateFormFromProjectFile(const AClassName,AName:string):boolean;
+function TProject.RemoveCreateFormFromProjectFile(const AName:string):boolean;
 begin
   Result:=CodeToolBoss.RemoveCreateFormStatement(MainUnitInfo.Source,AName);
-  if Result then begin
+  if Result then
     MainUnitInfo.Modified:=true;
-  end;
 end;
 
 function TProject.FormIsCreatedInProjectFile(const AClassname,AName:string):boolean;
@@ -4118,12 +4119,12 @@ end;
 
 procedure TProject.ConvertToLPIFilename(var AFilename: string);
 begin
-  OnLoadSaveFilename(AFilename,false);
+  LoadSaveFilenameHandler(AFilename,false);
 end;
 
 procedure TProject.ConvertFromLPIFilename(var AFilename: string);
 begin
-  OnLoadSaveFilename(AFilename,true);
+  LoadSaveFilenameHandler(AFilename,true);
 end;
 
 function TProject.GetMainResourceFilename(AnUnitInfo: TUnitInfo):string;
@@ -4356,7 +4357,7 @@ begin
   UpdateSessionFilename;
 end;
 
-function TProject.OnUnitFileBackup(const Filename: string): TModalResult;
+function TProject.FileBackupHandler(const Filename: string): TModalResult;
 begin
   if Assigned(fOnFileBackup) then
     Result:=fOnFileBackup(Filename)
@@ -4364,7 +4365,7 @@ begin
     Result:=mrOk;
 end;
 
-procedure TProject.OnLoadSaveFilename(var AFilename: string; Load:boolean);
+procedure TProject.LoadSaveFilenameHandler(var AFilename: string; Load:boolean);
 { This function is used after reading a filename from the config
   and before writing a filename to a config.
   The config can be the lpi or the session.
@@ -5221,7 +5222,7 @@ begin
   SessionModified := true;
 end;
 
-procedure TProject.OnUnitNameChange(AnUnitInfo: TUnitInfo;
+procedure TProject.UnitNameChangeHandler(AnUnitInfo: TUnitInfo;
   const OldUnitName, NewUnitName: string; CheckIfAllowed: boolean;
   var Allowed: boolean);
 var
@@ -5245,8 +5246,7 @@ begin
       if (pfMainUnitIsPascalSource in Flags) then
       begin
         // rename unit in program uses section
-        CodeToolBoss.RenameUsedUnit(MainUnitInfo.Source, OldUnitName,
-          NewUnitName, '');
+        CodeToolBoss.RenameUsedUnit(MainUnitInfo.Source, OldUnitName, NewUnitName, '');
       end;
       if MainUnitInfo = AnUnitInfo then
       begin
@@ -6958,12 +6958,14 @@ begin
   FSharedMatrixOptions.OnChanged:=@OnItemChanged;
   FSessionMatrixOptions:=TBuildMatrixOptions.Create;
   FSessionMatrixOptions.OnChanged:=@OnItemChanged;
+  FManyBuildModes:=TStringList.Create;
 end;
 
 destructor TProjectBuildModes.Destroy;
 begin
   FreeAndNil(fOnChanged);
   Clear;
+  FreeAndNil(FManyBuildModes);
   FreeAndNil(FSharedMatrixOptions);
   FreeAndNil(FSessionMatrixOptions);
   FreeAndNil(fItems);
@@ -7009,6 +7011,7 @@ begin
     end;
     SharedMatrixOptions.Assign(OtherModes.SharedMatrixOptions);
     SessionMatrixOptions.Assign(OtherModes.SessionMatrixOptions);
+    ManyBuildModes.Assign(OtherModes.ManyBuildModes);
     if WithModified then
       Modified:=OtherModes.Modified;
     FAssigning:=False;
@@ -7337,6 +7340,8 @@ begin
   if CurMode=nil then
     CurMode:=Items[0];
   LazProject.ActiveBuildMode:=CurMode;
+  // Many BuildModes selection, a comma separated list.
+  FManyBuildModes.CommaText:=FXMLConfig.GetValue(Path+'ManyBuildModesSelection/Value','');
 end;
 
 procedure TProjectBuildModes.LoadProjOptsFromXMLConfig(XMLConfig: TXMLConfig; const Path: string);
@@ -7399,6 +7404,8 @@ var
   SubPath: String;
   i, Cnt: Integer;
 begin
+  // Many BuildModes selection, a comma separated list.
+  FXMLConfig.SetDeleteValue(Path+'ManyBuildModesSelection/Value', FManyBuildModes.CommaText, '');
   // save what mode is currently active in the session
   FXMLConfig.SetDeleteValue(Path+'BuildModes/Active',
                               LazProject.ActiveBuildMode.Identifier,'default');
@@ -7455,7 +7462,6 @@ var
   i, Cnt: Integer;
 begin
   FXMLConfig := XMLConfig;
-
   Cnt:=0;
   for i:=0 to Count-1 do
     if Items[i].InSession and SaveSession then

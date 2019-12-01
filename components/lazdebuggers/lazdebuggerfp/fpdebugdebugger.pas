@@ -152,6 +152,9 @@ type
   protected
     FCallStackEntryListThread: TDbgThread;
     FCallStackEntryListFrameRequired: Integer;
+    FParamAsString: String;
+    FParamAsStringStackEntry: TDbgCallstackEntry;
+    FParamAsStringPrettyPrinter: TFpPascalPrettyPrinter;
     procedure DoAddBreakLine;
     procedure DoAddBreakLocation;
     procedure DoAddBWatch;
@@ -159,6 +162,7 @@ type
     procedure DoPrepareCallStackEntryList;
     procedure DoFreeBreakpoint;
     procedure DoFindContext;
+    procedure DoGetParamsAsString;
     {$endif linux}
     function AddBreak(const ALocation: TDbgPtr): TFpDbgBreakpoint; overload;
     function AddBreak(const AFileName: String; ALine: Cardinal): TFpDbgBreakpoint; overload;
@@ -169,6 +173,7 @@ type
     function ReadAddress(const AAdress: TDbgPtr; out AData: TDBGPtr): Boolean;
     procedure PrepareCallStackEntryList(AFrameRequired: Integer = -1; AThread: TDbgThread = nil); inline;
     function  FindContext(AThreadId, AStackFrame: Integer): TFpDbgInfoContext; inline;
+    function GetParamsAsString(AStackEntry: TDbgCallstackEntry; APrettyPrinter: TFpPascalPrettyPrinter): string; inline;
 
     property DebugInfo: TDbgInfo read GetDebugInfo;
   public
@@ -224,7 +229,7 @@ type
     FInDestroy: Boolean;
     procedure FreeSelf;
     procedure CallStackFreed(Sender: TObject);
-    procedure RequestAsync(Data: PtrInt);
+    procedure RequestAsync({%H-}Data: PtrInt);
   public
     constructor Create(ADebugger: TFpDebugDebugger; ACallstack: TCallStackBase;
       ARequiredMinCount: Integer);
@@ -625,6 +630,7 @@ begin
   if (CurCnt = 0) then begin
     FCallstack.SetCountValidity(ddsInvalid);
     FCallstack.SetHasAtLeastCountInfo(ddsInvalid);
+    FreeSelf;
     exit;
   end;
 
@@ -666,7 +672,6 @@ begin
   FCallstack := ACallstack;
   FCallstack.AddFreeNotification(@CallStackFreed);
   FRequiredMinCount := ARequiredMinCount;
-  RequestAsync(0);
 end;
 
 destructor TCallstackAsyncRequest.Destroy;
@@ -722,16 +727,16 @@ end;
 procedure TFPCallStackSupplier.RequestAtLeastCount(ACallstack: TCallStackBase;
   ARequiredMinCount: Integer);
 var
-  ThreadCallStack: TDbgCallstackEntryList;
+  r: TCallstackAsyncRequest;
 begin
   if (Debugger = nil) or not(Debugger.State in [dsPause, dsInternalPause])
   then begin
     ACallstack.SetCountValidity(ddsInvalid);
     exit;
   end;
-  FReqList.add(
-    TCallstackAsyncRequest.Create(FpDebugger, ACallstack, ARequiredMinCount)
-  );
+  r := TCallstackAsyncRequest.Create(FpDebugger, ACallstack, ARequiredMinCount);
+  FReqList.add(r);
+  r.RequestAsync(0);
 end;
 
 procedure TFPCallStackSupplier.RequestEntries(ACallstack: TCallStackBase);
@@ -739,76 +744,28 @@ var
   e: TCallStackEntry;
   It: TMapIterator;
   ThreadCallStack: TDbgCallstackEntryList;
-  v, params: String;
-  i: Integer;
-  ProcVal, m: TFpValue;
-  AController: TDbgController;
-  CurThreadId: Integer;
-  AContext: TFpDbgInfoContext;
-  OldContext: TFpDbgAddressContext;
+  cs: TDbgCallstackEntry;
 begin
   It := TMapIterator.Create(ACallstack.RawEntries);
-  //TFpDebugDebugger(Debugger).FDbgController.CurrentProcess.MainThread.PrepareCallStackEntryList;
-  //CurThreadId := FpDebugger.Threads.CurrentThreads.CurrentThreadId;
-  //ThreadCallStack := FpDebugger.Threads.CurrentThreads.Entries[CurThreadId].CallStackEntryList;
-
-  CurThreadId := FpDebugger.FDbgController.CurrentThread.ID;
   ThreadCallStack := FpDebugger.FDbgController.CurrentThread.CallStackEntryList;
 
   if not It.Locate(ACallstack.LowestUnknown )
   then if not It.EOM
   then It.Next;
 
-  AController := FpDebugger.FDbgController;
-  OldContext := FpDebugger.FMemManager.DefaultContext;
-
   while (not IT.EOM) and (TCallStackEntry(It.DataPtr^).Index <= ACallstack.HighestUnknown)
   do begin
     e := TCallStackEntry(It.DataPtr^);
     if e.Validity = ddsRequested then
     begin
-      ProcVal := nil;
-      if ThreadCallStack[e.Index].ProcSymbol <> nil then
-        ProcVal := ThreadCallStack[e.Index].ProcSymbol.Value;
-
-      params := '';
-      if (ProcVal <> nil) then begin
-        AContext := FpDebugger.FindContext(CurThreadId, e.Index);
-        if AContext <> nil then begin
-          // TODO: TDbgCallstackEntry.GetParamsAsString
-          if AContext <> nil then begin
-            AContext.MemManager.DefaultContext := AContext;
-            if ProcVal is TFpValueDwarfBase then
-              TFpValueDwarfBase(ProcVal).Context := AContext;
-            FPrettyPrinter.MemManager := AContext.MemManager;
-            FPrettyPrinter.AddressSize := AContext.SizeOfAddress;
-
-            for i := 0 to ProcVal.MemberCount - 1 do begin
-              m := ProcVal.Member[i];
-              if (m <> nil) and (sfParameter in m.DbgSymbol.Flags) then begin
-                FPrettyPrinter.PrintValue(v, m, wdfDefault, -1, [ppoStackParam]);
-                if params <> '' then params := params + ', ';
-                params := params + v;
-              end;
-              m.ReleaseReference;
-            end;
-            if ProcVal is TFpValueDwarfBase then
-              TFpValueDwarfBase(ProcVal).Context := nil;
-            AContext.ReleaseReference;
-          end;
-        end;
-        ProcVal.ReleaseReference;
-      end;
-      if params <> '' then
-        params := '(' + params + ')';
-      e.Init(ThreadCallStack[e.Index].AnAddress, nil,
-        ThreadCallStack[e.Index].FunctionName+params, ThreadCallStack[e.Index].SourceFile,
-        '', ThreadCallStack[e.Index].Line, ddsValid);
+      cs := ThreadCallStack[e.Index];
+      e.Init(cs.AnAddress, nil,
+        cs.FunctionName + FpDebugger.GetParamsAsString(cs, FPrettyPrinter),
+        cs.SourceFile, '', cs.Line, ddsValid);
     end;
     It.Next;
   end;
   It.Free;
-  FpDebugger.FMemManager.DefaultContext := OldContext;
 end;
 
 procedure TFPCallStackSupplier.RequestCurrent(ACallstack: TCallStackBase);
@@ -852,7 +809,6 @@ var
   m: TFpValue;
   n, v: String;
   CurThreadId, CurStackFrame: Integer;
-  CurStackList: TCallStackBase;
 begin
   AController := FpDebugger.FDbgController;
   if (AController = nil) or (AController.CurrentProcess = nil) or
@@ -1462,7 +1418,6 @@ var
   RepeatCnt: Integer;
   Res: Boolean;
   StackFrame, ThreadId: Integer;
-  StackList: TCallStackBase;
   ResValue: TFpValue;
   CastName, ResText2: String;
   ClassAddr, CNameAddr: TFpDbgMemLocation;
@@ -2228,6 +2183,11 @@ begin
   FCacheContext := FDbgController.CurrentProcess.FindContext(FCacheThreadId, FCacheStackFrame);
 end;
 
+procedure TFpDebugDebugger.DoGetParamsAsString;
+begin
+  FParamAsString := FParamAsStringStackEntry.GetParamsAsString(FParamAsStringPrettyPrinter);
+end;
+
 {$endif linux}
 
 function TFpDebugDebugger.AddBreak(const ALocation: TDbgPtr
@@ -2343,6 +2303,19 @@ begin
   Result := FCacheContext;
 {$else linux}
   Result := FDbgController.CurrentProcess.FindContext(AThreadId, AStackFrame);
+{$endif linux}
+end;
+
+function TFpDebugDebugger.GetParamsAsString(AStackEntry: TDbgCallstackEntry;
+  APrettyPrinter: TFpPascalPrettyPrinter): string;
+begin
+{$ifdef linux}
+  FParamAsStringStackEntry := AStackEntry;
+  FParamAsStringPrettyPrinter := APrettyPrinter;
+  ExecuteInDebugThread(@DoGetParamsAsString);
+  Result := FParamAsString;
+{$else linux}
+  Result := AStackEntry.GetParamsAsString(APrettyPrinter);
 {$endif linux}
 end;
 

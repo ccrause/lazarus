@@ -1861,8 +1861,12 @@ var
 begin
   Unused(APointIdx);
   Unused(AXIdx, AYIdx);
-  pt := ParentChart.GraphToImage(AGraphPt);
-  Result := AParams.FDistFunc(AParams.FPoint, pt);
+  if IsNaN(AGraphPt) then
+    exit(MaxInt)
+  else begin
+    pt := ParentChart.GraphToImage(AGraphPt);
+    Result := AParams.FDistFunc(AParams.FPoint, pt);
+  end;
 end;
 
 // AIndex refers to the index into YList here.
