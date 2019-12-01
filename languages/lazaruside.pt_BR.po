@@ -2317,6 +2317,10 @@ msgstr ""
 "Uma área de trabalho com o mesmo nome já existe.\n"
 "Favor confirmar o nome da área de trabalho:"
 
+#: lazarusidestrconsts.dlgincludecodetemplatestoidentcompl
+msgid "Include code templates"
+msgstr "Incluir modelos de código"
+
 #: lazarusidestrconsts.dlgincludeidentifierscontainingprefix
 msgid "Include identifiers containing prefix"
 msgstr "Incluir identificadores contendo prefixo"
@@ -3652,6 +3656,10 @@ msgstr "Escopo localização"
 #: lazarusidestrconsts.dlgselectallchildcontrols
 msgid "Select all child controls together with their parent."
 msgstr "Selecionar todos os controles filhos juntamente com seus pais."
+
+#: lazarusidestrconsts.dlgselectallnoscroll
+msgid "Do not scroll on Select-All / Paragraph or To-Brace"
+msgstr "Não rolar em Selecionar Tudo / Parágrafo ou Até Colchete"
 
 #: lazarusidestrconsts.dlgselectedtext
 msgid "&Selected text"
@@ -7018,6 +7026,10 @@ msgstr "Retorna"
 msgid "Visibility"
 msgstr "Visibilidade"
 
+#: lazarusidestrconsts.liscomboboxes
+msgid "Combo Boxes"
+msgstr ""
+
 #: lazarusidestrconsts.liscommandlineparameters
 msgctxt "lazarusidestrconsts.liscommandlineparameters"
 msgid "Command line parameters"
@@ -9004,6 +9016,10 @@ msgstr "Desenhar linhas da grade"
 #: lazarusidestrconsts.lisdrawtheselectionfocusedevenifthemessageswindowhasn
 msgid "Draw the selection focused even if the Messages window has no focus. Use this if your theme has a hardly visible unfocused drawing."
 msgstr "Desenhar a seleção focada, mesmo se a janela Mensagens não estiver em foco. Usar isto se o seu tema tem uma visão difícil de desenho não focado."
+
+#: lazarusidestrconsts.lisdropdowncount
+msgid "Drop Down Count"
+msgstr ""
 
 #: lazarusidestrconsts.lisdsgcopycomponents
 msgid "Copy selected components to clipboard"
@@ -11733,6 +11749,19 @@ msgstr "Nota: Todas as teclas serão definidas para os valores do esquema escolh
 #: lazarusidestrconsts.liskmopenpackagefile
 msgid "Open package file"
 msgstr "Abrir arquivo de pacote"
+
+#: lazarusidestrconsts.liskmopenrecent
+msgctxt "lazarusidestrconsts.liskmopenrecent"
+msgid "Open Recent"
+msgstr "Abrir recente"
+
+#: lazarusidestrconsts.liskmopenrecentpackage
+msgid "Open recent package"
+msgstr "Abrir pacote recente"
+
+#: lazarusidestrconsts.liskmopenrecentproject
+msgid "Open recent project"
+msgstr "Abrir projeto recente"
 
 #: lazarusidestrconsts.liskmpastecomponentsfromclipboard
 msgid "Paste Components"
@@ -21372,6 +21401,18 @@ msgctxt "lazarusidestrconsts.srkmeccopy"
 msgid "Copy"
 msgstr "Copiar"
 
+#: lazarusidestrconsts.srkmeccopyadd
+msgid "Copy (Add to Clipboard)"
+msgstr "Copiar (adicionar à área de transferência)"
+
+#: lazarusidestrconsts.srkmeccopyaddcurrentline
+msgid "Copy current line (Add to Clipboard)"
+msgstr "Copiar linha atual (adicionar à área de transferência)"
+
+#: lazarusidestrconsts.srkmeccopycurrentline
+msgid "Copy current line"
+msgstr "Copiar linha atual"
+
 #: lazarusidestrconsts.srkmeccopyeditornewwindow
 msgid "Copy editor to new window"
 msgstr "Copiar editor para nova janela"
@@ -21388,6 +21429,18 @@ msgstr "Copia editor para janela livre anterior"
 msgctxt "lazarusidestrconsts.srkmeccut"
 msgid "Cut"
 msgstr "Recortar"
+
+#: lazarusidestrconsts.srkmeccutadd
+msgid "Cut (Add to Clipboard)"
+msgstr "Recortar (adicionar à área de transferência)"
+
+#: lazarusidestrconsts.srkmeccutaddcurrentline
+msgid "Cut current line (Add to Clipboard)"
+msgstr "Recortar linha atual (adicionar à área de transferência)"
+
+#: lazarusidestrconsts.srkmeccutcurrentline
+msgid "Cut current line"
+msgstr "Recortar linha atual"
 
 #: lazarusidestrconsts.srkmecdeletebol
 msgid "Delete to beginning of line"
@@ -21429,6 +21482,10 @@ msgstr "Diferenciar (Diff)"
 #: lazarusidestrconsts.srkmecdown
 msgid "Move cursor down"
 msgstr "Mover cursor abaixo"
+
+#: lazarusidestrconsts.srkmecduplicateline
+msgid "Duplicate line (or lines in selection)"
+msgstr "Duplicar linha (ou linhas na seleção)"
 
 #: lazarusidestrconsts.srkmeceditorbottom
 msgid "Move cursor to absolute end"
@@ -21746,6 +21803,14 @@ msgstr "Mover editor a direita"
 #: lazarusidestrconsts.srkmecmoveeditorrightmost
 msgid "Move editor rightmost"
 msgstr "Mover editor extremo direito"
+
+#: lazarusidestrconsts.srkmecmovelinedown
+msgid "Move one line down"
+msgstr "Mover uma linha abaixo"
+
+#: lazarusidestrconsts.srkmecmovelineup
+msgid "Move one line up"
+msgstr "Mover uma linha acima"
 
 #: lazarusidestrconsts.srkmecmultipaste
 msgctxt "lazarusidestrconsts.srkmecmultipaste"
@@ -22259,7 +22324,7 @@ msgstr "alternar ponto de parada"
 
 #: lazarusidestrconsts.srkmectogglebreakpointenabled
 msgid "enable/disable breakpoint"
-msgstr ""
+msgstr "habilitar/desabilitar ponto de parada"
 
 #: lazarusidestrconsts.srkmectogglebreakpoints
 msgid "View breakpoints"

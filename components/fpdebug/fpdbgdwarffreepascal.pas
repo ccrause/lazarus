@@ -496,7 +496,8 @@ begin
   end;
 
   if (par_fp <> cur_fp) or (cur_fp = 0) or
-      not MemManager.ReadRegister(RegPc, pc, SearchCtx)
+     (i <= 0) or
+     not MemManager.ReadRegister(RegPc, pc, SearchCtx)
   then begin
     FOuterNotFound := True;
     SearchCtx.ReleaseReference;
@@ -702,8 +703,6 @@ end;
 
 function TFpSymbolDwarfFreePascalTypePointer.DoReadDataSize(
   const AValueObj: TFpValue; out ADataSize: TFpDbgValueSize): Boolean;
-var
-  Size: TFpDbgValueSize;
 begin
   if Kind = skClass then begin
     // TODO: get/adjust a value object to have the deref address // see ConstRefOrExprFromAttrData
@@ -942,8 +941,6 @@ end;
 
 function TFpValueDwarfFreePascalArray.DoGetMainStride(out
   AStride: TFpDbgValueSize): Boolean;
-var
-  ExtraStride: TFpDbgValueSize;
 begin
   if (TFpDwarfFreePascalSymbolClassMapDwarf3(TypeInfo.CompilationUnit.DwarfSymbolClassMap).FCompilerVersion >= $030300)
   then

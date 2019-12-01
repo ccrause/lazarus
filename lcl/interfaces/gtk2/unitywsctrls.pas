@@ -1,7 +1,11 @@
-{ Copyleft implementation of TTrayIcon for
-  Unity applications indicators
-  Created 2015 by Anthony Walter sysrpl@gmail.com }
+{
+ *****************************************************************************
+  This file is part of the Lazarus Component Library (LCL)
 
+  See the file COPYING.modifiedLGPL.txt, included in this distribution,
+  for details about the license.
+ *****************************************************************************
+}
 unit UnityWSCtrls;
 
 interface
@@ -10,14 +14,24 @@ interface
 uses
   GLib2, Gtk2, Gdk2Pixbuf,
   Classes, SysUtils, dynlibs,
-  Graphics, Controls, Forms, ExtCtrls, WSExtCtrls, LCLType, LazUTF8;
+  Graphics, Controls, Forms, ExtCtrls, WSExtCtrls, LCLType, LazUTF8,
+  FileUtil;
 
-{ Changed priority, now use libappindicator_3 if available.  ~_3 is, nominally
-  a Unity thing but Ubuntu and several other distros ship it (and support it) with
-  Gnome desktops.
+{ Copyleft implementation of TTrayIcon originally for Unity applications indicators
+  Original version 2015 by Anthony Walter sysrpl@gmail.com
 
-  As of U19.04, libappindicator_1, even if present, does not seem to work.
+  Changed October 2019, we now try and identify those Linux distributions that
+  need to use LibAppIndicator3 and allow the remainder to use the older and
+  more functional SystemTray. Only a few old distributions can use LibAppIndicator_1
+  so don't bother to try it, rely, here on LibAppIndicator3
 
+  The 'look up table' in NeedAppIndicator() can be overridden.
+  Introduce an optional env var, LAZUSEAPPIND that can be unset or set to
+  YES, NO or INFO - YES forces an attempt to use LibAppIndicator3, NO prevents
+  an attempt, any non blank value (eg INFO) displays to std out what is happening.
+
+  Note we assume this env var will only be used in Linux were its always safe to
+  write to stdout.
   DRB
 }
 
@@ -252,35 +266,23 @@ var
   Loaded: Boolean;
   Initialized: Boolean;
 
-function NeedAppIndicator: boolean;
-var
-  DeskTop,  VersionSt : String;
-  ProcFile: TextFile;
-begin
-  DeskTop := GetEnvironmentVariableUTF8('XDG_CURRENT_DESKTOP');
-  if DeskTop = 'Unity' then exit(True);
-  // GNOME needs AppIndicator lib only with some distros. Check them.
-  if (DeskTop = 'GNOME') then
-  begin
-    AssignFile(ProcFile, '/proc/version');
-    try
-      reset(ProcFile);
-      readln(ProcFile, VersionSt);
-    finally
-      CloseFile(ProcFile);
-    end;
-    if (pos('Debian', VersionSt) > 0)
-    or (pos('mageia', VersionSt) > 0)
-    or (pos('Red Hat', VersionSt) > 0)
-    or (pos('SUSE', VersionSt) > 0)
-    then exit(True);
-  end;
-  Result := False;
-end;
-
 function UnityAppIndicatorInit: Boolean;
 var
   Module: HModule;
+  UseAppInd : string;
+
+  function NeedAppIndicator: boolean;
+  var
+    DeskTop : String;
+  begin
+    DeskTop := GetEnvironmentVariableUTF8('XDG_CURRENT_DESKTOP');
+    // See the wiki for details of what extras these desktops require !!
+    if (Desktop = 'GNOME')
+      or (DeskTop = 'Unity')
+      or (Desktop = 'Enlightenment')
+      or (Desktop = 'ubuntu:GNOME') then exit(True);
+    Result := False;
+  end;
 
   function TryLoad(const ProcName: string; var Proc: Pointer): Boolean;
   begin
@@ -293,15 +295,28 @@ begin
   if Loaded then
     Exit(Initialized);
   Loaded := True;
-  if not NeedAppIndicator then
-  begin
-    Initialized := False;
-    Exit;
-  end;
   if Initialized then
     Exit(True);
-  Module := LoadLibrary(libappindicator_3);        // libappindicator v. 3
-  if Module = 0 then                               // no libappindicator_3
+  UseAppInd := getEnvironmentVariable('LAZUSEAPPIND');
+  if UseAppInd = 'NO' then
+    begin
+    Initialized := False;
+    writeln('APPIND Debug : Choosing to not try AppIndicator3');
+    Exit;
+  end;
+  if (UseAppInd <> 'YES') and (not NeedAppIndicator()) then    // ie its NO or blank or INFO
+  begin
+    Initialized := False;
+    if UseAppInd <> '' then
+       writeln('APPIND Debug : Will not use AppIndicator3');
+    Exit;
+  end;
+  if UseAppInd = 'YES' then                                    // either a YES or OS needs it
+     writeln('APPIND Debug : Will try to force AppIndicator3')
+  else
+     if UseAppInd <> '' then writeln('APPIND Debug : OS and Desktop request AppIndicator3');
+  Module := LoadLibrary(libappindicator_3);        // might have several package names, see wiki
+  if Module = 0 then
      Exit;
   Result :=
     TryLoad('app_indicator_get_type', @app_indicator_get_type) and
@@ -324,6 +339,8 @@ begin
     TryLoad('app_indicator_get_label', @app_indicator_get_label) and
     TryLoad('app_indicator_get_label_guide', @app_indicator_get_label_guide) and
     TryLoad('app_indicator_get_ordering_index', @app_indicator_get_ordering_index);
+  if UseAppInd <> '' then
+     writeln('APPIND Debug : AppIndicator3 has loaded ' + booltostr(Result, True));
   Initialized := Result;
 end;
 

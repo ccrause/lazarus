@@ -2378,6 +2378,10 @@ msgstr ""
 "Egzistuoja darbalaukis tokiu pat pavadinimu.\n"
 "Patvirkinte darbalaukio pavadinimą:\n"
 
+#: lazarusidestrconsts.dlgincludecodetemplatestoidentcompl
+msgid "Include code templates"
+msgstr ""
+
 #: lazarusidestrconsts.dlgincludeidentifierscontainingprefix
 msgid "Include identifiers containing prefix"
 msgstr ""
@@ -3751,6 +3755,10 @@ msgstr "Ieškos sritis"
 #: lazarusidestrconsts.dlgselectallchildcontrols
 msgid "Select all child controls together with their parent."
 msgstr "Pažymėti tevinę komponentę ir jos pokomponentes."
+
+#: lazarusidestrconsts.dlgselectallnoscroll
+msgid "Do not scroll on Select-All / Paragraph or To-Brace"
+msgstr ""
 
 #: lazarusidestrconsts.dlgselectedtext
 msgid "&Selected text"
@@ -7114,6 +7122,10 @@ msgstr "Grąžina"
 msgid "Visibility"
 msgstr "Matomumas"
 
+#: lazarusidestrconsts.liscomboboxes
+msgid "Combo Boxes"
+msgstr ""
+
 #: lazarusidestrconsts.liscommandlineparameters
 msgctxt "lazarusidestrconsts.liscommandlineparameters"
 msgid "Command line parameters"
@@ -9106,6 +9118,10 @@ msgstr "Brėžti tinklelio linijas"
 #| msgid "Draw the selection focused, even if the Messages window has no focus. Use this if your theme has a hardly visible unfocused drawing."
 msgid "Draw the selection focused even if the Messages window has no focus. Use this if your theme has a hardly visible unfocused drawing."
 msgstr "Pažymėjimą piešti kaip fokusuotą, net jei pranešimų langas praradęs fokusą. Šitai naudokite jei langų tvarkyklės temoje nefokusuoti elementai yra sunkiai įžiūrimi."
+
+#: lazarusidestrconsts.lisdropdowncount
+msgid "Drop Down Count"
+msgstr ""
 
 #: lazarusidestrconsts.lisdsgcopycomponents
 msgid "Copy selected components to clipboard"
@@ -11858,6 +11874,19 @@ msgstr "Pastaba: visų klavišų vertės bus nustatytos pagal pasirinktą derin�
 #: lazarusidestrconsts.liskmopenpackagefile
 msgid "Open package file"
 msgstr "Atverti paketo failą"
+
+#: lazarusidestrconsts.liskmopenrecent
+msgctxt "lazarusidestrconsts.liskmopenrecent"
+msgid "Open Recent"
+msgstr ""
+
+#: lazarusidestrconsts.liskmopenrecentpackage
+msgid "Open recent package"
+msgstr ""
+
+#: lazarusidestrconsts.liskmopenrecentproject
+msgid "Open recent project"
+msgstr ""
 
 #: lazarusidestrconsts.liskmpastecomponentsfromclipboard
 msgid "Paste Components"
@@ -21615,6 +21644,18 @@ msgctxt "lazarusidestrconsts.srkmeccopy"
 msgid "Copy"
 msgstr "Kopijuoti į iškarpinę"
 
+#: lazarusidestrconsts.srkmeccopyadd
+msgid "Copy (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopyaddcurrentline
+msgid "Copy current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopycurrentline
+msgid "Copy current line"
+msgstr ""
+
 #: lazarusidestrconsts.srkmeccopyeditornewwindow
 msgid "Copy editor to new window"
 msgstr "Rengyklę kopijuoti į naują langą"
@@ -21631,6 +21672,18 @@ msgstr "Rengyklę kopijuoti į ankstesnį laisvą langą"
 msgctxt "lazarusidestrconsts.srkmeccut"
 msgid "Cut"
 msgstr "Iškirpti į iškarpinę"
+
+#: lazarusidestrconsts.srkmeccutadd
+msgid "Cut (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutaddcurrentline
+msgid "Cut current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutcurrentline
+msgid "Cut current line"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecdeletebol
 msgid "Delete to beginning of line"
@@ -21672,6 +21725,10 @@ msgstr "Diff"
 #: lazarusidestrconsts.srkmecdown
 msgid "Move cursor down"
 msgstr "Perkelti žymeklį žemiau"
+
+#: lazarusidestrconsts.srkmecduplicateline
+msgid "Duplicate line (or lines in selection)"
+msgstr ""
 
 #: lazarusidestrconsts.srkmeceditorbottom
 msgid "Move cursor to absolute end"
@@ -21989,6 +22046,14 @@ msgstr "Perkelti rengyklę dešinėn"
 #: lazarusidestrconsts.srkmecmoveeditorrightmost
 msgid "Move editor rightmost"
 msgstr "Perkelti rengyklę į dešinįjį kraštą"
+
+#: lazarusidestrconsts.srkmecmovelinedown
+msgid "Move one line down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmovelineup
+msgid "Move one line up"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecmultipaste
 msgctxt "lazarusidestrconsts.srkmecmultipaste"

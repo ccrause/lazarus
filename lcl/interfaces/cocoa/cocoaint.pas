@@ -39,7 +39,7 @@ uses
   // LCL
   LCLStrConsts, LMessages, LCLMessageGlue, LCLProc, LCLIntf, LCLType,
   Controls, Forms, Themes, Menus,
-  IntfGraphics, Graphics, CocoaWSFactory;
+  IntfGraphics, Graphics, CocoaWSFactory, Interfaces, CocoaWSDialogs;
 
 type
 
@@ -171,6 +171,9 @@ type
     // modal session
     CurModalForm: NSWindow;
     Modals : TList;
+    ModalCounter: Integer; // the cheapest way to determine if modal window was called
+                           // used in mouse handling (in callbackobject)
+                           // Might not be needed, if native Modality used
     MainMenuEnabled: Boolean; // the latest main menu status
     PrevMenu : NSMenu;
     PrevLCLMenu : TMenu;
@@ -206,6 +209,7 @@ type
     procedure SetMainMenu(const AMenu: HMENU; const ALCLMenu: TMenu);
     function StartModal(awin: NSWindow; hasMenu: Boolean): Boolean;
     procedure EndModal(awin: NSWindow);
+    function isTopModalWin(awin: NSWindow): Boolean;
     function isModalSession: Boolean;
 
     {todo:}
@@ -238,6 +242,14 @@ var
   // if set to true, then WS would not assign icons via TCocoaWSForm SetIcon
   // The icon would have to be changed manually. By default LCL behaviour is used
   CocoaIconUse: Boolean = false;
+  CocoaToggleBezel : NSBezelStyle = NSRoundedBezelStyle;
+  CocoaToggleType  : NSButtonType = NSPushOnPushOffButton;
+
+  {$ifdef COCOALOOPHIJACK}
+  // The flag is set to true once hi-jacked loop is finished (at the end of app)
+  // The flag is checked in Menus to avoid "double" Cmd+Q menu
+  LoopHiJackEnded : Boolean = false;
+  {$endif}
 
 function CocoaScrollBarSetScrollInfo(bar: TCocoaScrollBar; const ScrollInfo: TScrollInfo): Integer;
 function CocoaScrollBarGetScrollInfo(bar: TCocoaScrollBar; var ScrollInfo: TScrollInfo): Boolean;
@@ -593,6 +605,7 @@ begin
     Result := nil;
     aloop();
     stop(nil); // this should stop the main loop
+    LoopHiJackEnded := true;
     exit;
   end;
   {$endif}
@@ -775,6 +788,7 @@ begin
     Modals.Add( TModalSession.Create(awin, sess, PrevMenuEnabled, PrevMenu, PrevLCLMenu));
 
   Result := true;
+  inc(ModalCounter);
 end;
 
 procedure TCocoaWidgetSet.EndModal(awin: NSWindow);
@@ -794,6 +808,15 @@ begin
 
   ms.Free;
   Modals.Delete(Modals.Count-1);
+end;
+
+function TCocoaWidgetSet.isTopModalWin(awin: NSWindow): Boolean;
+begin
+  if not isModalSession then begin
+    Result := false;
+    Exit;
+  end;
+  Result := TModalSession(Modals[Modals.Count-1]).window = awin;
 end;
 
 function TCocoaWidgetSet.isModalSession: Boolean;

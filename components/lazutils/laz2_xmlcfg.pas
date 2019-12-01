@@ -128,7 +128,7 @@ type
     function GetChildCount(const APath: string): Integer;
     function IsLegacyList(const APath: string): Boolean;
     function GetListItemCount(const APath, AItemName: string; const aLegacyList: Boolean): Integer;
-    function GetListItemXPath(const AName: string; const AIndex: Integer; const aLegacyList: Boolean;
+    class function GetListItemXPath(const AName: string; const AIndex: Integer; const aLegacyList: Boolean;
       const aLegacyList1Based: Boolean = False): string;
     procedure SetListItemCount(const APath: string; const ACount: Integer; const ALegacyList: Boolean);
     property Modified: Boolean read FModified write FModified;
@@ -443,7 +443,7 @@ begin
   end;
 end;
 
-function TXMLConfig.GetListItemXPath(const AName: string;
+class function TXMLConfig.GetListItemXPath(const AName: string;
   const AIndex: Integer; const aLegacyList: Boolean;
   const aLegacyList1Based: Boolean): string;
 begin
@@ -933,7 +933,7 @@ begin
         if (DefInstance <> nil) then
           DefValue := GetOrdProp(DefInstance, PropInfo);
         if ((DefInstance <> nil)  and (Value = DefValue)) or
-           (not IsStoredProp(Instance, PropInfo))
+           ((DefInstance =  nil)  and (not IsStoredProp(Instance, PropInfo)))
         then
           DeleteValue(Path)
         else begin
@@ -972,7 +972,7 @@ begin
         if (DefInstance <> nil) then
          DefFloatValue := GetFloatProp(DefInstance, PropInfo);
         if ((DefInstance <> nil)  and (DefFloatValue = FloatValue)) or
-           (not IsStoredProp(Instance, PropInfo))
+           ((DefInstance =  nil)  and (not IsStoredProp(Instance, PropInfo)))
         then
           DeleteValue(Path)
         else
@@ -984,7 +984,7 @@ begin
         if (DefInstance <> nil) then
            DefStrValue := GetStrProp(DefInstance, PropInfo);
         if ((DefInstance <> nil)  and (DefStrValue = StrValue)) or
-           (not IsStoredProp(Instance, PropInfo))
+           ((DefInstance =  nil)  and (not IsStoredProp(Instance, PropInfo)))
         then
           DeleteValue(Path)
         else
@@ -996,7 +996,7 @@ begin
         if (DefInstance <> nil) then
            WDefStrValue := GetWideStrProp(DefInstance, PropInfo);
         if ((DefInstance <> nil)  and (WDefStrValue = WStrValue)) or
-           (not IsStoredProp(Instance, PropInfo))
+           ((DefInstance =  nil)  and (not IsStoredProp(Instance, PropInfo)))
         then
           DeleteValue(Path)
         else
@@ -1008,7 +1008,7 @@ begin
         if (DefInstance <> nil) then
           DefInt64Value := GetInt64Prop(DefInstance, PropInfo)
         if ((DefInstance <> nil) and (Int64Value = DefInt64Value)) or
-           (not IsStoredProp(Instance, PropInfo))
+           ((DefInstance =  nil)  and (not IsStoredProp(Instance, PropInfo)))
         then
           DeleteValue(Path, Path)
         else
@@ -1020,7 +1020,7 @@ begin
         if (DefInstance <> nil) then
           DefBoolValue := GetOrdProp(DefInstance, PropInfo)<>0;
         if ((DefInstance <> nil) and (BoolValue = DefBoolValue)) or
-           (not IsStoredProp(Instance, PropInfo))
+           ((DefInstance =  nil)  and (not IsStoredProp(Instance, PropInfo)))
         then
           DeleteValue(Path)
         else

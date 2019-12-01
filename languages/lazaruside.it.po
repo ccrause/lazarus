@@ -2391,6 +2391,10 @@ msgid ""
 "Please confirm the desktop name:"
 msgstr ""
 
+#: lazarusidestrconsts.dlgincludecodetemplatestoidentcompl
+msgid "Include code templates"
+msgstr ""
+
 #: lazarusidestrconsts.dlgincludeidentifierscontainingprefix
 msgid "Include identifiers containing prefix"
 msgstr ""
@@ -3765,6 +3769,10 @@ msgstr ""
 #: lazarusidestrconsts.dlgselectallchildcontrols
 msgid "Select all child controls together with their parent."
 msgstr "Selezionare tutti i controlli figli insieme al loro genitore."
+
+#: lazarusidestrconsts.dlgselectallnoscroll
+msgid "Do not scroll on Select-All / Paragraph or To-Brace"
+msgstr ""
 
 #: lazarusidestrconsts.dlgselectedtext
 msgid "&Selected text"
@@ -7126,6 +7134,10 @@ msgstr "Ritorna"
 msgid "Visibility"
 msgstr "Visibilità"
 
+#: lazarusidestrconsts.liscomboboxes
+msgid "Combo Boxes"
+msgstr ""
+
 #: lazarusidestrconsts.liscommandlineparameters
 msgctxt "lazarusidestrconsts.liscommandlineparameters"
 msgid "Command line parameters"
@@ -9130,6 +9142,10 @@ msgstr "Disegna linee griglia"
 #| msgid "Draw the selection focused, even if the Messages window has no focus. Use this if your theme has a hardly visible unfocused drawing."
 msgid "Draw the selection focused even if the Messages window has no focus. Use this if your theme has a hardly visible unfocused drawing."
 msgstr "Disegnare come se avesse il fuoco, anche se la finestra non ha il fuoco. Usare se il disegno del vostro tema è poco visibile quando non ha il fuoco."
+
+#: lazarusidestrconsts.lisdropdowncount
+msgid "Drop Down Count"
+msgstr ""
 
 #: lazarusidestrconsts.lisdsgcopycomponents
 msgid "Copy selected components to clipboard"
@@ -11898,6 +11914,19 @@ msgstr "Nota: tutti i tasti saranno settati al valore dello schema scelto"
 #: lazarusidestrconsts.liskmopenpackagefile
 msgid "Open package file"
 msgstr "Apri un pacchetto"
+
+#: lazarusidestrconsts.liskmopenrecent
+msgctxt "lazarusidestrconsts.liskmopenrecent"
+msgid "Open Recent"
+msgstr ""
+
+#: lazarusidestrconsts.liskmopenrecentpackage
+msgid "Open recent package"
+msgstr ""
+
+#: lazarusidestrconsts.liskmopenrecentproject
+msgid "Open recent project"
+msgstr ""
 
 #: lazarusidestrconsts.liskmpastecomponentsfromclipboard
 #, fuzzy
@@ -21678,6 +21707,18 @@ msgctxt "lazarusidestrconsts.srkmeccopy"
 msgid "Copy"
 msgstr "Copia la selezione negli appunti"
 
+#: lazarusidestrconsts.srkmeccopyadd
+msgid "Copy (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopyaddcurrentline
+msgid "Copy current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopycurrentline
+msgid "Copy current line"
+msgstr ""
+
 #: lazarusidestrconsts.srkmeccopyeditornewwindow
 msgid "Copy editor to new window"
 msgstr "Copia editor in una nuova finestra"
@@ -21696,6 +21737,18 @@ msgstr "Copia editor nella precedente finestra libera"
 msgctxt "lazarusidestrconsts.srkmeccut"
 msgid "Cut"
 msgstr "Taglia la selezione negli appunti"
+
+#: lazarusidestrconsts.srkmeccutadd
+msgid "Cut (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutaddcurrentline
+msgid "Cut current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutcurrentline
+msgid "Cut current line"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecdeletebol
 msgid "Delete to beginning of line"
@@ -21737,6 +21790,10 @@ msgstr "Diff"
 #: lazarusidestrconsts.srkmecdown
 msgid "Move cursor down"
 msgstr "Sposta il cursore in giù"
+
+#: lazarusidestrconsts.srkmecduplicateline
+msgid "Duplicate line (or lines in selection)"
+msgstr ""
 
 #: lazarusidestrconsts.srkmeceditorbottom
 msgid "Move cursor to absolute end"
@@ -22061,6 +22118,14 @@ msgstr "Sposta l'editor a destra"
 #: lazarusidestrconsts.srkmecmoveeditorrightmost
 msgid "Move editor rightmost"
 msgstr "Sposta l'editor tutto a destra"
+
+#: lazarusidestrconsts.srkmecmovelinedown
+msgid "Move one line down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmovelineup
+msgid "Move one line up"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecmultipaste
 msgctxt "lazarusidestrconsts.srkmecmultipaste"

@@ -2388,6 +2388,10 @@ msgid ""
 "Please confirm the desktop name:"
 msgstr ""
 
+#: lazarusidestrconsts.dlgincludecodetemplatestoidentcompl
+msgid "Include code templates"
+msgstr ""
+
 #: lazarusidestrconsts.dlgincludeidentifierscontainingprefix
 msgid "Include identifiers containing prefix"
 msgstr ""
@@ -3767,6 +3771,10 @@ msgstr ""
 
 #: lazarusidestrconsts.dlgselectallchildcontrols
 msgid "Select all child controls together with their parent."
+msgstr ""
+
+#: lazarusidestrconsts.dlgselectallnoscroll
+msgid "Do not scroll on Select-All / Paragraph or To-Brace"
 msgstr ""
 
 #: lazarusidestrconsts.dlgselectedtext
@@ -7232,6 +7240,10 @@ msgstr ""
 msgid "Visibility"
 msgstr ""
 
+#: lazarusidestrconsts.liscomboboxes
+msgid "Combo Boxes"
+msgstr ""
+
 #: lazarusidestrconsts.liscommandlineparameters
 msgctxt "lazarusidestrconsts.liscommandlineparameters"
 msgid "Command line parameters"
@@ -9249,6 +9261,10 @@ msgstr ""
 
 #: lazarusidestrconsts.lisdrawtheselectionfocusedevenifthemessageswindowhasn
 msgid "Draw the selection focused even if the Messages window has no focus. Use this if your theme has a hardly visible unfocused drawing."
+msgstr ""
+
+#: lazarusidestrconsts.lisdropdowncount
+msgid "Drop Down Count"
 msgstr ""
 
 #: lazarusidestrconsts.lisdsgcopycomponents
@@ -11996,6 +12012,19 @@ msgstr ""
 #: lazarusidestrconsts.liskmopenpackagefile
 msgid "Open package file"
 msgstr "Open pakket bestand"
+
+#: lazarusidestrconsts.liskmopenrecent
+msgctxt "lazarusidestrconsts.liskmopenrecent"
+msgid "Open Recent"
+msgstr ""
+
+#: lazarusidestrconsts.liskmopenrecentpackage
+msgid "Open recent package"
+msgstr ""
+
+#: lazarusidestrconsts.liskmopenrecentproject
+msgid "Open recent project"
+msgstr ""
 
 #: lazarusidestrconsts.liskmpastecomponentsfromclipboard
 #, fuzzy
@@ -22008,6 +22037,18 @@ msgctxt "lazarusidestrconsts.srkmeccopy"
 msgid "Copy"
 msgstr "Kopieer selectie naar klembord"
 
+#: lazarusidestrconsts.srkmeccopyadd
+msgid "Copy (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopyaddcurrentline
+msgid "Copy current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccopycurrentline
+msgid "Copy current line"
+msgstr ""
+
 #: lazarusidestrconsts.srkmeccopyeditornewwindow
 msgid "Copy editor to new window"
 msgstr ""
@@ -22026,6 +22067,18 @@ msgstr ""
 msgctxt "lazarusidestrconsts.srkmeccut"
 msgid "Cut"
 msgstr "Knip selectie naar klembord"
+
+#: lazarusidestrconsts.srkmeccutadd
+msgid "Cut (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutaddcurrentline
+msgid "Cut current line (Add to Clipboard)"
+msgstr ""
+
+#: lazarusidestrconsts.srkmeccutcurrentline
+msgid "Cut current line"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecdeletebol
 msgid "Delete to beginning of line"
@@ -22066,6 +22119,10 @@ msgstr "Verschil"
 
 #: lazarusidestrconsts.srkmecdown
 msgid "Move cursor down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecduplicateline
+msgid "Duplicate line (or lines in selection)"
 msgstr ""
 
 #: lazarusidestrconsts.srkmeceditorbottom
@@ -22414,6 +22471,14 @@ msgstr "Editor naar rechts"
 
 #: lazarusidestrconsts.srkmecmoveeditorrightmost
 msgid "Move editor rightmost"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmovelinedown
+msgid "Move one line down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmovelineup
+msgid "Move one line up"
 msgstr ""
 
 #: lazarusidestrconsts.srkmecmultipaste

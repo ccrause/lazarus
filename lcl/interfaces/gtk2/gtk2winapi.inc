@@ -1409,6 +1409,7 @@ begin
          (lfWeight = FW_NORMAL) and
          (lfItalic = 0) and
          (lfUnderline = 0) and
+         (lfStrikeOut = 0) and
          (lfOrientation = 0) and
          IsFontNameDefault(lfFacename) then
       begin
@@ -1517,14 +1518,18 @@ begin
           AttrList := pango_attr_list_new();
           AttrListTemporary := True;
         end;
-        if LogFont.lfUnderline <> 0 then
-          Attr := pango_attr_underline_new(PANGO_UNDERLINE_SINGLE)
-        else
-          Attr := pango_attr_underline_new(PANGO_UNDERLINE_NONE);
-        pango_attr_list_change(AttrList, Attr);
 
-        Attr := pango_attr_strikethrough_new(LogFont.lfStrikeOut<>0);
-        pango_attr_list_change(AttrList, Attr);
+        if LogFont.lfUnderline<>0 then
+        begin
+          Attr := pango_attr_underline_new(PANGO_UNDERLINE_SINGLE);
+          pango_attr_list_change(AttrList, Attr);
+        end;
+
+        if LogFont.lfStrikeOut<>0 then
+        begin
+          Attr := pango_attr_strikethrough_new(True);
+          pango_attr_list_change(AttrList, Attr);
+        end;
 
         pango_layout_set_attributes(CurFont, AttrList);
         
@@ -2408,6 +2413,8 @@ var
   l: LongInt;
   Pt: TPoint;
   SavedRect: TRect; // if font orientation <> 0
+  LineHeight: Integer;
+  Size: TSize;
 
   function LeftOffset: Longint;
   begin
@@ -2453,7 +2460,7 @@ var
   var
     AP: TSize;
     J, MaxWidth,
-    LineWidth: Integer;
+    LineWidth, ActualHeight: Integer;
   begin
     theRect := Rect;
 
@@ -2497,20 +2504,25 @@ var
       if (Flags and DT_CALCRECT)<>0 then
       begin
         LineWidth := 0;
+        ActualHeight := 0;
         if (Lines <> nil) then
         begin
           for J := 0 to NumLines - 1 do
           begin
             TextExtentPoint(Lines[J], StrLen(Lines[J]), AP);
             LineWidth := Max(LineWidth, AP.cX);
+            Inc(ActualHeight, AP.cY);
           end;
         end;
         LineWidth := Min(MaxWidth, LineWidth);
       end else
+      begin
         LineWidth := MaxWidth;
+        ActualHeight := NumLines*TM.tmHeight;
+      end;
 
       theRect.Right := theRect.Left + LineWidth;
-      theRect.Bottom := theRect.Top + NumLines*TM.tmHeight;
+      theRect.Bottom := theRect.Top + ActualHeight;
       if NumLines>1 then
         Inc(theRect.Bottom, (NumLines-1)*TM.tmExternalLeading);// space between lines
 
@@ -2771,12 +2783,17 @@ begin
       and (tm.tmHeight > (theRect.Bottom - theRect.Top))
       then Break;
 
-      if Lines[i] <> nil then begin
+      if Lines[i] <> nil then
+      begin
         l:=StrLen(Lines[i]);
         DrawLine(Lines[i], l, theRect.Top);
         dec(pIndex,l+length(LineEnding));
-      end;
-      Inc(theRect.Top, TM.tmExternalLeading + TM.tmHeight);// space between lines
+        GetTextExtentPoint(DC, Lines[i], l, Size);
+        LineHeight := Size.cY;
+      end
+      else
+        LineHeight := TM.tmHeight;
+      Inc(theRect.Top, LineHeight + TM.tmExternalLeading);// space between lines
     end;
 
   finally

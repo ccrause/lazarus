@@ -440,6 +440,10 @@ begin
               begin
                 opt := QStyleOptionFrame_create();
               end;
+            QStylePE_FrameLineEdit:
+              begin
+                opt := QStyleOptionFrame_create();
+              end;
             QStylePE_IndicatorBranch:
               begin
 
@@ -564,7 +568,7 @@ var
   Context: TQtDeviceContext;
   Widget: QWidgetH;
   W: WideString;
-  TextRect: TRect;
+  TextRect, SelRect: TRect;
   AOldMode: Integer;
   ATextPalette: Cardinal;
   AQColor: TQColor;
@@ -622,6 +626,9 @@ begin
           Context.save;
           try
             Context.SetBkMode(TRANSPARENT);
+            if Details.State = TREIS_DISABLED then
+              QPalette_setCurrentColorGroup(Palette, QPaletteDisabled)
+            else
             if Details.State = TREIS_SELECTEDNOTFOCUS then
               QPalette_setCurrentColorGroup(Palette, QPaletteInactive)
             else
@@ -696,6 +703,19 @@ begin
           Context.Translate(R.Left, R.Top);
           Context.Rotate(-0.1 * Context.Font.Angle);
           OffsetRect(R, -R.Left, -R.Top);
+        end;
+
+        if (Details.Element = teEdit) then
+        begin
+          if IsDisabled(Details) then
+            QPalette_setCurrentColorGroup(Palette, QPaletteDisabled);
+          if GetControlState(Details) and QStyleState_Selected <> 0 then
+          begin
+            Context.font.Metrics.boundingRect(@SelRect, @R, DTFlagsToQtFlags(Flags), @W);
+            ColorRefToTQColor(ColorToRGB(clHighlight), AQColor);
+            QPainter_fillRect(Context.Widget, @SelRect,  PQColor(@AQColor));
+            ATextPalette := QPaletteHighlightedText;
+          end;
         end;
 
         QStyle_drawItemText(Style, Context.Widget, @R,
@@ -830,6 +850,20 @@ begin
       if Details.State in [TUS_PRESSED, TUS_HOT] then
         Result := Result or QStyleState_Active or QStyleState_HasFocus or QStyleState_MouseOver;
     end;
+  end;
+  if (Details.Element = teEdit) and (Details.Part in [EP_EDITTEXT, EP_BACKGROUND, EP_BACKGROUNDWITHBORDER]) then
+  begin
+    if Details.State = ETS_FOCUSED then
+      Result := Result or QStyleState_Active or QStyleState_Enabled or QStyleState_HasFocus;
+
+    if Details.State = ETS_HOT then
+      Result := Result or QStyleState_MouseOver
+    else
+    if Details.State = ETS_READONLY then
+      Result := Result or QStyleState_ReadOnly
+    else
+    if Details.State = ETS_SELECTED then
+      Result := Result or QStyleState_Selected;
   end;
   if (Details.Element = teWindow) then
   begin
@@ -1089,6 +1123,12 @@ begin
               Result.ControlElement := QStyleCE_Splitter;
             end;
         end;
+      end;
+    teEdit:
+      begin
+        Result.DrawVariant := qdvPrimitive;
+        if Details.Part in [0, EP_EDITTEXT, EP_CARET, EP_BACKGROUND, EP_BACKGROUNDWITHBORDER] then
+          Result.PrimitiveElement := QStylePE_FrameLineEdit;
       end;
     teSpin:
       begin

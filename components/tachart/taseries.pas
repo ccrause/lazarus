@@ -614,7 +614,8 @@ var
     ADrawer.SetBrushParams(bsClear, clTAColor);
     ADrawer.Pen := LinePen;
     if Styles <> nil then
-      Styles.Apply(ADrawer, AIndex);
+      Styles.Apply(ADrawer, AIndex, true);
+      // "true" avoids painting of spaces in non-solid lines in brush color
     if Depth = 0 then
       for i := 0 to High(breaks) - 1 do
         ADrawer.Polyline(points, breaks[i], breaks[i + 1] - breaks[i])
@@ -1515,6 +1516,10 @@ var
   i: Integer;
 begin
   Result := inherited Extent;
+
+  if FChart = nil then
+    raise EChartError.Create('Calculation of TBarSeries.Extent is not possible when the series is not added to a chart.');
+
   if IsEmpty then exit;
   if BarWidthStyle = bwPercentMin then
     UpdateMinXRange;

@@ -909,6 +909,7 @@ var
   bndPt, clPt, srchPt: TPoint; // clPt - is the one to send to LCL
                                // srchPt - is the one to use for each chidlren (clPt<>srchPt for TScrollBox)
   menuHandled : Boolean;
+  mc: Integer; // modal counter
 begin
   if Assigned(Owner) and not NSObjectIsLCLEnabled(Owner) then
   begin
@@ -954,6 +955,7 @@ begin
     lEventType := NSLeftMouseUp;
 
   Result := Result or (BlockCocoaUpDown and not AOverrideBlock);
+  mc := CocoaWidgetSet.ModalCounter;
   case lEventType of
     NSLeftMouseDown,
     NSRightMouseDown,
@@ -995,6 +997,14 @@ begin
       NotifyApplicationUserInput(Target, Msg.Msg);
       DeliverMessage(Msg);
     end;
+  end;
+
+  if mc <> CocoaWidgetSet.ModalCounter then
+  begin
+    // showing of a modal window is causing "mouse" event to be lost.
+    // so, preventing Cocoa from handling it
+    Result := true;
+    Exit;
   end;
 
   //debugln('MouseUpDownEvent:'+DbgS(Msg.Msg)+' Target='+Target.name+);
@@ -1127,6 +1137,11 @@ var
   MousePos: NSPoint;
   MButton: NSInteger;
   bndPt, clPt, srchPt: TPoint;
+  dx,dy: double;
+const
+  WheelDeltaToLCLY = 1200; // the basic (one wheel-click) is 0.1 on cocoa
+  WheelDeltaToLCLX = 1200; // the basic (one wheel-click) is 0.1 on cocoa
+  LCLStep = 120;
 begin
   Result := False; // allow cocoa to handle message
 
@@ -1149,22 +1164,32 @@ begin
   Msg.Y := round(clPt.Y);
   Msg.State := CocoaModifiersToShiftState(Event.modifierFlags, NSEvent.pressedMouseButtons);
 
+  if NSAppKitVersionNumber >= NSAppKitVersionNumber10_7 then
+  begin
+    dx := event.scrollingDeltaX;
+    dy := event.scrollingDeltaY;
+  end else
+  begin
+    dx := event.deltaX;
+    dy := event.deltaY;
+  end;
+
   // Some info on event.deltaY can be found here:
   // https://developer.apple.com/library/mac/releasenotes/AppKit/RN-AppKitOlderNotes/
   // It says that deltaY=1 means 1 line, and in the LCL 1 line is 120
-  if event.deltaY <> 0 then
+  if dy <> 0 then
   begin
     Msg.Msg := LM_MOUSEWHEEL;
-    Msg.WheelDelta := round(event.deltaY * 120);
+    Msg.WheelDelta := sign(dy) * LCLStep;
   end
   else
-  if event.deltaX <> 0 then
+  if dx <> 0 then
   begin
     Msg.Msg := LM_MOUSEHWHEEL;
     // see "deltaX" documentation.
     // on macOS: -1 = right, +1 = left
     // on LCL:   -1 = left,  +1 = right
-    Msg.WheelDelta := round(-event.deltaX * 120);
+    Msg.WheelDelta := sign(-dx) * LCLStep;
   end
   else
     // Filter out empty events - See bug 28491
@@ -1253,7 +1278,11 @@ end;
 
 procedure TLCLCommonCallback.BecomeFirstResponder;
 begin
-  LCLSendSetFocusMsg(Target);
+  if not Assigned(Target) then Exit;
+  // LCL is unable to determine the "already focused" message
+  // thus Cocoa related code is doing that.
+  //if not Target.Focused then
+    LCLSendSetFocusMsg(Target);
 end;
 
 procedure TLCLCommonCallback.ResignFirstResponder;
@@ -1658,48 +1687,33 @@ begin
   end;
 end;
 
+type
+  NSFontSetter = objccategory external(NSObject)
+    procedure setFont(afont: NSFont); message 'setFont:';
+    procedure setTextColor(clr: NSColor); message 'setTextColor:';
+  end;
+
 class procedure TCocoaWSWinControl.SetFont(const AWinControl: TWinControl; const AFont: TFont);
 var
   Obj: NSObject;
   Cell: NSCell;
   Str: NSAttributedString;
   NewStr: NSMutableAttributedString;
-  Dict: NSDictionary;
   Range: NSRange;
 begin
-  if (AWinControl.HandleAllocated) then
+  if not (AWinControl.HandleAllocated) then Exit;
+
+  Obj := NSObject(AWinControl.Handle).lclContentView;
+
+  if Obj.respondsToSelector(ObjCSelector('setFont:')) then
+    Obj.setFont(TCocoaFont(AFont.Reference.Handle).Font);
+
+  if Obj.respondsToSelector(ObjCSelector('setTextColor:')) then
   begin
-    Obj := NSObject(AWinControl.Handle);
-    if Obj.isKindOfClass(NSScrollView) then
-      Obj := NSScrollView(Obj).documentView;
-    if Obj.isKindOfClass(NSControl) then
-    begin
-      Cell := NSCell(NSControl(Obj).cell);
-      Cell.setFont(TCocoaFont(AFont.Reference.Handle).Font);
-      // try to assign foreground color?
-      Str := Cell.attributedStringValue;
-      if Assigned(Str) then
-      begin
-        NewStr := NSMutableAttributedString.alloc.initWithAttributedString(Str);
-        Range.location := 0;
-        Range.length := NewStr.length;
-        if AFont.Color = clDefault then
-          NewStr.removeAttribute_range(NSForegroundColorAttributeName, Range)
-        else
-          NewStr.addAttribute_value_range(NSForegroundColorAttributeName, ColorToNSColor(ColorToRGB(AFont.Color)), Range);
-        Cell.setAttributedStringValue(NewStr);
-        NewStr.release;
-      end;
-    end
+    if AFont.Color = clDefault then
+      Obj.setTextColor(nil)
     else
-    if Obj.isKindOfClass(NSText) then
-    begin
-      NSText(Obj).setFont(TCocoaFont(AFont.Reference.Handle).Font);
-      if AFont.Color = clDefault then
-        NSText(Obj).setTextColor(nil)
-      else
-        NSText(Obj).setTextColor(ColorToNSColor(ColorToRGB(AFont.Color)));
-    end;
+      Obj.setTextColor(ColorToNSColor(ColorToRGB(AFont.Color)));
   end;
 end;
 

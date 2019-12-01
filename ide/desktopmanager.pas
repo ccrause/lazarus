@@ -59,7 +59,7 @@ type
     procedure ExportAllActionClick(Sender: TObject);
     procedure ExportActionClick(Sender: TObject);
     procedure ExportBitBtnClick(Sender: TObject);
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
+    procedure FormClose(Sender: TObject; var {%H-}CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure HelpButtonClick(Sender: TObject);
@@ -412,6 +412,7 @@ begin
   xIndex := DesktopListBox.Items.IndexOf(EnvironmentOptions.ActiveDesktopName);
   if xIndex >= 0 then
     DesktopListBox.ItemIndex := xIndex;
+  AssociatedDebugDesktopComboBox.DropDownCount := EnvironmentOptions.DropDownCount;
 end;
 
 procedure TDesktopForm.HelpButtonClick(Sender: TObject);
