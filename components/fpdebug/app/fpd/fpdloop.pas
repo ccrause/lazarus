@@ -38,7 +38,7 @@ interface
 
 uses
   Classes, SysUtils, FileUtil, LazFileUtils, LazUTF8, FpDbgInfo, FpDbgClasses,
-  FpDbgDisasX86, DbgIntfBaseTypes, FpDbgDwarf, FpdMemoryTools, CustApp;
+  FpDbgDisasAvr{X86}, DbgIntfBaseTypes, FpDbgDwarf, FpdMemoryTools, CustApp;
 
 type
 

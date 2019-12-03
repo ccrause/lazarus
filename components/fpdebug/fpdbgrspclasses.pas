@@ -643,6 +643,7 @@ end;
 procedure TDbgRspProcess.TerminateProcess;
 begin
   FIsTerminating:=true;
+  FConnection.SendKill();
   //if fpkill(ProcessID,SIGKILL)<>0 then
   //  begin
   //  DebugLn(DBG_WARNINGS, 'Failed to send SIGKILL to process %d. Errno: %d',[ProcessID, errno]);
@@ -821,10 +822,16 @@ end;
 function TDbgRspProcess.InsertBreakInstructionCode(const ALocation: TDBGPtr;
   out OrigValue: Byte): Boolean;
 begin
+  result := ReadData(ALocation, SizeOf(OrigValue), OrigValue);
+  if result then
+  begin
   // HW break...
-  result := FConnection.SetBreakWatchPoint(ALocation, wkpExec);
-
-  OrigValue := 0;
+    result := FConnection.SetBreakWatchPoint(ALocation, wkpExec);
+    if not result then
+      DebugLn(DBG_WARNINGS, 'Failed to set break point.', []);
+  end
+  else
+    DebugLn(DBG_WARNINGS, 'Failed to read memory.', []);
 end;
 
 function TDbgRspProcess.RemoveBreakInstructionCode(const ALocation: TDBGPtr;
