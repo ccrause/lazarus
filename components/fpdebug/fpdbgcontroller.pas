@@ -11,7 +11,8 @@ uses
   Maps,
   LazLoggerBase,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
-  FpDbgDisasX86,
+  //FpDbgDisasX86,
+  FpDbgDisasAvr,
   FpDbgClasses;
 
 type
@@ -741,6 +742,7 @@ begin
     FCurrentProcess := OSDbgClasses.DbgProcessClass.StartInstance(FExecutableFilename, Params, Environment, WorkingDirectory, FConsoleTty, Flags);
   if assigned(FCurrentProcess) then
     begin
+    //Pause;
     FProcessMap.Add(FCurrentProcess.ProcessID, FCurrentProcess);
     DebugLn(DBG_VERBOSE, 'Got PID: %d, TID: %d', [FCurrentProcess.ProcessID, FCurrentProcess.ThreadID]);
     result := true;

@@ -36,7 +36,7 @@ unit FPDCommand;
 interface
 
 uses
-  SysUtils, Classes, fgl,
+  SysUtils, Classes,
 {$ifdef windows}
   Windows,
 {$endif}
@@ -44,14 +44,14 @@ uses
   FpPascalParser,
   FPDbgController,
   FpPascalBuilder,
-  FpErrorMessages, LazStringUtils;
+  FpErrorMessages, LazStringUtils, LazFileUtils, LazUTF8;
 
 procedure HandleCommand(ACommand: String; out CallProcessLoop: boolean);
 
 implementation
 
 uses
-  FPDGlobal
+  FPDGlobal, fgl
 {$ifdef windows}
   , FPDPEImage
 {$endif windows}
@@ -410,9 +410,72 @@ begin
 end;
 
 procedure HandleList(AParams: String; out CallProcessLoop: boolean);
+//begin
+//  WriteLN('not implemented: list');
+//  CallProcessLoop:=false;
+//end;
+var
+  a: TDbgPtr;
+  sym, symproc: TFpSymbol;
+  S: TStringList;
+  AName: String;
 begin
-  WriteLN('not implemented: list');
-  CallProcessLoop:=false;
+  WriteLN('===');
+  a := GController.CurrentThread.GetInstructionPointerRegisterValue;
+  sym := GController.CurrentProcess.FindProcSymbol(a);
+  if sym = nil
+  then begin
+    WriteLn('  [', FormatAddress(a), '] ???');
+    Exit;
+  end;
+
+  symproc := sym;
+  while not (symproc.kind in [skProcedure, skFunction]) do
+    symproc := symproc.Parent;
+
+  if sym <> symproc
+  then begin
+    if symproc = nil
+    then WriteLn('???')
+    else begin
+      WriteLn(symproc.FileName, ' ', symproc.Line, ':', symproc.Column, ' ', symproc.Name);
+    end;
+    Write(' ');
+  end;
+
+  WriteLn(sym.FileName, ' ', sym.Line, ':', sym.Column, ' ', sym.Name);
+  Write('  [', FormatAddress(sym.Address), '+', a-sym.Address.Address, '] ');
+
+  AName := sym.Filename;
+  if not FileExistsUTF8(AName)
+  then begin
+    if ExtractFilePath(AName) = ''
+    then begin
+      AName := IncludeTrailingPathDelimiter(ExtractFilePath(GController.ExecutableFilename)) + AName;
+      if not FileExistsUTF8(AName)
+      then AName := '';
+    end
+    else AName := '';
+  end;
+
+  if AName = ''
+  then begin
+    WriteLn(' File not found');
+    Exit;
+  end;
+
+  S := TStringList.Create;
+  try
+    S.LoadFromFile(UTF8ToSys(AName));
+    if S.Count < sym.Line
+    then WriteLn('Line not found')
+    else WriteLn(S[sym.Line - 1]);
+  except
+    on E: Exception do WriteLn(E.Message);
+  end;
+  S.Free;
+
+  sym.ReleaseReference;
 end;
 
 procedure HandleMemory(AParams: String; out CallProcessLoop: boolean);
@@ -570,9 +633,38 @@ end;
 
 
 procedure HandleDisas(AParams: String; out CallProcessLoop: boolean);
+//begin
+//  CallProcessLoop:=false;
+//  WriteLN('not implemented: disassemble');
+//end;
+var
+  a: TDbgPtr;
+  Code, CodeBytes: String;
+  CodeBin: array[0..20] of Byte;
+  p: pointer;
+  i: integer;
 begin
-  CallProcessLoop:=false;
-  WriteLN('not implemented: disassemble');
+  WriteLN('===');
+  a := GController.CurrentThread.GetInstructionPointerRegisterValue;
+  for i := 0 to 5 do
+  begin
+    Write('  [', FormatAddress(a), ']');
+
+    if not GController.CurrentProcess.ReadData(a,sizeof(CodeBin),CodeBin)
+    then begin
+      //debugln('Disassemble: Failed to read memory at %s.', [FormatAddress(a)]);
+      Code := '??';
+      CodeBytes := '??';
+      Inc(a);
+      Exit;
+    end;
+    p := @CodeBin;
+
+    Disassemble(p, GController.CurrentProcess.Mode=dm64, CodeBytes, Code);
+
+    WriteLN(' ', CodeBytes:20, '    ', Code);
+    Inc(a, PtrUInt(p) - PtrUInt(@CodeBin));
+  end;
 end;
 
 procedure HandleEval(AParams: String; out CallProcessLoop: boolean);
