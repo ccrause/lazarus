@@ -683,7 +683,8 @@ begin
   if FIsTerminating then
   begin
     AThread.BeforeContinue;
-    FConnection.SendKill();
+    // The kill command should have been issued earlier (if using fpd), calling SendKill again will lead to an exception since the connection shoul db terminated already.
+    // FConnection.SendKill();
 
     TDbgRspThread(AThread).ResetPauseStates;
     if not FThreadMap.HasId(AThread.ID) then
@@ -846,11 +847,14 @@ var
   Pid: THandle;
   WaitStatus: integer;
 begin
+  if FIsTerminating then begin
+    result := deExitProcess;
+    exit;
+  end;
+
   if AThread = nil then begin // should not happen... / just assume the most likely safe failbacks
-    if FIsTerminating then
-      result := deExitProcess
-    else
-      result := deInternalContinue;
+    result := deInternalContinue;
+    exit;
   end;
 
   TDbgRspThread(AThread).FExceptionSignal:=0;

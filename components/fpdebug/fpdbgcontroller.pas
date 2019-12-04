@@ -923,7 +923,8 @@ begin
     *)
 
     FPDEvent:=FCurrentProcess.ResolveDebugEvent(FCurrentThread);
-    if FCurrentThread <> nil then DebugLn(DBG_VERBOSE, 'Process stopped with event %s. IP=%s, SP=%s, BSP=%s. HasBreak: %s',
+    if (FCurrentThread <> nil) and (FPDEvent <> deExitProcess) then
+      DebugLn(DBG_VERBOSE, 'Process stopped with event %s. IP=%s, SP=%s, BSP=%s. HasBreak: %s',
                          [FPDEventNames[FPDEvent],
                          FCurrentProcess.FormatAddress(FCurrentThread.GetInstructionPointerRegisterValue),
                          FCurrentProcess.FormatAddress(FCurrentThread.GetStackPointerRegisterValue),
