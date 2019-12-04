@@ -274,14 +274,16 @@ end;
 
 function TDbgRspThread.WriteDebugReg(ind: byte; AVal: PtrUInt): boolean;
 begin
+
 end;
 
 function TDbgRspThread.ReadThreadState: boolean;
 begin
-  assert(FIsPaused, 'TDbgLinuxThread.ReadThreadState: FIsPaused');
+  assert(FIsPaused, 'TDbgRspThread.ReadThreadState: FIsPaused');
   result := true;
   if FHasThreadState then
     exit;
+  FRegisterValueListValid := false;
 end;
 
 function TDbgRspThread.RequestInternalPause: Boolean;
@@ -407,16 +409,21 @@ end;
 procedure TDbgRspThread.LoadRegisterValues;
 var
   i: integer;
+  regs: array[0..38] of byte;
 begin
   if not ReadThreadState then
     exit;
-  for i := low(FRegs.regs) to high(FRegs.regs) do
-    FRegisterValueList.DbgRegisterAutoCreate['r'+IntToStr(i)].SetValue(FRegs.regs[i], IntToStr(FRegs.regs[i]),1, 0); // confirm dwarf index
 
-  FRegisterValueList.DbgRegisterAutoCreate['spl'].SetValue(FRegs.SPL, IntToStr(FRegs.SPL),1,0);
-  FRegisterValueList.DbgRegisterAutoCreate['sph'].SetValue(FRegs.SPH, IntToStr(FRegs.SPH),1,0);
-  FRegisterValueList.DbgRegisterAutoCreate['pc'].SetValue(FRegs.PC, IntToStr(FRegs.PC),1,0);
-  FRegisterValueListValid:=true;
+  if TDbgRspProcess(Process).FConnection.ReadRegisters(regs[0], length(regs)) then
+  begin
+    for i := 0 to 31 do
+      FRegisterValueList.DbgRegisterAutoCreate['r'+IntToStr(i)].SetValue(regs[i], IntToStr(regs[i]),1, i); // confirm dwarf index
+
+    //FRegisterValueList.DbgRegisterAutoCreate['spl'].SetValue(regs.SPL, IntToStr(FRegs.SPL),1,0);
+    //FRegisterValueList.DbgRegisterAutoCreate['sph'].SetValue(FRegs.SPH, IntToStr(FRegs.SPH),1,0);
+    //FRegisterValueList.DbgRegisterAutoCreate['pc'].SetValue(FRegs.PC, IntToStr(FRegs.PC),1,0);
+    FRegisterValueListValid:=true;
+  end;
 end;
 
 function TDbgRspThread.GetInstructionPointerRegisterValue: TDbgPtr;
@@ -446,12 +453,16 @@ begin
 end;
 
 function TDbgRspThread.GetStackPointerRegisterValue: TDbgPtr;
+var
+  spl, sph: PtrUInt;
 begin
   Result := 0;
   if not ReadThreadState then
     exit;
 
-  result := FRegs.SPL + FRegs.SPH shl 8;
+  ReadDebugReg(SPLindex, spl);
+  ReadDebugReg(SPHindex, sph);
+  result := spl + sph shl 8;
 end;
 
 { TDbgRspProcess }

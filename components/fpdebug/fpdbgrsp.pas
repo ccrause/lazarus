@@ -34,6 +34,7 @@ type
     // TODO: no support thread ID or different address
     function Continue(): boolean;
     function SingleStep(): boolean;
+    function ReadRegisters(out regs; const sz: integer): boolean;
 
     // check state of target - ?
     function Init: integer;
@@ -383,6 +384,29 @@ begin
   result := FSendCommand('s');
   if not result then
     DebugLn(DBG_WARNINGS, ['Warning: SingleStep command failure in TRspConnection.SingleStep()']);
+end;
+
+function TRspConnection.ReadRegisters(out regs; const sz: integer): boolean;
+var
+  reply: string;
+  b: array of byte;
+  i: integer;
+begin
+  result := false;
+  reply := '';
+  setlength(b, sz);
+  FillByte(b[0], sz, 0);
+  // Normal receive error, or an error number of the form Exx
+  if not SendCmdWaitForReply('g', reply) or ((length(reply) < 4) and (reply[1] = 'E'))
+    or (length(reply) <> 2*sz) then
+    DebugLn(DBG_WARNINGS, ['Warning: "g" command returned unexpected result: ', reply])
+  else
+  begin
+    for i := 0 to sz-1 do
+      b[i] := StrToInt('$'+reply[2*i+1]+reply[2*i+2]);
+    result := true;
+  end;
+  Move(b[0], regs, sz);
 end;
 
 function TRspConnection.Init: integer;
