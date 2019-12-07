@@ -325,6 +325,7 @@ type
   TDbgInstance = class(TObject)
   private
     FMode: TFPDMode;
+    FIsAvr8: boolean;
     FFileName: String;
     FProcess: TDbgProcess;
     FSymbolTableInfo: TFpSymbolInfo;
@@ -348,6 +349,7 @@ type
     property DbgInfo: TDbgInfo read FDbgInfo;
     property SymbolTableInfo: TFpSymbolInfo read FSymbolTableInfo;
     property Mode: TFPDMode read FMode;
+    property IsAvr8: Boolean read FIsAvr8;
   end;
 
   { TDbgLibrary }
@@ -1127,6 +1129,7 @@ begin
     FMode:=dm64
   else
     FMode:=dm32;
+  FIsAvr8 := FLoaderList.ImageAvr8;
   FDbgInfo := TFpDwarfInfo.Create(FLoaderList);
   TFpDwarfInfo(FDbgInfo).LoadCompilationUnits;
   FSymbolTableInfo := TFpSymbolInfo.Create(FLoaderList);

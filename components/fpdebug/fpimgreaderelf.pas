@@ -50,7 +50,7 @@ type
   TElfFile = class(TObject)
   private
     FIs64Bit: boolean;
-    FIsAvr: boolean;
+    FIsAvr8: boolean;
   protected
     function Load32BitFile(ALoader: TDbgFileLoader): Boolean;
     function Load64BitFile(ALoader: TDbgFileLoader): Boolean;
@@ -61,7 +61,7 @@ type
     function LoadFromFile(ALoader: TDbgFileLoader): Boolean;
     function FindSection(const Name: String): Integer;
     property Is64Bit: boolean read FIs64Bit;
-    property Is6Avr: boolean read FIsAvr;
+    property IsAvr8: boolean read FIsAvr8;
   end;
 
   { TElfDbgSource }
@@ -131,7 +131,7 @@ begin
   Result := ALoader.Read(0, sizeof(hdr), @hdr) = sizeof(hdr);
   if not Result then Exit;
 
-  FIsAvr := (hdr.e_machine = EM_AVR);
+  FIsAvr8 := (hdr.e_machine = EM_AVR);
 
   SetLength(sect, hdr.e_shnum);
   //ALoader.Position := hdr.e_shoff;
@@ -324,6 +324,7 @@ begin
     FSections.Objects[idx] := TObject(p);
   end;
   SetImage64Bit(fElfFile.Is64Bit);
+  SetImageAvr8(fElfFile.IsAvr8);
   inherited Create(ASource, ADebugMap, OwnSource);
 end;
 

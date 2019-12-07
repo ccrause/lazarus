@@ -573,42 +573,7 @@ begin
   end;
   Freemem(buf);
 
-  //try
-  //  WordSize:=DBGPTRSIZE[Mode];
-  //  if AAdress mod WordSize <> 0 then
-  //    begin
-  //    AAdressAlign := ((PtrUInt(AAdress)) and not PtrUInt(WordSize - 1));
-  //    if not ReadWordSize(AAdressAlign, AVal) then
-  //      Exit;
-  //    pb := @AVal;
-  //    BytesRead:=WordSize-(AAdress-AAdressAlign);
-  //    if BytesRead>=ASize then
-  //      BytesRead:=ASize;
-  //    move(pb[AAdress-AAdressAlign], buf[0], BytesRead);
-  //    inc(AAdressAlign, WordSize);
-  //    end
-  //  else
-  //    AAdressAlign:=AAdress;
-  //
-  //  while BytesRead<ASize do
-  //    begin
-  //    if not ReadWordSize(AAdressAlign, AVal) then
-  //      exit;
-  //    if WordSize<(ASize-BytesRead) then
-  //      ReadBytes:=WordSize
-  //    else
-  //      ReadBytes:=(ASize-BytesRead);
-  //    move(AVal, buf[BytesRead], ReadBytes);
-  //    inc(BytesRead, ReadBytes);
-  //    inc(AAdressAlign, WordSize);
-  //
-  //    end;
-  //  System.Move(buf^, AData, BytesRead);
-  //finally
-  //  freemem(buf);
-  //end;
   MaskBreakpointsInReadData(AAdress, ASize, AData);
-  //result := true;
 end;
 
 function TDbgRspProcess.WriteData(const AAdress: TDbgPtr;

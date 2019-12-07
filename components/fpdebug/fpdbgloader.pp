@@ -64,6 +64,7 @@ type
     function GetReaderErrors: String;
     function GetSubFiles: TStrings;
     function GetImage64Bit: Boolean;
+    function GetImageAvr8: Boolean;
     function GetUUID: TGuid;
   protected
     FImageBase: QWord unimplemented;
@@ -101,12 +102,14 @@ type
   private
     function GetImage64Bit: Boolean;
     function GetImageBase: QWord;
+    function GetImageAvr8: boolean;
     function GetItem(Index: Integer): TDbgImageLoader;
     procedure SetItem(Index: Integer; AValue: TDbgImageLoader);
   public
     property Items[Index: Integer]: TDbgImageLoader read GetItem write SetItem; default;
     property ImageBase: QWord read GetImageBase;
-    Property Image64Bit: Boolean read GetImage64Bit;
+    property Image64Bit: Boolean read GetImage64Bit;
+    property ImageAvr8: boolean read GetImageAvr8;
   end;
 
 implementation
@@ -133,6 +136,14 @@ begin
     result := 0;
 end;
 
+function TDbgImageLoaderList.GetImageAvr8: boolean;
+begin
+  if Count>0 then
+    result := Items[0].GetImageAvr8
+  else
+    result := false;
+end;
+
 function TDbgImageLoaderList.GetItem(Index: Integer): TDbgImageLoader;
 begin
   result := TDbgImageLoader(inherited GetItem(Index));
@@ -155,6 +166,14 @@ begin
     {$endif}
   else
     result := ImgReader.Image64Bit;
+end;
+
+function TDbgImageLoader.GetImageAvr8: Boolean;
+begin
+  if not assigned(ImgReader) then
+    result := false
+  else
+    result := ImgReader.ImageAvr8;
 end;
 
 function TDbgImageLoader.GetAddressMapList: TDbgAddressMapList;

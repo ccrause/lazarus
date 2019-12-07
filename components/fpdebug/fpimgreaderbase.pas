@@ -89,6 +89,7 @@ type
   private
     FImage64Bit: Boolean;
     FImageBase: QWord;
+    FImageAvr8: boolean;
     FReaderErrors: String;
     FUUID: TGuid;
   protected
@@ -98,6 +99,7 @@ type
     procedure SetUUID(AGuid: TGuid);
     procedure SetImageBase(ABase: QWord);
     procedure SetImage64Bit(AValue: Boolean);
+    procedure SetImageAvr8(AValue: Boolean);
     procedure AddReaderError(AnError: String);
   public
     class function isValid(ASource: TDbgFileLoader): Boolean; virtual; abstract;
@@ -107,7 +109,8 @@ type
     procedure AddSubFilesToLoaderList(ALoaderList: TObject; PrimaryLoader: TObject); virtual;
 
     property ImageBase: QWord read FImageBase;
-    Property Image64Bit: Boolean read FImage64Bit;
+    property Image64Bit: Boolean read FImage64Bit;
+    property ImageAvr8: boolean read FImageAvr8;
     property UUID: TGuid read FUUID;
     property Section[const AName: String]: PDbgImageSection read GetSection;
     property SubFiles: TStrings read GetSubFiles;
@@ -332,6 +335,11 @@ end;
 procedure TDbgImageReader.SetImage64Bit(AValue: Boolean);
 begin
   FImage64Bit := AValue;
+end;
+
+procedure TDbgImageReader.SetImageAvr8(AValue: Boolean);
+begin
+  FImageAvr8 := AValue;
 end;
 
 procedure TDbgImageReader.AddReaderError(AnError: String);

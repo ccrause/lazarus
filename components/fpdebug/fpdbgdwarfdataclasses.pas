@@ -527,6 +527,7 @@ type
     FAbbrevOffset: QWord;
     FAddressSize: Byte;  // the address size of the target in bytes
     FIsDwarf64: Boolean; // Set if the dwarf info in this unit is 64bit
+    FIsAvr8: Boolean;
     // ------
     
     FInfoData: Pointer;
@@ -594,7 +595,9 @@ type
     function ReadAddressValue(AAttribute: Pointer; AForm: Cardinal; out AValue: QWord): Boolean;
 
   public
-    constructor Create(AOwner: TFpDwarfInfo; ADebugFile: PDwarfDebugFile; ADataOffset: QWord; ALength: QWord; AVersion: Word; AAbbrevOffset: QWord; AAddressSize: Byte; AIsDwarf64: Boolean); virtual;
+    constructor Create(AOwner: TFpDwarfInfo; ADebugFile: PDwarfDebugFile;
+      ADataOffset: QWord; ALength: QWord; AVersion: Word; AAbbrevOffset: QWord;
+  AAddressSize: Byte; AIsDwarf64, AIsAvr8: Boolean); virtual;
     destructor Destroy; override;
     procedure ScanAllEntries; inline;
     function GetDefinition(AAbbrevPtr: Pointer; out ADefinition: TDwarfAbbrev): Boolean; inline;
@@ -624,6 +627,7 @@ type
      so that the 32-bit and 64-bit DWARF formats can coexist and be distinguished within a single linked object.
     *)
     property IsDwarf64: Boolean read FIsDwarf64; // Set if the dwarf info in this unit is 64bit
+    property IsAvr8: Boolean read FIsAvr8;
     property Owner: TFpDwarfInfo read FOwner;
     property DebugFile: PDwarfDebugFile read FDebugFile;
 
@@ -645,6 +649,7 @@ type
     FCompilationUnits: TList;
     FImageBase: QWord;
     FImage64Bit: Boolean;
+    FImageAvr8: Boolean;
     FMemManager: TFpDbgMemManager;
     FFiles: array of TDwarfDebugFile;
     function GetCompilationUnit(AIndex: Integer): TDwarfCompilationUnit;
@@ -670,6 +675,7 @@ type
 
     property ImageBase: QWord read FImageBase;
     property Image64Bit: Boolean read FImage64Bit;
+    property ImageAvr8: Boolean read FImageAvr8;
   end;
 
   TDwarfLocationExpression = class;
@@ -1914,7 +1920,10 @@ var
     if (ASize > SizeOf(AValue)) or (ASize > AddrSize) then exit(False);
     Result := FMemManager.ReadAddress(AnAddress, SizeVal(ASize), AValue, FContext);
     if not Result then
-      SetError;
+      SetError
+    else if FCU.FIsAvr8 then begin  // or use a smaller type for address for AVR?
+      AValue.Address := $800000 or (AValue.Address and $FFFF);
+    end;
   end;
 
   function ReadAddressFromMemoryEx(AnAddress: TFpDbgMemLocation; AnAddrSpace: TDbgPtr; ASize: Cardinal; out AValue: TFpDbgMemLocation): Boolean;
@@ -1958,6 +1967,7 @@ var
   x : integer;
   Entry: TFpDbgMemLocation;
   EntryP: PFpDbgMemLocation;
+  r1, r2, val1, val2: byte;  // for AVR
 begin
   (* Returns the address of the value.
      - Except for DW_OP_regN and DW_OP_piece, which return the value itself. (Not sure about DW_OP_constN)
@@ -2035,7 +2045,20 @@ begin
         end;
 
       DW_OP_breg0..DW_OP_breg31: begin
-          if not FMemManager.ReadRegister(CurInstr^-DW_OP_breg0, NewValue, FContext) then begin
+        // if avr8 then read 2 registers to form a 2 byte pointer
+        // on large ram mcu needs to adjust rampz if applicable?
+          if FCU.FIsAvr8 then begin
+            r1 := byte(CurInstr^-DW_OP_breg0);
+            if (r1 < 30) then begin
+              r2 := r1 + 1;
+              FMemManager.ReadRegister(r1, NewValue, FContext);
+              val1 := byte(NewValue);
+              FMemManager.ReadRegister(r2, NewValue, FContext);
+              val2 := byte(NewValue);
+              NewValue := $800000 or (val2 shl 8) or val1;
+            end;
+          end
+          else if not FMemManager.ReadRegister(CurInstr^-DW_OP_breg0, NewValue, FContext) then begin
             SetError;
             exit;
           end;
@@ -2044,7 +2067,20 @@ begin
           {$POP}
         end;
       DW_OP_bregx: begin
-          if not FMemManager.ReadRegister(ULEB128toOrdinal(CurData), NewValue, FContext) then begin
+        // if avr8 then read 2 registers to form a 2 byte pointer
+        // on large ram mcu needs to adjust rampz if applicable?
+          if FCU.FIsAvr8 then begin
+            r1 := ULEB128toOrdinal(CurData);
+            if (r1 < 30) then begin
+              r2 := r1 + 1;
+              FMemManager.ReadRegister(r1, NewValue, FContext);
+              val1 := byte(NewValue);
+              FMemManager.ReadRegister(r2, NewValue, FContext);
+              val2 := byte(NewValue);
+              NewValue := $800000 or (val2 shl 8) or val1;
+            end;
+          end
+          else if not FMemManager.ReadRegister(ULEB128toOrdinal(CurData), NewValue, FContext) then begin
             SetError;
             exit;
           end;
@@ -3170,6 +3206,7 @@ var
 begin
   inherited Create(ALoaderList);
   FImage64Bit := ALoaderList.Image64Bit;
+  FImageAvr8 := ALoaderList.ImageAvr8;
   FCompilationUnits := TList.Create;
   FImageBase := ALoaderList.ImageBase;
 
@@ -3372,7 +3409,8 @@ begin
                 CU64^.Version,
                 CU64^.AbbrevOffset,
                 CU64^.AddressSize,
-                True);
+                True,
+                False);
         p := Pointer(@CU64^.Version) + CU64^.Length;
       end
       else begin
@@ -3385,7 +3423,8 @@ begin
                 CU32^.Version,
                 CU32^.AbbrevOffset,
                 CU32^.AddressSize,
-                False);
+                False,
+                ImageAvr8);
         p := Pointer(@CU32^.Version) + CU32^.Length;
       end;
       FCompilationUnits.Add(CU);
@@ -3852,7 +3891,7 @@ begin
   FAddressMapBuild := True;
 end;
 
-constructor TDwarfCompilationUnit.Create(AOwner: TFpDwarfInfo; ADebugFile: PDwarfDebugFile; ADataOffset: QWord; ALength: QWord; AVersion: Word; AAbbrevOffset: QWord; AAddressSize: Byte; AIsDwarf64: Boolean);
+constructor TDwarfCompilationUnit.Create(AOwner: TFpDwarfInfo; ADebugFile: PDwarfDebugFile; ADataOffset: QWord; ALength: QWord; AVersion: Word; AAbbrevOffset: QWord; AAddressSize: Byte; AIsDwarf64, AIsAvr8: Boolean);
   procedure FillLineInfo(AData: Pointer);
   var
     LNP32: PDwarfLNPHeader32 absolute AData;
@@ -3971,6 +4010,7 @@ begin
 
   FAddressSize := AAddressSize;
   FIsDwarf64 := AIsDwarf64;
+  FIsAvr8 := AIsAvr8;
 
   FAbbrevList := TDwarfAbbrevList.Create(ADebugFile^.Sections[dsAbbrev].RawData,
     ADebugFile^.Sections[dsAbbrev].RawData + ADebugFile^.Sections[dsAbbrev].Size,
