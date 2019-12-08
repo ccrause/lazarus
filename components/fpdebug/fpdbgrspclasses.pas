@@ -15,11 +15,9 @@ interface
 uses
   Classes,
   SysUtils,
-  fgl,
   FpDbgClasses,
   FpDbgLoader,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
-  FpDbgLinuxExtra,
   FpDbgInfo,
   FpDbgUtil,
   LazLoggerBase, Maps,
@@ -67,6 +65,7 @@ const
   SREGindex = 32;
   SPLindex = 33;
   SPHindex = 34;
+  // Program counter register indexes
   PC0 = 35;
   PC1 = 36;
   PC2 = 37;
@@ -145,7 +144,7 @@ type
     constructor Create(const AName: string; const AProcessID, AThreadID: Integer); override;
     destructor Destroy; override;
 
-    // FOR AVR target AAddress could be program or data (SRAM) memory (or EEPROM?)
+    // FOR AVR target AAddress could be program or data (SRAM) memory (or EEPROM)
     // Gnu tools masks data memory with $800000
     function ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean; override;
     function WriteData(const AAdress: TDbgPtr; const ASize: Cardinal; const AData): Boolean; override;
@@ -263,18 +262,13 @@ begin
 end;
 
 function TDbgRspThread.ReadDebugReg(ind: byte; out AVal: PtrUInt): boolean;
-var
-  req, ret: string;
 begin
-  req := 'p'+IntToHex(ind, 2);
-  TDbgRspProcess(Process).FConnection.SendCmdWaitForReply(req, ret);
-  AVal := StrToInt('$'+ret);
-  result := true;
+  result := TDbgRspProcess(Process).FConnection.ReadDebugReg(ind, AVal);
 end;
 
 function TDbgRspThread.WriteDebugReg(ind: byte; AVal: PtrUInt): boolean;
 begin
-
+  result := TDbgRspProcess(Process).FConnection.WriteDebugReg(ind, AVal);
 end;
 
 function TDbgRspThread.ReadThreadState: boolean;
@@ -293,7 +287,7 @@ begin
     exit;
 
   // Send SIGSTOP/break
-  TDbgRspProcess(Process).FConnection.SendBreak();
+  TDbgRspProcess(Process).FConnection.Break();
   FInternalPauseRequested := true;
 end;
 
@@ -409,20 +403,19 @@ end;
 procedure TDbgRspThread.LoadRegisterValues;
 var
   i: integer;
-  regs: array[0..38] of byte;
 begin
   if not ReadThreadState then
     exit;
 
-  if TDbgRspProcess(Process).FConnection.ReadRegisters(regs[0], length(regs)) then
+  if TDbgRspProcess(Process).FConnection.ReadRegisters(FRegs.regs[0], length(FRegs.regs)) then
   begin
-    for i := 0 to 31 do
-      FRegisterValueList.DbgRegisterAutoCreate['r'+IntToStr(i)].SetValue(regs[i], IntToStr(regs[i]),1, i); // confirm dwarf index
+    for i := 0 to high(FRegs.cpuRegs) do
+      FRegisterValueList.DbgRegisterAutoCreate['r'+IntToStr(i)].SetValue(FRegs.cpuRegs[i], IntToStr(FRegs.cpuRegs[i]),1, i); // confirm dwarf index
 
-    //FRegisterValueList.DbgRegisterAutoCreate['spl'].SetValue(regs.SPL, IntToStr(FRegs.SPL),1,0);
-    //FRegisterValueList.DbgRegisterAutoCreate['sph'].SetValue(FRegs.SPH, IntToStr(FRegs.SPH),1,0);
-    //FRegisterValueList.DbgRegisterAutoCreate['pc'].SetValue(FRegs.PC, IntToStr(FRegs.PC),1,0);
-    FRegisterValueListValid:=true;
+    FRegisterValueList.DbgRegisterAutoCreate['spl'].SetValue(FRegs.SPL, IntToStr(FRegs.SPL),1,0);
+    FRegisterValueList.DbgRegisterAutoCreate['sph'].SetValue(FRegs.SPH, IntToStr(FRegs.SPH),1,0);
+    FRegisterValueList.DbgRegisterAutoCreate['pc'].SetValue(FRegs.PC, IntToStr(FRegs.PC),1,0);
+    FRegisterValueListValid := true;
   end;
 end;
 
@@ -525,8 +518,11 @@ begin
 
   dbg := TDbgRspProcess.Create(AFileName, 0, 0);
   try
+    // TODO: Should be user configurable
     dbg.FConnection := TRspConnection.Create('localhost', 1234);
+    // TODO: RegisterCacheSize is target specific
     dbg.FConnection.RegisterCacheSize := 38;
+
     result := dbg;
     dbg.FStatus := dbg.FConnection.Init;
     dbg := nil;
@@ -548,104 +544,38 @@ end;
 
 function TDbgRspProcess.ReadData(const AAdress: TDbgPtr;
   const ASize: Cardinal; out AData): Boolean;
-var
-  AVal: TDbgPtr;
-  AAdressAlign: TDBGPtr;
-  BytesRead: integer;
-  ReadBytes: integer;
-  PB: PByte;
-  buf: pbyte;
-  cmd, reply: string;
-  i: integer;
 begin
-  BytesRead := 0;
-  result := false;
-  getmem(buf, ASize);
-  cmd := 'm'+IntToHex(AAdress, 2)+',' + IntToHex(ASize, 2);
-  if FConnection.SendCmdWaitForReply(cmd, reply) and (length(reply) = ASize*2) then
-  begin
-    for i := 0 to ASize-1 do
-    begin
-      buf[i] := StrToInt('$'+reply[2*i + 1]+reply[2*i + 2]);
-    end;
-    System.Move(buf^, AData, ASize);
-    result := true;
-  end;
-  Freemem(buf);
-
+  result := FConnection.ReadData(AAdress, ASize, AData);
   MaskBreakpointsInReadData(AAdress, ASize, AData);
 end;
 
 function TDbgRspProcess.WriteData(const AAdress: TDbgPtr;
   const ASize: Cardinal; const AData): Boolean;
-//var
-//  e: integer;
-//  pi: TDBGPtr;
-//  WordSize: integer;
 begin
-  //result := false;
-  //WordSize:=DBGPTRSIZE[Mode];
-  //
-  //if ASize>WordSize then
-  //  DebugLn(DBG_WARNINGS, 'Can not write more then '+IntToStr(WordSize)+' bytes.')
-  //else
-  //  begin
-  //  if ASize<WordSize then
-  //    begin
-  //    fpseterrno(0);
-  //    pi := TDbgPtr(fpPTrace(PTRACE_PEEKDATA, FCurrentThreadId, pointer(AAdress), nil));
-  //    e := fpgeterrno;
-  //    if e <> 0 then
-  //      begin
-  //      DebugLn(DBG_WARNINGS, 'Failed to read data. Errcode: '+inttostr(e));
-  //      result := false;
-  //      exit;
-  //      end;
-  //    end;
-  //  move(AData, pi, ASize);
-  //
-  //  fpPTrace(PTRACE_POKEDATA, FCurrentThreadId, pointer(AAdress), pointer(pi));
-  //  e := fpgeterrno;
-  //  if e <> 0 then
-  //    begin
-  //    DebugLn(DBG_WARNINGS, 'Failed to write data. Errcode: '+inttostr(e));
-  //    result := false;
-  //    end;
-  //  end;
-  //
-  //result := true;
+  result := FConnection.WriteData(AAdress,AAdress, AData);
 end;
 
 procedure TDbgRspProcess.TerminateProcess;
 begin
   FIsTerminating:=true;
-  FConnection.SendKill();
-  //if fpkill(ProcessID,SIGKILL)<>0 then
-  //  begin
-  //  DebugLn(DBG_WARNINGS, 'Failed to send SIGKILL to process %d. Errno: %d',[ProcessID, errno]);
-  //  FIsTerminating:=false;
-  //  end;
+  FConnection.Kill();
 end;
 
 function TDbgRspProcess.Pause: boolean;
 begin
   // Target should automatically respond with T or S reply after processing the break
-  result := FConnection.SendBreak();
+  result := FConnection.Break();
   PauseRequested:=true;
   if not result then
   begin
-    DebugLn(DBG_WARNINGS, 'Failed to send SIGTRAP to process %d.',[ProcessID]);
+    DebugLn(DBG_WARNINGS, 'Failed to send Ctrl-C to process %d.',[ProcessID]);
   end;
 end;
 
 function TDbgRspProcess.Detach(AProcess: TDbgProcess; AThread: TDbgThread): boolean;
-var
-  reply: string;
 begin
   RemoveAllBreakPoints;
-  result := FConnection.SendCmdWaitForReply('D', reply);
-  result := pos('OK', reply) = 1;
-  Result := True; // Probably not much more you can do, so say it is OK
+  Result := FConnection.Detach();
 end;
 
 function TDbgRspProcess.Continue(AProcess: TDbgProcess; AThread: TDbgThread; SingleStep: boolean): boolean;
@@ -659,8 +589,8 @@ begin
   if FIsTerminating then
   begin
     AThread.BeforeContinue;
-    // The kill command should have been issued earlier (if using fpd), calling SendKill again will lead to an exception since the connection shoul db terminated already.
-    // FConnection.SendKill();
+    // The kill command should have been issued earlier (if using fpd), calling SendKill again will lead to an exception since the connection should be terminated already.
+    // FConnection.Kill();
 
     TDbgRspThread(AThread).ResetPauseStates;
     if not FThreadMap.HasId(AThread.ID) then
@@ -683,21 +613,12 @@ begin
 
         while (ThreadToContinue.GetInstructionPointerRegisterValue = PC) do
         begin
-          result := FConnection.Continue();
-          //fpPTrace(PTRACE_SINGLESTEP, ThreadToContinue.ID, pointer(1), pointer(wstopsig(TDbgRspThread(ThreadToContinue).FExceptionSignal)));
-
+          result := FConnection.SingleStep();
           TDbgRspThread(ThreadToContinue).ResetPauseStates; // So BeforeContinue will not run again
-
           ThreadToContinue.FIsPaused := True;
           if result then
           begin
             tempState := FConnection.WaitForSignal(s);
-            //PID := fpWaitPid(ThreadToContinue.ID, WaitStatus, __WALL);
-            //if PID <> ThreadToContinue.ID then
-            //begin
-            //  DebugLn(DBG_WARNINGS, ['Error single stepping other thread ', ThreadToContinue.ID, ' waitpid got ', PID, ', ',WaitStatus, ' err ', Errno]);
-            //  break;
-            //end;
             if (tempState = SIGTRAP) then
               break; // if the command jumps back an itself....
           end
@@ -717,7 +638,6 @@ begin
     TDbgRspThread(AThread).FIsSteppingBreakPoint := True;
     AThread.BeforeContinue;
     result := FConnection.SingleStep(); // TODO: pass thread ID once it is supported in FConnection - also signals not yet passed through
-    //fpPTrace(PTRACE_SINGLESTEP, AThread.ID, pointer(1), pointer(wstopsig(TDbgRspThread(AThread).FExceptionSignal)));
     TDbgRspThread(AThread).ResetPauseStates;
     FStatus := 0; // need to call WaitForSignal to read state after single step
     exit;
@@ -733,7 +653,6 @@ begin
     if (ThreadToContinue <> AThread) and (ThreadToContinue.FIsPaused) then
     begin
       FConnection.Continue();
-      //fpPTrace(PTRACE_CONT, ThreadToContinue.ID, pointer(1), pointer(wstopsig(ThreadToContinue.FExceptionSignal)));
       ThreadToContinue.ResetPauseStates;
     end;
   end;
@@ -744,10 +663,8 @@ begin
     AThread.BeforeContinue;
     if SingleStep then
       result := FConnection.SingleStep()
-      //fpPTrace(PTRACE_SINGLESTEP, AThread.ID, pointer(1), pointer(wstopsig(TDbgRspThread(AThread).FExceptionSignal)))
     else
       result := FConnection.Continue();
-      //fpPTrace(PTRACE_CONT, AThread.ID, pointer(1), pointer(wstopsig(TDbgRspThread(AThread).FExceptionSignal)));
     TDbgRspThread(AThread).ResetPauseStates;
     FStatus := 0;  // should update status by calling WaitForSignal
   end;
@@ -758,8 +675,6 @@ end;
 
 function TDbgRspProcess.WaitForDebugEvent(out ProcessIdentifier, ThreadIdentifier: THandle): boolean;
 var
-  PID: THandle;
-  ThreadWithEvent: TDbgRspThread;
   s: string;
 begin
   // Currently only single process/thread
@@ -782,18 +697,6 @@ begin
   end;
 
   result := true;
-  //result := PID<>-1;
-  //if not result then
-  //  DebugLn(DBG_WARNINGS, 'Failed to wait for debug event.', [])
-  //else
-  //begin
-  //  ThreadIdentifier := self.ThreadID;
-  //
-  //  if not FProcessStarted and (PID <> ProcessID) then
-  //    DebugLn(DBG_WARNINGS, 'ThreadID of main thread does not match the ProcessID');
-  //
-  //  ProcessIdentifier := ProcessID;
-  //end;
 end;
 
 function TDbgRspProcess.InsertBreakInstructionCode(const ALocation: TDBGPtr;
@@ -819,9 +722,7 @@ end;
 
 function TDbgRspProcess.AnalyseDebugEvent(AThread: TDbgThread): TFPDEvent;
 var
-  ThreadToPause, ThreadSignaled: TDbgRspThread;
-  Pid: THandle;
-  WaitStatus: integer;
+  ThreadToPause: TDbgRspThread;
 begin
   if FIsTerminating then begin
     result := deExitProcess;
@@ -854,30 +755,6 @@ begin
   else if FStatus <> 0 then
   begin
     TDbgRspThread(AThread).ReadThreadState;
-
-    //if FStatus = SIGTRAP then
-    //begin
-    //  if not FProcessStarted then
-    //  begin
-    //    result := deCreateProcess;
-    //    FProcessStarted:=true;
-    //    //if fpPTrace(PTRACE_SETOPTIONS, ProcessID, nil,  Pointer( PTRACE_O_TRACECLONE) ) <> 0 then
-    //    //  writeln('Failed to set set trace options. ');
-    //  end
-    //  else
-    //  // TODO: check it is not a real breakpoint
-    //  // or end of single step
-    //    if TDbgRspThread(AThread).FInternalPauseRequested then begin
-    //      DebugLn(DBG_VERBOSE, ['Received late SigTrag for thread ', AThread.ID]);
-    //      result := deInternalContinue; // left over signal
-    //    end
-    //    else
-    //    begin
-    //      result := deBreakpoint; // or pause requested
-    //      if not TDbgRspThread(AThread).FIsSteppingBreakPoint then
-    //        AThread.CheckAndResetInstructionPointerAfterBreakpoint;
-    //    end;
-    //end;
 
     if (not FProcessStarted) and (FStatus <> SIGTRAP) then
     begin
@@ -956,8 +833,6 @@ begin
     if result=deException then
       ExceptionClass:='External: '+ExceptionClass;
   end;
-  //else
-  //  raise exception.CreateFmt('Received unknown status %d from process with pid=%d',[FStatus, ProcessID]);
 
   TDbgRspThread(AThread).FIsSteppingBreakPoint := False;
 

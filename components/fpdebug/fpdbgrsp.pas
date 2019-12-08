@@ -3,7 +3,7 @@ unit FpDbgRsp;
 interface
 
 uses
-  Classes, SysUtils, ssockets, DbgIntfDebuggerBase;
+  Classes, SysUtils, ssockets, DbgIntfDebuggerBase, DbgIntfBaseTypes;
 
 type
 
@@ -17,24 +17,33 @@ type
     function FWaitForData: boolean;
     function FSendCommand(const cmd: string): boolean;
     function FReadReply(out retval: string): boolean;
-
     procedure FProcessTPacket(const packet: string);
+    function FSendCmdWaitForReply(const cmd: string; out reply: string): boolean;
   public
     constructor Create(const AHost: String; APort: Word; AHandler : TSocketHandler = Nil); Overload;
     destructor Destroy;
-    function SendCmdWaitForReply(const cmd: string; out reply: string): boolean;
     // Wait for async signal
     function WaitForSignal(out msg: string): integer;
 
-    function SendBreak(): boolean;
-    function SendKill(): boolean;
+    function Break(): boolean;
+    function Kill(): boolean;
+    function Detach(): boolean;
     function MustReplyEmpty: boolean;
     function SetBreakWatchPoint(addr: PtrUInt; BreakWatchKind: TDBGWatchPointKind; watchsize: integer = 1): boolean;
     function DeleteBreakWatchPoint(addr: PtrUInt; BreakWatchKind: TDBGWatchPointKind; watchsize: integer = 1): boolean;
     // TODO: no support thread ID or different address
     function Continue(): boolean;
     function SingleStep(): boolean;
-    function ReadRegisters(out regs; const sz: integer): boolean;
+
+    // Data exchange
+    function ReadDebugReg(ind: byte; out AVal: PtrUInt): boolean;
+    function WriteDebugReg(ind: byte; AVal: PtrUInt): boolean;
+    function ReadRegisters(out regs; const sz: integer): boolean;  // size is not required by protocol, but is used to preallocate memory for the response
+    function WriteRegisters(constref regs; const sz: integer): boolean;
+    function ReadData(const AAddress: TDbgPtr; const ASize: cardinal; out AData
+      ): boolean;
+    function WriteData(const AAdress: TDbgPtr;
+      const ASize: Cardinal; const AData): Boolean;
 
     // check state of target - ?
     function Init: integer;
@@ -206,7 +215,7 @@ begin
   {$endif}
 end;
 
-function TRspConnection.SendCmdWaitForReply(const cmd: string; out reply: string
+function TRspConnection.FSendCmdWaitForReply(const cmd: string; out reply: string
   ): boolean;
 var
   c: char;
@@ -248,7 +257,7 @@ begin
     DebugLn(DBG_WARNINGS, ['Warning: Retries exceeded for cmd: ', cmd]);
 end;
 
-function TRspConnection.SendBreak(): boolean;
+function TRspConnection.Break(): boolean;
 var
   c: char;
   retryCount: integer;
@@ -286,9 +295,17 @@ begin
     DebugLn(DBG_WARNINGS, ['Warning: Retries exceeded for rspSendBreak']);
 end;
 
-function TRspConnection.SendKill(): boolean;
+function TRspConnection.Kill(): boolean;
 begin
   result := FSendCommand('k');
+end;
+
+function TRspConnection.Detach(): boolean;
+var
+  reply: string;
+begin
+  result := FSendCmdWaitForReply('D', reply);
+  result := pos('OK', reply) = 1;
 end;
 
 constructor TRspConnection.Create(const AHost: String; APort: Word;
@@ -329,7 +346,7 @@ function TRspConnection.MustReplyEmpty: boolean;
 var
   reply: string;
 begin
-  SendCmdWaitForReply('vMustReplyEmpty', reply);
+  FSendCmdWaitForReply('vMustReplyEmpty', reply);
   if reply <> '' then
     DebugLn(DBG_WARNINGS, ['Warning: vMustReplyEmpty command returned unexpected result: ', reply]);
 end;
@@ -348,7 +365,7 @@ begin
     wkpExec: cmd := cmd + '1,' + IntToHex(addr, 4) + ',00';
   end;
 
-  result := SendCmdWaitForReply(cmd, reply);
+  result := FSendCmdWaitForReply(cmd, reply);
   if result then
     result := pos('OK', reply) > 0;
 end;
@@ -367,7 +384,7 @@ begin
     wkpExec: cmd := cmd + '1,' + IntToHex(addr, 4) + ',00';
   end;
 
-  result := SendCmdWaitForReply(cmd, reply);
+  result := FSendCmdWaitForReply(cmd, reply);
   if result then
     result := pos('OK', reply) > 0;
 end;
@@ -386,27 +403,134 @@ begin
     DebugLn(DBG_WARNINGS, ['Warning: SingleStep command failure in TRspConnection.SingleStep()']);
 end;
 
+function TRspConnection.ReadDebugReg(ind: byte; out AVal: PtrUInt): boolean;
+var
+  cmd, reply: string;
+  err: integer;
+begin
+  cmd := 'p'+IntToHex(ind, 2);
+  result := FSendCmdWaitForReply(cmd, reply);
+  if result then
+  begin
+    Val('$'+reply, AVal, err);
+    result := err = 0;
+  end;
+
+  if not result then
+    DebugLn(DBG_WARNINGS, ['Warning: "p" command returned unexpected result: ', reply]);
+end;
+
+function TRspConnection.WriteDebugReg(ind: byte; AVal: PtrUInt): boolean;
+var
+  cmd, reply: string;
+begin
+  cmd := 'P'+IntToHex(ind, 2);
+  result := FSendCmdWaitForReply(cmd, reply) and (reply = 'OK');
+
+  if not result then
+    DebugLn(DBG_WARNINGS, ['Warning: "P" command returned unexpected result: ', reply]);
+end;
+
 function TRspConnection.ReadRegisters(out regs; const sz: integer): boolean;
 var
   reply: string;
   b: array of byte;
   i: integer;
 begin
-  result := false;
   reply := '';
   setlength(b, sz);
-  FillByte(b[0], sz, 0);
-  // Normal receive error, or an error number of the form Exx
-  if not SendCmdWaitForReply('g', reply) or ((length(reply) < 4) and (reply[1] = 'E'))
-    or (length(reply) <> 2*sz) then
-    DebugLn(DBG_WARNINGS, ['Warning: "g" command returned unexpected result: ', reply])
-  else
+  // Normal receive error, or an error response of the form Exx
+  result := FSendCmdWaitForReply('g', reply) or ((length(reply) < 4) and (reply[1] = 'E'))
+    or (length(reply) <> 2*sz);
+  if Result then
   begin
     for i := 0 to sz-1 do
       b[i] := StrToInt('$'+reply[2*i+1]+reply[2*i+2]);
     result := true;
+  end
+  else
+  begin
+    DebugLn(DBG_WARNINGS, ['Warning: "g" command returned unexpected result: ', reply]);
+    FillByte(b[0], sz, 0);
   end;
   Move(b[0], regs, sz);
+end;
+
+function TRspConnection.WriteRegisters(constref regs; const sz: integer
+  ): boolean;
+var
+  cmd, reply, s: string;
+  i, offset: integer;
+  pb: PByte;
+begin
+  pb := @regs;
+  result := false;
+  reply := '';
+  cmd := format('G', []);
+  offset := length(cmd);
+  setlength(cmd, offset+sz*2);
+  for i := 0 to sz-1 do
+  begin
+    s := IntToHex(pb^, 2);
+    cmd[offset + 2*i + 1] := s[1];
+    cmd[offset + 2*i + 2] := s[2];
+  end;
+
+  // Normal receive error, or an error number of the form Exx
+  result := FSendCmdWaitForReply(cmd, reply) and (reply = 'OK');
+  if not result then
+    DebugLn(DBG_WARNINGS, ['Warning: "G" command returned unexpected result: ', reply]);
+end;
+
+function TRspConnection.ReadData(const AAddress: TDbgPtr;
+  const ASize: cardinal; out AData): boolean;
+var
+  buf: pbyte;
+  cmd, reply: string;
+  i: integer;
+begin
+  result := false;
+  getmem(buf, ASize);
+  cmd := 'm'+IntToHex(AAddress, 2)+',' + IntToHex(ASize, 2);
+  result := FSendCmdWaitForReply(cmd, reply) and (length(reply) = ASize*2);
+  if result then
+  begin
+    for i := 0 to ASize-1 do
+      buf[i] := StrToInt('$'+reply[2*i + 1]+reply[2*i + 2])
+  end
+  else
+  begin
+    DebugLn(DBG_WARNINGS, ['Warning: "m" command returned unexpected result: ', reply]);
+    FillByte(buf[0], ASize, 0);
+  end;
+
+  System.Move(buf^, AData, ASize);
+  Freemem(buf);
+end;
+
+function TRspConnection.WriteData(const AAdress: TDbgPtr;
+  const ASize: Cardinal; const AData): Boolean;
+var
+  cmd, reply, s: string;
+  i, offset: integer;
+  pb: PByte;
+begin
+  result := false;
+  cmd := format('M%X,%X:', [AAdress, ASize]);
+  offset := length(cmd);
+  setlength(cmd, offset + 2*ASize);
+  pb := @AData;
+  for i := 0 to ASize-1 do
+  begin
+    s := IntToHex(pb^, 2);
+    cmd[offset + 2*i+1] := s[1];
+    cmd[offset + 2*i+2] := s[2];
+    inc(pb);
+  end;
+
+  result := FSendCmdWaitForReply(cmd, reply) and (reply = 'OK');
+  if not result then
+    DebugLn(DBG_WARNINGS, ['Warning: "M" command returned unexpected result: ', reply]);
 end;
 
 function TRspConnection.Init: integer;
@@ -415,7 +539,7 @@ var
 begin
   result := 0;
   reply := '';
-  if not SendCmdWaitForReply('vMustReplyEmpty', reply) or (reply <> '') then
+  if not FSendCmdWaitForReply('vMustReplyEmpty', reply) or (reply <> '') then
   begin
     DebugLn(DBG_WARNINGS, ['Warning: vMustReplyEmpty command returned unexpected result: ', reply]);
     exit;
