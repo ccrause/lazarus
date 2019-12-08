@@ -37,17 +37,25 @@ interface
 
 uses
   SysUtils,
-  FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools, LazLoggerBase;
+  FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools, LazLoggerBase,
+  FpDbgClasses;
 
-{                   
-  The function Disassemble decodes the instruction at the given address.
-  Unrecognized instructions are assumed to be data statements [dw XXXX]
-}
+type
+  //The function Disassemble decodes the instruction at the given address.
+  //Unrecognized instructions are assumed to be data statements [dw XXXX]
 
-procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String);
+  { TAvrDisassembler }
 
-// returns byte len of call instruction at AAddress // 0 if not a call intruction
-function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
+  TAvrDisassembler = class(TDisassembler)
+    procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String); override;
+    // returns byte len of call instruction at AAddress // 0 if not a call intruction
+    function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer; override;
+    // GetFunctionFrame not implemented
+    //function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal; const A64Bit: Boolean;
+    //  out AnIsOutsideFrame: Boolean): Boolean; override;
+    constructor Create;
+  end;
+
 
 implementation
 
@@ -96,7 +104,7 @@ begin
   result := format(opConstHex16, ['dw', instr]);
 end;
 
-procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String);
+procedure TAvrDisassembler.Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String);
 var
   CodeIdx, r, d, k, q: byte;
   a: SmallInt;
@@ -698,21 +706,54 @@ begin
   Inc(AAddress, CodeIdx);
 end;
 
-function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
+function TAvrDisassembler.IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
 var
-  OutBytes, Code: String;
   HiByte, LoByte: PByte;
 begin
   Result := 0;
   // little endian
   LoByte := AAddress;
   HiByte := AAddress+1;
-  if (HiByte^ = $94) and (LoByte^ in [$0E, $0F]) then // call
+  if ((HiByte^ and $94) = $94) and ((LoByte^ and $0E) = $0E) then // call
     Result := 4
-  else if (HiByte^ = $95) and (LoByte^ in [$09, $19]) then // icall / eicall
-    Result := 2;
+  else if (HiByte^ = $95) and (LoByte^ in [$09, $19]) or          // icall / eicall
+          ((HiByte^ and $D0) = $D0) then                          // rcall
+   Result := 2;
 end;
 
+constructor TAvrDisassembler.Create;
+begin
+  // Longest instructions are 4 bytes (call, jmp, lds, sts)
+  FMaxCodeLength := 4;
+end;
+
+//function TAvrDisassembler.GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal;
+//  const A64Bit: Boolean; out AnIsOutsideFrame: Boolean): Boolean;
+//begin
+//  while (ADataLen > 0) and (AData^ = $90) do begin // nop
+//    inc(AData);
+//    dec(ADataLen);
+//  end;
+//  Result := ADataLen > 0;
+//  if not Result then
+//    exit;
+//
+//  AnIsOutsideFrame := False;
+//  if AData^ = $55 then begin // push ebp
+//    AnIsOutsideFrame := True;
+//    exit;
+//  end;
+//  if AData^ = $C3 then begin // ret
+//    AnIsOutsideFrame := True;
+//    exit;
+//  end;
+//  //if (ADataLen >= 2) and (AData[0] = $89) and (AData[1] = $E5) // 32 bit mov ebp, esp
+//  if (ADataLen >= 3) and (AData[0] = $48) and (AData[1] = $89) and (AData[2] = $E5)
+//  then begin // mov rbp,rsp // AFTER push ebp
+//    // Need 1 byte before, to check for "push ebp"
+//    exit;
+//  end;
+//end;
 
 initialization
   DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );

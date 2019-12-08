@@ -72,7 +72,7 @@ const
   PC3 = 38;
 
 type
-  TRegisters = packed record
+  TAvrRegisters = packed record
     updated: boolean;
     case byte of
     0: (regs: array[0..38] of byte);
@@ -86,7 +86,7 @@ type
 
   TDbgRspThread = class(TDbgThread)
   private
-    FRegs: TRegisters;
+    FRegs: TAvrRegisters;
     FRegsChanged: boolean;
     FExceptionSignal: integer;
     FIsPaused, FInternalPauseRequested, FIsInInternalPause: boolean;
@@ -190,6 +190,9 @@ procedure RegisterDbgClasses;
 
 implementation
 
+uses
+  FpDbgDisasAvr;
+
 var
   DBG_VERBOSE, DBG_WARNINGS: PLazLoggerLogGroup;
 
@@ -197,6 +200,8 @@ procedure RegisterDbgClasses;
 begin
   OSDbgClasses.DbgProcessClass:=TDbgRspProcess;
   OSDbgClasses.DbgThreadClass:=TDbgRspThread;
+  // A large hack, should rather have a manager that loads the appropriate disassembler according to debug info
+  GDisassembler := TAvrDisassembler.Create;
 end;
 
 { TFpRspWatchPointData }

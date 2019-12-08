@@ -38,7 +38,7 @@ interface
 
 uses
   Classes, SysUtils, FileUtil, LazFileUtils, LazUTF8, FpDbgInfo, FpDbgClasses,
-  FpDbgDisasAvr{X86}, DbgIntfBaseTypes, FpDbgDwarf, FpdMemoryTools, CustApp;
+  {FpDbgDisasAvrX86,} DbgIntfBaseTypes, FpDbgDwarf, FpdMemoryTools, CustApp;
 
 type
 
@@ -124,7 +124,7 @@ procedure TFPDLoop.ShowDisas;
 var
   a: TDbgPtr;
   Code, CodeBytes: String;
-  CodeBin: array[0..20] of Byte;
+  CodeBin: array of Byte;
   p: pointer;
   i: integer;
 begin
@@ -134,7 +134,8 @@ begin
   begin
     Write('  [', FormatAddress(a), ']');
 
-    if not GController.CurrentProcess.ReadData(a,sizeof(CodeBin),CodeBin)
+    SetLength(CodeBin, GDisassembler.MaxCodeLength);
+    if not GController.CurrentProcess.ReadData(a,length(CodeBin),CodeBin[0])
     then begin
       //debugln('Disassemble: Failed to read memory at %s.', [FormatAddress(a)]);
       Code := '??';
@@ -142,12 +143,12 @@ begin
       Inc(a);
       Exit;
     end;
-    p := @CodeBin;
+    p := @CodeBin[0];
 
-    Disassemble(p, GController.CurrentProcess.Mode=dm64, CodeBytes, Code);
+    GDisassembler.Disassemble(p, GController.CurrentProcess.Mode=dm64, CodeBytes, Code);
 
     WriteLN(' ', CodeBytes:20, '    ', Code);
-    Inc(a, PtrUInt(p) - PtrUInt(@CodeBin));
+    Inc(a, PtrUInt(p) - PtrUInt(@CodeBin[0]));
   end;
 end;
 

@@ -43,7 +43,7 @@ uses
   DbgIntfDebuggerBase,
   FpPascalBuilder,
   fpDbgSymTableContext,
-  FpDbgDwarfDataClasses, FpDbgDisasX86;
+  FpDbgDwarfDataClasses{, FpDbgDisasX86};
 
 type
   TFPDEvent = (deExitProcess, deFinishedStep, deBreakpoint, deException, deCreateProcess, deLoadLibrary, deInternalContinue);
@@ -527,12 +527,26 @@ public
     property Owner[AnIndex: Integer]: Pointer read GetOwner;
   end;
 
+  TDisassembler = class
+  protected
+    FMaxCodeLength: integer;
+  public
+    procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String); virtual; abstract;
+    function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer; virtual; abstract;
+    function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal; const A64Bit: Boolean;
+      out AnIsOutsideFrame: Boolean): Boolean; virtual; abstract;
+    // Use this to determine how many bytes to read before disassembling an instruction
+    property MaxCodeLength: integer read FMaxCodeLength;
+  end;
+  TDisassemblerClass = class of TDisassembler;
+
   TOSDbgClasses = class
   public
     DbgThreadClass : TDbgThreadClass;
     DbgBreakpointClass : TFpInternalBreakpointClass;
     DbgWatchpointClass : TFpInternalWatchpointClass;
     DbgProcessClass : TDbgProcessClass;
+    DbgDisassembler: TDisassemblerClass;
   end;
 
 var
@@ -541,6 +555,7 @@ var
   {$else}
   GMode: TFPDMode = dm64;
   {$endif}
+  GDisassembler: TDisassembler = nil;
 
 const
   DBGPTRSIZE: array[TFPDMode] of Integer = (4, 8);
@@ -2106,7 +2121,7 @@ begin
       if CodeReadErrCnt > 5 then break; // If the code cannot be read the stack pointer is wrong.
     end
     else begin
-      if not GetFunctionFrameInfo(@CodeBin[0], AReadSize, FProcess.Mode=dm64, OutSideFrame) then
+      if not  GDisassembler.GetFunctionFrameInfo(@CodeBin[0], AReadSize, FProcess.Mode=dm64, OutSideFrame) then
         OutSideFrame := False;
     end;
     LastFrameBase := FrameBase;
@@ -2439,4 +2454,5 @@ initialization
 
 finalization
   GOSDbgClasses.Free;
+  if assigned(GDisassembler) then GDisassembler.Free;
 end.

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
-  <Package Version="4">
+  <Package Version="5">
     <PathDelim Value="\"/>
     <Name Value="fpdebug"/>
     <Type Value="RunAndDesignTime"/>
@@ -39,7 +39,7 @@ File(s) with other licenses (see also header in file(s):
 
   (Any modifications/translations of this file are from duby)
 "/>
-    <Files Count="31">
+    <Files Count="33">
       <Item1>
         <Filename Value="fpdbgclasses.pp"/>
         <UnitName Value="FpDbgClasses"/>
@@ -169,6 +169,14 @@ File(s) with other licenses (see also header in file(s):
         <AddToUsesPkgSection Value="False"/>
         <UnitName Value="FpDbgLinuxExtra"/>
       </Item31>
+      <Item32>
+        <Filename Value="fpdbgrsp.pas"/>
+        <UnitName Value="FpDbgRsp"/>
+      </Item32>
+      <Item33>
+        <Filename Value="fpdbgrspclasses.pas"/>
+        <UnitName Value="FpDbgRspClasses"/>
+      </Item33>
     </Files>
     <RequiredPkgs Count="3">
       <Item1>

@@ -232,7 +232,7 @@ var
 begin
   Result := 0;
   if FProcess.ReadData(FThread.GetInstructionPointerRegisterValue, sizeof(CodeBin), CodeBin) then
-    Result := IsCallInstruction(@CodeBin, FProcess.Mode=dm64);
+    Result := GDisassembler.IsCallInstruction(@CodeBin, FProcess.Mode=dm64);
 end;
 
 constructor TDbgControllerCmd.Create(AController: TDbgController);
@@ -538,7 +538,7 @@ begin
     if AProcess.ReadData(AThread.GetInstructionPointerRegisterValue,sizeof(CodeBin),CodeBin) then
     begin
       p := @CodeBin;
-      Disassemble(p, AProcess.Mode=dm64, ADump, AStatement);
+      GDisassembler.Disassemble(p, AProcess.Mode=dm64, ADump, AStatement);
       if (copy(AStatement,1,4)='call') then
       begin
         // Stop with the single-steps, set an hidden breakpoint at the return
@@ -740,9 +740,9 @@ begin
     FCurrentProcess := OSDbgClasses.DbgProcessClass.AttachToInstance(FExecutableFilename, AttachToPid)
   else
     FCurrentProcess := OSDbgClasses.DbgProcessClass.StartInstance(FExecutableFilename, Params, Environment, WorkingDirectory, FConsoleTty, Flags);
+
   if assigned(FCurrentProcess) then
     begin
-    //Pause;
     FProcessMap.Add(FCurrentProcess.ProcessID, FCurrentProcess);
     DebugLn(DBG_VERBOSE, 'Got PID: %d, TID: %d', [FCurrentProcess.ProcessID, FCurrentProcess.ThreadID]);
     result := true;

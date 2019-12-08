@@ -40,7 +40,20 @@ interface
 
 uses
   SysUtils,
-  FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools, LazLoggerBase;
+  FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools, LazLoggerBase,
+  FpDbgClasses;
+
+type
+
+  { TX86Disassembler }
+
+  TX86Disassembler = class(TDisassembler)
+    procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String); override;
+    function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer; override;
+    function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal; const A64Bit: Boolean;
+      out AnIsOutsideFrame: Boolean): Boolean; override;
+    constructor Create;
+  end;
 
 {                   
   The function Disassemble decodes the instruction at the given address.
@@ -55,13 +68,11 @@ uses
 }  
 
 
-procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String);
+//procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String);
 
 // returns byte len of call instruction at AAddress // 0 if not a call intruction
-function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
+//function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
 
-function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal; const A64Bit: Boolean;
-  out AnIsOutsideFrame: Boolean): Boolean;
 
 implementation
 var
@@ -322,7 +333,7 @@ const
     'o', 'no', 'b', 'nb', 'z', 'nz', 'be', 'nbe', 's', 'ns', 'p', 'np', 'l', 'nl', 'le', 'nle'
   );
 
-procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out AnInstruction: TInstruction);
+procedure FDisassemble(var AAddress: Pointer; const A64Bit: Boolean; out AnInstruction: TInstruction);
 var
   Code: PByte;
   CodeIdx: Byte;
@@ -3291,7 +3302,7 @@ begin
   Inc(AAddress, CodeIdx);
 end;
 
-procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String);
+procedure TX86Disassembler.Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String);
 const
   MEMPTR: array[TOperandSize] of string = ('byte ptr ', 'word ptr ', 'dword ptr ', 'qword ptr ', '', 'tbyte ptr ', '16byte ptr ');
 {$ifdef debug_OperandSize}
@@ -3306,7 +3317,7 @@ var
   Code: PByte;
 begin
   Code := AAddress;
-  Disassemble(AAddress, A64Bit, Instr);
+  FDisassemble(AAddress, A64Bit, Instr);
 
   Soper := '';
   HasMem := False;
@@ -3372,7 +3383,7 @@ begin
   ACodeBytes := S;
 end;
 
-function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
+function TX86Disassembler.IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
 var
   Instr: TInstruction;
   a: PByte;
@@ -3394,14 +3405,19 @@ begin
   end;
 
   a := AAddress;
-  Disassemble(AAddress, A64Bit, Instr);
+  FDisassemble(AAddress, A64Bit, Instr);
   if Instr.OpCode <> OPcall
   then
       exit;
   Result := AAddress - a;
 end;
 
-function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal;
+constructor TX86Disassembler.Create;
+begin
+  FMaxCodeLength := 16;
+end;
+
+function TX86Disassembler.GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal;
   const A64Bit: Boolean; out AnIsOutsideFrame: Boolean): Boolean;
 begin
   while (ADataLen > 0) and (AData^ = $90) do begin // nop

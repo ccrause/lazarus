@@ -317,6 +317,9 @@ procedure RegisterDbgClasses;
 
 implementation
 
+uses
+  FpDbgDisasX86;
+
 var
   DBG_VERBOSE, DBG_WARNINGS: PLazLoggerLogGroup;
   GConsoleTty: string;
@@ -326,6 +329,8 @@ procedure RegisterDbgClasses;
 begin
   OSDbgClasses.DbgProcessClass:=TDbgLinuxProcess;
   OSDbgClasses.DbgThreadClass:=TDbgLinuxThread;
+  // A large hack, should rather have a manager that loads the appropriate disassembler according to debug info
+  GDisassembler := TX86Disassembler.Create;
 end;
 
 Function WIFSTOPPED(Status: Integer): Boolean;

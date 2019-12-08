@@ -48,9 +48,7 @@ uses
   FPDLoop,
   FpDbgClasses,
   FpDbgDwarfConst,
-  FpDbgDwarf,
-  //FpDbgLinuxClasses;    // Disabled for testing RSP functionality - eventually the correct class should be selected at runtime.
-  FpDbgRspClasses, FpDbgRsp, LazLogger;
+  FpDbgDwarf;
 
 {$ifdef windows}
 function CtrlCHandler(CtrlType: Cardinal): BOOL; stdcall;
