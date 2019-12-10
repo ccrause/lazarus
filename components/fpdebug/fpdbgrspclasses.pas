@@ -188,6 +188,12 @@ type
 
 procedure RegisterDbgClasses;
 
+var
+  // Difficult to see how this can be encapsulated except if
+  // added methods are introduced that needs to be called after .Create
+  HostName: string = 'localhost';
+  Port: integer = 1234;
+
 implementation
 
 uses
@@ -263,17 +269,31 @@ end;
 
 function TDbgRspThread.GetDebugRegOffset(ind: byte): pointer;
 begin
+  if TDbgRspProcess(Process).FIsTerminating then
+    DebugLn(DBG_WARNINGS, 'TDbgRspThread.GetDebugRegOffset called while FIsTerminating is set.');
   result := nil;
 end;
 
 function TDbgRspThread.ReadDebugReg(ind: byte; out AVal: PtrUInt): boolean;
 begin
-  result := TDbgRspProcess(Process).FConnection.ReadDebugReg(ind, AVal);
+  if TDbgRspProcess(Process).FIsTerminating then
+  begin
+    DebugLn(DBG_WARNINGS, 'TDbgRspThread.GetDebugReg called while FIsTerminating is set.');
+    Result := false;
+  end
+  else
+    result := TDbgRspProcess(Process).FConnection.ReadDebugReg(ind, AVal);
 end;
 
 function TDbgRspThread.WriteDebugReg(ind: byte; AVal: PtrUInt): boolean;
 begin
-  result := TDbgRspProcess(Process).FConnection.WriteDebugReg(ind, AVal);
+  if TDbgRspProcess(Process).FIsTerminating then
+  begin
+    DebugLn(DBG_WARNINGS, 'TDbgRspThread.WriteDebugReg called while FIsTerminating is set.');
+    Result := false;
+  end
+  else
+    result := TDbgRspProcess(Process).FConnection.WriteDebugReg(ind, AVal);
 end;
 
 function TDbgRspThread.ReadThreadState: boolean;
@@ -287,6 +307,9 @@ end;
 
 function TDbgRspThread.RequestInternalPause: Boolean;
 begin
+  if TDbgRspProcess(Process).FIsTerminating then
+    DebugLn(DBG_WARNINGS, 'TDbgRspThread.RequestInternalPause called while FIsTerminating is set.');
+
   Result := False;
   if FInternalPauseRequested or FIsPaused then
     exit;
@@ -389,8 +412,8 @@ begin
     exit;
 
   inherited;
-  if Process.CurrentWatchpoint <> nil then
-    WriteDebugReg(6, 0);
+  //if Process.CurrentWatchpoint <> nil then
+  //  WriteDebugReg(6, 0);
 
   if FRegsChanged then
     begin
@@ -409,6 +432,12 @@ procedure TDbgRspThread.LoadRegisterValues;
 var
   i: integer;
 begin
+  if TDbgRspProcess(Process).FIsTerminating then
+  begin
+    DebugLn(DBG_WARNINGS, 'TDbgRspThread.LoadRegisterValues called while FIsTerminating is set.');
+    exit;
+  end;
+
   if not ReadThreadState then
     exit;
 
@@ -429,6 +458,12 @@ var
   val: PtrUInt;
 begin
   Result := 0;
+  if TDbgRspProcess(Process).FIsTerminating then
+  begin
+    DebugLn(DBG_WARNINGS, 'TDbgRspThread.GetInstructionPointerRegisterValue called while FIsTerminating is set.');
+    exit;
+  end;
+
   if not ReadThreadState then
     exit;
 
@@ -455,6 +490,12 @@ var
   spl, sph: PtrUInt;
 begin
   Result := 0;
+  if TDbgRspProcess(Process).FIsTerminating then
+  begin
+    DebugLn(DBG_WARNINGS, 'TDbgRspThread.GetStackPointerRegisterValue called while FIsTerminating is set.');
+    exit;
+  end;
+
   if not ReadThreadState then
     exit;
 
@@ -484,8 +525,8 @@ end;
 
 function TDbgRspProcess.CreateWatchPointData: TFpWatchPointData;
 begin
-  // Replace with rsp version of TFpWatchPointData
-  Result := TFpIntelWatchPointData.Create;
+  DebugLn(DBG_WARNINGS, 'TDbgRspProcess.CreateWatchPointData called.');
+  Result := TFpRspWatchPointData.Create;
 end;
 
 constructor TDbgRspProcess.Create(const AName: string; const AProcessID,
@@ -523,11 +564,7 @@ begin
 
   dbg := TDbgRspProcess.Create(AFileName, 0, 0);
   try
-    // TODO: Should be user configurable
-    dbg.FConnection := TRspConnection.Create('localhost', 1234);
-    // TODO: RegisterCacheSize is target specific
-    dbg.FConnection.RegisterCacheSize := 38;
-
+    dbg.FConnection := TRspConnection.Create(HostName, Port);
     result := dbg;
     dbg.FStatus := dbg.FConnection.Init;
     dbg := nil;
@@ -550,6 +587,13 @@ end;
 function TDbgRspProcess.ReadData(const AAdress: TDbgPtr;
   const ASize: Cardinal; out AData): Boolean;
 begin
+  if FIsTerminating then
+  begin
+    DebugLn(DBG_WARNINGS, 'TDbgRspProcess.ReadData called while FIsTerminating is set.');
+    Result := false;
+    exit;
+  end;
+
   result := FConnection.ReadData(AAdress, ASize, AData);
   MaskBreakpointsInReadData(AAdress, ASize, AData);
 end;
@@ -557,17 +601,36 @@ end;
 function TDbgRspProcess.WriteData(const AAdress: TDbgPtr;
   const ASize: Cardinal; const AData): Boolean;
 begin
+  if FIsTerminating then
+  begin
+    DebugLn(DBG_WARNINGS, 'TDbgRspProcess.WriteData called while FIsTerminating is set.');
+    Result := false;
+    exit;
+  end;
+
   result := FConnection.WriteData(AAdress,AAdress, AData);
 end;
 
 procedure TDbgRspProcess.TerminateProcess;
 begin
-  FIsTerminating:=true;
-  FConnection.Kill();
+  // Try to prevent access to the RSP socket after it has been closed
+  if not FIsTerminating then
+  begin
+    FIsTerminating:=true;
+    DebugLn(DBG_VERBOSE, 'Sending kill command from TDbgRspProcess.TerminateProcess');
+    FConnection.Kill();
+  end;
 end;
 
 function TDbgRspProcess.Pause: boolean;
 begin
+  if FIsTerminating then
+  begin
+    DebugLn(DBG_WARNINGS, 'TDbgRspProcess.Pause called while FIsTerminating is set.');
+    Result := false;
+    exit;
+  end;
+
   // Target should automatically respond with T or S reply after processing the break
   result := FConnection.Break();
   PauseRequested:=true;
@@ -580,6 +643,7 @@ end;
 function TDbgRspProcess.Detach(AProcess: TDbgProcess; AThread: TDbgThread): boolean;
 begin
   RemoveAllBreakPoints;
+  DebugLn(DBG_VERBOSE, 'Sending detach command from TDbgRspProcess.Detach');
   Result := FConnection.Detach();
 end;
 
@@ -594,6 +658,7 @@ begin
   if FIsTerminating then
   begin
     AThread.BeforeContinue;
+    DebugLn(DBG_VERBOSE, 'TDbgRspProcess.Continue called while terminating.');
     // The kill command should have been issued earlier (if using fpd), calling SendKill again will lead to an exception since the connection should be terminated already.
     // FConnection.Kill();
 
@@ -687,6 +752,12 @@ begin
   ThreadIdentifier  := self.ThreadID;
   ProcessIdentifier := Self.ProcessID;
 
+  if FIsTerminating then
+  begin
+    DebugLn(DBG_VERBOSE, 'TDbgRspProcess.WaitForDebugEvent called while FIsTerminating is set.');
+    FStatus := SIGKILL;
+  end
+  else
   // Wait for S or T response from target, or if connection to target is lost
   if FStatus = 0 then
     repeat
@@ -707,6 +778,9 @@ end;
 function TDbgRspProcess.InsertBreakInstructionCode(const ALocation: TDBGPtr;
   out OrigValue: Byte): Boolean;
 begin
+  if FIsTerminating then
+    DebugLn(DBG_WARNINGS, 'TDbgRspProcess.InsertBreakInstruction called while FIsTerminating is set.');
+
   result := ReadData(ALocation, SizeOf(OrigValue), OrigValue);
   if result then
   begin
@@ -722,6 +796,12 @@ end;
 function TDbgRspProcess.RemoveBreakInstructionCode(const ALocation: TDBGPtr;
   const OrigValue: Byte): Boolean;
 begin
+  if FIsTerminating then
+  begin
+    DebugLn(DBG_WARNINGS, 'TDbgRspProcess.RemoveBreakInstructionCode called while FIsTerminating is set');
+    result := false;
+  end;
+
   result := FConnection.DeleteBreakWatchPoint(ALocation, wkpExec);
 end;
 

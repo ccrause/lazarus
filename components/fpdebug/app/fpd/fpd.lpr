@@ -48,7 +48,8 @@ uses
   FPDLoop,
   FpDbgClasses,
   FpDbgDwarfConst,
-  FpDbgDwarf;
+  FpDbgDwarf,
+  LazLogger;
 
 {$ifdef windows}
 function CtrlCHandler(CtrlType: Cardinal): BOOL; stdcall;

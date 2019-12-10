@@ -55,13 +55,15 @@ type
   TFpDebugDebuggerProperties = class(TDebuggerProperties)
   private
     FNextOnlyStopOnStartLine: boolean;
-    FRemotePort: integer;
+    FHostName: string;
+    FPort: integer;
   public
     constructor Create; override;
     procedure Assign(Source: TPersistent); override;
   published
     property NextOnlyStopOnStartLine: boolean read FNextOnlyStopOnStartLine write FNextOnlyStopOnStartLine;
-    property RemotePort: integer read FRemotePort write FRemotePort;
+    property HostName: string read FHostName write FHostName;
+    property Port: integer read FPort write FPort;
   end;
 
   { TFpDebugDebuggerAvr }
@@ -79,6 +81,8 @@ type
     FMemConverter: TFpDbgMemConvertorLittleEndian;
     FMemReader: TDbgMemReader;
     FMemManager: TFpDbgMemManager;
+    FProperties: TFpDebugDebuggerProperties;
+    //FRemotePort: integer;
     //FConsoleOutputThread: TThread;
     function GetClassInstanceName(AnAddr: TDBGPtr): string;
     function ReadAnsiString(AnAddr: TDbgPtr): string;
@@ -109,11 +113,11 @@ type
     function CreateWatches: TWatchesSupplier; override;
     function CreateThreads: TThreadsSupplier; override;
     function CreateLocals: TLocalsSupplier; override;
-    function  CreateRegisters: TRegisterSupplier; override;
+    function CreateRegisters: TRegisterSupplier; override;
     function CreateCallStack: TCallStackSupplier; override;
     function CreateDisassembler: TDBGDisassembler; override;
     function CreateBreakPoints: TDBGBreakPoints; override;
-    function  RequestCommand(const ACommand: TDBGCommand;
+    function RequestCommand(const ACommand: TDBGCommand;
                              const AParams: array of const;
                              const ACallback: TMethod): Boolean; override;
     function ChangeFileName: Boolean; override;
@@ -142,6 +146,8 @@ type
     function GetParamsAsString(AStackEntry: TDbgCallstackEntry; APrettyPrinter: TFpPascalPrettyPrinter): string; inline;
 
     property DebugInfo: TDbgInfo read GetDebugInfo;
+    property Properties: TFpDebugDebuggerProperties read FProperties;
+    //property Port: integer read FRemotePort;
   public
     constructor Create(const AExternalDebugger: String); override;
     destructor Destroy; override;
@@ -302,7 +308,7 @@ uses
   FpDbgDisasAvr;
 
 var
-  DBG_BREAKPOINTS: PLazLoggerLogGroup;
+  DBG_VERBOSE, DBG_WARNINGS, DBG_BREAKPOINTS: PLazLoggerLogGroup;
 
 type
 
@@ -321,20 +327,6 @@ type
     function ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr;
       AContext: TFpDbgAddressContext): Boolean; override;
   end;
-
-  { TFpWaitForConsoleOutputThread }
-  // probably not necessary?
-  //TFpWaitForConsoleOutputThread = class(TThread)
-  //private
-  //  FFpDebugDebugger: TFpDebugDebuggerAvr;
-  //  FHasConsoleOutputQueued: PRTLEvent;
-  //  procedure DoHasConsoleOutput(Data: PtrInt);
-  //public
-  //  constructor Create(AFpDebugDebugger: TFpDebugDebuggerAvr);
-  //  destructor Destroy; override;
-  //  procedure Execute; override;
-  //end;
-
 
 procedure Register;
 begin
@@ -427,6 +419,8 @@ constructor TFpDebugDebuggerProperties.Create;
 begin
   inherited Create;
   FNextOnlyStopOnStartLine:=true;
+  FHostName := 'localhost';
+  FPort := 1234;
 end;
 
 procedure TFpDebugDebuggerProperties.Assign(Source: TPersistent);
@@ -434,57 +428,11 @@ begin
   inherited Assign(Source);
   if Source is TFpDebugDebuggerProperties then begin
     FNextOnlyStopOnStartLine := TFpDebugDebuggerProperties(Source).NextOnlyStopOnStartLine;
-    FRemotePort := TFpDebugDebuggerProperties(Source).RemotePort;
+    FHostName := TFpDebugDebuggerProperties(Source).HostName;
+    FPort := TFpDebugDebuggerProperties(Source).Port;
   end;
 end;
 
-{ TFpWaitForConsoleOutputThread }
-{
-procedure TFpWaitForConsoleOutputThread.DoHasConsoleOutput(Data: PtrInt);
-var
-  s: string;
-begin
-  if (Data=0) or assigned(TFpDebugDebuggerAvr(Data).FConsoleOutputThread) then
-  begin
-    s := FFpDebugDebugger.FDbgController.CurrentProcess.GetConsoleOutput;
-    RTLeventSetEvent(FHasConsoleOutputQueued);
-    if Assigned(FFpDebugDebugger.OnConsoleOutput) then
-      FFpDebugDebugger.OnConsoleOutput(self, s);
-  end;
-end;
-
-constructor TFpWaitForConsoleOutputThread.Create(AFpDebugDebugger: TFpDebugDebuggerAvr);
-begin
-  Inherited create(false);
-  FHasConsoleOutputQueued := RTLEventCreate;
-  FFpDebugDebugger := AFpDebugDebugger;
-end;
-
-destructor TFpWaitForConsoleOutputThread.Destroy;
-begin
-  Application.RemoveAsyncCalls(Self);
-  RTLeventdestroy(FHasConsoleOutputQueued);
-  inherited Destroy;
-end;
-
-procedure TFpWaitForConsoleOutputThread.Execute;
-var
-  res: integer;
-begin
-  while not terminated do
-  begin
-    res := FFpDebugDebugger.FDbgController.CurrentProcess.CheckForConsoleOutput(100);
-    if res<0 then
-      Terminate
-    else if res>0 then
-    begin
-      RTLeventResetEvent(FHasConsoleOutputQueued);
-      Application.QueueAsyncCall(@DoHasConsoleOutput, PtrInt(FFpDebugDebugger));
-      RTLeventWaitFor(FHasConsoleOutputQueued);
-    end;
-  end;
-end;
-}
 { TFpDbgMemReader }
 
 function TFpDbgMemReader.GetDbgProcess: TDbgProcess;
@@ -1249,6 +1197,10 @@ end;
 
 procedure TFpDebugThread.Execute;
 begin
+  //DebugLn(DBG_VERBOSE, 'Reassigned RemotePort from ', IntToStr(FpDbgRspClasses.Port), ' to ', IntToStr(FFpDebugDebugger.FProperties.Port));
+
+  FpDbgRspClasses.HostName := FFpDebugDebugger.FProperties.HostName;
+  FpDbgRspClasses.Port := FFpDebugDebugger.FProperties.Port;
   if FFpDebugDebugger.FDbgController.Run then
     FStartSuccessfull:=true;
 
@@ -1577,6 +1529,7 @@ procedure TFpDebugDebuggerAvr.SetFileName(const AValue: String);
 var
   tmpName: string;
 begin
+  // Compiler add the .elf extension when creating the ELF file for an AVR program
   tmpName := ChangeFileExt(AValue, '.elf');
   inherited SetFileName(tmpName);
 end;
@@ -1824,13 +1777,13 @@ function TFpDebugDebuggerAvr.RequestCommand(const ACommand: TDBGCommand;
   const AParams: array of const; const ACallback: TMethod): Boolean;
 var
   EvalFlags: TDBGEvaluateFlags;
-  AConsoleTty, ResText: string;
+  ResText: string;
   addr: TDBGPtrArray;
   ResType: TDBGType;
 begin
   result := False;
   if assigned(FDbgController) then
-    FDbgController.NextOnlyStopOnStartLine := TFpDebugDebuggerProperties(GetProperties).NextOnlyStopOnStartLine;
+    FDbgController.NextOnlyStopOnStartLine := TFpDebugDebuggerProperties(self.GetProperties).NextOnlyStopOnStartLine;
 
   if (ACommand in [dcRun, dcStepOver, dcStepInto, dcStepOut, dcRunTo, dcJumpto,
       dcStepOverInstr, dcStepIntoInstr, dcAttach]) and
@@ -1838,9 +1791,6 @@ begin
   then
   begin
     FDbgController.ExecutableFilename:=FileName;
-    //AConsoleTty:=TFpDebugDebuggerProperties(GetProperties).ConsoleTty;
-    //FDbgController.ConsoleTty:=AConsoleTty;
-    //FDbgController.RedirectConsoleOutput:=AConsoleTty='';
     FDbgController.Params.Clear;
     if Arguments<>'' then
       CommandToList(Arguments, FDbgController.Params);
@@ -2164,6 +2114,21 @@ begin
   FDbgController.OnExceptionEvent:=@FDbgControllerExceptionEvent;
   FDbgController.OnDebugInfoLoaded := @FDbgControllerDebugInfoLoaded;
   FDbgController.NextOnlyStopOnStartLine := TFpDebugDebuggerProperties(GetProperties).NextOnlyStopOnStartLine;
+  if Assigned(GetProperties) then
+  begin
+    if (GetProperties is TFpDebugDebuggerProperties) then
+    begin
+      // Not initialized to actual values yet
+      //FRemotePort := TFpDebugDebuggerProperties(GetProperties).Port;
+      //DebugLn(DBG_VERBOSE, 'Assigned RemotePort=', IntToStr(FRemotePort));
+      FProperties := TFpDebugDebuggerProperties(GetProperties);
+    end
+    else
+      DebugLn(DBG_WARNINGS, 'GetProperties is not of type "TFpDebugDebuggerProperties"');
+  end
+  else
+    DebugLn(DBG_WARNINGS, 'GetProperties returned nil in "TFpDebugDebuggerAvr.Create(const AExternalDebugger: String);"');
+
 end;
 
 destructor TFpDebugDebuggerAvr.Destroy;
@@ -2228,7 +2193,7 @@ end;
 
 class function TFpDebugDebuggerAvr.Caption: String;
 begin
-  Result:='FpDebugAvr internal Dwarf-debugger (beta)';
+  Result:='FpDebugAvr internal Dwarf-debugger for AVR (beta)';
 end;
 
 class function TFpDebugDebuggerAvr.NeedsExePath: boolean;
@@ -2257,6 +2222,8 @@ end;
 
 initialization
   DBG_BREAKPOINTS := DebugLogger.FindOrRegisterLogGroup('DBG_BREAKPOINTS' {$IFDEF DBG_BREAKPOINTS} , True {$ENDIF} );
+  DBG_VERBOSE := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
+  DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
 
 end.
 

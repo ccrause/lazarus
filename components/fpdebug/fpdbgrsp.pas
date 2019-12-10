@@ -12,8 +12,8 @@ type
   TRspConnection = class(TInetSocket)
   private
     FState: integer;
-    fRegisterCache: TBytes;
-    procedure FSetRegisterCacheSize(sz: cardinal);
+    //fRegisterCache: TBytes;
+    //procedure FSetRegisterCacheSize(sz: cardinal);
     function FWaitForData: boolean;
     function FSendCommand(const cmd: string): boolean;
     function FReadReply(out retval: string): boolean;
@@ -49,8 +49,8 @@ type
     function Init: integer;
 
     property State: integer read FState;
-    property RegisterCacheSize: cardinal write FSetRegisterCacheSize;
-    property RegisterCache: TBytes read fRegisterCache;
+    //property RegisterCacheSize: cardinal write FSetRegisterCacheSize;
+    //property RegisterCache: TBytes read fRegisterCache;
   end;
 
 
@@ -65,10 +65,10 @@ uses
 var
   DBG_VERBOSE, DBG_WARNINGS: PLazLoggerLogGroup;
 
-procedure TRspConnection.FSetRegisterCacheSize(sz: cardinal);
-begin
-  SetLength(fRegisterCache, sz);
-end;
+//procedure TRspConnection.FSetRegisterCacheSize(sz: cardinal);
+//begin
+//  SetLength(fRegisterCache, sz);
+//end;
 
 function TRspConnection.FWaitForData: boolean;
 {$if defined(unix) or defined(windows)}
