@@ -314,9 +314,11 @@ begin
   if FInternalPauseRequested or FIsPaused then
     exit;
 
+  DebugLn(DBG_VERBOSE, 'TDbgRspThread.RequestInternalPause requesting Ctrl-C.');
+
+  FInternalPauseRequested := true;
   // Send SIGSTOP/break
   TDbgRspProcess(Process).FConnection.Break();
-  FInternalPauseRequested := true;
 end;
 
 function TDbgRspThread.CheckSignalForPostponing(AWaitedStatus: integer): Boolean;
@@ -325,6 +327,9 @@ begin
   assert(FExceptionSignal = 0, 'TDbgLinuxThread.CheckSignalForPostponing: FExceptionSignal = 0');
   Result := FIsPaused;
   DebugLn(DBG_VERBOSE and (Result), ['Warning: Thread already paused', ID]);
+
+  DebugLn(DBG_VERBOSE, ['TDbgRspThread.CheckSignalForPostponing called with ', AWaitedStatus]);
+
   if Result then
     exit;
 
@@ -525,7 +530,7 @@ end;
 
 function TDbgRspProcess.CreateWatchPointData: TFpWatchPointData;
 begin
-  DebugLn(DBG_WARNINGS, 'TDbgRspProcess.CreateWatchPointData called.');
+  DebugLn(DBG_VERBOSE, 'TDbgRspProcess.CreateWatchPointData called.');
   Result := TFpRspWatchPointData.Create;
 end;
 
@@ -761,7 +766,11 @@ begin
   // Wait for S or T response from target, or if connection to target is lost
   if FStatus = 0 then
     repeat
-      FStatus := FConnection.WaitForSignal(s);
+      try
+        FStatus := FConnection.WaitForSignal(s);
+      except
+        FStatus := 0;
+      end;
     until FStatus <> 0;   // should probably wait at lower level...
 
   if FStatus <> 0 then
@@ -859,11 +868,12 @@ begin
         end
         else
           if TDbgRspThread(AThread).FInternalPauseRequested then begin
-            DebugLn(DBG_VERBOSE, ['Received late SigTrag for thread ', AThread.ID]);
-            result := deInternalContinue; // left over signal
+            DebugLn(DBG_VERBOSE, ['???Received late SigTrap for thread ', AThread.ID]);
+            result := deBreakpoint;//deInternalContinue; // left over signal
           end
           else
           begin
+            DebugLn(DBG_VERBOSE, ['Received SigTrap for thread ', AThread.ID]);
             result := deBreakpoint; // or pause requested
             if not TDbgRspThread(AThread).FIsSteppingBreakPoint then
               AThread.CheckAndResetInstructionPointerAfterBreakpoint;

@@ -131,9 +131,11 @@ var
   cksum, calcSum: byte;
 begin
   i := 0;
+  s := '';
   repeat
     c := chr(ReadByte);
     inc(i);
+    s := s + c;
   until (c = '$') or (i = 100);  // exit loop after start or count expired
 
   if i > 1 then
@@ -152,7 +154,10 @@ begin
 
       // Something weird happened
       if c = '#' then
+      begin
+        DebugLn(DBG_WARNINGS, ['Warning: Received end of packet marker in escaped sequence: ', c]);
         break;
+      end;
 
       calcSum := byte(calcSum + byte(c));
 
@@ -165,17 +170,16 @@ begin
 
   cksum := StrToInt('$' + char(ReadByte) + char(ReadByte));
 
-  if calcSum = cksum then
+  // Ignore checksum for now
+  WriteByte(byte('+'));
+  result := true;
+  retval := s;
+  if not (calcSum = cksum) then
   begin
-    WriteByte(byte('+'));
-    result := true;
-    retval := s;
-  end
-  else
-  begin
-    retval := '';
-    result := false;
-    DebugLn(DBG_WARNINGS, ['Warning: Discarding reply packet because of invalid checksum']);
+    //retval := '';
+    //result := false;
+    //DebugLn(DBG_WARNINGS, ['Warning: Discarding reply packet because of invalid checksum: ', s]);
+    DebugLn(DBG_WARNINGS, ['Warning: Reply packet with invalid checksum: ', s]);
   end;
 end;
 
@@ -336,9 +340,15 @@ begin
   begin
     if (msg[1] in ['S', 'T']) and (length(msg) > 2) then
     begin
-      result := StrToInt('$' + copy(msg, 2, 2));
-      FState := result;
-    end;
+      try
+        result := StrToInt('$' + copy(msg, 2, 2));
+        FState := result;
+      except
+        DebugLn(DBG_WARNINGS, ['Error converting signal number from reply: ', msg]);
+      end;
+    end
+    else
+      DebugLn(DBG_WARNINGS, ['Unexpected WaitForSignal reply: ', msg]);
   end;
 end;
 
