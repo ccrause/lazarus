@@ -14,7 +14,8 @@ type
     FState: integer;
     //fRegisterCache: TBytes;
     //procedure FSetRegisterCacheSize(sz: cardinal);
-    function FWaitForData: boolean;
+    // Blocking
+    function FWaitForData(timeout: integer): boolean;
     function FSendCommand(const cmd: string): boolean;
     function FReadReply(out retval: string): boolean;
     procedure FProcessTPacket(const packet: string);
@@ -22,10 +23,10 @@ type
   public
     constructor Create(const AHost: String; APort: Word; AHandler : TSocketHandler = Nil); Overload;
     destructor Destroy;
-    // Wait for async signal
+    // Wait for async signal - blocking
     function WaitForSignal(out msg: string): integer;
 
-    function Break(): boolean;
+    procedure Break();
     function Kill(): boolean;
     function Detach(): boolean;
     function MustReplyEmpty: boolean;
@@ -70,7 +71,7 @@ var
 //  SetLength(fRegisterCache, sz);
 //end;
 
-function TRspConnection.FWaitForData: boolean;
+function TRspConnection.FWaitForData(timeout: integer): boolean;
 {$if defined(unix) or defined(windows)}
 var
   FDS: TFDSet;
@@ -79,20 +80,20 @@ var
 begin
   Result:=False;
 {$if defined(unix) or defined(windows)}
-  TimeV.tv_usec := 1 * 1000;  // 1 msec
+  TimeV.tv_usec := timeout * 1000;  // 1 msec
   TimeV.tv_sec := 0;
 {$endif}
 {$ifdef unix}
   FDS := Default(TFDSet);
   fpFD_Zero(FDS);
   fpFD_Set(self.Handle, FDS);
-  Result := fpSelect(self.Handle + 1, @FDS, nil, nil, @TimeV) > 0;
+  Result := fpSelect(self.Handle + 1, @FDS, nil, nil, nil{@TimeV}) > 0;
 {$else}
 {$ifdef windows}
   FDS := Default(TFDSet);
   FD_Zero(FDS);
   FD_Set(self.Handle, FDS);
-  Result := Select(self.Handle + 1, @FDS, nil, nil, @TimeV) > 0;
+  Result := Select(self.Handle + 1, @FDS, nil, nil, nil{@TimeV}) > 0;
 {$endif}
 {$endif}
 end;
@@ -136,10 +137,10 @@ begin
     c := chr(ReadByte);
     inc(i);
     s := s + c;
-  until (c = '$') or (i = 100);  // exit loop after start or count expired
+  until (c = '$') or (i = 1000);  // exit loop after start or count expired
 
   if i > 1 then
-    DebugLn(DBG_WARNINGS, ['Warning: Discarding unexpected data before start of new message']);
+    DebugLn(DBG_WARNINGS, ['Warning: Discarding unexpected data before start of new message', s]);
 
   c := chr(ReadByte);
   s := '';
@@ -191,11 +192,14 @@ begin
   // Format of T packet: T05n1:r1;...
   len := length(packet);
   // grab signal number
-  if len >= 3 then
+  if (len >= 3) and (packet[1] = '$') then
   begin
     SigNum := StrToInt('$'+packet[2]+packet[3]);
     i := 4;
-  end;
+  end
+  else
+    DebugLn(DBG_WARNINGS, ['Warning: Invalid break packet in TRspConnection.FProcessTPacket: ', packet]);
+
 
   {$ifdef DoFurtherProcessing}  // just get basic logic working, can precache data later
   while i < len do
@@ -258,45 +262,12 @@ begin
   until result or (retryCount > 5);
 
   if retryCount > 5 then
-    DebugLn(DBG_WARNINGS, ['Warning: Retries exceeded for cmd: ', cmd]);
+    DebugLn(DBG_WARNINGS, ['Warning: Retries exceeded in TRspConnection.FSendCmdWaitForReply for cmd: ', cmd]);
 end;
 
-function TRspConnection.Break(): boolean;
-var
-  c: char;
-  retryCount: integer;
-  reply: string;
+procedure TRspConnection.Break();
 begin
-  result := false;
-  reply := '';
-  retryCount := 0;
-
-  repeat
-    WriteByte(3);  // Ctrl-C
-    // now check if target returned error, resend ('-') or ACK ('+')
-    // No support for ‘QStartNoAckMode’, i.e. always expect a -/+
-    c := char(ReadByte);
-    if c = '-' then
-      inc(retryCount)
-    else if c = '+' then
-    begin
-      if FReadReply(reply) then
-        result := true
-      else
-      begin
-        retryCount := 0;
-        repeat
-          WriteByte(ord('-'));
-          inc(retryCount);
-        until result or (retryCount > 5);
-      end;
-    end;
-
-  // Abort this command if no ACK after 5 attempts
-  until result or (retryCount > 5);
-
-  if retryCount > 5 then
-    DebugLn(DBG_WARNINGS, ['Warning: Retries exceeded for rspSendBreak']);
+  WriteByte(3);  // Ctrl-C
 end;
 
 function TRspConnection.Kill(): boolean;
@@ -329,6 +300,9 @@ var
 begin
   result := 0;
   res := false;
+
+  FWaitForData(10);
+
   try
     res := FReadReply(msg);
   except
@@ -401,6 +375,7 @@ end;
 
 function TRspConnection.Continue(): boolean;
 begin
+  DebugLn(DBG_VERBOSE, ['TRspConnection.Continue() called']);
   result := FSendCommand('c');
   if not result then
     DebugLn(DBG_WARNINGS, ['Warning: Continue command failure in TRspConnection.Continue()']);
