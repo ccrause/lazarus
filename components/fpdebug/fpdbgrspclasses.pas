@@ -282,7 +282,10 @@ begin
     Result := false;
   end
   else
+  begin
+    DebugLn(DBG_VERBOSE, ['TDbgRspThread.GetDebugReg requesting register: ',ind]);
     result := TDbgRspProcess(Process).FConnection.ReadDebugReg(ind, AVal);
+  end;
 end;
 
 function TDbgRspThread.WriteDebugReg(ind: byte; AVal: PtrUInt): boolean;
@@ -472,6 +475,7 @@ begin
   if not ReadThreadState then
     exit;
 
+  DebugLn(DBG_WARNINGS, 'TDbgRspThread.GetInstructionPointerRegisterValue requesting PC.');
   ReadDebugReg(PC0, val);
   result := val;
   ReadDebugReg(PC1, val);
@@ -504,6 +508,7 @@ begin
   if not ReadThreadState then
     exit;
 
+  DebugLn(DBG_VERBOSE, 'TDbgRspThread.GetStackPointerRegisterValue requesting stack registers.');
   ReadDebugReg(SPLindex, spl);
   ReadDebugReg(SPHindex, sph);
   result := spl + sph shl 8;
@@ -637,11 +642,17 @@ begin
   end;
 
   // Target should automatically respond with T or S reply after processing the break
-  result := FConnection.Break();
-  PauseRequested:=true;
-  if not result then
+  result := true;
+  DebugLn(DBG_VERBOSE, 'TDbgRspProcess.Pause called.');
+  if not PauseRequested then
   begin
-    DebugLn(DBG_WARNINGS, 'Failed to send Ctrl-C to process %d.',[ProcessID]);
+    FConnection.Break();
+    PauseRequested := true;
+  end
+  else
+  begin
+    result := true;
+    DebugLn(DBG_WARNINGS, 'TDbgRspProcess.Pause called while PauseRequested is set.');
   end;
 end;
 
@@ -733,16 +744,16 @@ begin
   end;
 
   if TDbgRspThread(AThread).FIsPaused then  // in case of deInternal, it may not be paused and can be ignored
-  if not FIsTerminating then
-  begin
-    AThread.BeforeContinue;
-    if SingleStep then
-      result := FConnection.SingleStep()
-    else
-      result := FConnection.Continue();
-    TDbgRspThread(AThread).ResetPauseStates;
-    FStatus := 0;  // should update status by calling WaitForSignal
-  end;
+    if not FIsTerminating then
+    begin
+      AThread.BeforeContinue;
+      if SingleStep then
+        result := FConnection.SingleStep()
+      else
+        result := FConnection.Continue();
+      TDbgRspThread(AThread).ResetPauseStates;
+      FStatus := 0;  // should update status by calling WaitForSignal
+    end;
 
   if not FThreadMap.HasId(AThread.ID) then
     AThread.Free;
@@ -860,47 +871,35 @@ begin
     else
     case FStatus of
       SIGTRAP:
-        begin
+      begin
         if not FProcessStarted then
         begin
           result := deCreateProcess;
           FProcessStarted:=true;
+          DebugLn(DBG_VERBOSE, ['Creating process - SIGTRAP received for thread: ', AThread.ID]);
+        end
+        else if TDbgRspThread(AThread).FInternalPauseRequested then
+        begin
+          DebugLn(DBG_VERBOSE, ['???Received late SigTrap for thread ', AThread.ID]);
+          result := deBreakpoint;//deInternalContinue; // left over signal
         end
         else
-          if TDbgRspThread(AThread).FInternalPauseRequested then begin
-            DebugLn(DBG_VERBOSE, ['???Received late SigTrap for thread ', AThread.ID]);
-            result := deBreakpoint;//deInternalContinue; // left over signal
-          end
-          else
-          begin
-            DebugLn(DBG_VERBOSE, ['Received SigTrap for thread ', AThread.ID]);
-            result := deBreakpoint; // or pause requested
-            if not TDbgRspThread(AThread).FIsSteppingBreakPoint then
-              AThread.CheckAndResetInstructionPointerAfterBreakpoint;
-          end;
-        end;
-      SIGBUS:
         begin
-          ExceptionClass:='SIGBUS';
-          TDbgRspThread(AThread).FExceptionSignal:=SIGBUS;
-          result := deException;
+          DebugLn(DBG_VERBOSE, ['Received SigTrap for thread ', AThread.ID,
+             ' PauseRequest=', TDbgRspThread(AThread).FInternalPauseRequested]);
+          result := deBreakpoint; // or pause requested
+          if not TDbgRspThread(AThread).FIsSteppingBreakPoint then
+            AThread.CheckAndResetInstructionPointerAfterBreakpoint;
+
+          if PauseRequested then
+            ;
         end;
+      end;
       SIGINT:
         begin
           ExceptionClass:='SIGINT';
           TDbgRspThread(AThread).FExceptionSignal:=SIGINT;
           result := deException;
-        end;
-      SIGSEGV:
-        begin
-          ExceptionClass:='SIGSEGV';
-          TDbgRspThread(AThread).FExceptionSignal:=SIGSEGV;
-          result := deException;
-        end;
-      SIGCHLD:
-        begin
-          TDbgRspThread(AThread).FExceptionSignal:=SIGCHLD;
-          result := deInternalContinue;
         end;
       SIGKILL:
         begin
