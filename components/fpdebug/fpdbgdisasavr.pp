@@ -51,8 +51,8 @@ type
     // returns byte len of call instruction at AAddress // 0 if not a call intruction
     function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer; override;
     // GetFunctionFrame not implemented
-    //function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal; const A64Bit: Boolean;
-    //  out AnIsOutsideFrame: Boolean): Boolean; override;
+    function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal; const A64Bit: Boolean;
+      out AnIsOutsideFrame: Boolean): Boolean; override;
     constructor Create;
   end;
 
@@ -719,6 +719,13 @@ begin
   else if (HiByte^ = $95) and (LoByte^ in [$09, $19]) or          // icall / eicall
           ((HiByte^ and $D0) = $D0) then                          // rcall
    Result := 2;
+end;
+
+function TAvrDisassembler.GetFunctionFrameInfo(AData: PByte;
+  ADataLen: Cardinal; const A64Bit: Boolean; out AnIsOutsideFrame: Boolean
+  ): Boolean;
+begin
+  false;
 end;
 
 constructor TAvrDisassembler.Create;
