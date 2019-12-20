@@ -633,37 +633,45 @@ end;
 
 
 procedure HandleDisas(AParams: String; out CallProcessLoop: boolean);
-//begin
-//  CallProcessLoop:=false;
-//  WriteLN('not implemented: disassemble');
-//end;
+const
+  NumInstructionsToDecode = 6;
 var
   a: TDbgPtr;
   Code, CodeBytes: String;
-  CodeBin: array[0..20] of Byte;
+  //CodeBin: array[0..20] of Byte;
+  CodeBin: TBytes;
   p: pointer;
-  i: integer;
+  i, bytesDisassembled, prevInstructionSize: integer;
 begin
   WriteLN('===');
   a := GController.CurrentThread.GetInstructionPointerRegisterValue;
+  SetLength(CodeBin,  NumInstructionsToDecode * GDisassembler.MaxCodeLength); // Size CodeBin to hold enough data so that only one Read is required
+  bytesDisassembled := length(CodeBin); // force memory read on first iteration
   for i := 0 to 5 do
   begin
     Write('  [', FormatAddress(a), ']');
 
-    if not GController.CurrentProcess.ReadData(a,sizeof(CodeBin),CodeBin)
-    then begin
-      //debugln('Disassemble: Failed to read memory at %s.', [FormatAddress(a)]);
-      Code := '??';
-      CodeBytes := '??';
-      Inc(a);
-      Exit;
+    if (length(CodeBin) - bytesDisassembled) < GDisassembler.MaxCodeLength then begin
+      if not GController.CurrentProcess.ReadData(a,length(CodeBin),CodeBin[0])
+      then begin
+        //debugln('Disassemble: Failed to read memory at %s.', [FormatAddress(a)]);
+        Code := '??';
+        CodeBytes := '??';
+        Inc(a);
+        Exit;
+      end
+      else
+        bytesDisassembled := 0;
     end;
-    p := @CodeBin;
+
+    p := pointer(PtrUInt(@CodeBin[0]) + bytesDisassembled);
 
     GDisassembler.Disassemble(p, GController.CurrentProcess.Mode=dm64, CodeBytes, Code);
 
+    prevInstructionSize := PtrUInt(p) - PtrUInt(@CodeBin[0]) - bytesDisassembled;
+    bytesDisassembled := bytesDisassembled + prevInstructionSize;
     WriteLN(' ', CodeBytes:20, '    ', Code);
-    Inc(a, PtrUInt(p) - PtrUInt(@CodeBin));
+    Inc(a, prevInstructionSize);
   end;
 end;
 
