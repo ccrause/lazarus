@@ -1786,7 +1786,7 @@ begin
     FDbgController.NextOnlyStopOnStartLine := TFpDebugDebuggerProperties(self.GetProperties).NextOnlyStopOnStartLine;
 
   if (ACommand in [dcRun, dcStepOver, dcStepInto, dcStepOut, dcRunTo, dcJumpto,
-      dcStepOverInstr, dcStepIntoInstr, dcAttach]) and
+      dcStepOverInstr, dcStepIntoInstr]) and
      not assigned(FDbgController.MainProcess)
   then
   begin
@@ -1797,14 +1797,14 @@ begin
     FDbgController.WorkingDirectory:=WorkingDir;
     FDbgController.Environment:=Environment;
     //FDbgController.AttachToPid := 0;
-    if ACommand = dcAttach then begin
-      FDbgController.AttachToPid := StrToIntDef(String(AParams[0].VAnsiString), 0);
-      Result := FDbgController.AttachToPid <> 0;
-      if not Result then begin
-        FileName := '';
-        Exit;
-      end;
-    end;
+    //if ACommand = dcAttach then begin
+    //  FDbgController.AttachToPid := StrToIntDef(String(AParams[0].VAnsiString), 0);
+    //  Result := FDbgController.AttachToPid <> 0;
+    //  if not Result then begin
+    //    FileName := '';
+    //    Exit;
+    //  end;
+    //end;
     FFpDebugThread := TFpDebugThread.Create(Self);
     RTLeventWaitFor(FFpDebugThread.DebugLoopStoppedEvent);
     RTLeventResetEvent(FFpDebugThread.DebugLoopStoppedEvent);
@@ -1913,10 +1913,10 @@ begin
         TDBGEvaluateResultCallback(ACallback)(Self, Result, ResText, ResType);
         Result := True;
       end;
-    dcSendConsoleInput:
-      begin
-        FDbgController.CurrentProcess.SendConsoleInput(String(AParams[0].VAnsiString));
-      end;
+    //dcSendConsoleInput:
+    //  begin
+    //    FDbgController.CurrentProcess.SendConsoleInput(String(AParams[0].VAnsiString));
+    //  end;
   end; {case}
 end;
 
@@ -2117,12 +2117,7 @@ begin
   if Assigned(GetProperties) then
   begin
     if (GetProperties is TFpDebugDebuggerProperties) then
-    begin
-      // Not initialized to actual values yet
-      //FRemotePort := TFpDebugDebuggerProperties(GetProperties).Port;
-      //DebugLn(DBG_VERBOSE, 'Assigned RemotePort=', IntToStr(FRemotePort));
-      FProperties := TFpDebugDebuggerProperties(GetProperties);
-    end
+      FProperties := TFpDebugDebuggerProperties(GetProperties)
     else
       DebugLn(DBG_WARNINGS, 'GetProperties is not of type "TFpDebugDebuggerProperties"');
   end
@@ -2193,7 +2188,7 @@ end;
 
 class function TFpDebugDebuggerAvr.Caption: String;
 begin
-  Result:='FpDebugAvr internal Dwarf-debugger for AVR (beta)';
+  Result:='FpDebugAvr internal Dwarf-debugger for AVR (concept)';
 end;
 
 class function TFpDebugDebuggerAvr.NeedsExePath: boolean;
@@ -2215,7 +2210,7 @@ function TFpDebugDebuggerAvr.GetSupportedCommands: TDBGCommands;
 begin
   Result := [dcRun, dcStop, dcStepIntoInstr, dcStepOverInstr, dcStepOver,
              dcRunTo, dcPause, dcStepOut, dcStepInto, dcEvaluate,
-             dcSendConsoleInput, dcAttach, dcDetach];
+             dcDetach];
   if State = dsStop then
     Result := Result - [dcStepInto, dcStepOver, dcStepOut, dcStepIntoInstr, dcStepOverInstr];
 end;
