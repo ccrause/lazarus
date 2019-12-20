@@ -49,6 +49,7 @@ uses
   FpDbgClasses,
   FpDbgDwarfConst,
   FpDbgDwarf,
+  FpDbgRspClasses,
   LazLogger;
 
 {$ifdef windows}
