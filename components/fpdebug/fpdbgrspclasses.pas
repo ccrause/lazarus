@@ -62,10 +62,14 @@ const
 
   // RSP commands
   Rsp_Status = '?';     // Request break reason - returns either S or T
+  lastCPURegIndex = 31; // After this are SREG, SP and PC
   SREGindex = 32;
+  SPindex = 33;
+  PCindex = 34;
+
+  // Byte level register indexes
   SPLindex = 33;
   SPHindex = 34;
-  // Program counter register indexes
   PC0 = 35;
   PC1 = 36;
   PC2 = 37;
@@ -76,10 +80,7 @@ type
     updated: boolean;
     case byte of
     0: (regs: array[0..38] of byte);
-    1: (cpuRegs: array[0..31] of byte;
-        SREG: byte;
-        SPL, SPH: byte;
-        PC: dword);
+    1: (cpuRegs: array[0..34] of qword);
   end;
 
   { TDbgRspThread }
@@ -93,9 +94,13 @@ type
     FIsSteppingBreakPoint: boolean;
     FDidResetInstructionPointer: Boolean;
     FHasThreadState: boolean;
-    function GetDebugRegOffset(ind: byte): pointer;
     function ReadDebugReg(ind: byte; out AVal: PtrUInt): boolean;
     function WriteDebugReg(ind: byte; AVal: PtrUInt): boolean;
+
+    // Cache registers if reported in event
+    // Only cache if all reqisters are reported
+    // if not, request registers from target
+    procedure FUpdateStatusFromEvent(event: TStatusEvent);
   protected
     function ReadThreadState: boolean;
 
@@ -121,7 +126,7 @@ type
     FStatus: integer;
     FProcessStarted: boolean;
     FIsTerminating: boolean;
-    FCurrentThreadId: THandle;
+    //FCurrentThreadId: THandle;
 
     // RSP protocol stuff
     FConnection: TRspConnection;
@@ -267,12 +272,12 @@ procedure TDbgRspProcess.OnForkEvent(Sender: TObject);
 begin
 end;
 
-function TDbgRspThread.GetDebugRegOffset(ind: byte): pointer;
-begin
-  if TDbgRspProcess(Process).FIsTerminating then
-    DebugLn(DBG_WARNINGS, 'TDbgRspThread.GetDebugRegOffset called while FIsTerminating is set.');
-  result := nil;
-end;
+//function TDbgRspThread.GetDebugRegOffset(ind: byte): pointer;
+//begin
+//  if TDbgRspProcess(Process).FIsTerminating then
+//    DebugLn(DBG_WARNINGS, 'TDbgRspThread.GetDebugRegOffset called while FIsTerminating is set.');
+//  result := nil;
+//end;
 
 function TDbgRspThread.ReadDebugReg(ind: byte; out AVal: PtrUInt): boolean;
 begin
@@ -284,7 +289,13 @@ begin
   else
   begin
     DebugLn(DBG_VERBOSE, ['TDbgRspThread.GetDebugReg requesting register: ',ind]);
-    result := TDbgRspProcess(Process).FConnection.ReadDebugReg(ind, AVal);
+    if FRegs.updated then
+    begin
+      AVal := FRegs.cpuRegs[ind];
+      result := true;
+    end
+    else
+      result := TDbgRspProcess(Process).FConnection.ReadDebugReg(ind, AVal);
   end;
 end;
 
@@ -297,6 +308,24 @@ begin
   end
   else
     result := TDbgRspProcess(Process).FConnection.WriteDebugReg(ind, AVal);
+end;
+
+procedure TDbgRspThread.FUpdateStatusFromEvent(event: TStatusEvent);
+var
+  allRegsOK: boolean;
+  i: integer;
+begin
+  allRegsOK := length(FRegs.cpuRegs) = length(event.registers);
+  i := 0;
+  while allRegsOK and (i < length(event.registers)) do
+  begin
+    allRegsOK := event.registers[i].Initialized;
+    inc(i);
+  end;
+  FRegs.updated := allRegsOK;
+  if allRegsOK then
+    for i := 0 to high(FRegs.cpuRegs) do
+      FRegs.cpuRegs[i] := event.registers[i].Value;
 end;
 
 function TDbgRspThread.ReadThreadState: boolean;
@@ -338,34 +367,6 @@ begin
 
   FIsPaused := True;
   FIsInInternalPause := False;
-
-  //if {FInternalPauseRequested and} (wstopsig(AWaitedStatus) = SIGSTOP) then begin
-  //  DebugLn(DBG_VERBOSE and not FInternalPauseRequested, 'Received SigStop, but had not (yet) requested it. TId=', [Id]);
-  //  FInternalPauseRequested := False;
-  //  FIsInInternalPause := True;
-  //  // no postpone
-  //end
-  //
-  //else
-  //if wstopsig(AWaitedStatus) = SIGTRAP then begin
-  //  if ReadThreadState then
-  //    CheckAndResetInstructionPointerAfterBreakpoint;
-  //  Result := True;
-  //  // TODO: main loop should search all threads for breakpoints
-  //end
-  //
-  //else
-  //if wifexited(AWaitedStatus) and (ID <> Process.ProcessID) then begin
-  //  Process.RemoveThread(ID); // Done, no postpone
-  //end
-  //
-  //else
-  //begin
-  //  // Handle later
-  //  Result := True;
-  //end;
-
-  //TODO: Handle all signals/exceptions/...
 end;
 
 procedure TDbgRspThread.ResetPauseStates;
@@ -386,8 +387,10 @@ begin
     exit;
   FDidResetInstructionPointer := True;
 
-  Dec(FRegs.PC);
-  FRegsChanged:=true;
+  // This is not required for gdbserver
+  // since remote stub should ensure PC points to break address
+  //Dec(FRegs.cpuRegs[PCindex]);
+  //FRegsChanged:=true;
 end;
 
 procedure TDbgRspThread.ApplyWatchPoints(AWatchPointData: TFpWatchPointData);
@@ -439,6 +442,7 @@ end;
 procedure TDbgRspThread.LoadRegisterValues;
 var
   i: integer;
+  registersOK: boolean;
 begin
   if TDbgRspProcess(Process).FIsTerminating then
   begin
@@ -449,21 +453,28 @@ begin
   if not ReadThreadState then
     exit;
 
-  if TDbgRspProcess(Process).FConnection.ReadRegisters(FRegs.regs[0], length(FRegs.regs)) then
+  registersOK := FRegs.updated;
+  if not registersOK then
   begin
-    for i := 0 to high(FRegs.cpuRegs) do
+    registersOK := TDbgRspProcess(Process).FConnection.ReadRegisters(FRegs.regs[0], length(FRegs.regs));
+    FRegs.updated := registersOK;
+  end;
+
+  if registersOK then
+  begin
+    for i := 0 to lastCPURegIndex do
       FRegisterValueList.DbgRegisterAutoCreate['r'+IntToStr(i)].SetValue(FRegs.cpuRegs[i], IntToStr(FRegs.cpuRegs[i]),1, i); // confirm dwarf index
 
-    FRegisterValueList.DbgRegisterAutoCreate['spl'].SetValue(FRegs.SPL, IntToStr(FRegs.SPL),1,0);
-    FRegisterValueList.DbgRegisterAutoCreate['sph'].SetValue(FRegs.SPH, IntToStr(FRegs.SPH),1,0);
-    FRegisterValueList.DbgRegisterAutoCreate['pc'].SetValue(FRegs.PC, IntToStr(FRegs.PC),1,0);
+    FRegisterValueList.DbgRegisterAutoCreate['sreg'].SetValue(FRegs.cpuRegs[SREGindex], IntToStr(FRegs.cpuRegs[SREGindex]),1,0);
+    FRegisterValueList.DbgRegisterAutoCreate['sp'].SetValue(FRegs.cpuRegs[SPindex], IntToStr(FRegs.cpuRegs[SPindex]),2,0);
+    FRegisterValueList.DbgRegisterAutoCreate['pc'].SetValue(FRegs.cpuRegs[PCindex], IntToStr(FRegs.cpuRegs[PCindex]),4,0);
     FRegisterValueListValid := true;
-  end;
+  end
+  else
+    DebugLn(DBG_WARNINGS, 'Warning: Could not update registers');
 end;
 
 function TDbgRspThread.GetInstructionPointerRegisterValue: TDbgPtr;
-var
-  val: PtrUInt;
 begin
   Result := 0;
   if TDbgRspProcess(Process).FIsTerminating then
@@ -475,15 +486,11 @@ begin
   if not ReadThreadState then
     exit;
 
-  DebugLn(DBG_WARNINGS, 'TDbgRspThread.GetInstructionPointerRegisterValue requesting PC.');
-  ReadDebugReg(PC0, val);
-  result := val;
-  ReadDebugReg(PC1, val);
-  result := result + val shl 8;
-  ReadDebugReg(PC2, val);
-  result := result + val shl 16;
-  ReadDebugReg(PC3, val);
-  result := result + val shl 24;
+  DebugLn(DBG_VERBOSE, 'TDbgRspThread.GetInstructionPointerRegisterValue requesting PC.');
+  if FRegs.updated then
+    result := FRegs.cpuRegs[PCindex]
+  else
+    ReadDebugReg(PCindex, result);
 end;
 
 function TDbgRspThread.GetStackBasePointerRegisterValue: TDbgPtr;
@@ -495,8 +502,6 @@ begin
 end;
 
 function TDbgRspThread.GetStackPointerRegisterValue: TDbgPtr;
-var
-  spl, sph: PtrUInt;
 begin
   Result := 0;
   if TDbgRspProcess(Process).FIsTerminating then
@@ -509,9 +514,10 @@ begin
     exit;
 
   DebugLn(DBG_VERBOSE, 'TDbgRspThread.GetStackPointerRegisterValue requesting stack registers.');
-  ReadDebugReg(SPLindex, spl);
-  ReadDebugReg(SPHindex, sph);
-  result := spl + sph shl 8;
+  if FRegs.updated then
+    result := FRegs.cpuRegs[SPindex]
+  else
+    ReadDebugReg(SPindex, result);
 end;
 
 { TDbgRspProcess }
@@ -575,6 +581,7 @@ begin
   dbg := TDbgRspProcess.Create(AFileName, 0, 0);
   try
     dbg.FConnection := TRspConnection.Create(HostName, Port);
+    dbg.FConnection.RegisterCacheSize := length(TAvrRegisters.cpuRegs);
     result := dbg;
     dbg.FStatus := dbg.FConnection.Init;
     dbg := nil;
@@ -643,11 +650,11 @@ begin
 
   // Target should automatically respond with T or S reply after processing the break
   result := true;
-  DebugLn(DBG_VERBOSE, 'TDbgRspProcess.Pause called.');
   if not PauseRequested then
   begin
     FConnection.Break();
     PauseRequested := true;
+    DebugLn(DBG_VERBOSE, 'TDbgRspProcess.Pause called.');
   end
   else
   begin
@@ -669,6 +676,7 @@ var
   PC: word;
   s: string;
   tempState: integer;
+  initRegs: TInitializedRegisters;
 begin
   // Terminating process and all threads
   if FIsTerminating then
@@ -704,7 +712,7 @@ begin
           ThreadToContinue.FIsPaused := True;
           if result then
           begin
-            tempState := FConnection.WaitForSignal(s);
+            tempState := FConnection.WaitForSignal(s, initRegs);  // TODO: Update registers cache for this thread
             if (tempState = SIGTRAP) then
               break; // if the command jumps back an itself....
           end
@@ -762,7 +770,9 @@ end;
 function TDbgRspProcess.WaitForDebugEvent(out ProcessIdentifier, ThreadIdentifier: THandle): boolean;
 var
   s: string;
+  initRegs: TInitializedRegisters;
 begin
+  debugln(DBG_VERBOSE, ['Entering WaitForDebugEvent, FStatus = ', FStatus]);
   // Currently only single process/thread
   // TODO: Query and handle process/thread states of target
   ThreadIdentifier  := self.ThreadID;
@@ -778,7 +788,7 @@ begin
   if FStatus = 0 then
     repeat
       try
-        FStatus := FConnection.WaitForSignal(s);
+        FStatus := FConnection.WaitForSignal(s, initRegs); // TODO: Update registers cache
       except
         FStatus := 0;
       end;
@@ -829,6 +839,7 @@ function TDbgRspProcess.AnalyseDebugEvent(AThread: TDbgThread): TFPDEvent;
 var
   ThreadToPause: TDbgRspThread;
 begin
+  debugln(DBG_VERBOSE, ['Entering TDbgRspProcess.AnalyseDebugEvent, FStatus = ', FStatus, ' PauseRequested = ', PauseRequested]);
   if FIsTerminating then begin
     result := deExitProcess;
     exit;
@@ -841,6 +852,7 @@ begin
 
   TDbgRspThread(AThread).FExceptionSignal:=0;
   TDbgRspThread(AThread).FIsPaused := True;
+  TDbgRspThread(AThread).FUpdateStatusFromEvent(FConnection.lastStatusEvent);
 
   if FStatus in [SIGHUP, SIGKILL] then  // not sure which signals is relevant here
   begin
@@ -886,13 +898,14 @@ begin
         else
         begin
           DebugLn(DBG_VERBOSE, ['Received SigTrap for thread ', AThread.ID,
-             ' PauseRequest=', TDbgRspThread(AThread).FInternalPauseRequested]);
-          result := deBreakpoint; // or pause requested
+             ' PauseRequest=', PauseRequested]);
+          if PauseRequested then   // Hack to work around Pause problem
+            result := deFinishedStep
+          else
+            result := deBreakpoint;
+
           if not TDbgRspThread(AThread).FIsSteppingBreakPoint then
             AThread.CheckAndResetInstructionPointerAfterBreakpoint;
-
-          if PauseRequested then
-            ;
         end;
       end;
       SIGINT:
@@ -927,6 +940,8 @@ begin
     if result=deException then
       ExceptionClass:='External: '+ExceptionClass;
   end;
+
+  debugln(DBG_VERBOSE, ['Leaving AnalyseDebugEvent, result = ', result]);
 
   TDbgRspThread(AThread).FIsSteppingBreakPoint := False;
 

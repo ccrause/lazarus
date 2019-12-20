@@ -6,25 +6,46 @@ uses
   Classes, SysUtils, ssockets, DbgIntfDebuggerBase, DbgIntfBaseTypes;
 
 type
+  TInitializedRegister = record
+    Initialized: boolean;
+    Value: qword; // sized to handle largest register, should truncate as required to smaller registers
+  end;
+  TInitializedRegisters = array of TInitializedRegister;
+
+  TStopReason = (srNone, srSWBreakPoint, srHWBreakPoint, srWriteWatchPoint, srReadWatchPoint, srAnyWatchPoint);
+
+  TStatusEvent = record
+    signal: integer;
+    coreID: integer;
+    threadID: integer;
+    stopReason: TStopReason;
+    watchPointAddress: qword;  // contains address which triggered watch point
+    registers: TInitializedRegisters;
+  end;
 
   { TRspConnection }
 
   TRspConnection = class(TInetSocket)
   private
     FState: integer;
-    //fRegisterCache: TBytes;
-    //procedure FSetRegisterCacheSize(sz: cardinal);
+    FStatusEvent: TStatusEvent;
+    procedure FSetRegisterCacheSize(sz: cardinal);
+    procedure FResetStatusEvent;
     // Blocking
-    function FWaitForData(timeout: integer): boolean;
+    function FWaitForData(): boolean;
     function FSendCommand(const cmd: string): boolean;
     function FReadReply(out retval: string): boolean;
-    procedure FProcessTPacket(const packet: string);
     function FSendCmdWaitForReply(const cmd: string; out reply: string): boolean;
+
+    // Note that numbers are transmitted as hex characters in target endian sequence
+    // For little endian targets this creates an endian swap if the string is parsed by Val
+    // because a hex representation of a number is interpreted as big endian
+    function convertHexWithLittleEndianSwap(constref hextext: string; out value: qword): boolean;
   public
-    constructor Create(const AHost: String; APort: Word; AHandler : TSocketHandler = Nil); Overload;
-    destructor Destroy;
+    constructor Create(const AHost: String; APort: Word; AHandler: TSocketHandler = Nil); Overload;
+    destructor Destroy; override;
     // Wait for async signal - blocking
-    function WaitForSignal(out msg: string): integer;
+    function WaitForSignal(out msg: string; out registers: TInitializedRegisters): integer;
 
     procedure Break();
     function Kill(): boolean;
@@ -50,8 +71,8 @@ type
     function Init: integer;
 
     property State: integer read FState;
-    //property RegisterCacheSize: cardinal write FSetRegisterCacheSize;
-    //property RegisterCache: TBytes read fRegisterCache;
+    property RegisterCacheSize: cardinal write FSetRegisterCacheSize;
+    property lastStatusEvent: TStatusEvent read FStatusEvent;
   end;
 
 
@@ -59,30 +80,49 @@ implementation
 
 uses
   LazLoggerBase, StrUtils,
-  {$IFNDEF WINDOWS}BaseUnix, sockets;
+  {$IFNDEF WINDOWS}BaseUnix;
   {$ELSE}winsock2, windows;
   {$ENDIF}
 
 var
   DBG_VERBOSE, DBG_WARNINGS: PLazLoggerLogGroup;
 
-//procedure TRspConnection.FSetRegisterCacheSize(sz: cardinal);
-//begin
-//  SetLength(fRegisterCache, sz);
-//end;
+procedure TRspConnection.FSetRegisterCacheSize(sz: cardinal);
+begin
+  SetLength(FStatusEvent.registers, sz);
+end;
 
-function TRspConnection.FWaitForData(timeout: integer): boolean;
+procedure TRspConnection.FResetStatusEvent;
+var
+  i: integer;
+begin
+  with FStatusEvent do
+  begin
+    signal := 0;
+    coreID := 0;
+    threadID := 0;
+    stopReason := srNone;
+    watchPointAddress := 0;
+    for i := low(registers) to high(registers) do
+    begin
+      registers[i].Initialized := false;
+      registers[i].Value := 0;
+    end;
+  end;
+end;
+
+function TRspConnection.FWaitForData({timeout: integer}): boolean;
 {$if defined(unix) or defined(windows)}
 var
   FDS: TFDSet;
-  TimeV: TTimeVal;
+  //TimeV: TTimeVal;
 {$endif}
 begin
   Result:=False;
-{$if defined(unix) or defined(windows)}
-  TimeV.tv_usec := timeout * 1000;  // 1 msec
-  TimeV.tv_sec := 0;
-{$endif}
+//{$if defined(unix) or defined(windows)}
+//  TimeV.tv_usec := timeout * 1000;  // 1 msec
+//  TimeV.tv_sec := 0;
+//{$endif}
 {$ifdef unix}
   FDS := Default(TFDSet);
   fpFD_Zero(FDS);
@@ -128,7 +168,7 @@ function TRspConnection.FReadReply(out retval: string): boolean;
 var
   c: char;
   s: string;
-  i, len, prevMsgEnd: integer;
+  i: integer;
   cksum, calcSum: byte;
 begin
   i := 0;
@@ -184,45 +224,6 @@ begin
   end;
 end;
 
-procedure TRspConnection.FProcessTPacket(const packet: string);
-var
-  i, j, len, SigNum, regnum, regvalue: integer;
-  s: string;
-begin
-  // Format of T packet: T05n1:r1;...
-  len := length(packet);
-  // grab signal number
-  if (len >= 3) and (packet[1] = '$') then
-  begin
-    SigNum := StrToInt('$'+packet[2]+packet[3]);
-    i := 4;
-  end
-  else
-    DebugLn(DBG_WARNINGS, ['Warning: Invalid break packet in TRspConnection.FProcessTPacket: ', packet]);
-
-
-  {$ifdef DoFurtherProcessing}  // just get basic logic working, can precache data later
-  while i < len do
-  begin
-    j := PosEx(':', packet, i);
-    if j > i then
-    begin
-      s := copy(packet, i, j-1);
-      regnum := StrToInt('$' + s);
-      i := j+1;
-    end
-    else
-      break;
-
-    j := PosEx(';', packet, i);
-    // in case last value is not correctly terminated
-    if j = 0 then
-      j := length(packet);
-
-  end;
-  {$endif}
-end;
-
 function TRspConnection.FSendCmdWaitForReply(const cmd: string; out reply: string
   ): boolean;
 var
@@ -265,6 +266,31 @@ begin
     DebugLn(DBG_WARNINGS, ['Warning: Retries exceeded in TRspConnection.FSendCmdWaitForReply for cmd: ', cmd]);
 end;
 
+function TRspConnection.convertHexWithLittleEndianSwap(constref
+  hextext: string; out value: qword): boolean;
+var
+  err: integer;
+begin
+  Val('$'+hextext, value, err);
+  if (err = 0) then
+  begin
+    result := true;
+    case length(hextext) of
+      2: ; // no conversion required
+      4:  value := SwapEndian(word(value));
+      8:  value := SwapEndian(dword(value));
+      16: value := SwapEndian(value);
+      else
+      begin
+        result := false;
+        DebugLn(DBG_WARNINGS, ['Warning: Unexpected hex length: ', IntToStr(length(hextext))]);
+      end;
+    end;
+  end
+  else
+    result := false;
+end;
+
 procedure TRspConnection.Break();
 begin
   WriteByte(3);  // Ctrl-C
@@ -287,21 +313,27 @@ constructor TRspConnection.Create(const AHost: String; APort: Word;
   AHandler: TSocketHandler);
 begin
   inherited Create(AHost, APort);
-  self.IOTimeout := 1000;  // socket read timeout = 1000 ms
+  //self.IOTimeout := 1000;  // socket read timeout = 1000 ms
 end;
 
 destructor TRspConnection.Destroy;
 begin
+  inherited;
 end;
 
-function TRspConnection.WaitForSignal(out msg: string): integer;
+function TRspConnection.WaitForSignal(out msg: string; out
+  registers: TInitializedRegisters): integer;
 var
   res: boolean;
+  startIndex, colonIndex, semicolonIndex: integer;
+  tmp, tmp2: qword;
+  part1, part2: string;
 begin
   result := 0;
   res := false;
+  SetLength(registers, 0);
 
-  FWaitForData(10);
+  FWaitForData();
 
   try
     res := FReadReply(msg);
@@ -315,8 +347,70 @@ begin
     if (msg[1] in ['S', 'T']) and (length(msg) > 2) then
     begin
       try
+        FResetStatusEvent;
         result := StrToInt('$' + copy(msg, 2, 2));
         FState := result;
+        FStatusEvent.signal := result;
+        if (msg[1] = 'T') and (length(msg) > 6) then // not much meaning can be returned in less than 2 bytes
+        begin
+          startIndex := 4; // first part of message TAA... is already parsed, rest should be nn:rr; pairs
+          repeat
+            colonIndex := posex(':', msg, startIndex);
+            semicolonIndex := posex(';', msg, startIndex);
+            // Check if there is a first part
+            if colonIndex > startIndex then
+              part1 := copy(msg, startIndex, colonIndex-startIndex)
+            else
+              part1 := '';
+
+            if (part1 <> '') and (semicolonIndex > colonIndex + 1) then
+              part2 := copy(msg, colonIndex+1, semicolonIndex - colonIndex - 1)
+            else
+              part2 := '';
+
+            // Check for stop reason
+            case part1 of
+              'watch','rwatch','awatch':
+              begin
+                case part1 of
+                  'watch': FStatusEvent.stopReason := srWriteWatchPoint;
+                  'rwatch': FStatusEvent.stopReason := srReadWatchPoint;
+                  'awatch': FStatusEvent.stopReason := srAnyWatchPoint;
+                end;
+                if convertHexWithLittleEndianSwap(part2, tmp) then
+                  FStatusEvent.watchPointAddress := tmp
+                else
+                  DebugLn(DBG_WARNINGS, format('Invalid value received for %s: %s ', [part1, part2]));
+              end;
+              'swbreak':
+              begin
+                FStatusEvent.stopReason := srSWBreakPoint;
+              end;
+              'hwbreak':
+              begin
+                FStatusEvent.stopReason := srHWBreakPoint;
+              end;
+              else // catch valid hex numbers - will be register info
+              begin
+                // check if part1 is a number, this should then be a register index
+                if convertHexWithLittleEndianSwap(part1, tmp) and convertHexWithLittleEndianSwap(part2, tmp2) then
+                begin
+                  if tmp < length(FStatusEvent.registers) then
+                  begin
+                    FStatusEvent.registers[tmp].Value := tmp2;
+                    FStatusEvent.registers[tmp].Initialized := true;
+                  end
+                  else
+                    DebugLn(DBG_WARNINGS, format('Register index exceeds total number of registers (%d > %d] ',
+                            [tmp, length(FStatusEvent.registers)]));
+                end
+                else
+                  DebugLn(DBG_WARNINGS, format('Ignoring stop reply  pair [%s:%s] ', [part1, part2]));
+              end;
+            end;
+            startIndex := semicolonIndex + 1;
+          until (semicolonIndex = 0) or (semicolonIndex = length(msg));
+        end;
       except
         DebugLn(DBG_WARNINGS, ['Error converting signal number from reply: ', msg]);
       end;
@@ -331,7 +425,8 @@ var
   reply: string;
 begin
   FSendCmdWaitForReply('vMustReplyEmpty', reply);
-  if reply <> '' then
+  result := reply = '';
+  if not result then
     DebugLn(DBG_WARNINGS, ['Warning: vMustReplyEmpty command returned unexpected result: ', reply]);
 end;
 
@@ -391,15 +486,11 @@ end;
 function TRspConnection.ReadDebugReg(ind: byte; out AVal: PtrUInt): boolean;
 var
   cmd, reply: string;
-  err: integer;
 begin
   cmd := 'p'+IntToHex(ind, 2);
   result := FSendCmdWaitForReply(cmd, reply);
   if result then
-  begin
-    Val('$'+reply, AVal, err);
-    result := err = 0;
-  end;
+    result := convertHexWithLittleEndianSwap(reply, aval);
 
   if not result then
     DebugLn(DBG_WARNINGS, ['Warning: "p" command returned unexpected result: ', reply]);
@@ -521,6 +612,7 @@ end;
 function TRspConnection.Init: integer;
 var
   reply: string;
+  intRegs: TInitializedRegisters;
 begin
   result := 0;
   reply := '';
@@ -532,17 +624,9 @@ begin
 
   if FSendCommand('?') then
   begin
-    result := WaitForSignal(reply);
-  end
-  else
-    exit;
-
-  // TODO: Check if reply includes register values
-  // Perhaps defer to calling side?
-  if reply[1] = 'T' then
-  begin
-
+    result := WaitForSignal(reply, intRegs);
   end;
+  // TODO: Do something with fresh register information
 end;
 
 initialization
