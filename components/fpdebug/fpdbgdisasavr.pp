@@ -725,7 +725,7 @@ function TAvrDisassembler.GetFunctionFrameInfo(AData: PByte;
   ADataLen: Cardinal; const A64Bit: Boolean; out AnIsOutsideFrame: Boolean
   ): Boolean;
 begin
-  false;
+  result := false;
 end;
 
 constructor TAvrDisassembler.Create;
