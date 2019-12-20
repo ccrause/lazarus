@@ -538,6 +538,7 @@ begin
     if AProcess.ReadData(AThread.GetInstructionPointerRegisterValue,sizeof(CodeBin),CodeBin) then
     begin
       p := @CodeBin;
+      {$Info 'Should rather call IsCallInstruction?'} // Hide target specific interpretation
       GDisassembler.Disassemble(p, AProcess.Mode=dm64, ADump, AStatement);
       if (copy(AStatement,1,4)='call') then
       begin
@@ -546,6 +547,7 @@ begin
         SetReturnAdressBreakpoint(AProcess);
         FProcess.Continue(FProcess, FThread, False);
       end
+      {$Info 'New method IsReturnInstruction in base class TTDisassembler?'} // Hide target specific interpretation
       else if (copy(AStatement,1,3)='ret') then
       begin
         // Do one more single-step, and we're finished.
