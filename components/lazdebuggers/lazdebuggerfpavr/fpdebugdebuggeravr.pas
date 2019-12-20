@@ -932,10 +932,12 @@ end;
 { TFPDBGDisassembler }
 
 function TFPDBGDisassembler.PrepareEntries(AnAddr: TDbgPtr; ALinesBefore, ALinesAfter: Integer): boolean;
+const
+  NumInstructionsToDecode = 6;  // tune to avoid unnecessary reads from target
 var
   ARange: TDBGDisassemblerEntryRange;
   AnEntry: TDisassemblerEntry;
-  CodeBin: array of byte;
+  CodeBin: TBytes;
   p: pointer;
   ADump,
   AStatement,
@@ -946,7 +948,7 @@ var
   StatIndex: integer;
   FirstIndex: integer;
   ALastAddr: TDBGPtr;
-
+  bytesDisassembled, prevInstructionSize: integer;
 begin
   Result := False;
   if (Debugger = nil) or not(Debugger.State = dsPause) then
@@ -960,71 +962,78 @@ begin
   ARange := TDBGDisassemblerEntryRange.Create;
   ARange.RangeStartAddr := AnAddr;
   ALastAddr := 0;
-  SetLength(CodeBin, GDisassembler.MaxCodeLength*2);
+  SetLength(CodeBin, GDisassembler.MaxCodeLength*NumInstructionsToDecode);
+  bytesDisassembled := length(CodeBin); // force memory read on first iteration
 
   Assert(ALinesBefore<>0,'TFPDBGDisassembler.PrepareEntries LinesBefore not supported');
 
   for i := 0 to ALinesAfter-1 do
+  begin
+    if (length(CodeBin) - bytesDisassembled) < GDisassembler.MaxCodeLength then
     begin
-    if not TFpDebugDebuggerAvr(Debugger).ReadData(AnAddr,length(CodeBin),CodeBin[0]) then
+      if not TFpDebugDebuggerAvr(Debugger).ReadData(AnAddr,length(CodeBin),CodeBin[0]) then
       begin
-      DebugLn(Format('Disassemble: Failed to read memory at %s.', [FormatAddress(AnAddr)]));
-      inc(AnAddr);
+        DebugLn(Format('Disassemble: Failed to read memory at %s.', [FormatAddress(AnAddr)]));
+        inc(AnAddr);
+        exit;
       end
-    else
-      begin
-      p := @CodeBin[0];
-      GDisassembler.Disassemble(p, false, ADump, AStatement);
-
-      Sym := TFpDebugDebuggerAvr(Debugger).FDbgController.CurrentProcess.FindProcSymbol(AnAddr);
-
-      // If this is the last statement for this source-code-line, fill the
-      // SrcStatementCount from the prior statements.
-      if (assigned(sym) and ((ASrcFileName<>sym.FileName) or (ASrcFileLine<>sym.Line))) or
-        (not assigned(sym) and ((ASrcFileLine<>0) or (ASrcFileName<>''))) then
-        begin
-        for j := 0 to StatIndex-1 do
-          ARange.EntriesPtr[FirstIndex+j]^.SrcStatementCount:=StatIndex;
-        StatIndex:=0;
-        FirstIndex:=i;
-        end;
-
-      if assigned(sym) then
-        begin
-        ASrcFileName:=sym.FileName;
-        ASrcFileLine:=sym.Line;
-        sym.ReleaseReference;
-        end
       else
-        begin
-        ASrcFileName:='';
-        ASrcFileLine:=0;
-        end;
-      AnEntry.Addr := AnAddr;
-      AnEntry.Dump := ADump;
-      AnEntry.Statement := AStatement;
-      AnEntry.SrcFileLine := ASrcFileLine;
-      AnEntry.SrcFileName := ASrcFileName;
-      AnEntry.SrcStatementIndex := StatIndex;
-      ARange.Append(@AnEntry);
-      ALastAddr := AnAddr;
-      inc(StatIndex);
-      Inc(AnAddr, {%H-}PtrUInt(p) - {%H-}PtrUInt(@CodeBin[0]));
-      end;
+        bytesDisassembled := 0;
     end;
 
-  if ARange.Count>0 then
+    p := pointer(PtrUInt(@CodeBin[0]) + bytesDisassembled);
+    GDisassembler.Disassemble(p, false, ADump, AStatement);
+    prevInstructionSize := {%H-}PtrUInt(p) - {%H-}PtrUInt(@CodeBin[0]) - bytesDisassembled;
+    bytesDisassembled := bytesDisassembled + prevInstructionSize;
+    DebugLn(DBG_VERBOSE, format('Disassembled: [%.8X:  %s] %s',[AnAddr, ADump, Astatement]));
+
+    Sym := TFpDebugDebuggerAvr(Debugger).FDbgController.CurrentProcess.FindProcSymbol(AnAddr);
+    // If this is the last statement for this source-code-line, fill the
+    // SrcStatementCount from the prior statements.
+    if (assigned(sym) and ((ASrcFileName<>sym.FileName) or (ASrcFileLine<>sym.Line))) or
+      (not assigned(sym) and ((ASrcFileLine<>0) or (ASrcFileName<>''))) then
     begin
+      for j := 0 to StatIndex-1 do
+        ARange.EntriesPtr[FirstIndex+j]^.SrcStatementCount:=StatIndex;
+      StatIndex:=0;
+      FirstIndex:=i;
+    end;
+
+    if assigned(sym) then
+    begin
+      ASrcFileName:=sym.FileName;
+      ASrcFileLine:=sym.Line;
+      sym.ReleaseReference;
+    end
+    else
+    begin
+      ASrcFileName:='';
+      ASrcFileLine:=0;
+    end;
+    AnEntry.Addr := AnAddr;
+    AnEntry.Dump := ADump;
+    AnEntry.Statement := AStatement;
+    AnEntry.SrcFileLine := ASrcFileLine;
+    AnEntry.SrcFileName := ASrcFileName;
+    AnEntry.SrcStatementIndex := StatIndex;
+    ARange.Append(@AnEntry);
+    ALastAddr := AnAddr;
+    inc(StatIndex);
+    Inc(AnAddr, prevInstructionSize);
+  end;
+
+  if ARange.Count>0 then
+  begin
     ARange.RangeEndAddr := ALastAddr;
     ARange.LastEntryEndAddr := {%H-}TDBGPtr(p);
     EntryRanges.AddRange(ARange);
     result := true;
-    end
+  end
   else
-    begin
+  begin
     result := false;
     ARange.Free;
-    end;
+  end;
 end;
 
 { TFPRegisters }
