@@ -40,7 +40,7 @@ interface
 
 uses
   SysUtils,
-  FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools, LazLoggerBase,
+  FpDbgUtil, FpdMemoryTools, LazLoggerBase,
   FpDbgClasses;
 
 type
