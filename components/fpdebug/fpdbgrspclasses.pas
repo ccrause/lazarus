@@ -830,9 +830,9 @@ begin
   begin
     DebugLn(DBG_WARNINGS, 'TDbgRspProcess.RemoveBreakInstructionCode called while FIsTerminating is set');
     result := false;
-  end;
-
-  result := FConnection.DeleteBreakWatchPoint(ALocation, wkpExec);
+  end
+  else
+    result := FConnection.DeleteBreakWatchPoint(ALocation, wkpExec);
 end;
 
 function TDbgRspProcess.AnalyseDebugEvent(AThread: TDbgThread): TFPDEvent;
