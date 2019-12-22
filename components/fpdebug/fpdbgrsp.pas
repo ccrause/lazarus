@@ -32,9 +32,14 @@ type
     procedure FSetRegisterCacheSize(sz: cardinal);
     procedure FResetStatusEvent;
     // Blocking
-    function FWaitForData(): boolean;
-    function FSendCommand(const cmd: string): boolean;
+    function FWaitForData(): boolean; overload;
+    function FWaitForData(timeout_ms: integer): boolean; overload;
+
     function FReadReply(out retval: string): boolean;
+    function FSendCommand(const cmd: string): boolean;
+    // Send command and wait for acknowledge
+    function FSendCommandOK(const cmd: string): boolean;
+    // Return reply to cmd
     function FSendCmdWaitForReply(const cmd: string; out reply: string): boolean;
 
     // Note that numbers are transmitted as hex characters in target endian sequence
@@ -138,33 +143,87 @@ begin
 {$endif}
 end;
 
+function TRspConnection.FWaitForData(timeout_ms: integer): boolean;
+{$if defined(unix) or defined(windows)}
+var
+  FDS: TFDSet;
+  TimeV: TTimeVal;
+{$endif}
+begin
+  Result:=False;
+//{$if defined(unix) or defined(windows)}
+  TimeV.tv_usec := timeout_ms * 1000;  // 1 msec
+  TimeV.tv_sec := 0;
+//{$endif}
+{$ifdef unix}
+  FDS := Default(TFDSet);
+  fpFD_Zero(FDS);
+  fpFD_Set(self.Handle, FDS);
+  Result := fpSelect(self.Handle + 1, @FDS, nil, nil, @TimeV) > 0;
+{$else}
+{$ifdef windows}
+  FDS := Default(TFDSet);
+  FD_Zero(FDS);
+  FD_Set(self.Handle, FDS);
+  Result := Select(self.Handle + 1, @FDS, nil, nil, @TimeV) > 0;
+{$endif}
+{$endif}
+end;
+
 function TRspConnection.FSendCommand(const cmd: string): boolean;
 var
   checksum: byte;
-  i, totalSent, ret: integer;
+  i, totalSent: integer;
   s: string;
 begin
   checksum := 0;
   for i := 1 to length(cmd) do
     checksum := byte(checksum + ord(cmd[i]));
 
-  // Start marker
-  WriteByte(ord('$'));
-  totalSent := 0;
-  repeat
-    ret := Write(cmd[1+totalSent], length(cmd));
-    totalSent := totalSent + ret;
-  until (totalSent = length(cmd)) or (ret < 0);
-  WriteByte(ord('#'));
-  s := IntToHex(checksum, 2);
-  Write(s[1], length(s));
+  s := '$'+cmd+'#'+IntToHex(checksum, 2);
+  totalSent := Write(s[1], length(s));
 
-  result := (totalSent = length(cmd)) and (ret >= 0);
+  // Debugging
+  //system.WriteLn(s);
+
+  result := (totalSent = length(s));
   if not result then
-    DebugLn(DBG_WARNINGS, ['Warning: TRspConnection.FSendRspCommand error: ' + IntToStr(ret)])
+  begin
+    //WriteLn('* FSendRspCommand error');
+    DebugLn(DBG_WARNINGS, ['Warning: TRspConnection.FSendRspCommand error.'])
+  end
+  else
+  begin
+    DebugLn(DBG_VERBOSE, ['RSP -> ', cmd]);
+  end;
+end;
+
+function TRspConnection.FSendCommandOK(const cmd: string): boolean;
+var
+  c: char;
+  retryCount: integer;
+begin
+  result := false;
+  retryCount := 0;
+
+  repeat
+    if FSendCommand(cmd) then
+    begin
+      // now check if target returned error, resend ('-') or ACK ('+')
+      // No support for ‘QStartNoAckMode’, i.e. always expect a -/+
+      c := char(ReadByte);
+      result := c = '+';
+      if not result then
+        inc(retryCount);
+    end
+    else
+      inc(retryCount);
+  // Abort this command if no ACK after 5 attempts
+  until result or (retryCount > 5);
 end;
 
 function TRspConnection.FReadReply(out retval: string): boolean;
+const failcountmax = 1000;
 var
   c: char;
   s: string;
@@ -173,14 +232,26 @@ var
 begin
   i := 0;
   s := '';
+  //IOTimeout := 10;  // sometimes an empty response needs to be swallowed to
   repeat
     c := chr(ReadByte);
     inc(i);
     s := s + c;
-  until (c = '$') or (i = 1000);  // exit loop after start or count expired
+  until (c = '$') or (i = failcountmax);  // exit loop after start or count expired
 
-  if i > 1 then
+  if c <> '$' then
+  begin
+    //WriteLn('* Timeout waiting for RSP reply');
+    DebugLn(DBG_WARNINGS, ['Warning: Timeout waiting for RSP reply']);
+    result := false;
+    retval := '';
+    exit;
+  end
+  else if i > 1 then
+  begin
+    //WriteLn('* Discarding data before start of message: ', s);
     DebugLn(DBG_WARNINGS, ['Warning: Discarding unexpected data before start of new message', s]);
+  end;
 
   c := chr(ReadByte);
   s := '';
@@ -196,6 +267,7 @@ begin
       // Something weird happened
       if c = '#' then
       begin
+        //WriteLn('* Received end of packet marker in escaped sequence: ', c);
         DebugLn(DBG_WARNINGS, ['Warning: Received end of packet marker in escaped sequence: ', c]);
         break;
       end;
@@ -217,50 +289,34 @@ begin
   retval := s;
   if not (calcSum = cksum) then
   begin
-    //retval := '';
-    //result := false;
-    //DebugLn(DBG_WARNINGS, ['Warning: Discarding reply packet because of invalid checksum: ', s]);
+    //WriteLn('* Reply packet with invalid checksum: ', s);
     DebugLn(DBG_WARNINGS, ['Warning: Reply packet with invalid checksum: ', s]);
   end;
+
+  //WriteLn('RSP <- ', retval);
+  DebugLn(DBG_VERBOSE, ['RSP <- ', retval]);
 end;
 
 function TRspConnection.FSendCmdWaitForReply(const cmd: string; out reply: string
   ): boolean;
 var
-  c: char;
   retryCount: integer;
 begin
-  result := false;
   reply := '';
   retryCount := 0;
 
-  repeat
-    if FSendCommand(cmd) then
-    begin
-      // now check if target returned error, resend ('-') or ACK ('+')
-      // No support for ‘QStartNoAckMode’, i.e. always expect a -/+
-      c := char(ReadByte);
-      if c = '-' then
-        inc(retryCount)
-      else if c = '+' then      // cmd ACK by target
+  if FSendCommandOK(cmd) then
+  begin
+    // Read reply, with retry if no success
+    repeat
+      result := FReadReply(reply);
+      if not result then
       begin
-        if FReadReply(reply) then
-          result := true
-        else
-        begin
-          retryCount := 0;
-          repeat
-            WriteByte(ord('-'));
-            inc(retryCount);
-          until result or (retryCount > 5);
-        end;
+        inc(retryCount);
+        WriteByte(ord('-'));
       end;
-    end
-    else // error sending command
-      inc(retryCount);
-
-  // Abort this command if no ACK after 5 attempts
-  until result or (retryCount > 5);
+    until result or (retryCount > 5);
+  end;
 
   if retryCount > 5 then
     DebugLn(DBG_WARNINGS, ['Warning: Retries exceeded in TRspConnection.FSendCmdWaitForReply for cmd: ', cmd]);
@@ -297,8 +353,17 @@ begin
 end;
 
 function TRspConnection.Kill(): boolean;
+var
+  c: char;
 begin
   result := FSendCommand('k');
+  // Swallow the last ack if send
+  result := FWaitForData(1000);
+  if result then
+  begin
+    c := char(ReadByte);
+    Result := c = '+';
+  end;
 end;
 
 function TRspConnection.Detach(): boolean;
@@ -344,7 +409,7 @@ begin
 
   if res then
   begin
-    if (msg[1] in ['S', 'T']) and (length(msg) > 2) then
+    if (length(msg) > 2) and (msg[1] in ['S', 'T']) then
     begin
       try
         FResetStatusEvent;
@@ -471,14 +536,14 @@ end;
 function TRspConnection.Continue(): boolean;
 begin
   DebugLn(DBG_VERBOSE, ['TRspConnection.Continue() called']);
-  result := FSendCommand('c');
+  result := FSendCommandOK('c');
   if not result then
     DebugLn(DBG_WARNINGS, ['Warning: Continue command failure in TRspConnection.Continue()']);
 end;
 
 function TRspConnection.SingleStep(): boolean;
 begin
-  result := FSendCommand('s');
+  result := FSendCommandOK('s');
   if not result then
     DebugLn(DBG_WARNINGS, ['Warning: SingleStep command failure in TRspConnection.SingleStep()']);
 end;
@@ -516,10 +581,11 @@ begin
   reply := '';
   setlength(b, sz);
   // Normal receive error, or an error response of the form Exx
-  result := FSendCmdWaitForReply('g', reply) or ((length(reply) < 4) and (reply[1] = 'E'))
-    or (length(reply) <> 2*sz);
+  result := FSendCmdWaitForReply('g', reply) and ((length(reply) > 4) and (reply[1] <> 'E'))
+    and (length(reply) = 2*sz);
   if Result then
   begin
+    //WriteLn('Read registers reply: ', reply);
     for i := 0 to sz-1 do
       b[i] := StrToInt('$'+reply[2*i+1]+reply[2*i+2]);
     result := true;
@@ -622,7 +688,7 @@ begin
     exit;
   end;
 
-  if FSendCommand('?') then
+  if FSendCommandOK('?') then
   begin
     result := WaitForSignal(reply, intRegs);
   end;
