@@ -66,6 +66,7 @@ const
   SREGindex = 32;
   SPindex = 33;
   PCindex = 34;
+  RegArrayLength = 35;
 
   // Byte level register indexes
   SPLindex = 33;
@@ -74,21 +75,23 @@ const
   PC1 = 36;
   PC2 = 37;
   PC3 = 38;
+  RegArrayByteLength = 39;
 
 type
-  TAvrRegisters = packed record
-    updated: boolean;
-    case byte of
-    0: (regs: array[0..38] of byte);
-    1: (cpuRegs: array[0..34] of qword);
-  end;
+  //TAvrRegisters = packed record
+  //  updated: boolean;
+  //  case byte of
+  //  0: (regs: array[0..38] of byte);
+  //  1: (cpuRegs: array[0..34] of qword);
+  //end;
 
   { TDbgRspThread }
 
   TDbgRspThread = class(TDbgThread)
   private
-    FRegs: TAvrRegisters;
-    FRegsChanged: boolean;
+    FRegs: TInitializedRegisters;
+    FRegsUpdated: boolean;   // regs read from target
+    FRegsChanged: boolean;   // write regs to target
     FExceptionSignal: integer;
     FIsPaused, FInternalPauseRequested, FIsInInternalPause: boolean;
     FIsSteppingBreakPoint: boolean;
@@ -101,6 +104,7 @@ type
     // Only cache if all reqisters are reported
     // if not, request registers from target
     procedure FUpdateStatusFromEvent(event: TStatusEvent);
+    procedure InvalidateRegisters;
   protected
     function ReadThreadState: boolean;
 
@@ -108,6 +112,7 @@ type
     function CheckSignalForPostponing(AWaitedStatus: integer): Boolean;
     procedure ResetPauseStates;
   public
+    constructor Create(const AProcess: TDbgProcess; const AID: Integer; const AHandle: THandle); override;
     function ResetInstructionPointerAfterBreakpoint: boolean; override;
     procedure ApplyWatchPoints(AWatchPointData: TFpWatchPointData); override;
     function DetectHardwareWatchpoint: Pointer; override;
@@ -272,13 +277,6 @@ procedure TDbgRspProcess.OnForkEvent(Sender: TObject);
 begin
 end;
 
-//function TDbgRspThread.GetDebugRegOffset(ind: byte): pointer;
-//begin
-//  if TDbgRspProcess(Process).FIsTerminating then
-//    DebugLn(DBG_WARNINGS, 'TDbgRspThread.GetDebugRegOffset called while FIsTerminating is set.');
-//  result := nil;
-//end;
-
 function TDbgRspThread.ReadDebugReg(ind: byte; out AVal: PtrUInt): boolean;
 begin
   if TDbgRspProcess(Process).FIsTerminating then
@@ -289,13 +287,17 @@ begin
   else
   begin
     DebugLn(DBG_VERBOSE, ['TDbgRspThread.GetDebugReg requesting register: ',ind]);
-    if FRegs.updated then
+    if FRegs[ind].Initialized then
     begin
-      AVal := FRegs.cpuRegs[ind];
+      AVal := FRegs[ind].Value;
       result := true;
     end
     else
+    begin
       result := TDbgRspProcess(Process).FConnection.ReadDebugReg(ind, AVal);
+      FRegs[ind].Value := AVal;
+      FRegs[ind].Initialized := true;
+    end;
   end;
 end;
 
@@ -312,20 +314,22 @@ end;
 
 procedure TDbgRspThread.FUpdateStatusFromEvent(event: TStatusEvent);
 var
-  allRegsOK: boolean;
   i: integer;
 begin
-  allRegsOK := length(FRegs.cpuRegs) = length(event.registers);
-  i := 0;
-  while allRegsOK and (i < length(event.registers)) do
+  for i := 0 to high(FRegs) do
   begin
-    allRegsOK := event.registers[i].Initialized;
-    inc(i);
+    FRegs[i].Initialized := event.registers[i].Initialized;
+    if event.registers[i].Initialized then
+      FRegs[i].Value := event.registers[i].Value;
   end;
-  FRegs.updated := allRegsOK;
-  if allRegsOK then
-    for i := 0 to high(FRegs.cpuRegs) do
-      FRegs.cpuRegs[i] := event.registers[i].Value;
+end;
+
+procedure TDbgRspThread.InvalidateRegisters;
+var
+  i: integer;
+begin
+  for i := 0 to high(FRegs) do
+    FRegs[i].Initialized := false;
 end;
 
 function TDbgRspThread.ReadThreadState: boolean;
@@ -378,6 +382,13 @@ begin
   FDidResetInstructionPointer := False;
 end;
 
+constructor TDbgRspThread.Create(const AProcess: TDbgProcess;
+  const AID: Integer; const AHandle: THandle);
+begin
+  inherited;
+  SetLength(FRegs, RegArrayLength);
+end;
+
 function TDbgRspThread.ResetInstructionPointerAfterBreakpoint: boolean;
 begin
   if not ReadThreadState then
@@ -418,31 +429,31 @@ begin
 end;
 
 procedure TDbgRspThread.BeforeContinue;
+var
+  regs: TBytes;
 begin
   if not FIsPaused then
     exit;
 
   inherited;
-  //if Process.CurrentWatchpoint <> nil then
-  //  WriteDebugReg(6, 0);
+  InvalidateRegisters;
 
-  if FRegsChanged then
-    begin
-    //io.iov_base:=@(FRegs.regs64[0]);
-    //io.iov_len:= sizeof(FRegs);
-    //
-    //if fpPTrace(PTRACE_SETREGSET, ID, pointer(PtrUInt(NT_PRSTATUS)), @io) <> 0 then
-    //  begin
-    //  DebugLn(DBG_WARNINGS, 'Failed to set thread registers. Errcode: '+inttostr(fpgeterrno));
-    //  end;
-    //FRegsChanged:=false;
-    end;
+  // TODO: currently nothing changes registers locally?
+
+  // Update registers if changed locally
+  //if FRegsChanged then
+  //begin
+  //  SetLength(regs, RegArrayByteLength);
+  //  for i := 0 to lastCPURegIndex do
+  //    regs[i] :=
+  //  FRegsChanged:=false;
+  //end;
 end;
 
 procedure TDbgRspThread.LoadRegisterValues;
 var
   i: integer;
-  registersOK: boolean;
+  regs: TBytes;
 begin
   if TDbgRspProcess(Process).FIsTerminating then
   begin
@@ -453,21 +464,25 @@ begin
   if not ReadThreadState then
     exit;
 
-  registersOK := FRegs.updated;
-  if not registersOK then
+  if not FRegsUpdated then
   begin
-    registersOK := TDbgRspProcess(Process).FConnection.ReadRegisters(FRegs.regs[0], length(FRegs.regs));
-    FRegs.updated := registersOK;
+    SetLength(regs, RegArrayByteLength);
+    FRegsUpdated := TDbgRspProcess(Process).FConnection.ReadRegisters(regs[0], length(regs));
+    // repack according to target endianness
+    FRegs[SPindex].Value := regs[SPLindex] + (regs[SPHindex] shl 8);
+    FRegs[SPHindex].Initialized := true;
+    FRegs[PCindex].Value := regs[PC0] + (regs[PC1] shl 8) + (regs[PC2] shl 16) + (regs[PC3] shl 24);
+    FRegs[PCindex].Initialized := true;
   end;
 
-  if registersOK then
+  if FRegsUpdated then
   begin
     for i := 0 to lastCPURegIndex do
-      FRegisterValueList.DbgRegisterAutoCreate['r'+IntToStr(i)].SetValue(FRegs.cpuRegs[i], IntToStr(FRegs.cpuRegs[i]),1, i); // confirm dwarf index
+      FRegisterValueList.DbgRegisterAutoCreate['r'+IntToStr(i)].SetValue(FRegs[i].Value, IntToStr(FRegs[i].Value),1, i); // confirm dwarf index
 
-    FRegisterValueList.DbgRegisterAutoCreate['sreg'].SetValue(FRegs.cpuRegs[SREGindex], IntToStr(FRegs.cpuRegs[SREGindex]),1,0);
-    FRegisterValueList.DbgRegisterAutoCreate['sp'].SetValue(FRegs.cpuRegs[SPindex], IntToStr(FRegs.cpuRegs[SPindex]),2,0);
-    FRegisterValueList.DbgRegisterAutoCreate['pc'].SetValue(FRegs.cpuRegs[PCindex], IntToStr(FRegs.cpuRegs[PCindex]),4,0);
+    FRegisterValueList.DbgRegisterAutoCreate['sreg'].SetValue(FRegs[SREGindex].Value, IntToStr(FRegs[SREGindex].Value),1,0);
+    FRegisterValueList.DbgRegisterAutoCreate['sp'].SetValue(FRegs[SPindex].Value, IntToStr(FRegs[SPindex].Value),2,0);
+    FRegisterValueList.DbgRegisterAutoCreate['pc'].SetValue(FRegs[PCindex].Value, IntToStr(FRegs[PCindex].Value),4,0);
     FRegisterValueListValid := true;
   end
   else
@@ -487,10 +502,14 @@ begin
     exit;
 
   DebugLn(DBG_VERBOSE, 'TDbgRspThread.GetInstructionPointerRegisterValue requesting PC.');
-  if FRegs.updated then
-    result := FRegs.cpuRegs[PCindex]
+  if FRegs[PCindex].Initialized then
+    result := FRegs[PCindex].Value
   else
+  begin
     ReadDebugReg(PCindex, result);
+    FRegs[PCindex].Value := result;
+    FRegs[PCindex].Initialized := true;
+  end;
 end;
 
 function TDbgRspThread.GetStackBasePointerRegisterValue: TDbgPtr;
@@ -514,10 +533,14 @@ begin
     exit;
 
   DebugLn(DBG_VERBOSE, 'TDbgRspThread.GetStackPointerRegisterValue requesting stack registers.');
-  if FRegs.updated then
-    result := FRegs.cpuRegs[SPindex]
+  if FRegs[SPindex].Initialized then
+    result := FRegs[SPindex].Value
   else
+  begin
     ReadDebugReg(SPindex, result);
+    FRegs[SPLindex].Value := result;
+    FRegs[SPindex].Initialized := true;
+  end;
 end;
 
 { TDbgRspProcess }
@@ -581,7 +604,7 @@ begin
   dbg := TDbgRspProcess.Create(AFileName, 0, 0);
   try
     dbg.FConnection := TRspConnection.Create(HostName, Port);
-    dbg.FConnection.RegisterCacheSize := length(TAvrRegisters.cpuRegs);
+    dbg.FConnection.RegisterCacheSize := RegArrayLength;
     result := dbg;
     dbg.FStatus := dbg.FConnection.Init;
     dbg := nil;
@@ -682,7 +705,9 @@ begin
   if FIsTerminating then
   begin
     AThread.BeforeContinue;
+    TDbgRspThread(AThread).InvalidateRegisters;
     DebugLn(DBG_VERBOSE, 'TDbgRspProcess.Continue called while terminating.');
+
     // The kill command should have been issued earlier (if using fpd), calling SendKill again will lead to an exception since the connection should be terminated already.
     // FConnection.Kill();
 
