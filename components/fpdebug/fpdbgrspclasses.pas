@@ -656,9 +656,11 @@ begin
   // Try to prevent access to the RSP socket after it has been closed
   if not FIsTerminating then
   begin
-    FIsTerminating:=true;
+    DebugLn(DBG_VERBOSE, 'Removing all break points');
+    RemoveAllBreakPoints;
     DebugLn(DBG_VERBOSE, 'Sending kill command from TDbgRspProcess.TerminateProcess');
     FConnection.Kill();
+    FIsTerminating:=true;
   end;
 end;
 
