@@ -3,5 +3,9 @@ Need to pass remote tcp port number from LazDebugger to FpDbgRspClasses.
 
 Need to properly clean up break points _before_ terminating debuggee -
 else connection could be lost.
+- Done, called TerminateProcess.
 
 Pause from IDE seems to get stuck in a logical loop.
+- Seems fixed, but probably out of sync with the debugger state machine.
+
+Call stack logic to be implemented.
