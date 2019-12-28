@@ -194,7 +194,8 @@ type
 
   TSynCaretAdjustMode = ( // used in TextBetweenPointsEx
     scamIgnore, // Caret stays at the same numeric values, if text is inserted before caret, the text moves, but the caret stays
-    scamAdjust, // Caret moves with text, if text is inserted
+    scamAdjust, // Caret moves with text. Except if it is at a selection boundary, in which case it stays with the selection (movement depends on setMoveBlock/setExtendBlock)
+    scamForceAdjust, // Caret moves with text. Can be used if the caret should move away from the bound of a persistent selection
     scamEnd,
     scamBegin
   );
@@ -6052,11 +6053,26 @@ end;
 procedure TCustomSynEdit.SetTextBetweenPoints(aStartPoint, aEndPoint: TPoint;
   const AValue: String; aFlags: TSynEditTextFlags; aCaretMode: TSynCaretAdjustMode;
   aMarksMode: TSynMarksAdjustMode; aSelectionMode: TSynSelectionMode);
+var
+  CaretAtBlock: (cabNo, cabBegin, cabEnd);
 begin
   InternalBeginUndoBlock;
   try
-    if aCaretMode = scamAdjust then
-      FCaret.IncAutoMoveOnEdit;
+    CaretAtBlock := cabNo;
+    if aCaretMode = scamForceAdjust then
+      FCaret.IncAutoMoveOnEdit
+    else
+    if aCaretMode = scamAdjust then begin
+      if FBlockSelection.SelAvail then begin
+        if FCaret.IsAtLineByte(FBlockSelection.StartLineBytePos) then
+          CaretAtBlock := cabBegin
+        else
+        if FCaret.IsAtLineByte(FBlockSelection.EndLineBytePos) then
+          CaretAtBlock := cabEnd;
+      end;
+      if CaretAtBlock = cabNo then
+        FCaret.IncAutoMoveOnEdit;
+    end;
     if setPersistentBlock in aFlags then
       FBlockSelection.IncPersistentLock;
     if setMoveBlock in aFlags then
@@ -6089,13 +6105,19 @@ begin
         FBlockSelection.EndLineBytePos := Point(FBlockSelection.StartBytePos + 1, FBlockSelection.EndLinePos - 1);
     end;
   finally
+    if CaretAtBlock = cabBegin then
+      FCaret.LineBytePos := FBlockSelection.StartLineBytePos
+    else
+    if CaretAtBlock = cabEnd then
+      FCaret.LineBytePos := FBlockSelection.EndLineBytePos;
+
     if setPersistentBlock in aFlags then
       FBlockSelection.DecPersistentLock;
     if setMoveBlock in aFlags then
       FBlockSelection.DecPersistentLock;
     if setExtendBlock in aFlags then
       FBlockSelection.DecPersistentLock;
-    if aCaretMode = scamAdjust then
+    if (CaretAtBlock = cabNo) and (aCaretMode in [scamAdjust, scamForceAdjust]) then
       FCaret.DecAutoMoveOnEdit;
     InternalEndUndoBlock;
   end;
@@ -7136,9 +7158,12 @@ begin
         if (not ReadOnly) then begin
           CY := BlockBegin.y;
           if CY > 1 then begin
-            FBlockSelection.IncPersistentLock;
+            FBlockSelection.IncPersistentLock(sbpWeak);
+            if SelAvail and (BlockEnd.x = 1) then
+              FTheLinesView.EditLinesInsert(BlockEnd.y, 1, FTheLinesView[ToIdx(CY) - 1])
+            else
+              FTheLinesView.EditLinesInsert(BlockEnd.y + 1, 1, FTheLinesView[ToIdx(CY) - 1]);
             FCaret.IncAutoMoveOnEdit;
-            FTheLinesView.EditLinesInsert(BlockEnd.y + 1, 1, FTheLinesView[ToIdx(CY) - 1]);
             FTheLinesView.EditLinesDelete(CY - 1, 1);
             FCaret.DecAutoMoveOnEdit;
             FBlockSelection.DecPersistentLock;
@@ -7147,8 +7172,10 @@ begin
       ecMoveLineDown:
         if (not ReadOnly) then begin
           CY := BlockEnd.y;
+          if SelAvail and (BlockEnd.x = 1) then
+            Dec(CY);
           if CY < FTheLinesView.Count - 1 then begin
-            FBlockSelection.IncPersistentLock;
+            FBlockSelection.IncPersistentLock(sbpWeak);
             FCaret.IncAutoMoveOnEdit;
             FTheLinesView.EditLinesInsert(BlockBegin.y, 1, FTheLinesView[ToIdx(CY) + 1]);
             FTheLinesView.EditLinesDelete(CY + 2, 1);
@@ -7158,10 +7185,18 @@ begin
         end;
       ecDuplicateLine:
         if (not ReadOnly) then begin
-          FBlockSelection.IncPersistentLock;
+          FBlockSelection.IncPersistentLock(sbpWeak);
           FInternalBlockSelection.AssignFrom(FBlockSelection);
+          if FInternalBlockSelection.IsBackwardSel then begin
+            FInternalBlockSelection.StartLineBytePos := FBlockSelection.EndLineBytePos;
+            FInternalBlockSelection.EndLineBytePos   := FBlockSelection.StartLineBytePos;
+          end;
           FInternalBlockSelection.ActiveSelectionMode := smLine;
           FInternalBlockSelection.ForceSingleLineSelected := True;
+          If (FInternalBlockSelection.EndBytePos = 1) and
+             (FInternalBlockSelection.EndLinePos > FInternalBlockSelection.StartLinePos)
+          then
+            FInternalBlockSelection.EndLineBytePos := Point(1, FInternalBlockSelection.EndLinePos-1);
           Temp := FInternalBlockSelection.SelText;
           FInternalBlockSelection.ForceSingleLineSelected := False;
           FInternalBlockSelection.StartLineBytePos := Point(1, FInternalBlockSelection.LastLineBytePos.y+1);
@@ -8372,8 +8407,7 @@ begin
         Style := [];        // Reserved for Highlighter
       end;
       //debugln(['TCustomSynEdit.RecalcCharExtent ',fFontDummy.Name,' ',fFontDummy.Size]);
-      //debugln('TCustomSynEdit.RecalcCharExtent A UseUTF8=',dbgs(UseUTF8),
-      //  ' Font.CanUTF8='+dbgs(Font.CanUTF8)+' CharHeight=',dbgs(CharHeight));
+      //debugln('TCustomSynEdit.RecalcCharExtent A UseUTF8=',dbgs(UseUTF8),' CharHeight=',dbgs(CharHeight));
 
       fTextDrawer.BaseFont := FFontDummy;
       if Assigned(fHighlighter) then
@@ -8400,7 +8434,7 @@ begin
   finally
     DecStatusChangeLock;
   end;
-  //debugln('TCustomSynEdit.RecalcCharExtent UseUTF8=',dbgs(UseUTF8),' Font.CanUTF8=',dbgs(Font.CanUTF8));
+  //debugln('TCustomSynEdit.RecalcCharExtent UseUTF8=',dbgs(UseUTF8));
 end;
 
 procedure TCustomSynEdit.HighlighterAttrChanged(Sender: TObject);

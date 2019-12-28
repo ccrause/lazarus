@@ -750,6 +750,7 @@ type
     FMainAddrFound: TDBGPtr;       // The address found for this named location
     FSetByAddrMethod: TInternBrkSetMethod;
     FUseForceFlag: Boolean;
+    FNoSymErr: Boolean;
     function  BreakSet(ACmd: TGDBMIDebuggerCommand; ABreakLoc: String;
                        ALoc: TInternalBreakLocation;
                        AClearIfSet: TClearOpt): Boolean;
@@ -5662,8 +5663,6 @@ begin
     then
       Include(FTheDebugger.FDebuggerFlags, dfSetBreakFailed);
 
-    FTheDebugger.FRtlUnwindExBreak.EnableOrSetByAddr(Self);
-
     SetDebuggerState(dsInit); // triggers all breakpoints to be set.
     FTheDebugger.RunQueue;  // run all the breakpoints
     Application.ProcessMessages; // workaround, allow source-editor to queue line info request (Async call)
@@ -5920,8 +5919,6 @@ begin
   then FTheDebugger.FBreakErrorBreak.SetByAddr(Self);
   if ieRunErrorBreakPoint in TGDBMIDebuggerPropertiesBase(FTheDebugger.GetProperties).InternalExceptionBreakPoints
   then FTheDebugger.FRunErrorBreak.SetByAddr(Self);
-
-  FTheDebugger.FRtlUnwindExBreak.EnableOrSetByAddr(Self);
 
   if not(DebuggerState in [dsPause]) then
     SetDebuggerState(dsPause);
@@ -6904,15 +6901,21 @@ const
   procedure EnablePopCatches; inline;
   begin
     FTheDebugger.FPopExceptStack.EnableOrSetByAddr(Self, True);
+    if (TargetInfo^.TargetOS = osWindows) and (TargetInfo^.TargetPtrSize = 8) and
+       (not FTheDebugger.FPopExceptStack.Enabled)
+    then
+      exit; // break not avail under Win 64bit
     FTheDebugger.FCatchesBreak.EnableOrSetByAddr(Self, True);
   end;
   procedure EnableFpcSpecificHandler; inline;
   begin
-    if TargetInfo^.TargetOS = osWindows then begin
-      if TargetInfo^.TargetPtrSize = 8 then begin // 64 bit SEH only
+    if (TargetInfo^.TargetOS = osWindows) and (TargetInfo^.TargetPtrSize = 8) then // 64 bit SEH only
       FTheDebugger.FFpcSpecificHandler.EnableOrSetByAddr(Self);
   end;
-    end;
+  procedure EnableRtlUnwind; inline;
+  begin
+    if (TargetInfo^.TargetOS = osWindows) and (TargetInfo^.TargetPtrSize = 8) then // 64 bit SEH only
+      FTheDebugger.FRtlUnwindExBreak.EnableOrSetByAddr(Self);
   end;
   procedure DisablePopCatches; inline;
   begin
@@ -7030,6 +7033,12 @@ var
 
     // Did we just leave an SEH finally block?
     if (FStepStartedInFinSub = sfsStepExited) and (FTheDebugger.FStoppedReason = srNone) then begin
+      if (UpperCase(FTheDebugger.FCurrentLocation.FuncName) <> '__FPC_SPECIFIC_HANDLER') and
+         (FTheDebugger.FCurrentLocation.SrcFile <> '')
+      then begin
+        DoEndStepping;
+        exit;
+      end;
       // run to next finally
       if ExecuteCommand('-data-read-memory $pc-2 x 1 1 2', [], R, [cfNoThreadContext, cfNoStackContext, cfNoMemLimits]) and
          (r.State <> dsError)
@@ -7042,14 +7051,18 @@ var
         then begin
           FTheDebugger.FFpcSpecificHandlerCallFin.Clear(Self);
           FTheDebugger.FFpcSpecificHandlerCallFin.SetAtCustomAddr(Self, MemDump.Addr);
-        end;
+          FStepStartedInFinSub := sfsNone;
+          FCurrentExecCmd := ectContinue;
+          EnableFpcSpecificHandler;
+          Result := True;
+        end
+        else
+          DoEndStepping;
         MemDump.Free;
+      end
+      else begin
+        DoEndStepping;
       end;
-
-      FStepStartedInFinSub := sfsNone;
-      FCurrentExecCmd := ectContinue;
-      EnableFpcSpecificHandler;
-      Result := True;
       exit;
     end;
 
@@ -7062,12 +7075,13 @@ var
              (FTheDebugger.FSehCatchesBreaks.IndexOfAddrWithFrame(Address, FrameAddr) < 0)
           then
             FTheDebugger.FSehCatchesBreaks.AddAddr(Self, Address, FrameAddr);
+          FTheDebugger.FRtlUnwindExBreak.Disable(Self);
           FCurrentExecCmd := ectContinue;
           Result := True;
           exit;
         end;
       // SEH
-      srSehCatches, srSehFinally: begin
+      srSehFinally: begin
           DoEndStepping;
           exit;
         end;
@@ -7119,6 +7133,7 @@ var
         then begin
           EnablePopCatches;
           EnableFpcSpecificHandler;
+          EnableRtlUnwind;
           // Continue below => set a breakpoint at the end of the intended stepping range
         end;
       // Check the stackframe, if the "current" function has been exited
@@ -7317,7 +7332,7 @@ var
   begin
     if (not (FExecType in [ectStepOver, ectStepInto, ectStepOut])) or
        (TargetInfo^.TargetOS <> osWindows) or
-       (not FTheDebugger.FRtlUnwindExBreak.Enabled)
+       (TargetInfo^.TargetPtrSize <> 8)
     then
       exit;
     if (not ExecuteCommand('-data-disassemble -s $pc -e $pc+12 -- 0', [], R)) or
@@ -7383,11 +7398,12 @@ begin
     FCurrentExecCmd := ectContinue;
     EnablePopCatches;
     EnableFpcSpecificHandler;
+    EnableRtlUnwind;
   end
   else
     CheckWin64StepOverFinally; // Finally is in a subroutine, and may need step into
 
-  if (FExecType in [ectRunTo, ectStepOver{, ectStepInto}, ectStepOut, ectStepOverInstruction {, ectStepIntoInstruction}]) and
+  if (FExecType in [ectRunTo, ectStepOver, ectStepInto, ectStepOut, ectStepOverInstruction {, ectStepIntoInstruction}]) and
      (ieRaiseBreakPoint in TGDBMIDebuggerPropertiesBase(FTheDebugger.GetProperties).InternalExceptionBreakPoints)
   then
     FTheDebugger.FReRaiseBreak.EnableOrSetByAddr(Self, True)
@@ -12577,6 +12593,7 @@ var
   ResultList: TGDBMINameValueList;
 begin
   Result := True; // true, if already set (dsError does not matter)
+  FNoSymErr := False;
   if ACmd.DebuggerState = dsError then exit;
 
   if AClearIfSet = coClearIfSet then
@@ -12597,6 +12614,11 @@ begin
   else
     ACmd.ExecuteCommand('-break-insert %s', [ABreakLoc], R);
   Result := R.State <> dsError;
+  if (not Result) and (ALoc in [iblAsterix, iblNamed]) then begin
+    if ALoc = iblAsterix then
+      Delete(ABreakLoc, 1,1); // *name
+    FNoSymErr := pos('no symbol \"'+LowerCase(ABreakLoc)+'\" ', LowerCase(R.Values)) > 0;
+  end;
   if not Result then exit;
   FEnabled := True; // TODO: What if some bp are disabled?
 
@@ -12728,7 +12750,7 @@ begin
   end;
   if (FSetByAddrMethod = ibmAddrDirect) then begin
     BreakSet(ACmd, '*'+FName, iblAsterix, coKeepIfSet);
-    if IsBreakSet then
+    if IsBreakSet or FNoSymErr then
       exit;
   end;
 
@@ -12972,6 +12994,7 @@ begin
     FList.List^[i].FCount := FList.List^[i].FCount + 1;
     if ABasePtr <> 0 then
       FList.List^[i].AddBasePointer(ABasePtr);
+    exit;
   end;
 
   E.FCount := 1;

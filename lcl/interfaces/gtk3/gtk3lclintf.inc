@@ -156,16 +156,6 @@ begin
 end;
 
 {------------------------------------------------------------------------------
-  function TGtk3WidgetSet.FontCanUTF8(Font: HFont): boolean;
-  
-  True if font recognizes Unicode UTF8 encoding.
- ------------------------------------------------------------------------------}
-function TGtk3WidgetSet.FontCanUTF8(Font: HFont): boolean;
-begin
-  Result := True; // IsValidGDIObject(Font);
-end;
-
-{------------------------------------------------------------------------------
   function TGtk3WidgetSet.FontIsMonoSpace(Font: HFont): boolean;
 
   True if font characters have all the same width.
@@ -286,7 +276,7 @@ begin
   ADesc.LineOrder := riloTopToBottom;
   ADesc.LineEnd := rileDWordBoundary;
 
-  ADesc.Depth := CairoImageFormatToDepth[Image.getFormat];
+  ADesc.Depth := CairoImageFormatToDepth[Image.Format];
   ADesc.BitsPerPixel := ADesc.Depth;
   if ADesc.BitsPerPixel = 24 then
     ADesc.BitsPerPixel := 32;

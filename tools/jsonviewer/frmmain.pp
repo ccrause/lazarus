@@ -43,7 +43,8 @@ type
     FQuoteStrings,
     FSortObjectMembers,
     FCompact,
-    FNewObject : Boolean;
+    FNewObject,
+    FSaveFormatted: Boolean;
   end;
 
   TJSONTab = Class(TTabsheet)
@@ -59,6 +60,7 @@ type
     FPageControl : TPageControl;
     FSyn : TSynEdit;
     procedure DoTabChange(Sender: TObject);
+    procedure JSONFromPreview;
     procedure SetCurrentFind(AValue: TTreeNode);
     procedure SetDocNo(AValue: Integer);
     procedure SetFileName(AValue: String);
@@ -120,6 +122,7 @@ type
     MenuItem13: TMenuItem;
     MenuItem14: TMenuItem;
     MenuItem15: TMenuItem;
+    MISaveFormatted: TMenuItem;
     MSepFavourites: TMenuItem;
     MFavourites: TMenuItem;
     MIGenCode: TMenuItem;
@@ -167,6 +170,7 @@ type
     MMJSON: TMainMenu;
     ODJSON: TOpenDialog;
     SDJSON: TSaveDialog;
+    SynJScriptSyn1: TSynJScriptSyn;
     TBJSON: TToolBar;
     TBNew: TToolButton;
     TBNewButton: TToolButton;
@@ -228,6 +232,7 @@ type
     procedure MICompactClick(Sender: TObject);
     procedure MIdocumentClick(Sender: TObject);
     procedure MIQuoteStringsClick(Sender: TObject);
+    procedure MISaveFormattedClick(Sender: TObject);
     procedure MISortMembersClick(Sender: TObject);
     procedure MIStrictClick(Sender: TObject);
     procedure PCJSONCloseTabClicked(Sender: TObject);
@@ -237,6 +242,7 @@ type
     procedure PSMainStoredValues3Restore(Sender: TStoredValue; var Value: TStoredType);
     procedure PSMainStoredValues6Restore(Sender: TStoredValue; var Value: TStoredType);
     procedure PSMainStoredValues7Restore(Sender: TStoredValue; var Value: TStoredType);
+    procedure PSMainStoredValues8Restore(Sender: TStoredValue; var Value: TStoredType);
     procedure TBShowRestClick(Sender: TObject);
     procedure TVJSONEdited(Sender: TObject; Node: TTreeNode; var S: string);
     procedure TVJSONEditing(Sender: TObject; Node: TTreeNode;
@@ -358,10 +364,12 @@ begin
   SetCaption;
 end;
 
+
+
 procedure TJSONTab.DoTabChange(Sender: TObject);
 begin
-  If (PageControl.ActivePageIndex=1) then
-    ShowJSONDocumentText;
+  If ((Sender as TPageControl).ActivePageIndex=1) then
+    ShowJSONDocumentText else JSONFromPreview;
 end;
 
 constructor TJSONTab.Create(AOwner: TComponent);
@@ -398,9 +406,8 @@ begin
   FSyn:=TSynEdit.Create(Self.Owner);
   FSyn.align:=alClient;
   FSyn.Parent:=TS;
-  FSyn.Highlighter:=TSynJScriptSyn.Create(Self.Owner);
+  FSyn.Highlighter:=MainForm.SynJScriptSyn1;
   FSyn.Highlighter.Enabled:=True;
-  FSyn.ReadOnly:=True;
   SetCaption;
 end;
 
@@ -514,6 +521,12 @@ begin
   FRestPanelHeight:=StrToIntDef(Value,0);
 end;
 
+procedure TMainForm.PSMainStoredValues8Restore(Sender: TStoredValue;
+  var Value: TStoredType);
+begin
+  FOptions.FSaveFormatted:=StrToIntDef(Value,0)=1;
+end;
+
 procedure TMainForm.TBShowRestClick(Sender: TObject);
 begin
   if TBShowRest.Down then
@@ -578,6 +591,8 @@ begin
   else
     // value node. Allow change for simple not null values
     AllowEdit:=Not (CurrentNodeType in [jtNull,jtArray,jtObject]);
+  // compact mode is for viewing only. Editing does not work.
+  if FOptions.FCompact then AllowEdit:=false;
 end;
 
 function TMainForm.GetCurrentFind: TTreeNode;
@@ -691,8 +706,11 @@ begin
 end;
 
 procedure TMainForm.ANewExecute(Sender: TObject);
+var Tab:TJSONTab;
 begin
-  NewDocument;
+  Tab:=NewDocument;
+  If FOptions.FNewObject then
+    Tab.Root:=TJSONObject.Create;
 end;
 
 function TMainForm.NewDocument: TJSONTab;
@@ -1204,8 +1222,8 @@ begin
     P.ImageIndex:=ImageTypeMap[D.JSONType];
     P.SelectedIndex:=ImageTypeMap[D.JSONType];
     P.MakeVisible;
+    T.ShowJSONData(P,D);
     end;
-  T.ShowJSONData(P,D);
 end;
 
 function TMainForm.CurrentNode: TTreeNode;
@@ -1245,6 +1263,8 @@ begin
     F:=TFileStream.Create(AFileName,fmCreate);
     try
       If Assigned(CurrentJSONTab.Root) then
+      if FOptions.FSaveFormatted then
+        S:=CurrentJSONTab.Root.FormatJSON else
         S:=CurrentJSONTab.Root.AsJSON;
       If length(S)>0 then
         F.WriteBuffer(S[1],Length(S));
@@ -1582,6 +1602,13 @@ begin
   ShowJSONDocument;
 end;
 
+procedure TMainForm.MISaveFormattedClick(Sender: TObject);
+begin
+  FOptions.FSaveFormatted :=(Sender as TMenuItem).Checked;
+  PSMain.StoredValue['SaveFormatted']:=IntToStr(Ord(FOptions.FSaveFormatted));
+  ShowJSONDocument;
+end;
+
 procedure TMainForm.MISortMembersClick(Sender: TObject);
 begin
   FOptions.FSortObjectMembers:=(Sender as TMenuItem).Checked;
@@ -1605,8 +1632,6 @@ begin
     try
 {$IF FPC_FULLVERSION>=30002}
       P.Options:=P.Options+[joStrict];
-{$ELSE}
-      P:=TJSONParser.Create(S);
 {$ENDIF}
       D:=P.Parse;
     finally
@@ -1647,9 +1672,35 @@ begin
     end;
 end;
 
+procedure TJSONTab.JSONFromPreview;
+var P : TJSONParser;
+D : TJSONData;
+begin
+  if FSyn.Modified then
+  begin
+   try
+     {$IF FPC_FULLVERSION>=30002}
+      P:=TJSONParser.Create(FSyn.Text,[]);
+      P.Options:=P.Options+[joStrict, joComments];
+     {$ELSE}
+      P:=TJSONParser.Create(FSyn.Text);
+     {$ENDIF}
+      D:=P.Parse;
+      Root:=D;
+      Modified:=true;
+   finally
+     P.Free;
+   end;
+  end;
+end;
+
 procedure TJSONTab.ShowJSONDocumentText;
 begin
-  FSyn.Text:=Root.FormatJSON();
+  IF Assigned(Root) then
+  begin
+   FSyn.Text:=Root.FormatJSON();
+   FSyn.Modified:=false;
+  end;
 end;
 
 procedure TJSONTab.ShowJSONData(AParent : TTreeNode; Data : TJSONData);

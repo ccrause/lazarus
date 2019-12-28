@@ -2628,12 +2628,16 @@ components/lazdebuggers/cmdlinedebuggerbase/debugprocess.pas svneol=native#text/
 components/lazdebuggers/lazdebuggerfp/fpdebugdebugger.pas svneol=native#text/plain
 components/lazdebuggers/lazdebuggerfp/lazdebuggerfp.lpk svneol=native#text/plain
 components/lazdebuggers/lazdebuggerfp/lazdebuggerfp.pas svneol=native#text/plain
+components/lazdebuggers/lazdebuggerfp/Makefile svneol=native#text/plain
+components/lazdebuggers/lazdebuggerfp/Makefile.compiled svneol=native#text/plain
+components/lazdebuggers/lazdebuggerfp/Makefile.fpc svneol=native#text/plain
 components/lazdebuggers/lazdebuggerfp/test/LazDebFpTest.lpi svneol=native#text/plain
 components/lazdebuggers/lazdebuggerfp/test/LazDebFpTest.lpr svneol=native#text/plain
 components/lazdebuggers/lazdebuggerfp/test/fpclist.txt.sample svneol=native#text/plain
 components/lazdebuggers/lazdebuggerfp/test/testapps/BreakPointPrg.pas svneol=native#text/pascal
 components/lazdebuggers/lazdebuggerfp/test/testapps/BreakPointThreadPrg.pas svneol=native#text/pascal
 components/lazdebuggers/lazdebuggerfp/test/testapps/BreakPointThread2Prg.pas svneol=native#text/pascal
+components/lazdebuggers/lazdebuggerfp/test/testapps/ExceptTestPrg.pas svneol=native#text/pascal
 components/lazdebuggers/lazdebuggerfp/test/testapps/StepOverPrg.pas svneol=native#text/pascal
 components/lazdebuggers/lazdebuggerfp/test/testbase.pas svneol=native#text/pascal
 components/lazdebuggers/lazdebuggerfp/test/testbreakpoint.pas svneol=native#text/pascal
@@ -2807,6 +2811,7 @@ components/lazreport/images/designer/lrd_copy.png -text
 components/lazreport/images/designer/lrd_cut.png -text
 components/lazreport/images/designer/lrd_grid.png -text
 components/lazreport/images/designer/lrd_grid_align.png -text
+components/lazreport/images/designer/lrd_guides.png -text
 components/lazreport/images/designer/lrd_ins_fields.bmp -text svneol=unset#image/x-ms-bmp
 components/lazreport/images/designer/lrd_italic.png -text
 components/lazreport/images/designer/lrd_new.png -text
@@ -3961,6 +3966,7 @@ components/opengl/example/testopenglcontext1.lpr svneol=native#text/plain
 components/opengl/example/uglyfont.pas svneol=native#text/pascal
 components/opengl/glcarbonaglcontext.pas svneol=native#text/plain
 components/opengl/glcocoanscontext.pas svneol=native#text/plain
+components/opengl/glgtk3glxcontext.pas svneol=native#text/pascal
 components/opengl/glgtkglxcontext.pas svneol=native#text/plain
 components/opengl/glqtcontext.pas svneol=native#text/plain
 components/opengl/glwin32wglcontext.pas svneol=native#text/plain
@@ -7748,6 +7754,18 @@ images/actions/restore_default_200.png -text svneol=unset#image/png
 images/actions/restore_defaults.png -text svneol=unset#image/png
 images/actions/restore_defaults_150.png -text svneol=unset#image/png
 images/actions/restore_defaults_200.png -text svneol=unset#image/png
+images/actions/tab_close_All.png -text svneol=unset#image/png
+images/actions/tab_close_All_150.png -text svneol=unset#image/png
+images/actions/tab_close_All_200.png -text svneol=unset#image/png
+images/actions/tab_close_L.png -text svneol=unset#image/png
+images/actions/tab_close_LR.png -text svneol=unset#image/png
+images/actions/tab_close_LR_150.png -text svneol=unset#image/png
+images/actions/tab_close_LR_200.png -text svneol=unset#image/png
+images/actions/tab_close_L_150.png -text svneol=unset#image/png
+images/actions/tab_close_L_200.png -text svneol=unset#image/png
+images/actions/tab_close_R.png -text svneol=unset#image/png
+images/actions/tab_close_R_150.png -text svneol=unset#image/png
+images/actions/tab_close_R_200.png -text svneol=unset#image/png
 images/bookmark.res -text
 images/bookmark.sh svneol=native#text/plain
 images/bookmark_images.bat svneol=native#text/plain

@@ -54,7 +54,7 @@ type
     wtGroupBox, wtCalendar, wtTrackBar, wtScrollBar,
     wtScrollingWin, wtListBox, wtListView, wtCheckListBox, wtMemo, wtTreeModel,
     wtCustomControl, wtScrollingWinControl,
-    wtWindow, wtDialog, wtHintWindow);
+    wtWindow, wtDialog, wtHintWindow, wtGLArea);
   TGtk3WidgetTypes = set of TGtk3WidgetType;
 
   { TGtk3Widget }
@@ -165,7 +165,7 @@ type
     procedure SetParent(AParent: TGtk3Widget; const ALeft, ATop: Integer); virtual;
     procedure Show; virtual;
     procedure ShowAll; virtual;
-    procedure Update(ARect: PRect);
+    procedure Update(ARect: PRect); virtual;
     property CairoContext: Pcairo_t read GetCairoContext;
     property Color: TColor read GetColor write SetColor;
     property Context: HDC read GetContext;
@@ -822,6 +822,16 @@ type
   public
     constructor Create(const ACommonDialog: TCommonDialog); virtual; overload;
   end;
+
+  { TGtk3GLArea }
+  TGtk3GLArea = class(TGtk3Widget)
+  protected
+    function CreateWidget(const Params: TCreateParams): PGtkWidget; override;
+  public
+    procedure Update(ARect: PRect); override;
+  end;
+
+
 
 {main event filter for all widgets, also called from widgetset main eventfilter}
 function Gtk3WidgetEvent(widget: PGtkWidget; event: PGdkEvent; data: GPointer): gboolean; cdecl;
@@ -2497,8 +2507,7 @@ begin
     FWidget^.Visible := AValue;
 end;
 
-function TGtk3Widget.QueryInterface(constref iid: TGuid; out obj): LongInt;
-  cdecl;
+function TGtk3Widget.QueryInterface(constref iid: TGuid; out obj): LongInt; cdecl;
 begin
   if GetInterface(iid, obj) then
     Result := 0
@@ -3079,7 +3088,7 @@ begin
   end;
 
   if BorderStyle <> bsNone then
-    DC.drawRect(0, 0, LCLObject.Width, LCLObject.Height, LCLObject.Color <> clDefault);
+    DC.drawRect(0, 0, LCLObject.Width, LCLObject.Height, LCLObject.Color <> clDefault, True);
 end;
 
 function TGtk3Panel.getText: String;
@@ -3600,6 +3609,7 @@ var
 begin
   if IsWidgetOK then
   begin
+    PGtkScale(FWidget)^.set_draw_value(ATickStyle <> tsNone);
     if ATickStyle = tsNone then
       PGtkScale(FWidget)^.clear_marks
     else
@@ -4028,7 +4038,7 @@ begin
         if Assigned(AToolBar.Images) and (btn.ImageIndex>=0) then
         begin
           bmp:=TBitmap.Create; { this carries gdk pixmap }
-          resolution:=Atoolbar.Images.Resolution[Atoolbar.Images.Width];
+          resolution:=AToolBar.Images.Resolution[AToolBar.ImagesWidth]; // not AToolBar.Images.Width, issue #36465
           resolution.GetRawImage(btn.ImageIndex,raw);
           { convince the bitmap it has actually another format }
           bmp.BeginUpdate();
@@ -4059,6 +4069,7 @@ begin
         begin
           gtb:=TGtkToggleToolButton.new();
           PGtkToolButton(gtb)^.set_label(PgChar(bs));
+          PGtkToolButton(gtb)^.set_icon_widget(wicon);
         end
   	  else
     	  gtb:=TGtkToolButton.new(wicon,PgChar(bs));
@@ -6506,7 +6517,8 @@ var
   w: PGtkWidget;
   ctl, Parent: TWinControl;
   rb: TRadioButton;
-  pl: PGsList;
+  //pl: PGsList;
+  i: Integer;
 begin
   if Self.LCLObject.Name='HiddenRadioButton' then
     exit;
@@ -6517,15 +6529,33 @@ begin
   if Assigned(ctl) then
   begin
     Parent := ctl.Parent;
-    if (Parent is TRadioGroup) and (TRadioGroup(Parent).Items.Count>0) then
+    if (Parent is TRadioGroup) then
     begin
-      rb := TRadioButton(Parent.Controls[0]);
-      if rb<>ctl then
+      if (TRadioGroup(Parent).Items.Count>0) then
       begin
-        w := TGtk3RadioButton(rb.Handle).Widget;
-        pl := PGtkRadioButton(w)^.get_group;
-        PGtkRadioButton(Result)^.set_group(pl);
-      end;
+        rb := TRadioButton(Parent.Controls[0]);
+        if rb<>ctl then
+        begin
+          w := TGtk3RadioButton(rb.Handle).Widget;
+          //pl := PGtkRadioButton(w)^.get_group;
+          //PGtkRadioButton(Result)^.set_group(pl);
+          PGtkRadioButton(Result)^.join_group(PGtkRadioButton(w));
+        end;
+      end
+    end
+    else
+    begin
+      for i := 0 to Parent.ControlCount - 1 do
+        if Parent.Controls[i] is TRadioButton and
+           TWinControl(Parent.Controls[i]).HandleAllocated then
+        begin
+          rb := TRadioButton(Parent.Controls[i]);
+          w := TGtk3RadioButton(rb.Handle).Widget;
+          //pl := PGtkRadioButton(w)^.get_group;
+          //PGtkRadioButton(Result)^.set_group(pl);
+          PGtkRadioButton(Result)^.join_group(PGtkRadioButton(w));
+          Break;
+        end;
     end;
   end;
 end;
@@ -7138,10 +7168,7 @@ begin
   end
   else
   if FileDialog is TSelectDirectoryDialog then
-  begin
     Action := GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER;
-    Button1 := GTK_STOCK_OPEN;
-  end;
 
   FWidget := gtk_file_chooser_dialog_new(PgChar(FileDialog.Title), nil,
     Action, PChar(GTK_STOCK_CANCEL),
@@ -7192,6 +7219,19 @@ begin
   CommonDialog := ACommonDialog;
 end;
 
+{ TGtk3GLArea }
+
+procedure TGtk3GLArea.Update(ARect: PRect);
+begin
+  if IsWidgetOK then
+    PGtkGLArea(Widget)^.queue_render;
+end;
+
+function TGtk3GLArea.CreateWidget(const Params: TCreateParams): PGtkWidget;
+begin
+  FWidgetType := [wtWidget, wtGLArea];
+  Result := TGtkGLArea.new;
+end;
 
 end.
 

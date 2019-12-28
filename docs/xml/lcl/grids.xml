@@ -13119,18 +13119,6 @@
         <short></short>
       </element>
 
-      <!-- procedure Visibility: protected -->
-      <element link="#LCL.Grids.TCustomGrid.SetEditText" name="TCustomStringGrid.SetEditText"/>
-      <element name="TCustomStringGrid.SetEditText.aCol">
-        <short></short>
-      </element>
-      <element name="TCustomStringGrid.SetEditText.aRow">
-        <short></short>
-      </element>
-      <element name="TCustomStringGrid.SetEditText.aValue">
-        <short></short>
-      </element>
-
       <element name="TCustomStringGrid.SelectionSetHTML">
         <short>Sets the value for the current Selection to the specified HTML content</short>
         <descr></descr>
@@ -13561,7 +13549,7 @@
       <element link="#LCL.Grids.TCustomGrid.DefaultDrawing" name="TStringGrid.DefaultDrawing"/>
       <element link="#LCL.Grids.TCustomGrid.DefaultRowHeight" name="TStringGrid.DefaultRowHeight"/>
       <element name="TStringGrid.DoubleBuffered" link="#LCL.Controls.TControl.DoubleBuffered"/>
-      <element name="TStringGrid.DragCursor"link="#LCL.Controls.TControl.DragCursor"/>
+      <element name="TStringGrid.DragCursor" link="#LCL.Controls.TControl.DragCursor"/>
       <element name="TStringGrid.DragKind" link="#LCL.Controls.TControl.DragKind"/>
       <element name="TStringGrid.DragMode" link="#LCL.Controls.TControl.DragMode"/>
       <element link="#LCL.Controls.TControl.Enabled" name="TStringGrid.Enabled"/>
@@ -13626,7 +13614,7 @@
       <element name="TStringGrid.OnButtonClick" link="TCustomGrid.OnButtonClick"/>
       <element link="#LCL.Controls.TControl.OnEditingDone" name="TStringGrid.OnEditingDone"/>
       <element name="TStringGrid.OnEndDock" link="#LCL.Controls.TControl.OnEndDock"/>
-      <element name="TStringGrid.OnEndDrag"link="#LCL.Controls.TControl.OnEndDrag"/>
+      <element name="TStringGrid.OnEndDrag" link="#LCL.Controls.TControl.OnEndDrag"/>
       <element link="#LCL.Controls.TWinControl.OnEnter" name="TStringGrid.OnEnter"/>
       <element link="#LCL.Controls.TWinControl.OnExit" name="TStringGrid.OnExit"/>
       <element name="TStringGrid.OnGetCellHint" link="#LCL.Grids.TCustomGrid.OnGetCellHint"/>
@@ -13668,7 +13656,6 @@
       <element link="#LCL.Controls.TControl.OnStartDock" name="TStringGrid.OnStartDock"/>
       <element link="#LCL.Controls.TControl.OnStartDrag" name="TStringGrid.OnStartDrag"/>
       <element link="#LCL.Grids.TCustomGrid.OnTopLeftChanged" name="TStringGrid.OnTopLeftChanged"/>
-      <element name="TStringGrid.OnUserCheckboxBitmap" link="TCustomGrid.OnUserCheckboxBitmap"/>
       <element name="TStringGrid.OnUserCheckboxBitmap" link="TCustomGrid.OnUserCheckboxBitmap"/>
       <element link="#LCL.Controls.TWinControl.OnUTF8KeyPress" name="TStringGrid.OnUTF8KeyPress"/>
       <element name="TStringGrid.OnValidateEntry" link="TCustomGrid.OnValidateEntry"/>

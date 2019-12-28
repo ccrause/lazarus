@@ -896,6 +896,9 @@ DECL = DW_AT_decl_column, DW_AT_decl_file, DW_AT_decl_line
     FAddressInfo: PDwarfAddressInfo;
     FStateMachine: TDwarfLineInfoStateMachine;
     FFrameBaseParser: TDwarfLocationExpression;
+    function GetLineEndAddress: TDBGPtr;
+    function GetLineStartAddress: TDBGPtr;
+    function GetLineUnfixed: TDBGPtr;
     function StateMachineValid: Boolean;
     function  ReadVirtuality(out AFlags: TDbgSymbolFlags): Boolean;
   protected
@@ -916,6 +919,10 @@ DECL = DW_AT_decl_column, DW_AT_decl_file, DW_AT_decl_line
     function CreateContext(AThreadId, AStackFrame: Integer; ADwarfInfo: TFpDwarfInfo): TFpDbgInfoContext; override;
     // TODO members = locals ?
     function GetSelfParameter(AnAddress: TDbgPtr = 0): TFpValueDwarf;
+    // Contineous (sub-)part of the line
+    property LineStartAddress: TDBGPtr read GetLineStartAddress;
+    property LineEndAddress: TDBGPtr read GetLineEndAddress;
+    property LineUnfixed: TDBGPtr read GetLineUnfixed; // with 0 lines
   end;
 
   { TFpSymbolDwarfTypeProc }
@@ -1261,9 +1268,7 @@ begin
           // TODO: only valid, as long as context is valid, because if context is freed, then self is lost too
           ADbgValue := SelfParam.MemberByName[AName];
           assert(ADbgValue <> nil, 'FindSymbol: SelfParam.MemberByName[AName]');
-        end
-else debugln(['TDbgDwarfInfoAddressContext.FindSymbol XXXXXXXXXXXXX no self']);
-        ;
+        end;
         if ADbgValue = nil then begin // Todo: abort the searh /SetError
           ADbgValue := SymbolToValue(TFpSymbolDwarf.CreateSubClass(AName, InfoEntry));
         end;
@@ -3301,13 +3306,13 @@ begin
   // DW_AT_data_member_location in members [ block or const]
   // DW_AT_location [block or reference] todo: const
   if not InformationEntry.ReadValue(AnAttribData, Val) then begin
-    DebugLn(['LocationFromAttrData: failed to read DW_AT_location']);
+    DebugLn([FPDBG_DWARF_VERBOSE, 'LocationFromAttrData: failed to read DW_AT_location']);
     SetLastError(AValueObj, CreateError(fpErrAnyError));
     exit;
   end;
 
   if Length(Val) = 0 then begin
-    DebugLn('LocationFromAttrData: Warning DW_AT_location empty');
+    DebugLn(FPDBG_DWARF_VERBOSE, 'LocationFromAttrData: Warning DW_AT_location empty');
     SetLastError(AValueObj, CreateError(fpErrAnyError));
     //exit;
   end;
@@ -3324,7 +3329,7 @@ begin
   Result := IsValidLoc(AnAddress);
   if IsTargetAddr(AnAddress) and  AnAdjustAddress then
     AnAddress.Address :=CompilationUnit.MapAddressToNewValue(AnAddress.Address);
-  debugln(not Result, ['TDbgDwarfIdentifier.LocationFromAttrDataFAILED']); // TODO
+  debugln(FPDBG_DWARF_VERBOSE and (not Result), ['TDbgDwarfIdentifier.LocationFromAttrDataFAILED']); // TODO
 
   LocationParser.Free;
 end;
@@ -3352,7 +3357,7 @@ begin
     if not Result then
       AnAddress := InvalidLoc;
     if not Result then
-      DebugLn(['LocationFromTag: failed to read DW_AT_..._location / ASucessOnMissingTag=', dbgs(ASucessOnMissingTag)]);
+      DebugLn([FPDBG_DWARF_VERBOSE, 'LocationFromTag: failed to read DW_AT_..._location / ASucessOnMissingTag=', dbgs(ASucessOnMissingTag)]);
     exit;
   end;
 
@@ -4606,8 +4611,8 @@ end;
 function TFpSymbolDwarfDataMember.GetValueAddress(AValueObj: TFpValueDwarf; out
   AnAddress: TFpDbgMemLocation): Boolean;
 begin
-  if AValueObj = nil then debugln(['TFpSymbolDwarfDataMember.InitLocationParser: NO VAl Obj !!!!!!!!!!!!!!!'])
-  else if AValueObj.StructureValue = nil then debugln(['TFpSymbolDwarfDataMember.InitLocationParser: NO STRUCT Obj !!!!!!!!!!!!!!!']);
+  if AValueObj = nil then debugln([FPDBG_DWARF_VERBOSE, 'TFpSymbolDwarfDataMember.InitLocationParser: NO VAl Obj !!!!!!!!!!!!!!!'])
+  else if AValueObj.StructureValue = nil then debugln(FPDBG_DWARF_VERBOSE, ['TFpSymbolDwarfDataMember.InitLocationParser: NO STRUCT Obj !!!!!!!!!!!!!!!']);
 
   if (AValueObj = nil) or (AValueObj.StructureValue = nil) or (AValueObj.FParentTypeSymbol = nil)
   then begin
@@ -5028,13 +5033,11 @@ procedure TFpSymbolDwarfTypeArray.ResetValueBounds;
 var
   i: Integer;
 begin
-  debuglnEnter(['TFpSymbolDwarfTypeArray.ResetValueBounds ' , Self.ClassName, dbgs(self)]); try
   inherited ResetValueBounds;
   if FMembers <> nil then
     for i := 0 to FMembers.Count - 1 do
       if TObject(FMembers[i]) is TFpSymbolDwarfType then
         TFpSymbolDwarfType(FMembers[i]).ResetValueBounds;
-  finally debuglnExit(['TFpSymbolDwarfTypeArray.ResetValueBounds ' ]); end;
 end;
 
 { TDbgDwarfSymbol }
@@ -5091,10 +5094,54 @@ begin
 end;
 
 function TFpSymbolDwarfDataProc.GetLine: Cardinal;
+var
+  sm: TDwarfLineInfoStateMachine;
 begin
   if StateMachineValid
-  then Result := FStateMachine.Line
+  then begin
+    Result := FStateMachine.Line;
+    if Result = 0 then begin // TODO: fpc specific.
+      sm := FStateMachine.Clone;
+      sm.NextLine;
+      Result := sm.Line;
+      sm.Free;
+    end;
+  end
   else Result := inherited GetLine;
+end;
+
+function TFpSymbolDwarfDataProc.GetLineEndAddress: TDBGPtr;
+var
+  sm: TDwarfLineInfoStateMachine;
+begin
+  if StateMachineValid
+  then begin
+    sm := FStateMachine.Clone;
+    if sm.NextLine then
+      Result := sm.Address
+    else
+      Result := 0;
+    sm.Free;
+  end
+  else Result := 0;
+end;
+
+function TFpSymbolDwarfDataProc.GetLineStartAddress: TDBGPtr;
+begin
+  if StateMachineValid
+  then
+    Result := FStateMachine.Address
+  else
+    Result := 0;
+end;
+
+function TFpSymbolDwarfDataProc.GetLineUnfixed: TDBGPtr;
+begin
+  if StateMachineValid
+  then
+    Result := FStateMachine.Line
+  else
+    Result := inherited GetLine;
 end;
 
 function TFpSymbolDwarfDataProc.GetValueObject: TFpValue;
@@ -5121,6 +5168,7 @@ end;
 function TFpSymbolDwarfDataProc.StateMachineValid: Boolean;
 var
   SM1, SM2: TDwarfLineInfoStateMachine;
+  SM2val: Boolean;
 begin
   Result := FStateMachine <> nil;
   if Result then Exit;
@@ -5134,19 +5182,21 @@ begin
   // we cannot restore a statemachine to its current state
   // so we shouldn't modify FAddressInfo^.StateMachine
   // so use clones to navigate
+  if FAddress < FAddressInfo^.StateMachine.Address
+  then
+    Exit;    // The address we want to find is before the start of this symbol ??
+
   SM1 := FAddressInfo^.StateMachine.Clone;
-  if FAddress < SM1.Address
-  then begin
-    // The address we want to find is before the start of this symbol ??
-    SM1.Free;
-    Exit;
-  end;
   SM2 := FAddressInfo^.StateMachine.Clone;
 
   repeat
-    if (FAddress = SM1.Address)
-    or not SM2.NextLine
-    or (FAddress < SM2.Address)
+    SM2val := SM2.NextLine;
+    if (not SM1.EndSequence) and
+       ( (FAddress = SM1.Address) or
+         ( (FAddress > SM1.Address) and
+           SM2val and (FAddress < SM2.Address)
+         )
+       )
     then begin
       // found
       FStateMachine := SM1;

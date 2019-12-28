@@ -12459,6 +12459,14 @@ msgstr ""
 msgid "Check this if you want to open your project in legacy (2.0 and older) Lazarus versions."
 msgstr ""
 
+#: lazarusidestrconsts.lislpkcompatibilitymodecheckbox
+msgid "Maximize compatibility of package file (LPK)"
+msgstr ""
+
+#: lazarusidestrconsts.lislpkcompatibilitymodecheckboxhint
+msgid "Check this if you want to open your package in legacy (2.0 and older) Lazarus versions."
+msgstr ""
+
 #: lazarusidestrconsts.lislpkhasvanishedondiskusingasalternative
 #, object-pascal-format
 msgid "lpk has vanished on disk. Using as alternative%s"
@@ -20870,9 +20878,34 @@ msgstr "&Construction :"
 msgid "Character set:"
 msgstr "Jeu de caractères :"
 
+#: lazarusidestrconsts.rscloseall
+#, fuzzy
+#| msgid "Close all tabs"
+msgid "Close all pages"
+msgstr "Fermer tous les onglets"
+
 #: lazarusidestrconsts.rsclosecurrentpage
+#, fuzzy
 msgid "Close current page"
-msgstr "Fermer la page en cours"
+msgstr "Fermer l'onglet actif"
+
+#: lazarusidestrconsts.rscloseleft
+#, fuzzy
+#| msgid "Close tab(s) on the left"
+msgid "Close page(s) on the left"
+msgstr "Fermer le(s) onglet(s) de gauche"
+
+#: lazarusidestrconsts.rscloseothers
+#, fuzzy
+#| msgid "Close other tab(s)"
+msgid "Close other page(s)"
+msgstr "Fermer tous les autre(s) onglet(s)"
+
+#: lazarusidestrconsts.rscloseright
+#, fuzzy
+#| msgid "Close tab(s) on the right"
+msgid "Close page(s) on the right"
+msgstr "Fermer le(s) onglet(s) de droite"
 
 #: lazarusidestrconsts.rsconditionaldefines
 msgid "Conditional defines"

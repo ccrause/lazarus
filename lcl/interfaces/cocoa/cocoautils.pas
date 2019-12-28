@@ -42,6 +42,8 @@ function NSRectToRect(const NS: NSRect): TRect;
 procedure NSToLCLRect(const ns: NSRect; ParentHeight: Single; out lcl: TRect);
 procedure LCLToNSRect(const lcl: TRect; ParentHeight: Single; out ns: NSRect);
 
+function NSScreenZeroHeight: CGFloat;
+
 function CreateParamsToNSRect(const params: TCreateParams): NSRect;
 
 function NSStringUtf8(s: PChar): NSString;
@@ -573,6 +575,11 @@ begin
   ns.size.height:=lcl.Bottom-lcl.Top;
 end;
 
+function NSScreenZeroHeight: CGFloat;
+begin
+  Result := NSScreen(NSScreen.screens.objectAtIndex(0)).frame.size.height;
+end;
+
 function CreateParamsToNSRect(const params: TCreateParams): NSRect;
 begin
   with params do Result:=GetNSRect(X,Y,Width,Height);
@@ -611,6 +618,8 @@ begin
     ns := NSStringUTF8(s);
     text.setString(ns);
     ns.release;
+    if Assigned(text.undoManager) then
+      text.undoManager.removeAllActions;
   end;
 end;
 

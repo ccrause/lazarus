@@ -170,13 +170,13 @@ begin
     FormatCount, Formats);
 end;
 
-function TGtk3WidgetSet.ClipboardRegisterFormat(const AMimeType: string
-  ): TClipboardFormat;
+function TGtk3WidgetSet.ClipboardRegisterFormat(const AMimeType: string): TClipboardFormat;
 begin
-  {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
-  DebugLn('WARNING: TGtk3WidgetSet.ClipboardRegisterFormat not implemented ...');
-  {$ENDIF}
-  Result:=inherited ClipboardRegisterFormat(AMimeType);
+  if Assigned(Application) then
+    Result := TClipboardFormat(TGdkAtom.intern(PChar(AMimeType), False))
+  else
+    RaiseGDBException(
+      'ERROR: TGtk3WidgetSet.ClipboardRegisterFormat gdk not initialized');
 end;
 
 function TGtk3WidgetSet.CombineRgn(Dest, Src1, Src2: HRGN;
@@ -1052,11 +1052,13 @@ begin
 end;
 
 function TGtk3WidgetSet.Ellipse(DC: HDC; x1, y1, x2, y2: Integer): Boolean;
+var
+  bFill, bBorder: Boolean;
 begin
-  {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
-  DebugLn('WARNING: TGtk3WidgetSet.Ellipse not implemented ...');
-  {$ENDIF}
-  Result:=inherited Ellipse(DC, x1, y1, x2, y2);
+  bFill := TGtk3DeviceContext(DC).CurrentBrush.Style <> BS_NULL;
+  bBorder := TGtk3DeviceContext(DC).CurrentPen.Style <> psClear;
+  TGtk3DeviceContext(DC).drawEllipse(x1, y1, x2 - x1 - 1, y2 - y1 - 1, bFill, bBorder);
+  Result := True;
 end;
 
 function TGtk3WidgetSet.EnableScrollBar(Wnd: HWND; wSBflags, wArrows: Cardinal
@@ -1696,8 +1698,9 @@ begin
 
 end;
 
-function TGtk3WidgetSet.FrameRect(DC: HDC; const ARect: TRect; hBr: HBRUSH
-  ): Integer;
+function TGtk3WidgetSet.FrameRect(DC: HDC; const ARect: TRect; hBr: HBRUSH): Integer;
+const
+  PixelOffset = 0.5;
 var
   cr: Pcairo_t;
 begin
@@ -1708,7 +1711,7 @@ begin
   if not IsValidDC(DC) then
     exit;
   cr := TGtk3DeviceContext(DC).Widget;
-  cairo_rectangle(cr, ARect.Left, ARect.Top, ARect.Right-ARect.Left, ARect.Bottom-ARect.Top);
+  cairo_rectangle(cr, ARect.Left+PixelOffset, ARect.Top+PixelOffset, ARect.Right-ARect.Left-1, ARect.Bottom-ARect.Top-1);
   if IsValidGDIObject(hBr) then
     TGtk3DeviceContext(DC).SetSourceColor(TGtk3Brush(HBR).Color);
   cairo_set_line_width(cr, 1);
@@ -3145,21 +3148,27 @@ end;
 
 function TGtk3WidgetSet.Polygon(DC: HDC; Points: PPoint; NumPts: Integer;
   Winding: boolean): boolean;
+var
+  NFillRule: integer;
+  bFill, bBorder: boolean;
 begin
   if not IsValidDC(DC) then
     exit(False);
-  if not Winding then // faster
-    TGtk3DeviceContext(DC).drawPolygon(Points, NumPts, ord(CAIRO_FILL_RULE_EVEN_ODD))
+  if Winding then
+    NFillRule := Ord(CAIRO_FILL_RULE_WINDING)
   else
-    TGtk3DeviceContext(DC).drawPolygon(Points, NumPts, Ord(CAIRO_FILL_RULE_WINDING));
+    NFillRule := Ord(CAIRO_FILL_RULE_EVEN_ODD);
+  bFill := TGtk3DeviceContext(DC).CurrentBrush.Style <> BS_NULL;
+  bBorder := TGtk3DeviceContext(DC).CurrentPen.Style <> psClear;
+  TGtk3DeviceContext(DC).drawPolygon(Points, NumPts, NFillRule, bFill, bBorder);
   Result:= True;
 end;
 
-function TGtk3WidgetSet.Polyline(DC: HDC; Points: PPoint; NumPts: Integer
-  ): boolean;
+function TGtk3WidgetSet.Polyline(DC: HDC; Points: PPoint; NumPts: Integer): boolean;
 begin
   if not IsValidDC(DC) then
     exit(False);
+  if TGtk3DeviceContext(DC).CurrentPen.Style = psClear then Exit;
   TGtk3DeviceContext(DC).drawPolyLine(Points, NumPts);
   Result:=True;
 end;
@@ -3259,13 +3268,15 @@ end;
 function TGtk3WidgetSet.Rectangle(DC: HDC; X1, Y1, X2, Y2: Integer): Boolean;
 var
   R: TRect;
+  bFill, bBorder: Boolean;
 begin
   if not IsValidDC(DC) then
     exit(False);
   R := NormalizeRect(Rect(X1, Y1, X2, Y2));
   if IsRectEmpty(R) then Exit(True);
-  with R do
-    TGtk3DeviceContext(DC).drawRect(Left, Top, Right - Left, Bottom - Top, false);
+  bFill := TGtk3DeviceContext(DC).CurrentBrush.Style <> BS_NULL;
+  bBorder := TGtk3DeviceContext(DC).CurrentPen.Style <> psClear;
+  TGtk3DeviceContext(DC).drawRect(R.Left, R.Top, R.Right - R.Left, R.Bottom - R.Top, bFill, bBorder);
   Result := True;
 end;
 
@@ -3470,18 +3481,18 @@ begin
     begin
       // DebugLn('TGtk3WidgetSet.SelectObject PEN ');
       Result := HGDIOBJ(TGtk3DeviceContext(DC).CurrentPen);
-      TGtk3DeviceContext(DC).SetCurrentPen(TGtk3Pen(GDIObj));
+      TGtk3DeviceContext(DC).CurrentPen:= TGtk3Pen(GDIObj);
     end else
     if TObject(GDIObj) is TGtk3Brush then
     begin
       Result := HGDIOBJ(TGtk3DeviceContext(DC).CurrentBrush);
       // DebugLn('TGtk3WidgetSet.SelectObject BRUSH ',dbgHex(Result),'  ',TimeToStr(Now()));
-      TGtk3DeviceContext(DC).SetCurrentBrush(TGtk3Brush(GDIObj));
+      TGtk3DeviceContext(DC).CurrentBrush:= TGtk3Brush(GDIObj);
     end else
     if TObject(GDIObj) is TGtk3Font then
     begin
       Result := HGDIOBJ(TGtk3DeviceContext(DC).CurrentFont);
-      TGtk3DeviceContext(DC).SetCurrentFont(TGtk3Font(GDIObj));
+      TGtk3DeviceContext(DC).CurrentFont:= TGtk3Font(GDIObj);
       // DebugLn('TGtk3WidgetSet.SelectObject Font ');
     end else
     if TObject(GDIObj) is TGtk3Region then
@@ -4073,8 +4084,13 @@ begin
   {$ENDIF}
   ATargetRect := Rect(X, Y, Width + X, Height + Y);
   ASrcRect := Rect(XSrc, YSrc, SrcWidth + XSrc, SrcHeight + YSrc);
-  DestContext.drawImage1(@ATargetRect, PgdkPixbuf(SrcContext.CurrentImage.Handle) , @ASrcRect, nil, nil);
-  // Result := True;
+
+  if (DestContext.OwnsSurface) then
+    DestContext.drawImage1(@ATargetRect, PgdkPixbuf(SrcContext.CurrentImage.Handle) , @ASrcRect, nil, nil)
+  else
+    DestContext.drawSurface(@ATargetRect,SrcContext.CairoSurface , @ASrcRect, nil, nil);
+
+  Result := True;
 end;
 
 function TGtk3WidgetSet.SystemParametersInfo(uiAction: DWord; uiParam: DWord;

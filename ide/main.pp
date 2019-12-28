@@ -272,7 +272,9 @@ type
     procedure mnuSourceUseUnitClicked(Sender: TObject);
     procedure mnuSourceSyntaxCheckClicked(Sender: TObject);
     procedure mnuSourceGuessUnclosedBlockClicked(Sender: TObject);
+    {$IFDEF GuessMisplacedIfdef}
     procedure mnuSourceGuessMisplacedIFDEFClicked(Sender: TObject);
+    {$ENDIF}
     // source->insert CVS keyword
     procedure mnuSourceInsertCVSAuthorClick(Sender: TObject);
     procedure mnuSourceInsertCVSDateClick(Sender: TObject);
@@ -923,7 +925,9 @@ type
     procedure DoGoToPascalBlockOtherEnd;
     procedure DoGoToPascalBlockStart;
     procedure DoJumpToGuessedUnclosedBlock(FindNextUTF8: boolean);
+    {$IFDEF GuessMisplacedIfdef}
     procedure DoJumpToGuessedMisplacedIFDEF(FindNextUTF8: boolean);
+    {$ENDIF}
     procedure DoGotoIncludeDirective;
 
     // tools
@@ -1545,7 +1549,7 @@ begin
 
   // build and position the MainIDE form
   Application.CreateForm(TMainIDEBar,MainIDEBar);
-  MainIDEBar.Name := NonModalIDEWindowNames[nmiwMainIDEName];
+  MainIDEBar.Name := NonModalIDEWindowNames[nmiwMainIDE];
   FormCreator:=IDEWindowCreators.Add(MainIDEBar.Name);
   FormCreator.Right:='100%';
   FormCreator.Bottom:='+90';
@@ -2452,22 +2456,22 @@ end;
 
 procedure TMainIDE.SetupIDEWindowsLayout;
 begin
-  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwMessagesViewName],
+  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwMessagesView],
     nil,@CreateIDEWindow,'250','75%','+70%','+100',
-    NonModalIDEWindowNames[nmiwSourceNoteBookName],alBottom,false,@GetLayoutHandler);
-  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwCodeExplorerName],
+    NonModalIDEWindowNames[nmiwSourceNoteBook],alBottom,false,@GetLayoutHandler);
+  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwCodeExplorer],
     nil,@CreateIDEWindow,'72%','120','+170','-200',
-    NonModalIDEWindowNames[nmiwMainIDEName],alRight);
+    NonModalIDEWindowNames[nmiwMainIDE],alRight);
 
-  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwUnitDependenciesName],
+  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwUnitDependencies],
     nil,@CreateIDEWindow,'200','200','','');
-  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwFPDocEditorName],
+  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwFPDocEditor],
     nil,@CreateIDEWindow,'250','75%','+70%','+120');
-  //IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwClipbrdHistoryName],
+  //IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwClipbrdHistory],
   //  nil,@CreateIDEWindow,'250','200','','');
   IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwProjectInspector],
     nil,@CreateIDEWindow,'200','150','+300','+400');
-  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwSearchResultsViewName],
+  IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwSearchResultsView],
     nil,@CreateIDEWindow,'250','250','+70%','+300');
   IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwAnchorEditor],
     nil,@CreateIDEWindow,'250','250','','');
@@ -2746,7 +2750,9 @@ begin
     // CodeTool Checks
     itmSourceSyntaxCheck.OnClick := @mnuSourceSyntaxCheckClicked;
     itmSourceGuessUnclosedBlock.OnClick := @mnuSourceGuessUnclosedBlockClicked;
+    {$IFDEF GuessMisplacedIfdef}
     itmSourceGuessMisplacedIFDEF.OnClick := @mnuSourceGuessMisplacedIFDEFClicked;
+    {$ENDIF}
     // Refactor
     itmRefactorRenameIdentifier.OnClick:=@mnuRefactorRenameIdentifierClicked;
     itmRefactorExtractProc.OnClick:=@mnuRefactorExtractProcClicked;
@@ -3012,7 +3018,9 @@ begin
 
     itmSourceSyntaxCheck.Command:=GetCommand(ecSyntaxCheck);
     itmSourceGuessUnclosedBlock.Command:=GetCommand(ecGuessUnclosedBlock);
+    {$IFDEF GuessMisplacedIfdef}
     itmSourceGuessMisplacedIFDEF.Command:=GetCommand(ecGuessMisplacedIFDEF);
+    {$ENDIF}
 
     itmSourceInsertCVSAuthor.Command:=GetCommand(ecInsertCVSAuthor);
     itmSourceInsertCVSDate.Command:=GetCommand(ecInsertCVSDate);
@@ -3609,7 +3617,9 @@ begin
   ecExtToolFirst..ecExtToolLast: DoRunExternalTool(Command-ecExtToolFirst,false);
   ecSyntaxCheck:              DoCheckSyntax;
   ecGuessUnclosedBlock:       DoJumpToGuessedUnclosedBlock(true);
+  {$IFDEF GuessMisplacedIfdef}
   ecGuessMisplacedIFDEF:      DoJumpToGuessedMisplacedIFDEF(true);
+  {$ENDIF}
   ecMakeResourceString:       DoMakeResourceString;
   ecDiff:                     DoDiff;
   ecConvertDFM2LFM:           DoConvertDFMtoLFM;
@@ -4710,10 +4720,12 @@ begin
   DoJumpToGuessedUnclosedBlock(true);
 end;
 
+{$IFDEF GuessMisplacedIfdef}
 procedure TMainIDE.mnuSourceGuessMisplacedIFDEFClicked(Sender: TObject);
 begin
   DoJumpToGuessedMisplacedIFDEF(true);
 end;
+{$ENDIF}
 
 procedure TMainIDE.mnuRefactorMakeResourceStringClicked(Sender: TObject);
 begin
@@ -6254,30 +6266,30 @@ begin
     State:=iwgfDisabled
   else
     State:=iwgfEnabled;
-  if ItIs(NonModalIDEWindowNames[nmiwMessagesViewName]) then
+  if ItIs(NonModalIDEWindowNames[nmiwMessagesView]) then
     AForm:=MessagesView
-  else if ItIs(NonModalIDEWindowNames[nmiwUnitDependenciesName]) then
+  else if ItIs(NonModalIDEWindowNames[nmiwUnitDependencies]) then
   begin
     ShowUnitDependencies(State);
     AForm:=UnitDependenciesWindow;
   end
-  else if ItIs(NonModalIDEWindowNames[nmiwCodeExplorerName]) then
+  else if ItIs(NonModalIDEWindowNames[nmiwCodeExplorer]) then
   begin
     DoShowCodeExplorer(State);
     AForm:=CodeExplorerView;
   end
-  else if ItIs(NonModalIDEWindowNames[nmiwFPDocEditorName]) then
+  else if ItIs(NonModalIDEWindowNames[nmiwFPDocEditor]) then
   begin
     DoShowFPDocEditor(State);
     AForm:=FPDocEditor;
   end
-  // ToDo: nmiwClipbrdHistoryName:
+  // ToDo: nmiwClipbrdHistory:
   else if ItIs(NonModalIDEWindowNames[nmiwProjectInspector]) then
   begin
     DoShowProjectInspector(State);
     AForm:=ProjInspector;
   end
-  else if ItIs(NonModalIDEWindowNames[nmiwSearchResultsViewName]) then
+  else if ItIs(NonModalIDEWindowNames[nmiwSearchResultsView]) then
   begin
     DoShowSearchResultsView(State);
     AForm:=SearchResultsView;
@@ -10764,6 +10776,7 @@ begin
   end;
 end;
 
+{$IFDEF GuessMisplacedIfdef}
 procedure TMainIDE.DoJumpToGuessedMisplacedIFDEF(FindNextUTF8: boolean);
 var ActiveSrcEdit: TSourceEditor;
   ActiveUnitInfo: TUnitInfo;
@@ -10791,6 +10804,7 @@ begin
   end else
     DoJumpToCodeToolBossError;
 end;
+{$ENDIF}
 
 procedure TMainIDE.DoGotoIncludeDirective;
 var ActiveSrcEdit: TSourceEditor;
@@ -12802,7 +12816,7 @@ begin
        ScreenR.Bottom-MainIDEBar.Scale96ToForm(50));
     // do not dock object inspector, because this would hide the floating designers
   end
-  else if (aFormName=NonModalIDEWindowNames[nmiwMessagesViewName]) then begin
+  else if (aFormName=NonModalIDEWindowNames[nmiwMessagesView]) then begin
     // place messages below source editor
     ScreenR:=IDEWindowCreators.GetScreenrectForDefaults;
     if SourceEditorManager.SourceWindowCount>0 then begin
@@ -12818,7 +12832,7 @@ begin
         ScreenR.Bottom-MainIDEBar.Scale96ToForm(50));
     end;
     if IDEDockMaster<>nil then begin
-      DockSibling:=NonModalIDEWindowNames[nmiwSourceNoteBookName];
+      DockSibling:=NonModalIDEWindowNames[nmiwSourceNoteBook];
       DockAlign:=alBottom;
     end;
   end;

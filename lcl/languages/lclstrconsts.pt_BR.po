@@ -731,6 +731,28 @@ msgstr "Limão"
 msgid "List index exceeds bounds (%d)"
 msgstr "Índice lista excede o limite (%d)"
 
+#: lclstrconsts.rsmacosmenuhide
+#, object-pascal-format
+msgid "Hide %s"
+msgstr "Ocultar %s"
+
+#: lclstrconsts.rsmacosmenuhideothers
+msgid "Hide Others"
+msgstr "Ocultar outros"
+
+#: lclstrconsts.rsmacosmenuquit
+#, object-pascal-format
+msgid "Quit %s"
+msgstr "Encerrar %s"
+
+#: lclstrconsts.rsmacosmenuservices
+msgid "Services"
+msgstr "Serviços"
+
+#: lclstrconsts.rsmacosmenushowall
+msgid "Show All"
+msgstr "Exibir tudo"
+
 #: lclstrconsts.rsmarooncolorcaption
 msgid "Maroon"
 msgstr "Marrom"
