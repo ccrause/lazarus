@@ -455,7 +455,7 @@ implementation
 
 uses
   FpDbgUtil,
-  fpdbgdisasbase;
+  fpdbgdisasbase, FpDbgDisasX86;
 
 var
   DBG_VERBOSE, DBG_BREAKPOINTS, FPDBG_COMMANDS: PLazLoggerLogGroup;
@@ -2325,6 +2325,10 @@ end;
 procedure TFpDebugDebugger.FDbgControllerDebugInfoLoaded(Sender: TObject);
 begin
   TFpDwarfInfo(FDbgController.CurrentProcess.DbgInfo).MemManager := FMemManager;
+
+  // Set target CPU bit width
+  TX86Disassembler(GDisassembler).A64bit := TFpDwarfInfo(FDbgController.CurrentProcess.DbgInfo).Image64Bit;
+
   if LineInfo <> nil then begin
     TFpLineInfo(LineInfo).DebugInfoChanged;
   end;
