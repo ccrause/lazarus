@@ -340,6 +340,10 @@ begin
   OSDbgClasses.DbgThreadClass:=TDbgWinThread;
   OSDbgClasses.DbgBreakpointClass:=TFpInternalBreakpoint;
   OSDbgClasses.DbgProcessClass:=TDbgWinProcess;
+  GDisassembler := TX86Disassembler.Create;
+  // Set 64 bit mode according to compiler
+  // TODO: Perhaps extract from loaded debug information?
+  TX86Disassembler(GDisassembler).A64bit := {$ifdef cpui386}false{$else}true{$endif};
 end;
 
 procedure TDbgWinProcess.LogLastError;

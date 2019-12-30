@@ -455,7 +455,7 @@ implementation
 
 uses
   FpDbgUtil,
-  FpDbgDisasX86;
+  fpdbgdisasbase;
 
 var
   DBG_VERBOSE, DBG_BREAKPOINTS, FPDBG_COMMANDS: PLazLoggerLogGroup;
@@ -510,7 +510,7 @@ procedure TDbgControllerStepOverFirstFinallyLineCmd.DoResolveEvent(
   var AnEvent: TFPDEvent; AnEventThread: TDbgThread; out Finished: boolean);
 begin
   Finished := (FThread.CompareStepInfo(0, True) <> dcsiSameLine) or
-              (NextOpCode = OPret) or IsSteppedOut;
+              (NextOpCode = OPG_Ret) or IsSteppedOut;
 
   if Finished then
     AnEvent := deFinishedStep
@@ -532,10 +532,10 @@ begin
 
 }
   case NextOpCode of
-    OPmov:
+    OPG_Mov:
       if UpperCase(NextInstruction.Operand[2].Value) = 'RBP' then
         FFinState := fsMov;
-    OPcall:
+    OPG_Call:
       if FFinState = fsMov then begin
         CheckForCallAndSetBreak;
         FProcess.Continue(FProcess, FThread, True); // Step into
@@ -581,7 +581,7 @@ begin
   if IsAtOrOutOfHiddenBreakFrame then
     RemoveHiddenBreak;
 
-  Finished := IsSteppedOut or FDone or ((not HasHiddenBreak) and (NextOpCode = OPret));
+  Finished := IsSteppedOut or FDone or ((not HasHiddenBreak) and (NextOpCode = OPG_Ret));
   if Finished then
     AnEvent := deFinishedStep
   else
@@ -593,7 +593,7 @@ procedure TDbgControllerStepThroughFpcSpecialHandler.InternalContinue(
   AProcess: TDbgProcess; AThread: TDbgThread);
 begin
   {$PUSH}{$Q-}{$R-}
-  if (NextOpCode = OPcall) and
+  if (NextOpCode = OPG_Call) and
      (FThread.GetInstructionPointerRegisterValue + NextInstructionLen = FAfterFinCallAddr)
   then begin
     RemoveHiddenBreak;
@@ -1330,7 +1330,7 @@ begin
     else
       begin
       p := @CodeBin;
-      FpDbgDisasX86.Disassemble(p, TFpDebugDebugger(Debugger).FDbgController.CurrentProcess.Mode=dm64, ADump, AStatement);
+      GDisassembler.Disassemble(p, ADump, AStatement);
 
       Sym := TFpDebugDebugger(Debugger).FDbgController.CurrentProcess.FindProcSymbol(AnAddr);
 

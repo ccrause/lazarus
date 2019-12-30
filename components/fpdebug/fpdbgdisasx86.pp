@@ -40,7 +40,8 @@ interface
 
 uses
   SysUtils,
-  FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools, LazLoggerBase;
+  FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools, LazLoggerBase,
+  fpdbgdisasbase;
 
 {                   
   The function Disassemble decodes the instruction at the given address.
@@ -201,15 +202,27 @@ type
     ParseFlags: TFlags;
   end;
 
-procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String);
-procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out AnInstruction: TInstruction);
+  { TX86Disassembler }
 
-// returns byte len of call instruction at AAddress // 0 if not a call intruction
-function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
-function IsReturnInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
+  TX86Disassembler = class(TDisassembler)
+  private
+    FIs64Bit: boolean;
+    procedure FDisassemble(var AAddress: Pointer; out AnInstruction: TInstruction);
+  public
+    procedure Disassemble(var AAddress: Pointer; out ACodeBytes: String; out ACode: String); override;
+    procedure Disassemble(var AAddress: Pointer; out AnInstruction: TGenericInstruction); override;
 
-function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal; const A64Bit: Boolean;
-  out AnIsOutsideFrame: Boolean): Boolean;
+    // returns byte len of call instruction at AAddress // 0 if not a call intruction
+    function IsCallInstruction(AAddress: Pointer): Integer;  override;
+    function IsReturnInstruction(AAddress: Pointer): Integer;  override;
+
+    function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal;
+      out AnIsOutsideFrame: Boolean): Boolean;  override;
+
+    constructor Create;
+    property A64bit: boolean read FIs64Bit write FIs64Bit;
+  end;
+
 
 implementation
 var
@@ -324,7 +337,7 @@ const
     'o', 'no', 'b', 'nb', 'z', 'nz', 'be', 'nbe', 's', 'ns', 'p', 'np', 'l', 'nl', 'le', 'nle'
   );
 
-procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out AnInstruction: TInstruction);
+procedure TX86Disassembler.FDisassemble(var AAddress: Pointer; out AnInstruction: TInstruction);
 var
   Code: PByte;
   CodeIdx: Byte;
@@ -3293,7 +3306,7 @@ begin
   Inc(AAddress, CodeIdx);
 end;
 
-procedure Disassemble(var AAddress: Pointer; const A64Bit: Boolean; out ACodeBytes: String; out ACode: String);
+procedure TX86Disassembler.Disassemble(var AAddress: Pointer; out ACodeBytes: String; out ACode: String);
 const
   MEMPTR: array[TOperandSize] of string = ('byte ptr ', 'word ptr ', 'dword ptr ', 'qword ptr ', '', 'tbyte ptr ', '16byte ptr ');
 {$ifdef debug_OperandSize}
@@ -3308,7 +3321,7 @@ var
   Code: PByte;
 begin
   Code := AAddress;
-  Disassemble(AAddress, A64Bit, Instr);
+  FDisassemble(AAddress, Instr);
 
   Soper := '';
   HasMem := False;
@@ -3374,7 +3387,28 @@ begin
   ACodeBytes := S;
 end;
 
-function IsCallInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
+procedure TX86Disassembler.Disassemble(var AAddress: Pointer; out
+  AnInstruction: TGenericInstruction);
+var
+  tempinstr: TInstruction;
+  i: integer;
+begin
+  FDisassemble(AAddress, tempinstr);
+  // Only call & ret instructions are used further in the debug controller
+  case tempinstr.OpCode of
+    OPret, OpRetf: AnInstruction.OpCode := OPG_Ret;
+    OPcall, OPleave: AnInstruction.OpCode := OPG_Call;
+    OPmov: AnInstruction.OpCode := OPG_Mov;
+  else
+    AnInstruction.OpCode := OPG_Other;
+  end;
+
+  AnInstruction.OperCnt := tempinstr.OperCnt;
+  for i := 1 to tempinstr.OperCnt do
+    AnInstruction.Operand[i].Value := tempinstr.Operand[i].Value;
+end;
+
+function TX86Disassembler.IsCallInstruction(AAddress: Pointer): Integer;
 var
   Instr: TInstruction;
   a: PByte;
@@ -3396,29 +3430,29 @@ begin
   end;
 
   a := AAddress;
-  Disassemble(AAddress, A64Bit, Instr);
+  FDisassemble(AAddress, Instr);
   if Instr.OpCode <> OPcall
   then
       exit;
   Result := AAddress - a;
 end;
 
-function IsReturnInstruction(AAddress: Pointer; const A64Bit: Boolean): Integer;
+function TX86Disassembler.IsReturnInstruction(AAddress: Pointer): Integer;
 var
   Instr: TInstruction;
   a: PByte;
 begin
   Result := 0;
   a := AAddress;
-  Disassemble(AAddress, A64Bit, Instr);
+  FDisassemble(AAddress, Instr);
   if (Instr.OpCode <> OPret) and (Instr.OpCode <> OPretf)
   then
       exit;
   Result := AAddress - a;
 end;
 
-function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal;
-  const A64Bit: Boolean; out AnIsOutsideFrame: Boolean): Boolean;
+function TX86Disassembler.GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal;
+  out AnIsOutsideFrame: Boolean): Boolean;
 begin
   while (ADataLen > 0) and (AData^ = $90) do begin // nop
     inc(AData);
@@ -3443,6 +3477,11 @@ begin
     // Need 1 byte before, to check for "push ebp"
     exit;
   end;
+end;
+
+constructor TX86Disassembler.Create;
+begin
+  FMaxInstructionSize := 15; // Quite large, but apparently a limit
 end;
 
 

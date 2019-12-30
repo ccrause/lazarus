@@ -317,6 +317,9 @@ procedure RegisterDbgClasses;
 
 implementation
 
+uses
+  FpDbgDisasX86;
+
 var
   DBG_VERBOSE, DBG_WARNINGS: PLazLoggerLogGroup;
   GConsoleTty: string;
@@ -326,6 +329,8 @@ procedure RegisterDbgClasses;
 begin
   OSDbgClasses.DbgProcessClass:=TDbgLinuxProcess;
   OSDbgClasses.DbgThreadClass:=TDbgLinuxThread;
+  GDisassembler := TX86Disassembler.Create;
+  TX86Disassembler(GDisassembler).A64bit := {$ifdef cpui386}false{$else}true{$endif};
 end;
 
 Function WIFSTOPPED(Status: Integer): Boolean;

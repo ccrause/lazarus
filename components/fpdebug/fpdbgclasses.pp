@@ -43,7 +43,7 @@ uses
   DbgIntfDebuggerBase,
   FpPascalBuilder,
   fpDbgSymTableContext,
-  FpDbgDwarfDataClasses, FpDbgDisasX86;
+  FpDbgDwarfDataClasses, fpdbgdisasbase; //FpDbgDisasX86;
 
 type
   TFPDEvent = (deExitProcess, deFinishedStep, deBreakpoint, deException, deCreateProcess, deLoadLibrary, deUnloadLibrary, deInternalContinue);
@@ -579,6 +579,7 @@ var
   {$else}
   GMode: TFPDMode = dm64;
   {$endif}
+  GDisassembler: TDisassembler;
 
 const
   DBGPTRSIZE: array[TFPDMode] of Integer = (4, 8);
@@ -2276,7 +2277,7 @@ begin
       if CodeReadErrCnt > 5 then break; // If the code cannot be read the stack pointer is wrong.
     end
     else begin
-      if not GetFunctionFrameInfo(@CodeBin[0], AReadSize, FProcess.Mode=dm64, OutSideFrame) then
+      if not GDisassembler.GetFunctionFrameInfo(@CodeBin[0], AReadSize, OutSideFrame) then
         OutSideFrame := False;
     end;
     LastFrameBase := FrameBase;

@@ -11,7 +11,7 @@ uses
   Maps,
   LazLoggerBase,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
-  FpDbgDisasX86,
+  fpdbgdisasbase, //FpDbgDisasX86,
   FpDbgClasses, FpDbgInfo;
 
 type
@@ -41,7 +41,7 @@ type
     FIsInitialized: Boolean;
     procedure Init; virtual;
     function IsAtCallInstruction: Integer;
-    function GetAsmInstruction(var AnInstr: TInstruction): Integer;
+    function GetAsmInstruction(var AnInstr: TGenericInstruction): Integer;
     procedure DoResolveEvent(var AnEvent: TFPDEvent; AnEventThread: TDbgThread; out Finished: boolean); virtual; abstract;
   public
     constructor Create(AController: TDbgController); virtual;
@@ -78,11 +78,11 @@ type
     FIsSteppedOut: Boolean;
     FHiddenBreakpoint: TFpInternalBreakpoint;
     FHiddenBreakAddr, FHiddenBreakInstrPtr, FHiddenBreakFrameAddr, FHiddenBreakStackPtrAddr: TDBGPtr;
-    FNextInstruction: TInstruction;
+    FNextInstruction: TGenericInstruction;
     FNextInstructionLen: Integer;
     function GetIsSteppedOut: Boolean;
     function GetNextInstructionLen: integer; inline;
-    function GetNextOpCode: TOpCode; inline;
+    function GetNextOpCode: TGenericOpCode; inline;
   protected
     function IsAtHiddenBreak: Boolean; inline;
     function HasHiddenBreak: Boolean; inline;
@@ -90,7 +90,7 @@ type
     function IsAtOrOutOfHiddenBreakFrame: Boolean;  inline; // Stopped in/out-of the origin frame, maybe by a breakpoint after an exception
     procedure SetHiddenBreak(AnAddr: TDBGPtr);
     procedure RemoveHiddenBreak;
-    property NextInstruction: TInstruction read FNextInstruction;
+    property NextInstruction: TGenericInstruction read FNextInstruction;
 
     function CheckForCallAndSetBreak: boolean; // True, if break is newly set
 
@@ -103,7 +103,7 @@ type
     property StoredStackFrame: TDBGPtr read FStoredStackFrame;
     property IsSteppedOut: Boolean read GetIsSteppedOut;
     property NextInstructionLen: integer read GetNextInstructionLen;
-    property NextOpCode: TOpCode read GetNextOpCode;
+    property NextOpCode: TGenericOpCode read GetNextOpCode;
   end;
 
   { TDbgControllerStepOverInstructionCmd }
@@ -303,20 +303,20 @@ var
 begin
   Result := 0;
   if FProcess.ReadData(FThread.GetInstructionPointerRegisterValue, sizeof(CodeBin), CodeBin) then
-    Result := IsCallInstruction(@CodeBin, FProcess.Mode=dm64);
+    Result := GDisassembler.IsCallInstruction(@CodeBin);
 end;
 
-function TDbgControllerCmd.GetAsmInstruction(var AnInstr: TInstruction
+function TDbgControllerCmd.GetAsmInstruction(var AnInstr: TGenericInstruction
   ): Integer;
 var
   CodeBin: array[0..20] of byte;
   p: Pointer;
 begin
   Result := 0;
-  AnInstr.OpCode := OPX_Invalid;
+  AnInstr.OpCode := OPG_Invalid;
   if FProcess.ReadData(FThread.GetInstructionPointerRegisterValue, sizeof(CodeBin), CodeBin) then begin
     p := @CodeBin;
-    Disassemble(p, FProcess.Mode=dm64, AnInstr);
+    GDisassembler.Disassemble(p, AnInstr);
     Result := p - @CodeBin[0];
   end;
 end;
@@ -400,14 +400,14 @@ end;
 
 function TDbgControllerHiddenBreakStepBaseCmd.GetNextInstructionLen: integer;
 begin
-  if FNextInstruction.OpCode = OPX_InternalUnknown then
+  if FNextInstruction.OpCode = OPG_InternalUnknown then
     FNextInstructionLen := GetAsmInstruction(FNextInstruction);
   Result := FNextInstructionLen;
 end;
 
-function TDbgControllerHiddenBreakStepBaseCmd.GetNextOpCode: TOpCode;
+function TDbgControllerHiddenBreakStepBaseCmd.GetNextOpCode: TGenericOpCode;
 begin
-  if FNextInstruction.OpCode = OPX_InternalUnknown then
+  if FNextInstruction.OpCode = OPG_InternalUnknown then
     FNextInstructionLen := GetAsmInstruction(FNextInstruction);
   Result := FNextInstruction.OpCode;
 end;
@@ -492,7 +492,7 @@ begin
   Result := FHiddenBreakpoint = nil;
   if not Result then
     exit;
-  Result := NextOpCode = OPcall;
+  Result := NextOpCode = OPG_Call;
   if Result then
     {$PUSH}{$Q-}{$R-}
     SetHiddenBreak(FThread.GetInstructionPointerRegisterValue + NextInstructionLen);
@@ -516,11 +516,10 @@ procedure TDbgControllerHiddenBreakStepBaseCmd.DoContinue(AProcess: TDbgProcess;
   AThread: TDbgThread);
 begin
   InternalContinue(AProcess, AThread);
-  if ((FNextInstruction.OpCode = OPret) or (FNextInstruction.OpCode = OPretf)) and
-     (FHiddenBreakpoint = nil)
+  if (FNextInstruction.OpCode = OPG_Ret) and (FHiddenBreakpoint = nil)
   then
     FIsSteppedOut := True;
-  FNextInstruction.OpCode := OPX_InternalUnknown;
+  FNextInstruction.OpCode := OPG_InternalUnknown;
   FNextInstructionLen := 0;
 end;
 
@@ -746,8 +745,7 @@ var
   CodeBin: array[0..30] of byte;
 begin
   Result := (FProcess.ReadData(FThread.GetInstructionPointerRegisterValue, sizeof(CodeBin), CodeBin) and
-             GetFunctionFrameInfo(@CodeBin[0], sizeof(CodeBin), FProcess.Mode=dm64, AnOutside)
-            );
+             GDisassembler.GetFunctionFrameInfo(@CodeBin[0], sizeof(CodeBin), AnOutside));
 end;
 
 procedure TDbgControllerStepOutCmd.SetReturnAdressBreakpoint(
@@ -776,7 +774,7 @@ end;
 procedure TDbgControllerStepOutCmd.InternalContinue(AProcess: TDbgProcess;
   AThread: TDbgThread);
 var
-  Opc: TOpCode;
+  Opc: TGenericOpCode;
   Outside: Boolean;
 begin
   assert(FProcess=AProcess, 'TDbgControllerStepOutCmd.DoContinue: FProcess=AProcess');
@@ -797,12 +795,12 @@ begin
       // 12) single steps.
       Inc(FStepCount);
       Opc := NextOpCode;
-      if (Opc = OPcall) or (Opc = OPleave)  then  // asm "call" // set break before "leave" or the frame becomes unavail
+      if (Opc = OPG_Call)  then  // asm "call" // set break before "leave" or the frame becomes unavail
       begin
         SetReturnAdressBreakpoint(AProcess, False);
       end
       else
-      if (Opc = OPret) or (Opc = OPretf) then  // asm "ret"
+      if (Opc = OPG_Ret) then  // asm "ret"
       begin
         FStepCount := MaxInt; // Do one more single-step, and we're finished.
         FProcess.Continue(FProcess, FThread, True);
