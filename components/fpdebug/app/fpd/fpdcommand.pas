@@ -51,7 +51,7 @@ procedure HandleCommand(ACommand: String; out CallProcessLoop: boolean);
 implementation
 
 uses
-  FPDGlobal
+  FPDGlobal, fgl
 {$ifdef windows}
   , FPDPEImage
 {$endif windows}
