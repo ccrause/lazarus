@@ -1033,7 +1033,7 @@ begin
 
   // Get exe info, load classes
   CheckExecutableAndLoadClasses;
-  if not (Assigned(GDbgProcessClass) and Assigned(GDbgProcessClass)) then
+  if not (Assigned(GDbgProcessClass) and Assigned(GDisassembler)) then
   begin
     result := false;
     DebugLn(DBG_WARNINGS, 'Error - No support registered for debug target');
