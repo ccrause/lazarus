@@ -2326,9 +2326,8 @@ procedure TFpDebugDebugger.FDbgControllerDebugInfoLoaded(Sender: TObject);
 begin
   TFpDwarfInfo(FDbgController.CurrentProcess.DbgInfo).MemManager := FMemManager;
 
-  // Set target CPU bit width
-  TX86Disassembler(GDisassembler).A64bit := TFpDwarfInfo(FDbgController.CurrentProcess.DbgInfo).Image64Bit;
-
+  // Set target for disassembler
+  GDisassembler.Target := TFpDwarfInfo(FDbgController.CurrentProcess.DbgInfo).Target;
   if LineInfo <> nil then begin
     TFpLineInfo(LineInfo).DebugInfoChanged;
   end;

@@ -21,7 +21,8 @@ uses
   MacOSAll,
   FpDbgUtil,
   UTF8Process,
-  LazLoggerBase;
+  LazLoggerBase,
+  FpDbgCommon;
 
 type
   x86_thread_state32_t = record
@@ -146,6 +147,9 @@ type
     function CreateWatchPointData: TFpWatchPointData; override;
   public
     class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags): TDbgProcess; override;
+
+    class function isSupported(target: TTargetDescriptor): boolean; override;
+
     constructor Create(const AName: string; const AProcessID, AThreadID: Integer); override;
     destructor Destroy; override;
 
@@ -162,6 +166,7 @@ type
     function WaitForDebugEvent(out ProcessIdentifier, ThreadIdentifier: THandle): boolean; override;
     function Pause: boolean; override;
   end;
+  TDbgDarwinProcessClass = class of TDbgDarwinProcess;
 
 procedure RegisterDbgClasses;
 
@@ -720,6 +725,12 @@ begin
   end;
 end;
 
+class function TDbgLinuxProcess.isSupported(target: TTargetDescriptor): boolean;
+begin
+  result := (target.OS = osDarwin) and
+            (target.machineType = mtX86_64);
+end;
+
 function TDbgDarwinProcess.ReadData(const AAdress: TDbgPtr;
   const ASize: Cardinal; out AData): Boolean;
 var
@@ -956,5 +967,7 @@ end;
 initialization
   DBG_VERBOSE := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
   DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
+
+  FpDbgClasses.RegisterDbgProcessClass(TDbgDarwinProcessClass);
 
 end.

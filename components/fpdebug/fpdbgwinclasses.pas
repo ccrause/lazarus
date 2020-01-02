@@ -118,11 +118,11 @@ uses
   FpDbgInfo,
   FpDbgLoader,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
-  LazLoggerBase, UTF8Process;
+  LazLoggerBase, UTF8Process,
+  FpDbgCommon;
 
 type
 
-  TWinBitness = (b32, b64);
   TFpWinCtxFlags = (cfSkip, cfControl, cfFull);
 
   { TDbgWinThread }
@@ -165,7 +165,7 @@ type
     FInfo: TCreateProcessDebugInfo;
     FProcProcess: TProcessUTF8;
     FJustStarted, FTerminated: boolean;
-    FBitness: TWinBitness;
+    FBitness: TBitness;
     function GetFullProcessImageName(AProcessHandle: THandle): string;
     function GetModuleFileName(AModuleHandle: THandle): string;
     function GetProcFilename(AProcess: TDbgProcess; lpImageName: LPVOID; fUnicode: word; hFile: handle): string;
@@ -189,6 +189,9 @@ type
 
     class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags): TDbgProcess; override;
     class function AttachToInstance(AFileName: string; APid: Integer): TDbgProcess; override;
+
+    class function isSupported(target: TTargetDescriptor): boolean; override;
+
     function Continue(AProcess: TDbgProcess; AThread: TDbgThread; SingleStep: boolean): boolean; override;
     function Detach(AProcess: TDbgProcess; AThread: TDbgThread): boolean; override;
     function WaitForDebugEvent(out ProcessIdentifier, ThreadIdentifier: THandle): boolean; override;
@@ -205,6 +208,7 @@ type
     function  AddLib(const AInfo: TLoadDLLDebugInfo): TDbgLibrary;
     procedure RemoveLib(const AInfo: TUnloadDLLDebugInfo);
   end;
+  TDbgWinProcessClass = class of TDbgWinProcess;
 
   { tDbgWinLibrary }
 
@@ -218,8 +222,6 @@ type
       const AModuleHandle: THandle; const ABaseAddr: TDbgPtr; AInfo: TLoadDLLDebugInfo);
   end;
 
-
-procedure RegisterDbgClasses;
 
 implementation
 
@@ -333,17 +335,6 @@ begin
   DebugLn(DBG_WARNINGS and (_Wow64GetThreadContext = nil), ['WARNING: Failed to get Wow64GetThreadContext']);
   DebugLn(DBG_WARNINGS and (_Wow64SetThreadContext = nil), ['WARNING: Failed to get Wow64SetThreadContext']);
   {$endif}
-end;
-
-procedure RegisterDbgClasses;
-begin
-  OSDbgClasses.DbgThreadClass:=TDbgWinThread;
-  OSDbgClasses.DbgBreakpointClass:=TFpInternalBreakpoint;
-  OSDbgClasses.DbgProcessClass:=TDbgWinProcess;
-  GDisassembler := TX86Disassembler.Create;
-  // Set 64 bit mode according to compiler
-  // TODO: Perhaps extract from loaded debug information?
-  TX86Disassembler(GDisassembler).A64bit := {$ifdef cpui386}false{$else}true{$endif};
 end;
 
 procedure TDbgWinProcess.LogLastError;
@@ -624,6 +615,12 @@ begin
 
   result := TDbgWinProcess.Create(AFileName, APid, 0);
   // TODO: change the filename to the actual exe-filename. Load the correct dwarf info
+end;
+
+class function TDbgWinProcess.isSupported(target: TTargetDescriptor): boolean;
+begin
+  result := (target.OS = osWindows) and
+            (target.machineType in [mt386, mtX86_64]);
 end;
 
 function TDbgWinProcess.Continue(AProcess: TDbgProcess; AThread: TDbgThread;
@@ -1702,5 +1699,8 @@ initialization
 
   DBG_VERBOSE := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
   DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
+
+  FpDbgClasses.RegisterDbgProcessClass(TDbgWinProcessClass);
+
 end.
 

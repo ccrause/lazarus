@@ -43,7 +43,7 @@ uses
   DbgIntfDebuggerBase,
   FpPascalBuilder,
   fpDbgSymTableContext,
-  FpDbgDwarfDataClasses, fpdbgdisasbase; //FpDbgDisasX86;
+  FpDbgDwarfDataClasses, FpDbgDisasBase, FpDbgCommon;
 
 type
   TFPDEvent = (deExitProcess, deFinishedStep, deBreakpoint, deException, deCreateProcess, deLoadLibrary, deUnloadLibrary, deInternalContinue);
@@ -451,9 +451,15 @@ type
     function AnalyseDebugEvent(AThread: TDbgThread): TFPDEvent; virtual; abstract;
 
     function CreateWatchPointData: TFpWatchPointData; virtual;
+    function CreateBreakpoint(const ALocation: TDBGPtrArray; AnEnabled: Boolean): TFpInternalBreakpoint; virtual;
+    function CreateWatchPoint(const ALocation: TDBGPtr; ASize: Cardinal; AReadWrite: TDBGWatchPointKind;
+                      AScope: TDBGWatchPointScope): TFpInternalWatchpoint; virtual;
 public
     class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags): TDbgProcess; virtual;
     class function AttachToInstance(AFileName: string; APid: Integer): TDbgProcess; virtual;
+
+    class function isSupported(target: TTargetDescriptor): boolean; virtual;
+
     constructor Create(const AFileName: string; const AProcessID, AThreadID: Integer); virtual;
     destructor Destroy; override;
     function  AddInternalBreak(const ALocation: TDBGPtr): TFpInternalBreakpoint; overload;
@@ -565,13 +571,12 @@ public
     property Owner[AnIndex: Integer]: Pointer read GetOwner;
   end;
 
-  TOSDbgClasses = class
-  public
-    DbgThreadClass : TDbgThreadClass;
-    DbgBreakpointClass : TFpInternalBreakpointClass;
-    DbgWatchpointClass : TFpInternalWatchpointClass;
-    DbgProcessClass : TDbgProcessClass;
-  end;
+  //TOSDbgClasses = class
+  //  DbgThreadClass : TDbgThreadClass;
+  //  DbgBreakpointClass : TFpInternalBreakpointClass;
+  //  DbgWatchpointClass : TFpInternalWatchpointClass;
+  //  DbgProcessClass : TDbgProcessClass;
+  //end;
 
 var
   {$ifdef cpui386}
@@ -579,13 +584,16 @@ var
   {$else}
   GMode: TFPDMode = dm64;
   {$endif}
-  GDisassembler: TDisassembler;
+  GDisassembler: TDisassembler;        // Global disassembler instance
+  GDbgProcessClass: TDbgProcessClass;  // Global FpDbgProcess class reference
 
 const
   DBGPTRSIZE: array[TFPDMode] of Integer = (4, 8);
   FPDEventNames: array[TFPDEvent] of string = ('deExitProcess', 'deFinishedStep', 'deBreakpoint', 'deException', 'deCreateProcess', 'deLoadLibrary', 'deUnloadLibrary', 'deInternalContinue');
 
-function OSDbgClasses: TOSDbgClasses;
+function GetDbgProcessClass(target: TTargetDescriptor): TDbgProcessClass;
+
+procedure RegisterDbgProcessClass(ADbgProcessClass: TDbgProcessClass);
 
 implementation
 
@@ -603,29 +611,40 @@ uses
 {$endif}
 
 var
-  GOSDbgClasses : TOSDbgClasses;
   DBG_VERBOSE, DBG_WARNINGS, DBG_BREAKPOINTS, FPDBG_COMMANDS: PLazLoggerLogGroup;
+  RegisteredDbgProcessClasses: TFPList;
 
-function OSDbgClasses: TOSDbgClasses;
+function GetDbgProcessClass(target: TTargetDescriptor): TDbgProcessClass;
+var
+  i   : Integer;
+  cls : TDbgProcessClass;
 begin
-  if GOSDbgClasses=nil then
-    begin
-    GOSDbgClasses := TOSDbgClasses.create;
-    GOSDbgClasses.DbgThreadClass := TDbgThread;
-    GOSDbgClasses.DbgBreakpointClass := TFpInternalBreakpoint;
-    GOSDbgClasses.DbgWatchpointClass := TFpInternalWatchpoint;
-    GOSDbgClasses.DbgProcessClass := TDbgProcess;
-    {$ifdef windows}
-    RegisterDbgClasses;
-    {$endif windows}
-    {$ifdef darwin}
-    RegisterDbgClasses;
-    {$endif darwin}
-    {$ifdef linux}
-    RegisterDbgClasses;
-    {$endif linux}
+  Result := nil;
+
+  for i := 0 to RegisteredDbgProcessClasses.Count - 1 do
+  begin
+    cls :=  TDbgProcessClass(RegisteredDbgProcessClasses[i]);
+    try
+      if cls.isSupported(target) then
+      begin
+        Result := TDbgProcessClass(RegisteredDbgProcessClasses[i]);
+        Exit;
+      end;
+    except
+      on e: exception do
+      begin
+        //writeln('exception! WHY? ', e.Message);
+      end;
     end;
-  result := GOSDbgClasses;
+  end;
+end;
+
+procedure RegisterDbgProcessClass(ADbgProcessClass: TDbgProcessClass);
+begin
+  if not Assigned(RegisteredDbgProcessClasses) then
+    RegisteredDbgProcessClasses := TFPList.Create;
+  if RegisteredDbgProcessClasses.IndexOf(ADbgProcessClass) < 0 then
+    RegisteredDbgProcessClasses.Add(ADbgProcessClass);
 end;
 
 { TThreadMapEnumerator }
@@ -1245,7 +1264,7 @@ end;
 procedure TDbgInstance.LoadInfo;
 begin
   InitializeLoaders;
-  if FLoaderList.Image64Bit then
+  if FLoaderList.Target.bitness = b64 then  //Image64Bit then
     FMode:=dm64
   else
     FMode:=dm32;
@@ -1299,7 +1318,8 @@ function TDbgProcess.AddBreak(const ALocation: TDBGPtrArray; AnEnabled: Boolean
 var
   a, ip: TDBGPtr;
 begin
-  Result := OSDbgClasses.DbgBreakpointClass.Create(Self, ALocation, AnEnabled);
+  Result := self.CreateBreakpoint(ALocation, AnEnabled);
+
   // TODO: empty breakpoint (all address failed to set) = nil
   ip := FMainThread.GetInstructionPointerRegisterValue;
   if not assigned(FCurrentBreakpoint) then
@@ -1314,7 +1334,8 @@ function TDbgProcess.AddWatch(const ALocation: TDBGPtr; ASize: Cardinal;
   AReadWrite: TDBGWatchPointKind; AScope: TDBGWatchPointScope
   ): TFpInternalWatchpoint;
 begin
-  Result := OSDbgClasses.DbgWatchpointClass.Create(Self, ALocation, ASize, AReadWrite, AScope);
+  Result := CreateWatchPoint(ALocation, ASize, AReadWrite, AScope);
+  //Result := OSDbgClasses.DbgWatchpointClass.Create(Self, ALocation, ASize, AReadWrite, AScope);
 end;
 
 function TDbgProcess.FindProcSymbol(const AName, ALibraryName: String;
@@ -1751,6 +1772,11 @@ begin
   Result := nil;
 end;
 
+class function TDbgProcess.isSupported(target: TTargetDescriptor): boolean;
+begin
+  result := false;
+end;
+
 procedure TDbgProcess.ThreadDestroyed(const AThread: TDbgThread);
 begin
   if AThread = FMainThread
@@ -1979,6 +2005,19 @@ end;
 function TDbgProcess.CreateWatchPointData: TFpWatchPointData;
 begin
   Result := TFpWatchPointData.Create;
+end;
+
+function TDbgProcess.CreateBreakpoint(const ALocation: TDBGPtrArray;
+  AnEnabled: Boolean): TFpInternalBreakpoint;
+begin
+  Result := TFpInternalBreakpoint.Create(self, ALocation, AnEnabled);
+end;
+
+function TDbgProcess.CreateWatchPoint(const ALocation: TDBGPtr;
+  ASize: Cardinal; AReadWrite: TDBGWatchPointKind; AScope: TDBGWatchPointScope
+  ): TFpInternalWatchpoint;
+begin
+  Result := TFpInternalWatchpoint.Create(Self, ALocation, ASize, AReadWrite, AScope);
 end;
 
 function TDbgProcess.WriteData(const AAdress: TDbgPtr; const ASize: Cardinal; const AData): Boolean;
@@ -2636,14 +2675,15 @@ begin
 end;
 
 initialization
-  GOSDbgClasses := nil;
-
   DBG_VERBOSE := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
   DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
   DBG_BREAKPOINTS := DebugLogger.FindOrRegisterLogGroup('DBG_BREAKPOINTS' {$IFDEF DBG_BREAKPOINTS} , True {$ENDIF} );
   FPDBG_COMMANDS := DebugLogger.FindOrRegisterLogGroup('FPDBG_COMMANDS' {$IFDEF FPDBG_COMMANDS} , True {$ENDIF} );
 
-
 finalization
-  GOSDbgClasses.Free;
+  if assigned(RegisteredDbgProcessClasses) then
+    FreeAndNil(RegisteredDbgProcessClasses);
+  if Assigned(GDisassembler) then
+    FreeAndNil(GDisassembler);
+
 end.

@@ -11,7 +11,7 @@ uses
   Maps,
   LazLoggerBase,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
-  fpdbgdisasbase, //FpDbgDisasX86,
+  FpDbgDisasBase,
   FpDbgClasses, FpDbgInfo;
 
 type
@@ -214,6 +214,8 @@ type
     procedure SetExecutableFilename(AValue: string);
     procedure DoOnDebugInfoLoaded(Sender: TObject);
     procedure SetParams(AValue: TStringList);
+
+    procedure CheckExecutableAndLoadClasses;
   protected
     FMainProcess: TDbgProcess;
     FCurrentProcess: TDbgProcess;
@@ -278,6 +280,9 @@ type
   end;
 
 implementation
+
+uses
+  FpImgReaderBase, FpDbgCommon;
 
 var
   DBG_VERBOSE, DBG_WARNINGS, FPDBG_COMMANDS: PLazLoggerLogGroup;
@@ -894,6 +899,32 @@ begin
   FParams.Assign(AValue);
 end;
 
+procedure TDbgController.CheckExecutableAndLoadClasses;
+var
+  source: TDbgFileLoader;
+  imgReader: TDbgImageReader;
+  target: TTargetDescriptor;
+begin
+  if (FExecutableFilename <> '') and FileExists(FExecutableFilename) then
+  begin
+   DebugLn(DBG_VERBOSE, 'TDbgController.CheckExecutableAndLoadClasses');
+    try
+      source := TDbgFileLoader.Create(FExecutableFilename);
+      imgReader := GetImageReader(source, nil, false);
+
+      target := imgReader.Target;
+    finally
+      FreeAndNil(imgReader);  // TODO: Store object reference, it will be needed again
+      FreeAndNil(source);
+    end;
+  end
+  else
+    target := hostDescriptor;
+
+  GDisassembler := FpDbgDisasBase.GetDisassemblerInstance(target);
+  GDbgProcessClass := FpDbgClasses.GetDbgProcessClass(target);
+end;
+
 procedure TDbgController.SetExecutableFilename(AValue: string);
 begin
   if FExecutableFilename=AValue then Exit;
@@ -1000,13 +1031,24 @@ begin
     Exit;
     end;
 
+  // Get exe info, load classes
+  CheckExecutableAndLoadClasses;
+  if not (Assigned(GDbgProcessClass) and Assigned(GDbgProcessClass)) then
+  begin
+    result := false;
+    DebugLn(DBG_WARNINGS, 'Error - No support registered for debug target');
+    exit;
+  end;
+
   Flags := [];
   if RedirectConsoleOutput then Include(Flags, siRediretOutput);
   if ForceNewConsoleWin then Include(Flags, siForceNewConsole);
   if AttachToPid <> 0 then
-    FCurrentProcess := OSDbgClasses.DbgProcessClass.AttachToInstance(FExecutableFilename, AttachToPid)
+    FCurrentProcess := GDbgProcessClass.AttachToInstance(FExecutableFilename, AttachToPid)
+    //OSDbgClasses.DbgProcessClass.AttachToInstance(FExecutableFilename, AttachToPid)
   else
-    FCurrentProcess := OSDbgClasses.DbgProcessClass.StartInstance(FExecutableFilename, Params, Environment, WorkingDirectory, FConsoleTty, Flags);
+    FCurrentProcess := GDbgProcessClass.StartInstance(FExecutableFilename, Params, Environment, WorkingDirectory, FConsoleTty, Flags);
+    //OSDbgClasses.DbgProcessClass.StartInstance(FExecutableFilename, Params, Environment, WorkingDirectory, FConsoleTty, Flags);
   if assigned(FCurrentProcess) then
     begin
     FProcessMap.Add(FCurrentProcess.ProcessID, FCurrentProcess);
@@ -1280,8 +1322,24 @@ begin
   case FPDEvent of
     deCreateProcess:
       begin
+        DebugLn(DBG_VERBOSE, 'TDbgController.SendEvents called - deCreateProcess.');
+        if not Assigned(FCurrentProcess) then
+          DebugLn(DBG_WARNINGS, 'TDbgController.SendEvents called - deCreateProcess - FCurrentProcess not assigned.')
+        else if not Assigned(FCurrentProcess.DbgInfo) then
+        begin
+          DebugLn(DBG_WARNINGS, 'TDbgController.SendEvents called - deCreateProcess - FCurrentProcess.DbgInfo not assigned.');
+          FCurrentProcess.LoadInfo;
+        end;
+
+        if Assigned(FCurrentProcess.DbgInfo) and not(FCurrentProcess.DbgInfo.HasInfo) then
+          DebugLn(DBG_WARNINGS, 'TDbgController.SendEvents called - deCreateProcess - No debug info.');
       (* Only events for the main process get here / See ProcessLoop *)
-        FCurrentProcess.LoadInfo;
+
+        DebugLn(DBG_VERBOSE, Format('  Target.MachineType = %d', [FCurrentProcess.DbgInfo.Target.machineType]));
+        DebugLn(DBG_VERBOSE, Format('  Target.Bitness     = %d', [FCurrentProcess.DbgInfo.Target.bitness]));
+        DebugLn(DBG_VERBOSE, Format('  Target.byteOrder   = %d', [FCurrentProcess.DbgInfo.Target.byteOrder]));
+        DebugLn(DBG_VERBOSE, Format('  Target.OS          = %d', [FCurrentProcess.DbgInfo.Target.OS]));
+
         if not FCurrentProcess.DbgInfo.HasInfo then
           DebugLn(DBG_WARNINGS, 'No Dwarf-debug information available. The debugger will not function properly. [CurrentProcess='+dbgsname(FCurrentProcess)+',DbgInfo='+dbgsname(FCurrentProcess.DbgInfo)+']');
 

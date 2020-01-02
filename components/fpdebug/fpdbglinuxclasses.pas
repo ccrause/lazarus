@@ -20,7 +20,8 @@ uses
   FpDbgInfo,
   FpDbgUtil,
   UTF8Process,
-  LazLoggerBase, Maps;
+  LazLoggerBase, Maps,
+  FpDbgCommon;
 
 type
   user_regs_struct64 = record
@@ -295,6 +296,9 @@ type
       AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags): TDbgProcess; override;
     class function AttachToInstance(AFileName: string; APid: Integer
       ): TDbgProcess; override;
+
+    class function isSupported(target: TTargetDescriptor): boolean; override;
+
     constructor Create(const AName: string; const AProcessID, AThreadID: Integer); override;
     destructor Destroy; override;
 
@@ -312,26 +316,14 @@ type
     function Continue(AProcess: TDbgProcess; AThread: TDbgThread; SingleStep: boolean): boolean; override;
     function WaitForDebugEvent(out ProcessIdentifier, ThreadIdentifier: THandle): boolean; override;
   end;
-
-procedure RegisterDbgClasses;
+  TDbgLinuxProcessClass = class of TDbgLinuxProcess;
 
 implementation
-
-uses
-  FpDbgDisasX86;
 
 var
   DBG_VERBOSE, DBG_WARNINGS: PLazLoggerLogGroup;
   GConsoleTty: string;
   GSlavePTyFd: cint;
-
-procedure RegisterDbgClasses;
-begin
-  OSDbgClasses.DbgProcessClass:=TDbgLinuxProcess;
-  OSDbgClasses.DbgThreadClass:=TDbgLinuxThread;
-  GDisassembler := TX86Disassembler.Create;
-  TX86Disassembler(GDisassembler).A64bit := {$ifdef cpui386}false{$else}true{$endif};
-end;
 
 Function WIFSTOPPED(Status: Integer): Boolean;
 begin
@@ -830,6 +822,12 @@ begin
   result := TDbgLinuxProcess.Create(AFileName, APid, 0);
 
   // TODO: change the filename to the actual exe-filename. Load the correct dwarf info
+end;
+
+class function TDbgLinuxProcess.isSupported(target: TTargetDescriptor): boolean;
+begin
+  result := (target.OS = osLinux) and
+            (target.machineType in [mt386, mtX86_64]);
 end;
 
 function TDbgLinuxProcess.ReadData(const AAdress: TDbgPtr;
@@ -1371,4 +1369,7 @@ end;
 initialization
   DBG_VERBOSE := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
   DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
+
+  FpDbgClasses.RegisterDbgProcessClass(TDbgLinuxProcess);
+
 end.

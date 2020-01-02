@@ -41,7 +41,8 @@ interface
 uses
   SysUtils,
   FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools, LazLoggerBase,
-  fpdbgdisasbase;
+  FpDbgDisasBase, FpImgReaderBase,
+  FpDbgCommon;
 
 {                   
   The function Disassemble decodes the instruction at the given address.
@@ -206,7 +207,7 @@ type
 
   TX86Disassembler = class(TDisassembler)
   private
-    FIs64Bit: boolean;
+    function FIs64Bit: boolean;   // TODO: Perhaps buffer the boolean, but then need a hook to update if Target changes
     procedure FDisassemble(var AAddress: Pointer; out AnInstruction: TInstruction);
   public
     procedure Disassemble(var AAddress: Pointer; out ACodeBytes: String; out ACode: String); override;
@@ -219,8 +220,10 @@ type
     function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal;
       out AnIsOutsideFrame: Boolean): Boolean;  override;
 
+    class function isSupported(ATarget: TTargetDescriptor): boolean; override;
+
     constructor Create;
-    property A64bit: boolean read FIs64Bit write FIs64Bit;
+    property A64bit: boolean read FIs64Bit;
   end;
 
 
@@ -336,6 +339,11 @@ const
     '',
     'o', 'no', 'b', 'nb', 'z', 'nz', 'be', 'nbe', 's', 'ns', 'p', 'np', 'l', 'nl', 'le', 'nle'
   );
+
+function TX86Disassembler.FIs64Bit: boolean;
+begin
+  result := FTarget.bitness = b64;
+end;
 
 procedure TX86Disassembler.FDisassemble(var AAddress: Pointer; out AnInstruction: TInstruction);
 var
@@ -3479,6 +3487,13 @@ begin
   end;
 end;
 
+class function TX86Disassembler.isSupported(ATarget: TTargetDescriptor
+  ): boolean;
+begin
+  Result := (ATarget.machineType in [mtX86_64, mt386]) and
+            (ATarget.bitness in [b32, b64]);
+end;
+
 constructor TX86Disassembler.Create;
 begin
   FMaxInstructionSize := 15; // Quite large, but apparently a limit
@@ -3487,4 +3502,5 @@ end;
 
 initialization
   DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
+  FpDbgDisasBase.RegisterDisassemblerClass(TX86Disassembler);
 end.
