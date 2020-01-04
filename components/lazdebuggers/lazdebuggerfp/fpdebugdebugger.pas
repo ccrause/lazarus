@@ -1306,7 +1306,7 @@ var
   Sym: TFpSymbol;
   StatIndex: integer;
   FirstIndex: integer;
-  ALastAddr: TDBGPtr;
+  ALastAddr, tmpAddr, tmpPointer: TDBGPtr;
   bytesDisassembled, prevInstructionSize: integer;
 
 begin
@@ -1314,26 +1314,88 @@ begin
   if (Debugger = nil) or not(Debugger.State = dsPause) then
     exit;
 
-  Sym:=nil;
-  ASrcFileLine:=0;
-  ASrcFileName:='';
-  StatIndex:=0;
-  FirstIndex:=0;
+  Sym := nil;
+  ASrcFileLine := 0;
+  ASrcFileName := '';
+  StatIndex := 0;
+  FirstIndex := 0;
   ARange := TDBGDisassemblerEntryRange.Create;
-  ARange.RangeStartAddr:=AnAddr;
-  ALastAddr:=0;
+  ARange.RangeStartAddr := AnAddr;
+  ALastAddr := 0;
 
-  Assert(ALinesBefore<>0,'TFPDBGDisassembler.PrepareEntries LinesBefore not supported');
+  if (ALinesBefore > 0) and GDisassembler.CanReverseDisassemble then
+  begin
+    tmpAddr := AnAddr;  // do not modify AnAddr in this loop
+    // Large enough block of memory for whole loop
+    j := GDisassembler.MaxInstructionSize*ALinesBefore;
+    // But check that we don't read before start of memory
+    if j >= AnAddr then
+      j := AnAddr - 2;     // 2 == min instruction length for AVR
+    SetLength(CodeBin, j);
+
+    // Everything now counts back from starting address...
+    bytesDisassembled := length(CodeBin); // force memory read on first iteration
+
+    bytesDisassembled := 0;
+    // Only read up to byte before this address
+    if not TFpDebugDebugger(Debugger).ReadData(tmpAddr-j, j, CodeBin[0]) then
+      DebugLn(DBG_WARNINGS, Format('Disassemble: Failed to read memory at %s.', [FormatAddress(tmpAddr)]))
+    else
+      for i := 0 to ALinesBefore-1 do
+      begin
+        tmpPointer := TDBGPtr(@CodeBin[0]) + TDBGPtr(length(CodeBin)) - TDBGPtr(bytesDisassembled);
+        if tmpPointer >= 2 then    // TODO: 2 is min instruction size for AVR, generalize...
+          p := pointer(tmpPointer)
+        else
+          break;
+
+        GDisassembler.ReverseDisassemble(p, ADump, AStatement); // give statement before pointer p, pointer p points to decoded instruction on return
+        prevInstructionSize := {%H-}PtrUInt(@CodeBin[length(CodeBin)-1]) + 1 - {%H-}PtrUInt(p) - bytesDisassembled;
+        bytesDisassembled := bytesDisassembled + prevInstructionSize;
+        DebugLn(DBG_VERBOSE, format('Disassembled: [%.8X:  %s] %s',[tmpAddr, ADump, Astatement]));
+
+        Dec(tmpAddr, prevInstructionSize);
+        Sym := TFpDebugDebugger(Debugger).FDbgController.CurrentProcess.FindProcSymbol(tmpAddr);
+        // If this is the last statement for this source-code-line, fill the
+        // SrcStatementCount from the prior statements.
+        if (assigned(sym) and ((ASrcFileName<>sym.FileName) or (ASrcFileLine<>sym.Line))) or
+          (not assigned(sym) and ((ASrcFileLine<>0) or (ASrcFileName<>''))) then
+        begin
+          for j := 0 to StatIndex-1 do
+            ARange.EntriesPtr[FirstIndex+j]^.SrcStatementCount := StatIndex;
+          StatIndex := 0;
+          FirstIndex := i;
+        end;
+
+        if assigned(sym) then
+        begin
+          ASrcFileName:=sym.FileName;
+          ASrcFileLine:=sym.Line;
+          sym.ReleaseReference;
+        end
+        else
+        begin
+          ASrcFileName:='';
+          ASrcFileLine:=0;
+        end;
+        AnEntry.Addr := tmpAddr;
+        AnEntry.Dump := ADump;
+        AnEntry.Statement := AStatement;
+        AnEntry.SrcFileLine:=ASrcFileLine;
+        AnEntry.SrcFileName:=ASrcFileName;
+        AnEntry.SrcStatementIndex:=StatIndex;  // should be inverted for reverse parsing
+        ARange.Append(@AnEntry);
+        inc(StatIndex);
+      end;
+
+    // Only update start of range
+    if ARange.Count>0 then
+      ARange.RangeStartAddr := {%H-}TDBGPtr(p);
+  end;
 
   // Large enough block of memory for whole loop
   SetLength(CodeBin, GDisassembler.MaxInstructionSize*ALinesAfter);
   bytesDisassembled := length(CodeBin); // force memory read on first iteration
-
-  DebugLn(DBG_VERBOSE, Format('PrepareEntries: AnAddr = %x.', [AnAddr]));
-  DebugLn(DBG_VERBOSE, Format('PrepareEntries: ALinesAfter = %d.', [ALinesAfter]));
-  DebugLn(DBG_VERBOSE, Format('PrepareEntries: GDisassembler.MaxInstructionSize = %d.', [GDisassembler.MaxInstructionSize]));
-  DebugLn(DBG_VERBOSE, Format('PrepareEntries: GDisassembler = %s.', [GDisassembler.ClassName]));
-  DebugLn(DBG_VERBOSE, Format('PrepareEntries: length(CodeBin) = %d.', [length(CodeBin)]));
 
   for i := 0 to ALinesAfter-1 do
   begin
@@ -2822,6 +2884,11 @@ end;
 
 procedure TFpDebugDebugger.ExecuteInDebugThread(AMethod: TFpDbgAsyncMethod);
 begin
+  if ThreadID = FFpDebugThread.ThreadID then begin
+    AMethod();
+    exit;
+  end;
+
   assert(not assigned(FFpDebugThread.AsyncMethod));
   FFpDebugThread.AsyncMethod:=AMethod;
   RTLeventSetEvent(FFpDebugThread.StartDebugLoopEvent);

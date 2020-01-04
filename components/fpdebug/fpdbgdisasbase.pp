@@ -62,6 +62,7 @@ type
     // Size of largest opcode, used to overestimate buffer required for disassembling
     FMaxInstructionSize: integer;
     FTarget: TTargetDescriptor;
+    FCanReverseDisassemble: boolean; // set true if new class support reverse disassembling
   public
     procedure Disassemble(var AAddress: Pointer; out ACodeBytes: String; out ACode: String); virtual; abstract;
     procedure Disassemble(var AAddress: Pointer; out AnInstruction: TGenericInstruction); virtual; abstract;
@@ -70,11 +71,15 @@ type
       out AnIsOutsideFrame: Boolean): Boolean; virtual; abstract;
     function IsReturnInstruction(AAddress: Pointer): Integer; virtual; abstract;
 
+    // AAdress will be decremented to point to start of the disassembled instruction on success
+    procedure ReverseDisassemble(var AAddress: Pointer; out ACodeBytes: String; out ACode: String); virtual;
+
     class function isSupported(ATarget: TTargetDescriptor): boolean; virtual;
     constructor Create; virtual;
 
     property MaxInstructionSize: integer read FMaxInstructionSize;
     property Target: TTargetDescriptor read FTarget write FTarget;
+    property CanReverseDisassemble: boolean read FCanReverseDisassemble;
   end;
   TDisassemblerClass = class of TDisassembler;
 
@@ -126,6 +131,13 @@ end;
 
 { TDisassembler }
 
+procedure TDisassembler.ReverseDisassemble(var AAddress: Pointer; out
+  ACodeBytes: String; out ACode: String);
+begin
+  ACodeBytes := '';
+  ACode := '';
+end;
+
 class function TDisassembler.isSupported(ATarget: TTargetDescriptor): boolean;
 begin
   result := false;
@@ -134,6 +146,7 @@ end;
 constructor TDisassembler.Create;
 begin
   inherited Create;
+  FCanReverseDisassemble := false;
 end;
 
 initialization

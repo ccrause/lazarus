@@ -52,10 +52,11 @@ type
 
     // returns byte len of call instruction at AAddress // 0 if not a call intruction
     function IsCallInstruction(AAddress: Pointer): Integer; override;
-    function IsReturnInstruction(AAddress: Pointer): Integer;  override;
-
     function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal;
       out AnIsOutsideFrame: Boolean): Boolean;  override;
+    function IsReturnInstruction(AAddress: Pointer): Integer;  override;
+
+    procedure ReverseDisassemble(var AAddress: Pointer; out ACodeBytes: String; out ACode: String); override;
 
     class function isSupported(ATarget: TTargetDescriptor): boolean; override;
 
@@ -788,6 +789,31 @@ begin
     Result := 2;
 end;
 
+// Naive backwards scanner, decode 4 bytes back
+// if it is a 4 byte instruction, done!
+// If not it should be a two byte instruction.
+// One of the situations it will miss:
+// 4 byte instruction, followed by two byte instruction, followed by current (pointed to) instruction
+// if the last two bytes of the four byte instruction happens to be a valid 4 byte instruction header
+// the decoding will be wrong - the chances are 130 / 65535 = 0.2%
+procedure TAvrDisassembler.ReverseDisassemble(var AAddress: Pointer; out
+  ACodeBytes: String; out ACode: String);
+var
+  i: integer;
+  tmpAddress: PtrUint;
+begin
+  // Decode max instruction length backwards,
+  tmpAddress := PtrUInt(AAddress) - 4;
+
+  while tmpAddress < PtrUInt(AAddress) do
+  begin
+    Disassemble(pointer(tmpAddress), ACodeBytes, ACode);
+  end;
+
+  // Undo last dec
+  AAddress := pointer(tmpAddress - 2);
+end;
+
 function TAvrDisassembler.GetFunctionFrameInfo(AData: PByte;
   ADataLen: Cardinal; out AnIsOutsideFrame: Boolean): Boolean;
 begin
@@ -804,6 +830,7 @@ constructor TAvrDisassembler.Create;
 begin
   // Longest instructions are 4 bytes (call, jmp, lds, sts)
   FMaxInstructionSize := 4;
+  FCanReverseDisassemble := true;
 end;
 
 initialization
