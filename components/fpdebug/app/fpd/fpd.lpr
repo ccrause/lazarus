@@ -53,7 +53,10 @@ uses
   // The $ifdef below will not work for cross debugging of a remote target
   {$ifdef DARWIN}FpDbgDarwinClasses,{$endif}
   {$ifdef LINUX}FpDbgLinuxClasses,{$endif}
-  FpDbgCommon;
+  FpDbgCommon,
+  FpDbgDisasX86,
+  FpDbgDisasAvr,
+  FpDbgAvrClasses;
 
 {$ifdef windows}
 function CtrlCHandler(CtrlType: Cardinal): BOOL; stdcall;
