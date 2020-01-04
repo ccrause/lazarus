@@ -35,11 +35,11 @@ begin
                    {$elseif defined(CPUARM)} mtARM
                    {$elseif defined(CPUPOWERPC)} mtPPC
                    {$endif};
-    bitness     := {$ifdef CPU64} b64 {$elseif defined(CPU32)} b32 {$else} bNone {$endif};
+    bitness     := {$if defined(CPU64)} b64 {$elseif defined(CPU32)} b32 {$else} bNone {$endif};
 
     byteorder   := {$ifdef ENDIAN_LITTLE} boLSB {$else} boMSB {$endif};
 
-    OS          := {$ifdef DARWIN} osDarwin
+    OS          := {$if defined(DARWIN)} osDarwin
                    {$elseif defined(LINUX)} osLinux
                    {$elseif defined(MSWINDOWS)} osWindows {$endif};
   end;
