@@ -3194,7 +3194,14 @@ var
   n: integer;
 begin
   for n := 0 to FCompilationUnits.Count - 1 do
+  begin
+    if (n = 0) and
+       (TObject(FCompilationUnits[n]) is TDwarfCompilationUnit) and
+       (TDwarfCompilationUnit(FCompilationUnits[n]).DwarfSymbolClassMap is TFpSymbolDwarfClassMap) then
+      TDwarfCompilationUnit(FCompilationUnits[n]).DwarfSymbolClassMap.FreeAllInstances;
+
     TObject(FCompilationUnits[n]).Free;
+  end;
   FreeAndNil(FCompilationUnits);
   inherited Destroy;
 end;
@@ -4060,7 +4067,6 @@ begin
   FreeAndNil(FLineInfo.Directories);
   FreeAndNil(FLineInfo.FileNames);
 
-  FDwarfSymbolClassMap.FreeAllInstances;
   inherited Destroy;
 end;
 
