@@ -234,6 +234,7 @@ type
     procedure ProcessASyncWatches({%H-}Data: PtrInt);
     procedure ClearWatchEvalList;
   protected
+    procedure SetFileName(const AValue: String); override;  // so that file extension can be checked and changed if required for cross platform targets
     procedure GetCurrentThreadAndStackFrame(out AThreadId, AStackFrame: Integer);
     function GetContextForEvaluate(const ThreadId, StackFrame: Integer): TFpDbgInfoContext;
     procedure ScheduleWatchValueEval(AWatchValue: TWatchValue);
@@ -455,10 +456,10 @@ implementation
 
 uses
   FpDbgUtil,
-  fpdbgdisasbase, FpDbgDisasX86;
+  FpDbgDisasBase, FpDbgCommon;
 
 var
-  DBG_VERBOSE, DBG_BREAKPOINTS, FPDBG_COMMANDS: PLazLoggerLogGroup;
+  DBG_VERBOSE, DBG_BREAKPOINTS, FPDBG_COMMANDS, DBG_WARNINGS: PLazLoggerLogGroup;
 
 type
 
@@ -818,14 +819,17 @@ function TFpDbgMemReader.ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr;
   AContext: TFpDbgAddressContext): Boolean;
 begin
 {$ifdef linux}
-  FRegNum := ARegNum;
-  FRegContext := AContext;
-  FFpDebugDebugger.ExecuteInDebugThread(@DoReadRegister);
-  AValue := FRegValue;
-  result := FRegResult;
-{$else linux}
-  result := inherited ReadRegister(ARegNum, AValue, AContext);
+  if FFpDebugDebugger.DebugInfo.Target.OS = osLinux then  // only use threaded access if target is also Linux
+  begin
+    FRegNum := ARegNum;
+    FRegContext := AContext;
+    FFpDebugDebugger.ExecuteInDebugThread(@DoReadRegister);
+    AValue := FRegValue;
+    result := FRegResult;
+  end
+  else
 {$endif linux}
+    result := inherited ReadRegister(ARegNum, AValue, AContext);
 end;
 
 { TCallstackAsyncRequest }
@@ -1292,7 +1296,7 @@ function TFPDBGDisassembler.PrepareEntries(AnAddr: TDbgPtr; ALinesBefore, ALines
 var
   ARange: TDBGDisassemblerEntryRange;
   AnEntry: TDisassemblerEntry;
-  CodeBin: array[0..20] of byte;
+  CodeBin: TBytes;
   p: pointer;
   ADump,
   AStatement,
@@ -1303,6 +1307,7 @@ var
   StatIndex: integer;
   FirstIndex: integer;
   ALastAddr: TDBGPtr;
+  bytesDisassembled, prevInstructionSize: integer;
 
 begin
   Result := False;
@@ -1320,67 +1325,87 @@ begin
 
   Assert(ALinesBefore<>0,'TFPDBGDisassembler.PrepareEntries LinesBefore not supported');
 
+  // Large enough block of memory for whole loop
+  SetLength(CodeBin, GDisassembler.MaxInstructionSize*ALinesAfter);
+  bytesDisassembled := length(CodeBin); // force memory read on first iteration
+
+  DebugLn(DBG_VERBOSE, Format('PrepareEntries: AnAddr = %x.', [AnAddr]));
+  DebugLn(DBG_VERBOSE, Format('PrepareEntries: ALinesAfter = %d.', [ALinesAfter]));
+  DebugLn(DBG_VERBOSE, Format('PrepareEntries: GDisassembler.MaxInstructionSize = %d.', [GDisassembler.MaxInstructionSize]));
+  DebugLn(DBG_VERBOSE, Format('PrepareEntries: GDisassembler = %s.', [GDisassembler.ClassName]));
+  DebugLn(DBG_VERBOSE, Format('PrepareEntries: length(CodeBin) = %d.', [length(CodeBin)]));
+
   for i := 0 to ALinesAfter-1 do
+  begin
+    if (length(CodeBin) - bytesDisassembled) < GDisassembler.MaxInstructionSize then
     begin
-    if not TFpDebugDebugger(Debugger).ReadData(AnAddr,sizeof(CodeBin),CodeBin) then
+      DebugLn(DBG_VERBOSE, Format('PrepareEntries: Read memory at %s.', [FormatAddress(AnAddr)]));
+      if not TFpDebugDebugger(Debugger).ReadData(AnAddr,length(CodeBin),CodeBin[0]) then
       begin
-      DebugLn(Format('Disassemble: Failed to read memory at %s.', [FormatAddress(AnAddr)]));
-      inc(AnAddr);
+        DebugLn(DBG_WARNINGS, Format('Disassemble: Failed to read memory at %s.', [FormatAddress(AnAddr)]));
+        inc(AnAddr);
+        exit;
       end
-    else
-      begin
-      p := @CodeBin;
-      GDisassembler.Disassemble(p, ADump, AStatement);
-
-      Sym := TFpDebugDebugger(Debugger).FDbgController.CurrentProcess.FindProcSymbol(AnAddr);
-
-      // If this is the last statement for this source-code-line, fill the
-      // SrcStatementCount from the prior statements.
-      if (assigned(sym) and ((ASrcFileName<>sym.FileName) or (ASrcFileLine<>sym.Line))) or
-        (not assigned(sym) and ((ASrcFileLine<>0) or (ASrcFileName<>''))) then
-        begin
-        for j := 0 to StatIndex-1 do
-          ARange.EntriesPtr[FirstIndex+j]^.SrcStatementCount:=StatIndex;
-        StatIndex:=0;
-        FirstIndex:=i;
-        end;
-
-      if assigned(sym) then
-        begin
-        ASrcFileName:=sym.FileName;
-        ASrcFileLine:=sym.Line;
-        sym.ReleaseReference;
-        end
       else
-        begin
-        ASrcFileName:='';
-        ASrcFileLine:=0;
-        end;
-      AnEntry.Addr := AnAddr;
-      AnEntry.Dump := ADump;
-      AnEntry.Statement := AStatement;
-      AnEntry.SrcFileLine:=ASrcFileLine;
-      AnEntry.SrcFileName:=ASrcFileName;
-      AnEntry.SrcStatementIndex:=StatIndex;
-      ARange.Append(@AnEntry);
-      ALastAddr:=AnAddr;
-      inc(StatIndex);
-      Inc(AnAddr, {%H-}PtrUInt(p) - {%H-}PtrUInt(@CodeBin));
-      end;
+        bytesDisassembled := 0;
     end;
 
-  if ARange.Count>0 then
+    DebugLn(DBG_VERBOSE, Format('PrepareEntries: Values after possible read: [%s, %x], [%s, %x]', ['@CodeBin[0]', PtrUInt(@CodeBin[0]), 'bytesDisassembled', bytesDisassembled]));
+
+    p := pointer(PtrUInt(@CodeBin[0]) + bytesDisassembled);
+    GDisassembler.Disassemble(p, ADump, AStatement);
+    prevInstructionSize := {%H-}PtrUInt(p) - {%H-}PtrUInt(@CodeBin[0]) - bytesDisassembled;
+    bytesDisassembled := bytesDisassembled + prevInstructionSize;
+    DebugLn(DBG_VERBOSE, format('Disassembled: [%.8X:  %s] %s',[AnAddr, ADump, Astatement]));
+
+    Sym := TFpDebugDebugger(Debugger).FDbgController.CurrentProcess.FindProcSymbol(AnAddr);
+    // If this is the last statement for this source-code-line, fill the
+    // SrcStatementCount from the prior statements.
+    if (assigned(sym) and ((ASrcFileName<>sym.FileName) or (ASrcFileLine<>sym.Line))) or
+      (not assigned(sym) and ((ASrcFileLine<>0) or (ASrcFileName<>''))) then
     begin
+      for j := 0 to StatIndex-1 do
+        ARange.EntriesPtr[FirstIndex+j]^.SrcStatementCount:=StatIndex;
+      StatIndex:=0;
+      FirstIndex:=i;
+    end;
+
+    if assigned(sym) then
+    begin
+      ASrcFileName:=sym.FileName;
+      ASrcFileLine:=sym.Line;
+      sym.ReleaseReference;
+    end
+    else
+    begin
+      ASrcFileName:='';
+      ASrcFileLine:=0;
+    end;
+    AnEntry.Addr := AnAddr;
+    AnEntry.Dump := ADump;
+    AnEntry.Statement := AStatement;
+    AnEntry.SrcFileLine:=ASrcFileLine;
+    AnEntry.SrcFileName:=ASrcFileName;
+    AnEntry.SrcStatementIndex:=StatIndex;
+    ARange.Append(@AnEntry);
+    ALastAddr:=AnAddr;
+    inc(StatIndex);
+    //Inc(AnAddr, {%H-}PtrUInt(p) - {%H-}PtrUInt(@CodeBin));
+    Inc(AnAddr, prevInstructionSize);
+  end;
+
+  if ARange.Count>0 then
+  begin
     ARange.RangeEndAddr:=ALastAddr;
     ARange.LastEntryEndAddr:={%H-}TDBGPtr(p);
     EntryRanges.AddRange(ARange);
     result := true;
-    end
+  end
   else
-    begin
+  begin
     result := false;
     ARange.Free;
-    end;
+  end;
 end;
 
 { TFPRegisters }
@@ -2405,6 +2430,18 @@ begin
     end;
 end;
 
+procedure TFpDebugDebugger.SetFileName(const AValue: String);
+var
+  tmpName: string;
+begin
+  // Compiler add the .elf extension when creating the ELF file for an AVR program
+  tmpName := ChangeFileExt(AValue, '.elf');
+  if FileExists(tmpName) then
+    inherited SetFileName(tmpName)
+  else
+    inherited SetFileName(AValue);
+end;
+
 procedure TFpDebugDebugger.GetCurrentThreadAndStackFrame(out AThreadId,
   AStackFrame: Integer);
 var
@@ -2953,47 +2990,56 @@ function TFpDebugDebugger.AddBreak(const ALocation: TDbgPtr; AnEnabled: Boolean
   ): TFpDbgBreakpoint;
 begin
 {$ifdef linux}
-  FCacheLocation:=ALocation;
-  FCacheBoolean:=AnEnabled;
-  ExecuteInDebugThread(@DoAddBreakLocation);
-  result := FCacheBreakpoint;
-{$else linux}
-  if ALocation = 0 then
-    result := FDbgController.CurrentProcess.AddBreak(nil, AnEnabled)
+  if self.DebugInfo.Target.OS = osLinux then  // only use threaded access if target is also Linux
+  begin
+    FCacheLocation:=ALocation;
+    FCacheBoolean:=AnEnabled;
+    ExecuteInDebugThread(@DoAddBreakLocation);
+    result := FCacheBreakpoint;
+  end
   else
-    result := FDbgController.CurrentProcess.AddBreak(ALocation, AnEnabled);
 {$endif linux}
+    if ALocation = 0 then
+      result := FDbgController.CurrentProcess.AddBreak(nil, AnEnabled)
+    else
+      result := FDbgController.CurrentProcess.AddBreak(ALocation, AnEnabled);
 end;
 
 function TFpDebugDebugger.AddBreak(const AFileName: String; ALine: Cardinal;
   AnEnabled: Boolean): TFpDbgBreakpoint;
 begin
 {$ifdef linux}
-  FCacheFileName:=AFileName;
-  FCacheLine:=ALine;
-  FCacheBoolean:=AnEnabled;
-  ExecuteInDebugThread(@DoAddBreakLine);
-  result := FCacheBreakpoint;
-{$else linux}
-  result := TDbgInstance(FDbgController.CurrentProcess).AddBreak(AFileName, ALine, AnEnabled);
+  if self.DebugInfo.Target.OS = osLinux then  // only use threaded access if target is also Linux
+  begin
+    FCacheFileName:=AFileName;
+    FCacheLine:=ALine;
+    FCacheBoolean:=AnEnabled;
+    ExecuteInDebugThread(@DoAddBreakLine);
+    result := FCacheBreakpoint;
+  end
+  else
 {$endif linux}
+    result := TDbgInstance(FDbgController.CurrentProcess).AddBreak(AFileName, ALine, AnEnabled);
 end;
 
 function TFpDebugDebugger.AddBreak(const AFuncName: String; ALib: TDbgLibrary;
   AnEnabled: Boolean): TFpDbgBreakpoint;
 begin
 {$ifdef linux}
-  FCacheFileName:=AFuncName;
-  FCacheLib:=ALib;
-  FCacheBoolean:=AnEnabled;
-  ExecuteInDebugThread(@DoAddBreakFuncLib);
-  result := FCacheBreakpoint;
-{$else linux}
-  if ALib <> nil then
-    result := ALib.AddBreak(AFuncName, AnEnabled)
+  if self.DebugInfo.Target.OS = osLinux then  // only use threaded access if target is also Linux
+  begin
+    FCacheFileName:=AFuncName;
+    FCacheLib:=ALib;
+    FCacheBoolean:=AnEnabled;
+    ExecuteInDebugThread(@DoAddBreakFuncLib);
+    result := FCacheBreakpoint;
+  end
   else
-    result := TDbgInstance(FDbgController.CurrentProcess).AddBreak(AFuncName, AnEnabled);
 {$endif linux}
+    if ALib <> nil then
+      result := ALib.AddBreak(AFuncName, AnEnabled)
+    else
+      result := TDbgInstance(FDbgController.CurrentProcess).AddBreak(AFuncName, AnEnabled);
 end;
 
 function TFpDebugDebugger.AddWatch(const ALocation: TDBGPtr; ASize: Cardinal;
@@ -3001,40 +3047,53 @@ function TFpDebugDebugger.AddWatch(const ALocation: TDBGPtr; ASize: Cardinal;
   ): TFpDbgBreakpoint;
 begin
 {$ifdef linux}
-  FCacheLocation:=ALocation;
-  FCacheLine:=ASize;
-  FCacheReadWrite:=AReadWrite;
-  FCacheScope:=AScope;
-  ExecuteInDebugThread(@DoAddBWatch);
-  result := FCacheBreakpoint;
-{$else linux}
-  result := FDbgController.CurrentProcess.AddWatch(ALocation, ASize, AReadWrite, AScope);
+  if self.DebugInfo.Target.OS = osLinux then  // only use threaded access if target is also Linux
+  begin
+    FCacheLocation:=ALocation;
+    FCacheLine:=ASize;
+    FCacheReadWrite:=AReadWrite;
+    FCacheScope:=AScope;
+    ExecuteInDebugThread(@DoAddBWatch);
+    result := FCacheBreakpoint;
+  end
+  else
 {$endif linux}
+    result := FDbgController.CurrentProcess.AddWatch(ALocation, ASize, AReadWrite, AScope);
 end;
 
 procedure TFpDebugDebugger.FreeBreakpoint(
   const ABreakpoint: TFpDbgBreakpoint);
 begin
-{$ifdef linux}
   if ABreakpoint = nil then exit;
-  FCacheBreakpoint:=ABreakpoint;
-  ExecuteInDebugThread(@DoFreeBreakpoint);
-{$else linux}
-  ABreakpoint.Free;
+{$ifdef linux}
+  if self.DebugInfo.Target.OS = osLinux then  // only use threaded access if target is also Linux
+  begin
+    FCacheBreakpoint:=ABreakpoint;
+    ExecuteInDebugThread(@DoFreeBreakpoint);
+  end
+  else
 {$endif linux}
+    ABreakpoint.Free;
 end;
 
 function TFpDebugDebugger.ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean;
 begin
 {$ifdef linux}
-  FCacheLocation := AAdress;
-  FCacheLine:=ASize;
-  FCachePointer := @AData;
-  ExecuteInDebugThread(@DoReadData);
-  result := FCacheBoolean;
-{$else linux}
-  result:=FDbgController.CurrentProcess.ReadData(AAdress, ASize, AData);
+  if self.DebugInfo.Target.OS = osLinux then  // only use threaded access if target is also Linux
+  begin
+    DebugLn(DBG_VERBOSE, 'TFpDebugDebugger.ReadData reading memory using thread');
+    FCacheLocation := AAdress;
+    FCacheLine:=ASize;
+    FCachePointer := @AData;
+    ExecuteInDebugThread(@DoReadData);
+    result := FCacheBoolean;
+  end
+  else
 {$endif linux}
+    result:=FDbgController.CurrentProcess.ReadData(AAdress, ASize, AData);
+
+  if not Result then
+    DebugLn(DBG_WARNINGS, 'TFpDebugDebugger.ReadData failed to read memory');
 end;
 
 function TFpDebugDebugger.ReadAddress(const AAdress: TDbgPtr; out AData: TDBGPtr): Boolean;
@@ -3067,37 +3126,46 @@ begin
      (AFrameRequired < AThread.CallStackEntryList.Count) then
     exit;
 {$ifdef linux}
-  FCallStackEntryListThread := AThread;
-  FCallStackEntryListFrameRequired := AFrameRequired;
-  ExecuteInDebugThread(@DoPrepareCallStackEntryList);
-{$else linux}
-  AThread.PrepareCallStackEntryList(AFrameRequired);
+  if self.DebugInfo.Target.OS = osLinux then  // only use threaded access if target is also Linux
+  begin
+    FCallStackEntryListThread := AThread;
+    FCallStackEntryListFrameRequired := AFrameRequired;
+    ExecuteInDebugThread(@DoPrepareCallStackEntryList);
+  end
+  else
 {$endif linux}
+    AThread.PrepareCallStackEntryList(AFrameRequired);
 end;
 
 function TFpDebugDebugger.FindContext(AThreadId, AStackFrame: Integer): TFpDbgInfoContext;
 begin
 {$ifdef linux}
-  FCacheThreadId := AThreadId;
-  FCacheStackFrame := AStackFrame;
-  ExecuteInDebugThread(@DoFindContext);
-  Result := FCacheContext;
-{$else linux}
-  Result := FDbgController.CurrentProcess.FindContext(AThreadId, AStackFrame);
+  if self.DebugInfo.Target.OS = osLinux then  // only use threaded access if target is also Linux
+  begin
+    FCacheThreadId := AThreadId;
+    FCacheStackFrame := AStackFrame;
+    ExecuteInDebugThread(@DoFindContext);
+    Result := FCacheContext;
+  end
+  else
 {$endif linux}
+    Result := FDbgController.CurrentProcess.FindContext(AThreadId, AStackFrame);
 end;
 
 function TFpDebugDebugger.GetParamsAsString(AStackEntry: TDbgCallstackEntry;
   APrettyPrinter: TFpPascalPrettyPrinter): string;
 begin
 {$ifdef linux}
-  FParamAsStringStackEntry := AStackEntry;
-  FParamAsStringPrettyPrinter := APrettyPrinter;
-  ExecuteInDebugThread(@DoGetParamsAsString);
-  Result := FParamAsString;
-{$else linux}
-  Result := AStackEntry.GetParamsAsString(APrettyPrinter);
+  if self.DebugInfo.Target.OS = osLinux then  // only use threaded access if target is also Linux
+  begin
+    FParamAsStringStackEntry := AStackEntry;
+    FParamAsStringPrettyPrinter := APrettyPrinter;
+    ExecuteInDebugThread(@DoGetParamsAsString);
+    Result := FParamAsString;
+  end
+  else
 {$endif linux}
+    Result := AStackEntry.GetParamsAsString(APrettyPrinter);
 end;
 
 constructor TFpDebugDebugger.Create(const AExternalDebugger: String);
@@ -3228,9 +3296,10 @@ begin
 end;
 
 initialization
-  DBG_VERBOSE       := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
+  DBG_VERBOSE     := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
   DBG_BREAKPOINTS := DebugLogger.FindOrRegisterLogGroup('DBG_BREAKPOINTS' {$IFDEF DBG_BREAKPOINTS} , True {$ENDIF} );
-  FPDBG_COMMANDS := DebugLogger.FindOrRegisterLogGroup('FPDBG_COMMANDS' {$IFDEF FPDBG_COMMANDS} , True {$ENDIF} );
+  FPDBG_COMMANDS  := DebugLogger.FindOrRegisterLogGroup('FPDBG_COMMANDS' {$IFDEF FPDBG_COMMANDS} , True {$ENDIF} );
+  DBG_WARNINGS    := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
 
 end.
 
