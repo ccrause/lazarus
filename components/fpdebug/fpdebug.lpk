@@ -172,7 +172,19 @@ File(s) with other licenses (see also header in file(s):
       </Item>
       <Item>
         <Filename Value="fpdbgdisasbase.pp"/>
-        <UnitName Value="fpdbgdisasbase"/>
+        <UnitName Value="FpDbgDisasBase"/>
+      </Item>
+      <Item>
+        <Filename Value="fpdbgavrclasses.pas"/>
+        <UnitName Value="FpDbgAvrClasses"/>
+      </Item>
+      <Item>
+        <Filename Value="fpdbgdisasavr.pp"/>
+        <UnitName Value="FpDbgDisasAvr"/>
+      </Item>
+      <Item>
+        <Filename Value="fpdbgrsp.pas"/>
+        <UnitName Value="FpDbgRsp"/>
       </Item>
     </Files>
     <RequiredPkgs>
