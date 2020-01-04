@@ -1032,6 +1032,7 @@ begin
     end;
 
   // Get exe info, load classes
+  DebugLn(DBG_VERBOSE, 'Calling CheckExecutableAndLoadClasses, current file name: %s.',[FExecutableFilename]);
   CheckExecutableAndLoadClasses;
   if not (Assigned(GDbgProcessClass) and Assigned(GDisassembler)) then
   begin
