@@ -3194,14 +3194,7 @@ var
   n: integer;
 begin
   for n := 0 to FCompilationUnits.Count - 1 do
-  begin
-    if (n = 0) and
-       (TObject(FCompilationUnits[n]) is TDwarfCompilationUnit) and
-       (TDwarfCompilationUnit(FCompilationUnits[n]).DwarfSymbolClassMap is TFpSymbolDwarfClassMap) then
-      TDwarfCompilationUnit(FCompilationUnits[n]).DwarfSymbolClassMap.FreeAllInstances;
-
     TObject(FCompilationUnits[n]).Free;
-  end;
   FreeAndNil(FCompilationUnits);
   inherited Destroy;
 end;
@@ -3656,8 +3649,13 @@ procedure TFpSymbolDwarfClassMapList.FreeAllInstances;
 var
   i: Integer;
 begin
-  for i := 0 to length(FMapList) - 1 do
+  for i := 0 to length(FMapList) - 1 do begin
+    if FMapList[i] = FDefaultMap then
+      FDefaultMap := nil; // Should not happen, default map should not be added to list
     FMapList[i].FreeAllInstances;
+  end;
+  if FDefaultMap <> nil then
+    FDefaultMap.FreeAllInstances;
 end;
 
 procedure TFpSymbolDwarfClassMapList.AddMap(AMap: TFpSymbolDwarfClassMapClass);
