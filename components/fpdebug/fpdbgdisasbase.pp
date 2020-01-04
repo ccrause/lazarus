@@ -71,6 +71,7 @@ type
     function IsReturnInstruction(AAddress: Pointer): Integer; virtual; abstract;
 
     class function isSupported(ATarget: TTargetDescriptor): boolean; virtual;
+    constructor Create; virtual;
 
     property MaxInstructionSize: integer read FMaxInstructionSize;
     property Target: TTargetDescriptor read FTarget write FTarget;
@@ -128,6 +129,11 @@ end;
 class function TDisassembler.isSupported(ATarget: TTargetDescriptor): boolean;
 begin
   result := false;
+end;
+
+constructor TDisassembler.Create;
+begin
+  inherited Create;
 end;
 
 initialization

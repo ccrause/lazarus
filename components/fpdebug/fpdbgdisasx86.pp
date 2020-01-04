@@ -207,8 +207,11 @@ type
 
   TX86Disassembler = class(TDisassembler)
   private
+    //FMaxInstrSize: integer;
     function FIs64Bit: boolean;   // TODO: Perhaps buffer the boolean, but then need a hook to update if Target changes
     procedure FDisassemble(var AAddress: Pointer; out AnInstruction: TInstruction);
+  protected
+    //function GetMaxInstructionSize: integer; override;
   public
     procedure Disassemble(var AAddress: Pointer; out ACodeBytes: String; out ACode: String); override;
     procedure Disassemble(var AAddress: Pointer; out AnInstruction: TGenericInstruction); override;
@@ -222,7 +225,7 @@ type
 
     class function isSupported(ATarget: TTargetDescriptor): boolean; override;
 
-    constructor Create;
+    constructor Create; override;
     property A64bit: boolean read FIs64Bit;
   end;
 
