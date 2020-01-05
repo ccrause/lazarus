@@ -799,19 +799,29 @@ end;
 procedure TAvrDisassembler.ReverseDisassemble(var AAddress: Pointer; out
   ACodeBytes: String; out ACode: String);
 var
-  i: integer;
+  i, instrLen: integer;
   tmpAddress: PtrUint;
 begin
   // Decode max instruction length backwards,
-  tmpAddress := PtrUInt(AAddress) - 4;
+  instrLen := FMaxInstructionSize;
+  // TODO: starting address should fall on word boundary for AVR
+  // Cannot check it here since the pointer points to arbitrary host memory
 
-  while tmpAddress < PtrUInt(AAddress) do
-  begin
+  // TODO: could get an access violation if AAdress is within 4 bytes of start of memory = pointer(0)
+  // Easy to run into this situation: BP at entry point, or BP at start of interrupt table
+  // Perhaps add dummy bytes in host buffer and fill with 0 to avoid memory access violation
+  tmpAddress := PtrUInt(AAddress) - instrLen;
+
+  // Only two scenarios, so can in principle use a simple if check, but the loop illustrates the general method
+  inc(instrLen, 2); // to balance first dec in loop
+  repeat
+    dec(instrLen, 2);
     Disassemble(pointer(tmpAddress), ACodeBytes, ACode);
-  end;
+  until (tmpAddress = PtrUInt(AAddress)) or (instrLen = 2);
 
-  // Undo last dec
-  AAddress := pointer(tmpAddress - 2);
+  // After disassemble tmpAddress points to the starting address
+  // Decrement with the instruction length to point to the start of this instruction
+  AAddress := pointer(tmpAddress - instrLen);
 end;
 
 function TAvrDisassembler.GetFunctionFrameInfo(AData: PByte;
