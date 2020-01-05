@@ -1302,12 +1302,12 @@ var
   AStatement,
   ASrcFileName: string;
   ASrcFileLine: integer;
-  i,j: Integer;
+  i, j, sz, bufOffset: Integer;
   Sym: TFpSymbol;
   StatIndex: integer;
   FirstIndex: integer;
-  ALastAddr, tmpAddr, tmpPointer: TDBGPtr;
-  bytesDisassembled, prevInstructionSize: integer;
+  ALastAddr, tmpAddr, tmpPointer, prevInstructionSize: TDBGPtr;
+  bytesDisassembled: integer;
 
 begin
   Result := False;
@@ -1328,30 +1328,40 @@ begin
     AReversedRange := TDBGDisassemblerEntryRange.Create;
     tmpAddr := AnAddr;  // do not modify AnAddr in this loop
     // Large enough block of memory for whole loop
-    j := GDisassembler.MaxInstructionSize*ALinesBefore;
-    // But check that we don't read before start of memory
-    if j >= AnAddr then
-      j := AnAddr - 2;     // 2 == min instruction length for AVR
-    SetLength(CodeBin, j);
+    sz := GDisassembler.MaxInstructionSize*ALinesBefore;
+    SetLength(CodeBin, sz);
+
+    // TODO: Check if AnAddr is at lower address than length(CodeBin)
+    //       and ensure ReadData size doesn't exceed available target memory.
+    //       Fill out of bounds memory in buffer with "safe" value e.g. 0
+    if sz + GDisassembler.MaxInstructionSize > AnAddr then
+    begin
+      FillByte(CodeBin[0], sz, 0);
+      // offset into buffer where active memory should start
+      bufOffset := sz - AnAddr;
+      // size of active memory to read
+      sz := integer(AnAddr);
+    end
+    else
+    begin
+      bufOffset := 0;
+    end;
 
     // Everything now counts back from starting address...
-    bytesDisassembled := length(CodeBin); // force memory read on first iteration
-
     bytesDisassembled := 0;
     // Only read up to byte before this address
-    if not TFpDebugDebugger(Debugger).ReadData(tmpAddr-j, j, CodeBin[0]) then
-      DebugLn(DBG_WARNINGS, Format('Disassemble: Failed to read memory at %s.', [FormatAddress(tmpAddr)]))
+    if not TFpDebugDebugger(Debugger).ReadData(tmpAddr-sz, sz, CodeBin[bufOffset]) then
+      DebugLn(DBG_WARNINGS, Format('Reverse disassemble: Failed to read memory at %s.', [FormatAddress(tmpAddr)]))
     else
       for i := 0 to ALinesBefore-1 do
       begin
-        tmpPointer := TDBGPtr(@CodeBin[0]) + TDBGPtr(length(CodeBin)) - TDBGPtr(bytesDisassembled);
-        if tmpPointer >= 2 then    // TODO: 2 is min instruction size for AVR, generalize...
-          p := pointer(tmpPointer)
-        else
-          break;
+          if bytesDisassembled >= sz + GDisassembler.MinInstructionSize then
+            break;
 
+        tmpPointer := TDBGPtr(@CodeBin[bufOffset]) + TDBGPtr(sz) - TDBGPtr(bytesDisassembled);
+        p := pointer(tmpPointer);
         GDisassembler.ReverseDisassemble(p, ADump, AStatement); // give statement before pointer p, pointer p points to decoded instruction on return
-        prevInstructionSize := {%H-}PtrUInt(@CodeBin[length(CodeBin)-1]) + 1 - {%H-}PtrUInt(p) - bytesDisassembled;
+        prevInstructionSize := tmpPointer - PtrUInt(p);
         bytesDisassembled := bytesDisassembled + prevInstructionSize;
         DebugLn(DBG_VERBOSE, format('Disassembled: [%.8X:  %s] %s',[tmpAddr, ADump, Astatement]));
 

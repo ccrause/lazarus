@@ -3499,7 +3499,10 @@ end;
 
 constructor TX86Disassembler.Create;
 begin
-  FMaxInstructionSize := 15; // Quite large, but apparently a limit
+  inherited Create;
+  FMaxInstructionSize := 15; // Probable limit
+  FMinInstructionSize := 1;
+  FCanReverseDisassemble := true;
 end;
 
 

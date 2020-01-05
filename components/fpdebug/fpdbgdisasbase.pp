@@ -61,6 +61,7 @@ type
   protected
     // Size of largest opcode, used to overestimate buffer required for disassembling
     FMaxInstructionSize: integer;
+    FMinInstructionSize: integer;
     FTarget: TTargetDescriptor;
     FCanReverseDisassemble: boolean; // set true if new class support reverse disassembling
   public
@@ -78,6 +79,7 @@ type
     constructor Create; virtual;
 
     property MaxInstructionSize: integer read FMaxInstructionSize;
+    property MinInstructionSize: integer read FMinInstructionSize;
     property Target: TTargetDescriptor read FTarget write FTarget;
     property CanReverseDisassemble: boolean read FCanReverseDisassemble;
   end;
@@ -131,11 +133,28 @@ end;
 
 { TDisassembler }
 
+// Naive backwards scanner, decode MaxInstructionSize
+// if pointer to next instruction matches, done!
+// If not decrease instruction size and try again.
+// Many pitfalls with X86 instruction encoding...
+// Avr may give 130/65535 = 0.2% errors per instruction reverse decoded
 procedure TDisassembler.ReverseDisassemble(var AAddress: Pointer; out
   ACodeBytes: String; out ACode: String);
+var
+  i, instrLen: integer;
+  tmpAddress: PtrUint;
 begin
-  ACodeBytes := '';
-  ACode := '';
+  // Decode max instruction length backwards,
+  instrLen := FMaxInstructionSize + FMinInstructionSize;
+  repeat
+    dec(instrLen, FMinInstructionSize);
+    tmpAddress := PtrUInt(AAddress) - instrLen;
+    Disassemble(pointer(tmpAddress), ACodeBytes, ACode);
+  until (tmpAddress = PtrUInt(AAddress)) or (instrLen = FMinInstructionSize);
+
+  // After disassemble tmpAddress points to the starting address of next instruction
+  // Decrement with the instruction length to point to the start of this instruction
+  AAddress := AAddress - instrLen;
 end;
 
 class function TDisassembler.isSupported(ATarget: TTargetDescriptor): boolean;

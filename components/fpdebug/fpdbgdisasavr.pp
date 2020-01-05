@@ -56,8 +56,6 @@ type
       out AnIsOutsideFrame: Boolean): Boolean;  override;
     function IsReturnInstruction(AAddress: Pointer): Integer;  override;
 
-    procedure ReverseDisassemble(var AAddress: Pointer; out ACodeBytes: String; out ACode: String); override;
-
     class function isSupported(ATarget: TTargetDescriptor): boolean; override;
 
     constructor Create; override;
@@ -789,41 +787,6 @@ begin
     Result := 2;
 end;
 
-// Naive backwards scanner, decode 4 bytes back
-// if it is a 4 byte instruction, done!
-// If not it should be a two byte instruction.
-// One of the situations it will miss:
-// 4 byte instruction, followed by two byte instruction, followed by current (pointed to) instruction
-// if the last two bytes of the four byte instruction happens to be a valid 4 byte instruction header
-// the decoding will be wrong - the chances are 130 / 65535 = 0.2%
-procedure TAvrDisassembler.ReverseDisassemble(var AAddress: Pointer; out
-  ACodeBytes: String; out ACode: String);
-var
-  i, instrLen: integer;
-  tmpAddress: PtrUint;
-begin
-  // Decode max instruction length backwards,
-  instrLen := FMaxInstructionSize;
-  // TODO: starting address should fall on word boundary for AVR
-  // Cannot check it here since the pointer points to arbitrary host memory
-
-  // TODO: could get an access violation if AAdress is within 4 bytes of start of memory = pointer(0)
-  // Easy to run into this situation: BP at entry point, or BP at start of interrupt table
-  // Perhaps add dummy bytes in host buffer and fill with 0 to avoid memory access violation
-  tmpAddress := PtrUInt(AAddress) - instrLen;
-
-  // Only two scenarios, so can in principle use a simple if check, but the loop illustrates the general method
-  inc(instrLen, 2); // to balance first dec in loop
-  repeat
-    dec(instrLen, 2);
-    Disassemble(pointer(tmpAddress), ACodeBytes, ACode);
-  until (tmpAddress = PtrUInt(AAddress)) or (instrLen = 2);
-
-  // After disassemble tmpAddress points to the starting address
-  // Decrement with the instruction length to point to the start of this instruction
-  AAddress := pointer(tmpAddress - instrLen);
-end;
-
 function TAvrDisassembler.GetFunctionFrameInfo(AData: PByte;
   ADataLen: Cardinal; out AnIsOutsideFrame: Boolean): Boolean;
 begin
@@ -838,8 +801,10 @@ end;
 
 constructor TAvrDisassembler.Create;
 begin
+  inherited Create;
   // Longest instructions are 4 bytes (call, jmp, lds, sts)
   FMaxInstructionSize := 4;
+  FMinInstructionSize := 2;
   FCanReverseDisassemble := true;
 end;
 
