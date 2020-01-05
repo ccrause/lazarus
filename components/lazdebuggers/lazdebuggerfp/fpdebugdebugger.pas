@@ -1294,7 +1294,7 @@ end;
 
 function TFPDBGDisassembler.PrepareEntries(AnAddr: TDbgPtr; ALinesBefore, ALinesAfter: Integer): boolean;
 var
-  ARange: TDBGDisassemblerEntryRange;
+  ARange, AReversedRange: TDBGDisassemblerEntryRange;
   AnEntry: TDisassemblerEntry;
   CodeBin: TBytes;
   p: pointer;
@@ -1325,6 +1325,7 @@ begin
 
   if (ALinesBefore > 0) and GDisassembler.CanReverseDisassemble then
   begin
+    AReversedRange := TDBGDisassemblerEntryRange.Create;
     tmpAddr := AnAddr;  // do not modify AnAddr in this loop
     // Large enough block of memory for whole loop
     j := GDisassembler.MaxInstructionSize*ALinesBefore;
@@ -1362,7 +1363,10 @@ begin
           (not assigned(sym) and ((ASrcFileLine<>0) or (ASrcFileName<>''))) then
         begin
           for j := 0 to StatIndex-1 do
-            ARange.EntriesPtr[FirstIndex+j]^.SrcStatementCount := StatIndex;
+          begin
+            with AReversedRange.EntriesPtr[FirstIndex+j]^ do
+              SrcStatementCount := StatIndex;
+          end;
           StatIndex := 0;
           FirstIndex := i;
         end;
@@ -1384,13 +1388,29 @@ begin
         AnEntry.SrcFileLine:=ASrcFileLine;
         AnEntry.SrcFileName:=ASrcFileName;
         AnEntry.SrcStatementIndex:=StatIndex;  // should be inverted for reverse parsing
-        ARange.Append(@AnEntry);
+        AReversedRange.Append(@AnEntry);
         inc(StatIndex);
       end;
 
-    // Only update start of range
-    if ARange.Count>0 then
-      ARange.RangeStartAddr := {%H-}TDBGPtr(p);
+    if AReversedRange.Count>0 then
+    begin
+      // Update start of range
+      ARange.RangeStartAddr := tmpAddr;
+      // Copy range in revese order of entries
+      for i := 0 to AReversedRange.Count-1 do
+      begin
+        // Reverse order of statements
+        with AReversedRange.Entries[AReversedRange.Count-1 - i] do
+        begin
+          for j := 0 to SrcStatementCount-1 do
+            SrcStatementIndex := SrcStatementCount - 1 - j;
+        end;
+
+        ARange.Append(AReversedRange.EntriesPtr[AReversedRange.Count-1 - i]);
+      end;
+    end;
+    // Entries are all pointers, don't free entries
+    FreeAndNil(AReversedRange);
   end;
 
   // Large enough block of memory for whole loop
