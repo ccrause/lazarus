@@ -602,7 +602,7 @@ begin
   {$PUSH}{$Q-}{$R-}
   if (AThread = FThread) and
      (NextInstruction.IsCallInstruction) and
-     (FThread.GetInstructionPointerRegisterValue + NextInstruction.InstructionLenght = FAfterFinCallAddr)
+     (FThread.GetInstructionPointerRegisterValue + NextInstruction.InstructionLength = FAfterFinCallAddr)
   then begin
     RemoveHiddenBreak;
     FProcess.Continue(FProcess, FThread, True);
