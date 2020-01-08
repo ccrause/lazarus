@@ -473,7 +473,7 @@ begin
   Result := NextInstruction.IsCallInstruction;
   if Result then
     {$PUSH}{$Q-}{$R-}
-    SetHiddenBreak(FThread.GetInstructionPointerRegisterValue + NextInstruction.InstructionLenght);
+    SetHiddenBreak(FThread.GetInstructionPointerRegisterValue + NextInstruction.InstructionLength);
     {$POP}
 end;
 
