@@ -38,34 +38,66 @@ interface
 uses
   SysUtils,
   FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools, LazLoggerBase,
-  FpDbgCommon, FpDbgDisasBase;
+  FpDbgClasses;
 
 type
   //The function Disassemble decodes the instruction at the given address.
   //Unrecognized instructions are assumed to be data statements [dw XXXX]
 
-  { TAvrDisassembler }
+  TAvrDisassembler = class;
 
-  TAvrDisassembler = class(TDisassembler)
+  { TX86DisassemblerInstruction }
+
+  { TAvrDisassemblerInstruction }
+
+  TAvrDisassemblerInstruction = class(TDbgDisassemblerInstruction)
+  private const
+    INSTR_CODEBIN_LEN = 4;
+  private
+    FDisassembler: TAvrDisassembler;
+    FAddress: TDBGPtr;
+    FCodeBin: array[0..INSTR_CODEBIN_LEN-1] of byte;
+    FInstrLen: Integer;
+    FFlags: set of (diCodeRead, diCodeReadError);
+  protected
+    procedure ReadCode; inline;
+  public
+    constructor Create(ADisassembler: TAvrDisassembler);
+    procedure SetAddress(AnAddress: TDBGPtr);
+    function IsCallInstruction: boolean; override;
+    function IsReturnInstruction: boolean; override;
+    function IsLeaveStackFrame: boolean; override;
+    function InstructionLength: Integer; override;
+  end;
+
+{ TAvrDisassembler }
+
+  TAvrDisassembler = class(TDbgDisassembler)
+  private const
+    MAX_CODEBIN_LEN = 50;
+  private
+    FProcess: TDbgProcess;
+    FLastErrWasMem: Boolean;
+    FCodeBin: array[0..MAX_CODEBIN_LEN-1] of byte;
+    FLastInstr: TAvrDisassembler;
+  protected
+    function GetLastErrorWasMemReadErr: Boolean; override;
+    function ReadCodeAt(AnAddress: TDBGPtr; var ALen: Cardinal): Boolean; inline;
     procedure Disassemble(var AAddress: Pointer; out ACodeBytes: String; out ACode: String); override;
-    procedure Disassemble(var AAddress: Pointer; out AnInstruction: TGenericInstruction); override;
 
     // returns byte len of call instruction at AAddress // 0 if not a call intruction
-    function IsCallInstruction(AAddress: Pointer): Integer; override;
-    function GetFunctionFrameInfo(AData: PByte; ADataLen: Cardinal;
-      out AnIsOutsideFrame: Boolean): Boolean;  override;
-    function IsReturnInstruction(AAddress: Pointer): Integer;  override;
+    function GetFunctionFrameInfo(AnAddress: TDBGPtr; out
+      AnIsOutsideFrame: Boolean): Boolean; override;
 
-    class function isSupported(ATarget: TTargetDescriptor): boolean; override;
-
-    constructor Create; override;
+    constructor Create(AProcess: TDbgProcess); override;
+    destructor Destroy;
   end;
 
 
 implementation
 
 uses
-  StrUtils;
+  StrUtils, LazClasses;
 
 const
   opRegReg = '%s r%d, r%d';
@@ -110,6 +142,86 @@ end;
 function InvalidOpCode(instr: word): string;
 begin
   result := format(opConstHex16, ['dw', instr]);
+end;
+
+{ TAvrDisassemblerInstruction }
+
+procedure TAvrDisassemblerInstruction.ReadCode;
+begin
+  if not (diCodeRead in FFlags) then begin
+    if not FDisassembler.FProcess.ReadData(FAddress, INSTR_CODEBIN_LEN, FCodeBin) then
+      Include(FFlags, diCodeReadError);
+    Include(FFlags, diCodeRead);
+  end;
+end;
+
+constructor TAvrDisassemblerInstruction.Create(ADisassembler: TAvrDisassembler);
+begin
+  FDisassembler := ADisassembler;
+  inherited Create;
+  AddReference;
+end;
+
+procedure TAvrDisassemblerInstruction.SetAddress(AnAddress: TDBGPtr);
+begin
+  FAddress := AnAddress;
+  FFlags := [];
+end;
+
+function TAvrDisassemblerInstruction.IsCallInstruction: boolean;
+var
+  LoByte, HiByte: byte;
+begin
+  Result := False;
+  ReadCode;
+  LoByte := FCodeBin[0];
+  HiByte := FCodeBin[1];
+  if ((HiByte and $FE) = $94) and ((LoByte and $0E) = $0E) or // call
+     ((HiByte = $95) and (LoByte in [$09, $19])) or           // icall / eicall
+     ((HiByte and $D0) = $D0) then                            // rcall
+    Result := true;
+end;
+
+function TAvrDisassemblerInstruction.IsReturnInstruction: boolean;
+var
+  LoByte, HiByte: byte;
+begin
+  Result := False;
+  ReadCode;
+  LoByte := FCodeBin[0];
+  HiByte := FCodeBin[1];
+  if ((HiByte = $95) and (LoByte in [$08, $18])) then  // ret / reti
+    Result := true;
+end;
+
+function TAvrDisassemblerInstruction.IsLeaveStackFrame: boolean;
+begin
+  Result := false;
+end;
+
+function TAvrDisassemblerInstruction.InstructionLength: Integer;
+var
+  LoByte, HiByte: byte;
+begin
+  Result := 2;
+  ReadCode;
+  LoByte := FCodeBin[0];
+  HiByte := FCodeBin[1];
+  if ((HiByte and $FE) = $94) and ((LoByte and $0E) in [$0C, $0E]) or   // jmp / call
+     ((HiByte and $FE) in [$90, $92]) and ((LoByte and $0F) = $0) then  // lds / sts
+    Result := 4;
+end;
+
+function TAvrDisassembler.GetLastErrorWasMemReadErr: Boolean;
+begin
+  Result := FLastErrWasMem;
+end;
+
+function TAvrDisassembler.ReadCodeAt(AnAddress: TDBGPtr; var ALen: Cardinal
+  ): Boolean;
+begin
+  FLastErrWasMem := not FProcess.ReadData(AnAddress, ALen, FCodeBin[0], ALen);
+  Result := FLastErrWasMem;
 end;
 
 procedure TAvrDisassembler.Disassemble(var AAddress: Pointer; out
@@ -715,101 +827,24 @@ begin
   Inc(AAddress, CodeIdx);
 end;
 
-procedure TAvrDisassembler.Disassemble(var AAddress: Pointer; out
-  AnInstruction: TGenericInstruction);
-var
-  codebytes, code, instruction: string;
-  space1, space2: integer;
-begin
-  Disassemble(AAddress, codebytes, code);
-
-  space1 := pos(' ', code);
-  if space1 > 0 then
-    instruction := copy(code, 1, space1-1)
-  else
-    instruction := code;
-
-  // Only call & ret instructions are used further in the debug controller
-  case instruction of
-    'ret', 'reti': AnInstruction.OpCode := OPG_Ret;
-    'call', 'eicall', 'icall', 'rcall': AnInstruction.OpCode := OPG_Call;
-    'mov': AnInstruction.OpCode := OPG_Mov;
-  else
-    AnInstruction.OpCode := OPG_Other;
-  end;
-
-  // AVR instructions can have 0..2 operands
-  if space1 = 0 then
-    AnInstruction.OperCnt := 0
-  else
-  begin
-    space2 := PosEx(' ', code, space1);
-    if space2 > 0 then
-    begin
-      AnInstruction.OperCnt := 2;
-      AnInstruction.Operand[1].Value := copy(code, space1+1, space2-1);
-      AnInstruction.Operand[2].Value := copy(code, space2+1, length(code));
-    end
-    else
-    begin
-      AnInstruction.OperCnt := 1;
-      AnInstruction.Operand[1].Value := copy(code, space1+1, length(code));
-    end;
-  end;
-end;
-
-function TAvrDisassembler.IsCallInstruction(AAddress: Pointer): Integer;
-var
-  HiByte, LoByte: PByte;
-begin
-  Result := 0;
-  // little endian
-  LoByte := AAddress;
-  HiByte := AAddress+1;
-  if ((HiByte^ and $94) = $94) and ((LoByte^ and $0E) = $0E) then // call
-    Result := 4
-  else if (HiByte^ = $95) and (LoByte^ in [$09, $19]) or          // icall / eicall
-          ((HiByte^ and $D0) = $D0) then                          // rcall
-   Result := 2;
-end;
-
-function TAvrDisassembler.IsReturnInstruction(AAddress: Pointer): Integer;
-var
-  HiByte, LoByte: PByte;
-begin
-  Result := 0;
-  // little endian
-  LoByte := AAddress;
-  HiByte := AAddress+1;
-
-  // ret or reti instructions
-  if (HiByte^ = $95) and ((LoByte^ = $08) or (LoByte^ = $18)) then
-    Result := 2;
-end;
-
-function TAvrDisassembler.GetFunctionFrameInfo(AData: PByte;
-  ADataLen: Cardinal; out AnIsOutsideFrame: Boolean): Boolean;
+function TAvrDisassembler.GetFunctionFrameInfo(AnAddress: TDBGPtr; out
+  AnIsOutsideFrame: Boolean): Boolean;
 begin
   result := false;
 end;
 
-class function TAvrDisassembler.isSupported(ATarget: TTargetDescriptor
-  ): boolean;
+constructor TAvrDisassembler.Create(AProcess: TDbgProcess);
 begin
-  Result := ATarget.machineType = mtAVR8;
+  FProcess := AProcess;
 end;
 
-constructor TAvrDisassembler.Create;
+destructor TAvrDisassembler.Destroy;
 begin
-  inherited Create;
-  // Longest instructions are 4 bytes (call, jmp, lds, sts)
-  FMaxInstructionSize := 4;
-  FMinInstructionSize := 2;
-  FCanReverseDisassemble := true;
+  ReleaseRefAndNil(FLastInstr);
+  inherited Destroy;
 end;
 
 initialization
   DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
-  FpDbgDisasBase.RegisterDisassemblerClass(TAvrDisassembler);
 
 end.
