@@ -137,7 +137,7 @@ type
 
     class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings;
       AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags;
-      AnOsClasses: TOSDbgClasses): TDbgProcess; virtual;
+      AnOsClasses: TOSDbgClasses): TDbgProcess; override;
 
     // Not supported, returns false
     //class function AttachToInstance(AFileName: string; APid: Integer
@@ -984,5 +984,8 @@ end;
 initialization
   DBG_VERBOSE := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
   DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
-
+  RegisterDbgOsClasses(TOSDbgClasses.Create(
+    TDbgAvrProcess,
+    TDbgAvrThread,
+    TAvrDisassembler));
 end.
