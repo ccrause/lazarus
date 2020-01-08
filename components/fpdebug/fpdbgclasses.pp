@@ -405,7 +405,7 @@ type
     function IsCallInstruction: boolean; virtual;
     function IsReturnInstruction: boolean; virtual;
     function IsLeaveStackFrame: boolean; virtual;
-    function InstructionLenght: Integer; virtual;
+    function InstructionLength: Integer; virtual;
   end;
 
   { TDbgDisassembler }
@@ -1284,7 +1284,7 @@ begin
   Result := False;
 end;
 
-function TDbgDisassemblerInstruction.InstructionLenght: Integer;
+function TDbgDisassemblerInstruction.InstructionLength: Integer;
 begin
   Result := 0;
 end;

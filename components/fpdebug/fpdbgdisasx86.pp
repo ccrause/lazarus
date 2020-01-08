@@ -224,7 +224,7 @@ type
     function IsCallInstruction: boolean; override;
     function IsReturnInstruction: boolean; override;
     function IsLeaveStackFrame: boolean; override;
-    function InstructionLenght: Integer; override;
+    function InstructionLength: Integer; override;
     function X86OpCode: TOpCode;
     property X86Instruction: TInstruction read FInstruction; // only valid after call to X86OpCode
   end;
@@ -441,7 +441,7 @@ begin
   Result := (FInstruction.OpCode = OPleave);
 end;
 
-function TX86DisassemblerInstruction.InstructionLenght: Integer;
+function TX86DisassemblerInstruction.InstructionLength: Integer;
 begin
   Disassemble;
   Result := FInstrLen;
