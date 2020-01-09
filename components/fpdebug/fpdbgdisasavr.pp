@@ -79,11 +79,12 @@ type
     FProcess: TDbgProcess;
     FLastErrWasMem: Boolean;
     FCodeBin: array[0..MAX_CODEBIN_LEN-1] of byte;
-    FLastInstr: TAvrDisassembler;
+    FLastInstr: TAvrDisassemblerInstruction;
   protected
     function GetLastErrorWasMemReadErr: Boolean; override;
     function ReadCodeAt(AnAddress: TDBGPtr; var ALen: Cardinal): Boolean; inline;
     procedure Disassemble(var AAddress: Pointer; out ACodeBytes: String; out ACode: String); override;
+    function GetInstructionInfo(AnAddress: TDBGPtr): TDbgDisassemblerInstruction; override;
 
     // returns byte len of call instruction at AAddress // 0 if not a call intruction
     function GetFunctionFrameInfo(AnAddress: TDBGPtr; out
@@ -825,6 +826,18 @@ begin
     ACodeBytes := ACodeBytes + HexStr(pcode[k], 2);
 
   Inc(AAddress, CodeIdx);
+end;
+
+function TAvrDisassembler.GetInstructionInfo(AnAddress: TDBGPtr
+  ): TDbgDisassemblerInstruction;
+begin
+  if (FLastInstr = nil) or (FLastInstr.RefCount > 1) then begin
+    ReleaseRefAndNil(FLastInstr);
+    FLastInstr := TAvrDisassemblerInstruction.Create(Self);
+  end;
+
+  FLastInstr.SetAddress(AnAddress);
+  Result := FLastInstr;
 end;
 
 function TAvrDisassembler.GetFunctionFrameInfo(AnAddress: TDBGPtr; out
