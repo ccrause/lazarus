@@ -1862,8 +1862,8 @@ type
                      const ACallback: TMethod): Boolean;
     procedure SetDebuggerEnvironment (const AValue: TStrings ); overload;
     procedure SetEnvironment(const AValue: TStrings);
-    procedure SetFileName(const AValue: String);
   protected
+    procedure SetFileName(const AValue: String); virtual;
     procedure ResetStateToIdle; virtual;
     function  CreateBreakPoints: TDBGBreakPoints; virtual;
     function  CreateLocals: TLocalsSupplier; virtual;
