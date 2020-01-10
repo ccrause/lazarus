@@ -402,6 +402,7 @@ begin
   if not FWaitForData() then
   begin
     msg := '';
+    exit;
   end;
 
   try
