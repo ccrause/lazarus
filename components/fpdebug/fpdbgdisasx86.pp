@@ -245,6 +245,7 @@ type
     function GetLastErrorWasMemReadErr: Boolean; override;
     function GetMaxInstrSize: integer; override;
     function GetMinInstrSize: integer; override;
+    function GetCanReverseDisassemble: boolean; override;
     function ReadCodeAt(AnAddress: TDBGPtr; var ALen: Cardinal): Boolean; inline;
     procedure Disassemble(var AAddress: Pointer; out AnInstruction: TInstruction);
   public
@@ -3535,6 +3536,11 @@ end;
 function TX86Disassembler.GetMinInstrSize: integer;
 begin
   Result := 1;
+end;
+
+function TX86Disassembler.GetCanReverseDisassemble: boolean;
+begin
+  Result := true;
 end;
 
 function TX86Disassembler.ReadCodeAt(AnAddress: TDBGPtr; var ALen: Cardinal
