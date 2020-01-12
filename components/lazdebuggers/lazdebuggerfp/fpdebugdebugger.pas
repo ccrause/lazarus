@@ -1487,7 +1487,9 @@ begin
       inc(StatIndex);
       Inc(AnAddr, prevInstructionSize);
       end;
-  end;
+  end
+  else
+    ALastAddr := AnAddr;
 
   if ARange.Count>0 then
     begin
