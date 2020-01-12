@@ -2530,7 +2530,7 @@ begin
   // ppcrossavr names AVR executables with .elf extension
   // Hack to work around Lazarus looking for the native file extension
   newFileName := AValue;
-  if not FileExists(AValue) then
+  if (AValue <> '') and not FileExists(AValue) then
     newFileName := ChangeFileExt(AValue, '.elf');
   inherited SetFileName(newFileName);
 end;
