@@ -523,7 +523,7 @@ begin
   else
   begin
     ReadDebugReg(SPindex, result);
-    FRegs[SPLindex].Value := result;
+    FRegs[SPindex].Value := result;
     FRegs[SPindex].Initialized := true;
   end;
 end;

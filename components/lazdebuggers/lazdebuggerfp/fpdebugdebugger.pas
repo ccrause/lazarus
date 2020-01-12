@@ -233,8 +233,6 @@ type
     procedure DoWatchFreed(Sender: TObject);
     procedure ProcessASyncWatches({%H-}Data: PtrInt);
     procedure ClearWatchEvalList;
-
-    procedure SetFileName(const AValue: String); override;
   protected
     procedure GetCurrentThreadAndStackFrame(out AThreadId, AStackFrame: Integer);
     function GetContextForEvaluate(const ThreadId, StackFrame: Integer): TFpDbgInfoContext;
@@ -2523,18 +2521,6 @@ begin
       TWatchValue(FWatchEvalList[0]).RemoveFreeNotification(@DoWatchFreed);
       FWatchEvalList.Delete(0);
     end;
-end;
-
-procedure TFpDebugDebugger.SetFileName(const AValue: String);
-var
-  newFileName: string;
-begin
-  // ppcrossavr names AVR executables with .elf extension
-  // Hack to work around Lazarus looking for the native file extension
-  newFileName := AValue;
-  if (AValue <> '') and not FileExists(AValue) then
-    newFileName := ChangeFileExt(AValue, '.elf');
-  inherited SetFileName(newFileName);
 end;
 
 procedure TFpDebugDebugger.GetCurrentThreadAndStackFrame(out AThreadId,
