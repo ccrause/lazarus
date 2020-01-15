@@ -982,5 +982,5 @@ initialization
   RegisterDbgOsClasses(TOSDbgClasses.Create(
     TDbgAvrProcess,
     TDbgAvrThread,
-    TAvrDisassembler));
+    TAvrAsmDecoder));
 end.

@@ -1372,7 +1372,7 @@ initialization
   RegisterDbgOsClasses(TOSDbgClasses.Create(
     TDbgLinuxProcess,
     TDbgLinuxThread,
-    TX86Disassembler
+    TX86AsmDecoder
   ));
 
 end.
