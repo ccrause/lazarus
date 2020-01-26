@@ -482,22 +482,28 @@ begin
     exit;
 
   DebugLn(DBG_VERBOSE, 'TDbgRspThread.GetInstructionPointerRegisterValue requesting PC.');
-  if FRegs[PCindex].Initialized then
-    result := FRegs[PCindex].Value
-  else
-  begin
-    ReadDebugReg(PCindex, result);
-    FRegs[PCindex].Value := result;
-    FRegs[PCindex].Initialized := true;
-  end;
+  ReadDebugReg(PCindex, result);
 end;
 
 function TDbgAvrThread.GetStackBasePointerRegisterValue: TDbgPtr;
+var
+  lval, hval: QWord;
 begin
   Result := 0;
-  //if not ReadThreadState then
-  //  exit;
-  //result := FRegs.SPL + FRegs.SPH shl 8;
+  if TDbgAvrProcess(Process).FIsTerminating then
+  begin
+    DebugLn(DBG_WARNINGS, 'TDbgAvrThread.GetStackBasePointerRegisterValue called while FIsTerminating is set.');
+    exit;
+  end;
+
+  if not ReadThreadState then
+    exit;
+
+  DebugLn(DBG_VERBOSE, 'TDbgAvrThread.GetStackBasePointerRegisterValue requesting base registers.');
+  // Y-pointer (r28..r29)
+  ReadDebugReg(28, lval);
+  ReadDebugReg(29, hval);
+  result := byte(lval) + (byte(hval) shl 8);
 end;
 
 function TDbgAvrThread.GetStackPointerRegisterValue: TDbgPtr;
@@ -513,14 +519,7 @@ begin
     exit;
 
   DebugLn(DBG_VERBOSE, 'TDbgRspThread.GetStackPointerRegisterValue requesting stack registers.');
-  if FRegs[SPindex].Initialized then
-    result := FRegs[SPindex].Value
-  else
-  begin
-    ReadDebugReg(SPindex, result);
-    FRegs[SPindex].Value := result;
-    FRegs[SPindex].Initialized := true;
-  end;
+  ReadDebugReg(SPindex, result);
 end;
 
 { TDbgAvrProcess }
