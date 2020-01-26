@@ -681,7 +681,13 @@ begin
       if not (TCocoaWindowContent(obj).isembedded)
         and not isTopModalWin(TCocoaWindowContent(obj).window) then Exit;
     end;
-    obj.lclSetEnabled(bEnable)
+    obj.lclSetEnabled(bEnable);
+
+    if (CaptureControl <> 0)
+      and (not bEnable)
+      and (obj.isKindOfClass(NSView))
+      and NSViewIsLCLEnabled(NSView(obj)) then
+      ReleaseCapture
   end;
 end;
 
@@ -1294,7 +1300,7 @@ begin
       Result := SizeOf(TLogFont);
       FillChar(ALogFont^, SizeOf(ALogFont^), 0);
       ALogFont^.lfFaceName := AFont.Name;
-      ALogFont^.lfHeight := AFont.Size;
+      ALogFont^.lfHeight := -AFont.Size; // Cocoa supports only full height (with leading) that corresponds with a negative value in WinAPI
       Traits := NSFontManager.sharedFontManager.traitsOfFont(AFont.Font);
       if (Traits and NSFontBoldTrait) <> 0 then
         ALogFont^.lfWeight := FW_BOLD

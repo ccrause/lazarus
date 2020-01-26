@@ -90,6 +90,7 @@ type
     //class function GetNotebookMinTabWidth(const AWinControl: TWinControl): integer; override;
     //class function GetPageRealIndex(const ATabControl: TCustomTabControl; AIndex: Integer): Integer; override;
     class function GetTabIndexAtPos(const ATabControl: TCustomTabControl; const AClientPos: TPoint): integer; override;
+    class function GetTabRect(const ATabControl: TCustomTabControl; const AIndex: Integer): TRect; override;
     class procedure SetPageIndex(const ATabControl: TCustomTabControl; const AIndex: integer); override;
     class procedure SetTabPosition(const ATabControl: TCustomTabControl; const ATabPosition: TTabPosition); override;
     class procedure ShowTabs(const ATabControl: TCustomTabControl; AShowTabs: boolean); override;
@@ -157,6 +158,7 @@ type
     class procedure ColumnSetMinWidth(const ALV: TCustomListView; const AIndex: Integer; const {%H-}AColumn: TListColumn; const AMinWidth: integer); override;
     class procedure ColumnSetWidth(const ALV: TCustomListView; const AIndex: Integer; const {%H-}AColumn: TListColumn; const AWidth: Integer); override;
     class procedure ColumnSetVisible(const ALV: TCustomListView; const AIndex: Integer; const {%H-}AColumn: TListColumn; const AVisible: Boolean); override;
+    class procedure ColumnSetSortIndicator(const ALV: TCustomListView; const AIndex: Integer; const AColumn: TListColumn; const ASortIndicator: TSortIndicator); override;
 
     // Item
     class procedure ItemDelete(const ALV: TCustomListView; const AIndex: Integer); override;
@@ -787,6 +789,85 @@ begin
   Result := lTabControl.exttabIndexOfTabViewItem(lTabPage);
 end;
 
+class function TCocoaWSCustomTabControl.GetTabRect(
+  const ATabControl: TCustomTabControl; const AIndex: Integer): TRect;
+var
+  lTabControl: TCocoaTabControl;
+  lTabPage: NSTabViewItem;
+  tb : TCocoaTabPageView;
+  i   : integer;
+  idx : integer;
+  tr  : TRect;
+  w   : array of Double;
+  mw  : Double;
+  ofs : Double; // aprx offset between label and the text (from both sides)
+  x   : Double;
+  vt  : NSTabViewType;
+begin
+  Result:=inherited GetTabRect(ATabControl, AIndex);
+  if not Assigned(ATabControl) or not ATabControl.HandleAllocated then Exit;
+  lTabControl := TCocoaTabControl(ATabControl.Handle);
+  // unable to determine the rectangle view
+
+  if (AIndex<0) or (AIndex>=ATabControl.PageCount) then Exit;
+  tb := TCocoaTabPageView(ATabControl.Page[AIndex].Handle);
+  if not Assigned(tb) then Exit;
+
+  idx := lTabControl.tabViewItems.indexOfObject( tb.tabPage );
+  if (idx = Integer(NSNotFound)) then Exit;
+
+  if not GetTabsRect(lTabControl, tr) then Exit;
+
+  SetLength(w, lTabControl.tabViewItems.count);
+  if (length(w) = 0) then Exit; // no tabs!
+
+  vt := lTabControl.tabViewType;
+  if (vt = NSTopTabsBezelBorder) or (vt = NSBottomTabsBezelBorder) then
+  begin
+    mw := 0;
+    for i := 0 to Integer(lTabControl.tabViewItems.count)-1 do
+    begin
+      lTabPage := lTabControl.tabViewItemAtIndex(i);
+      w[i] := lTabPage.sizeOfLabel(false).width;
+      mw := mw + w[i];
+    end;
+    if (mw = 0) then Exit; // 0 for the total tabs width?
+
+    ofs := (tr.Right - tr.Left - mw) / length(w);
+
+    x := tr.Left;
+    for i := 0 to idx-1 do
+      x := x+ofs+w[i];
+
+    Result.Left := Round(x);
+    Result.Right := Round(Result.Left + w[idx]);
+    Result.Top := tr.Top;
+    Result.Bottom := tr.Bottom;
+  end
+  else
+  begin
+    mw := 0;
+    for i := 0 to Integer(lTabControl.tabViewItems.count)-1 do
+    begin
+      lTabPage := lTabControl.tabViewItemAtIndex(i);
+      w[i] := lTabPage.sizeOfLabel(false).height;
+      mw := mw + w[i];
+    end;
+    if (mw = 0) then Exit; // 0 for the total tabs width?
+
+    ofs := (tr.Bottom - tr.Top - mw) / length(w);
+
+    x := tr.Top;
+    for i := 0 to idx-1 do
+      x := x+ofs+w[i];
+
+    Result.Left := tr.Left;
+    Result.Right := tr.Right;
+    Result.Top := Round(x);
+    Result.Bottom := Round(Result.Top + w[idx]);
+  end;
+end;
+
 class procedure TCocoaWSCustomTabControl.SetPageIndex(const ATabControl: TCustomTabControl; const AIndex: integer);
 var
   i  : NSInteger;
@@ -913,6 +994,7 @@ var
   lTableLV: TCocoaTableListView;
   ns: NSRect;
   lclcb: TLCLListViewCallback;
+  sz: NSSize;
 begin
   {$IFDEF COCOA_DEBUG_LISTVIEW}
   WriteLn('[TCocoaWSCustomListView.CreateHandle] AWinControl='+IntToStr(PtrInt(AWinControl)));
@@ -944,10 +1026,16 @@ begin
     lTableLV.setDataSource(lTableLV);
     lTableLV.setDelegate(lTableLV);
     lTableLV.setAllowsColumnReordering(False);
+    lTableLV.setAllowsColumnSelection(False);
     lCocoaLV.callback := lclcb;
 
     ScrollViewSetBorderStyle(lCocoaLV, TCustomListView(AWinControl).BorderStyle);
+    UpdateFocusRing(lTableLV, TCustomListView(AWinControl).BorderStyle);
 
+    sz := lTableLV.intercellSpacing;
+    // Windows compatibility. on Windows there's no extra space between columns
+    sz.width := 0;
+    lTableLV.setIntercellSpacing(sz);;
     {$IFDEF COCOA_DEBUG_LISTVIEW}
     WriteLn(Format('[TCocoaWSCustomListView.CreateHandle] headerView=%d', [PtrInt(lTableLV.headerView)]));
     {$ENDIF}
@@ -959,6 +1047,7 @@ class procedure TCocoaWSCustomListView.SetBorderStyle(
 begin
   if not Assigned(AWinControl) or not AWinControl.HandleAllocated then Exit;
   ScrollViewSetBorderStyle(NSScrollView(AWinControl.Handle), ABorderStyle);
+  UpdateFocusRing(NSView(NSScrollView(AWinControl.Handle).documentView), ABorderStyle);
 end;
 
 class procedure TCocoaWSCustomListView.ColumnDelete(const ALV: TCustomListView;
@@ -1147,6 +1236,29 @@ begin
   {$else}
   lNSColumn.setHidden(not AVisible);
   {$endif}
+end;
+
+class procedure TCocoaWSCustomListView.ColumnSetSortIndicator(
+  const ALV: TCustomListView; const AIndex: Integer;
+  const AColumn: TListColumn; const ASortIndicator: TSortIndicator);
+var
+  lTableLV: TCocoaTableListView;
+  lNSColumn: NSTableColumn;
+begin
+  if not CheckColumnParams(lTableLV, lNSColumn, ALV, AIndex) then Exit;
+
+  case ASortIndicator of
+    siNone:
+     lTableLV.setIndicatorImage_inTableColumn(nil, lNSColumn);
+    siAscending:
+      lTableLV.setIndicatorImage_inTableColumn(
+        NSImage.imageNamed(NSSTR('NSAscendingSortIndicator')),
+        lNSColumn);
+    siDescending:
+      lTableLV.setIndicatorImage_inTableColumn(
+        NSImage.imageNamed(NSSTR('NSDescendingSortIndicator')),
+        lNSColumn);
+  end;
 end;
 
 class procedure TCocoaWSCustomListView.ItemDelete(const ALV: TCustomListView;
@@ -1483,7 +1595,7 @@ begin
   case AProp of
   {lvpAutoArrange,}
   lvpCheckboxes: lTableLV.lclSetFirstColumCheckboxes(AIsSet);
-  lvpColumnClick: lTableLV.setAllowsColumnSelection(AIsSet);
+ // lvpColumnClick: lTableLV.setAllowsColumnSelection(AIsSet);
 {  lvpFlatScrollBars,
   lvpFullDrag,}
   lvpGridLines: lTableLV.setGridStyleMask(GridStyle[AIsSet]);

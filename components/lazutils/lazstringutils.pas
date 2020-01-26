@@ -93,7 +93,11 @@ function SwapCase(Const S: String): String;
 function StringCase(const AString: String; const ACase: array of String {; const AIgnoreCase = False, APartial = false: Boolean}): Integer; overload;
 function StringCase(const AString: String; const ACase: array of String; const AIgnoreCase, APartial: Boolean): Integer; overload;
 
-// Test over a string
+// PChar
+function SamePChar(P1, P2: PChar): boolean;
+function StrLScan(P: PChar; c: Char; MaxLen: Cardinal): PChar;
+
+// Like IsValidIdent() in FPC 3.1.
 function LazIsValidIdent(const Ident: string; AllowDots: Boolean = False;
                          StrictDots: Boolean = False): Boolean;
 
@@ -1236,6 +1240,34 @@ begin
   end;
 
   Result := -1;
+end;
+
+function SamePChar(P1, P2: PChar): boolean;
+// Return True if P1 and P2 have the same contents.
+begin
+  if (P1=P2) then Exit(True);
+  if (P1=nil) or (P2=nil) then Exit(False);
+  while P1^=P2^ do
+  begin
+    if P1^=#0 then Exit(True);
+    inc(P1);
+    inc(P2);
+  end;
+  Result:=False;
+end;
+
+function StrLScan(P: PChar; c: Char; MaxLen: Cardinal): PChar;
+// Like StrScan() but only scan to MaxLen. Also check for Nil P before scanning.
+var
+  i: Integer;
+begin
+  Result:=Nil;
+  if P=Nil then Exit;
+  for i:=0 to MaxLen-1 do
+  begin
+    if P[i]=#0 then Exit;        // End of the string, c was not found.
+    if P[i]=c then Exit(@P[i]);  // Found!
+  end;
 end;
 
 function LazIsValidIdent(const Ident: string; AllowDots: Boolean = False;

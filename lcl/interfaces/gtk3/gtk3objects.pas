@@ -21,9 +21,13 @@ unit gtk3objects;
 interface
 
 uses
-  Classes, SysUtils, Graphics, types, LCLType, LCLProc, LazUTF8, IntegerList,
-  LazGtk3, LazGdk3, LazGObject2, LazPango1, LazPangoCairo1, LazGdkPixbuf2,
-  LazGLib2, LazCairo1, FPCanvas;
+  Classes, SysUtils, Types, FPCanvas,
+  // LazUtils
+  LazUTF8, IntegerList, LazStringUtils,
+  // LCL
+  LCLType, LCLProc, Graphics,
+  LazGtk3, LazGdk3, LazGObject2, LazGLib2, LazGdkPixbuf2,
+  LazPango1, LazPangoCairo1, LazCairo1;
 
 type
   TGtk3DeviceContext = class;
@@ -212,12 +216,11 @@ type
     procedure CreateObjects;
     procedure DeleteObjects;
   public
-    procedure drawPoint(x1: Integer; y1: Integer);
+    procedure drawPixel(x, y: Integer; AColor: TColor);
+    function getPixel(x, y: Integer): TColor;
     procedure drawRect(x1, y1, w, h: Integer; const AFill, ABorder: Boolean);
     procedure drawRoundRect(x, y, w, h, rx, ry: Integer);
-    procedure drawText(x: Integer; y: Integer; const s: String); overload;
-    procedure drawText(x,y,w,h,flags: Integer; const s: String); overload;
-    procedure drawLine(x1: Integer; y1: Integer; x2: Integer; y2: Integer);
+    procedure drawText(x, y: Integer; AText: PChar; ALen: Integer);
     procedure drawEllipse(x, y, w, h: Integer; AFill, ABorder: Boolean);
     procedure drawSurface(targetRect: PRect; Surface: Pcairo_surface_t; sourceRect: PRect;
       mask: PGdkPixBuf; maskRect: PRect);
@@ -1211,12 +1214,29 @@ begin
     FreeAndNil(FvImage);
 end;
 
-procedure TGtk3DeviceContext.drawPoint(x1: Integer; y1: Integer);
+procedure TGtk3DeviceContext.drawPixel(x, y: Integer; AColor: TColor);
+// Seems that painting line from (a-1, b-1) to (a,b) gives one pixel
 begin
-  applyPen;
-  cairo_move_to(Widget , x1, y1);
-  cairo_line_to(Widget, x1, y1);
+  SetSourceColor(AColor);
+  cairo_set_line_width(Widget, 1);
+  cairo_move_to(Widget, x - PixelOffset, y - PixelOffset);
+  cairo_line_to(Widget, x + PixelOffset, y + PixelOffset);
   cairo_stroke(Widget);
+end;
+
+function TGtk3DeviceContext.getPixel(x, y: Integer): TColor;
+var
+  pixbuf: PGdkPixbuf;
+  pixels: pointer;
+begin
+  Result := 0;
+  pixbuf := gdk_pixbuf_get_from_surface(CairoSurface, X, Y, 1, 1);
+  if Assigned(pixbuf) then
+  begin
+    pixels := gdk_pixbuf_get_pixels(pixbuf);
+    if Assigned(pixels) then
+      Result := PLongInt(pixels)^ and $FFFFFF; // take first 3 bytes at pixels^
+  end;
 end;
 
 procedure TGtk3DeviceContext.drawRect(x1, y1, w, h: Integer; const AFill, ABorder: Boolean);
@@ -1247,73 +1267,53 @@ begin
   RoundRect(x, y, w, h, rx, ry);
 end;
 
-procedure TGtk3DeviceContext.drawText(x: Integer; y: Integer; const s: String);
+procedure TGtk3DeviceContext.drawText(X, Y: Integer; AText: PChar; ALen: Integer);
 var
-  e: cairo_font_extents_t;
-  R: Double;
-  G: Double;
-  B: Double;
+  //e: cairo_font_extents_t;
+  R, G, B: Double;
+  gColor: TGdkColor;
+  Attr: PPangoAttribute;
+  AttrList: PPangoAttrList;
+  UseBack: boolean;
 begin
   cairo_save(Widget);
   try
+    {
     // TranslateCairoToDevice;
     // cairo_surface_get_device_offset(CairoSurface, @dx, @dy);
     cairo_font_extents(Widget, @e);
     if e.ascent <> 0 then
     begin
-      // writeln('EXTENTS !!!! ',Format('%2.2n',[e.ascent]));
+      // WriteLn('EXTENTS !!!! ',Format('%2.2n',[e.ascent]));
     end;
-    cairo_move_to(Widget, x, y {+ e.ascent});
-    // writeln('DevOffset ',Format('dx %2.2n dy %2.2n x %d y %d text %s',
-    //  [dx, dy, x, y, s]));
-    // pango_renderer_activate();
-    // pango_cairo_show_layout(Widget, Layout);
-    ColorToCairoRGB(TColor(CurrentTextColor), R, G , B);
+    }
+    cairo_move_to(Widget, X, Y {+ e.ascent});
+    ColorToCairoRGB(TColor(CurrentTextColor), R, G, B);
     cairo_set_source_rgb(Widget, R, G, B);
-    // writeln('DRAWINGTEXT ',S,' WITH R=',dbgs(R),' G=',dbgs(G),' B=',dbgs(B));
-    FCurrentFont.Layout^.set_text(PChar(S), length(S));
-    // writeln('Family: ',FCurrentFont.Handle^.get_family,' size ',FCurrentFont.Handle^.get_size,' weight ',FCurrentFont.Handle^.get_weight);
-    pango_cairo_show_layout(Widget, FCurrentFont.Layout);
-  finally
-    cairo_restore(Widget);
-  end;
-end;
 
-procedure TGtk3DeviceContext.drawText(x, y, w, h, flags: Integer; const s: String
-  );
-var
-  e: cairo_font_extents_t;
-  R: Double;
-  G: Double;
-  B: Double;
-  // dx, dy: Double;
-begin
-  cairo_save(Widget);
-  try
-    // TranslateCairoToDevice;
-    // cairo_surface_get_device_offset(CairoSurface, @dx, @dy);
-    cairo_font_extents(Widget, @e);
-    if e.ascent <> 0 then
+    FCurrentFont.Layout^.set_text(AText, ALen);
+
+    UseBack := FCurrentBrush.Style <> BS_NULL;
+    if UseBack then
     begin
-      // writeln('2.EXTENTS !!!! ',Format('%2.2n',[e.ascent]));
+      gColor := TColorToTGDKColor(FCurrentBrush.Color);
+      AttrList := pango_attr_list_new;
+      Attr := pango_attr_background_new(gColor.red, gColor.green, gColor.blue);
+      pango_attr_list_insert(AttrList, Attr);
+      FCurrentFont.Layout^.set_attributes(AttrList);
     end;
-    cairo_move_to(Widget, x, y + e.ascent);
-    ColorToCairoRGB(CurrentTextColor, R, G , B);
-    cairo_set_source_rgb(Widget, R, G, B);
-    // cairo_show_text(Widget, PChar(s));
-    FCurrentFont.Layout^.set_text(PChar(S), length(S));
+
+    // WriteLn('Family: ',FCurrentFont.Handle^.get_family,' size ',FCurrentFont.Handle^.get_size,' weight ',FCurrentFont.Handle^.get_weight);
     pango_cairo_show_layout(Widget, FCurrentFont.Layout);
+
+    if UseBack then
+    begin
+      FCurrentFont.Layout^.set_attributes(nil);
+      pango_attribute_destroy(Attr);
+    end;
   finally
     cairo_restore(Widget);
   end;
-end;
-
-procedure TGtk3DeviceContext.drawLine(x1: Integer; y1: Integer; x2: Integer;
-  y2: Integer);
-begin
-  ApplyPen;
-  cairo_move_to(Widget, x1, y1);
-  cairo_line_to(Widget, x2, y2);
 end;
 
 procedure TGtk3DeviceContext.drawEllipse(x, y, w, h: Integer; AFill, ABorder: Boolean);
@@ -1873,67 +1873,6 @@ begin
 end;
 
 {-------------------------------------------------------------------------------
-  function RemoveAmpersands(Src: PChar; LineLength : Longint) : PChar;
-
-  Creates a new PChar removing all escaping ampersands.
--------------------------------------------------------------------------------}
-function RemoveAmpersands(Src: PChar; LineLength : Longint) : PChar;
-var
-  i, j: Longint;
-  ShortenChars, NewLength, SrcLength: integer;
-begin
-  // count ampersands and find first ampersand
-  ShortenChars:= 0;  // chars to delete
-  SrcLength:= LineLength;
-
-  { Look for amperands. If found, check if it is an escaped ampersand.
-    If it is, don't count it in. }
-  i:=0;
-  while i<SrcLength do
-  begin
-    if Src[i] = '&' then
-    begin
-      if (i < SrcLength - 1) and (Src[i+1] = '&') then
-      begin
-        // escaping ampersand found
-        inc(ShortenChars);
-        inc(i,2);
-        Continue;
-      end
-      else
-        inc(ShortenChars);
-    end;
-    inc(i);
-  end;
-  // create new PChar
-  NewLength:= SrcLength - ShortenChars;
-
-  Result:=StrAlloc(NewLength+1); // +1 for #0 char at end
-
-  // copy string without ampersands
-  i:=0;
-  j:=0;
-  while (j < NewLength) do begin
-    if Src[i] <> '&' then begin
-      // copy normal char
-      Result[j]:= Src[i];
-    end else begin
-      // ampersand
-      if (i < (SrcLength - 1)) and (Src[i+1] = '&') then begin
-        // escaping ampersand found
-        inc(i);
-        Result[j]:='&';
-      end else
-        // delete single ampersand
-        dec(j);
-    end;
-    Inc(i);
-    Inc(j);
-  end;
-  Result[NewLength]:=#0;
-end;
-
-{-------------------------------------------------------------------------------
   function GetTextExtentIgnoringAmpersands(TheFont: PGDKFont;
     Str : PChar; StrLength: integer;
     MaxWidth: Longint; lbearing, rbearing, width, ascent, descent : Pgint);
@@ -1947,24 +1886,15 @@ procedure GetTextExtentIgnoringAmpersands(TheFont: TGtk3Font;
   lbearing, rbearing, width, ascent, descent : Pgint);
 var
   NewStr : PChar;
-  i: integer;
   AMetrics: PPangoFontMetrics;
   {ACharWidth,}ATextWidth,ATextHeight: gint;
 begin
-  NewStr:=Str;
-  // first check if Str contains an ampersand:
-  if (Str<>nil) then
-  begin
-    i:=0;
-    while (Str[i]<>'&') and (i<StrLength) do inc(i);
-    if i<StrLength then
-    begin
-      NewStr := RemoveAmpersands(Str, StrLength);
-      StrLength:=StrLen(NewStr);
-    end;
-  end;
-  TheFont.Layout^.set_text(Str, StrLength);
-
+  // check if Str contains an ampersand before removing them all.
+  if StrLScan(Str, '&', StrLength) <> nil then
+    NewStr := RemoveAmpersands(Str, StrLength)
+  else
+    NewStr := Str;
+  TheFont.Layout^.set_text(NewStr, StrLength);
   // TheFont.Layout^.get_extents(@AInkRect, @ALogicalRect);
 
   AMetrics := pango_context_get_metrics(TheFont.Layout^.get_context, TheFont.Handle, TheFont.Layout^.get_context^.get_language);
@@ -1993,7 +1923,7 @@ begin
   // rBearing^ := 0;
   // gdk_text_extents(TheFont, NewStr, StrLength,
   //                 lbearing, rBearing, width, ascent, descent);
-  if NewStr<>Str then
+  if NewStr <> Str then
     StrDispose(NewStr);
   AMetrics^.unref;
 end;

@@ -818,6 +818,7 @@ type
     procedure SetTabStop(const AValue: Boolean);
     procedure SetTabWidth(AValue: Smallint);
   protected
+    class procedure WSRegisterClass; override;
     procedure SetOptions(const AValue: TCTabControlOptions); override;
     procedure AddRemovePageHandle(APage: TCustomPage); override;
     function CanChange: Boolean; override;
@@ -1187,6 +1188,8 @@ type
 
   TWidth = 0..MaxInt;
 
+  TSortIndicator = (siNone, siAscending, siDescending);
+
   TListColumn = class(TCollectionItem)
   private
     FAlignment: TAlignment;
@@ -1198,6 +1201,7 @@ type
     FWidth: TWidth;
     FImageIndex: TImageIndex;
     FTag: PtrInt;
+    FSortIndicator: TSortIndicator;
     function GetWidth: TWidth;
     procedure WSCreateColumn;
     procedure WSDestroyColumn;
@@ -1211,6 +1215,7 @@ type
     procedure SetCaption(const AValue: TTranslateString);
     procedure SetAlignment(const AValue: TAlignment);
     procedure SetImageIndex(const AValue: TImageIndex);
+    procedure SetSortIndicator(AValue: TSortIndicator);
   protected
     procedure SetIndex(AValue: Integer); override;
     function GetDisplayName: string; override;
@@ -1230,6 +1235,7 @@ type
     property Tag: PtrInt read FTag write FTag default 0;
     property Visible: Boolean read FVisible write SetVisible default true;
     property Width: TWidth read GetWidth write SetWidth default 50;
+    property SortIndicator: TSortIndicator read FSortIndicator write SetSortIndicator default siNone;
   end;
 
 
@@ -1372,6 +1378,7 @@ type
     FEditor: TCustomListViewEditor;
     FAllocBy: Integer;
     FAutoSort: Boolean;
+    FAutoSortIndicator: Boolean;
     FAutoWidthLastColumn: Boolean;
     FCanvas: TCanvas;
     FDefaultItemHeight: integer;
@@ -1536,6 +1543,7 @@ type
   protected
     property AllocBy: Integer read FAllocBy write SetAllocBy default 0;
     property AutoSort: Boolean read FAutoSort write FAutoSort default True;
+    property AutoSortIndicator: Boolean read FAutoSortIndicator write FAutoSortIndicator default False;
     property AutoWidthLastColumn: Boolean read FAutoWidthLastColumn write SetAutoWidthLastColumn default False;
     property ColumnClick: Boolean index Ord(lvpColumnClick) read GetProperty write SetProperty default True;
     property Columns: TListColumns read FColumns write SetColumns;
@@ -1654,6 +1662,7 @@ type
     property AllocBy;
     property Anchors;
     property AutoSort;
+    property AutoSortIndicator;
     property AutoWidthLastColumn: Boolean read FAutoWidthLastColumn write SetAutoWidthLastColumn default False; // resize last column to fit width of TListView
     property BorderSpacing;
     property BorderStyle;
@@ -4198,8 +4207,5 @@ begin
     RegisterWSComponent(TCustomTabControl, TWSCustomTabControl);
   Done := True;
 end;
-
-initialization
-  RegisterPropertyToSkip(TTabControl, 'OnDrawTab', 'Property streamed in older Lazarus revision','');
 
 end.

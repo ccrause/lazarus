@@ -571,6 +571,7 @@ type
     procedure SetColumnMinWidth(AIndex: Integer; AColumn: TListColumn; AMinWidth: Integer);
     procedure SetColumnWidth(AIndex: Integer; AColumn: TListColumn; AWidth: Integer);
     procedure SetColumnVisible(AIndex: Integer; AColumn: TListColumn; AVisible: Boolean);
+    procedure ColumnSetSortIndicator(const AIndex: Integer; const AColumn: TListColumn; const ASortIndicator: TSortIndicator);
 
     procedure ItemDelete(AIndex: Integer);
     procedure ItemInsert(AIndex: Integer; AItem: TListItem);
@@ -603,8 +604,6 @@ type
 
   TGtk3Panel = class(TGtk3Bin)
   private
-    FBevelInner: TBevelCut;
-    FBevelOuter: TBevelCut;
     FBorderStyle: TBorderStyle;
     FText: String;
   protected
@@ -614,8 +613,6 @@ type
     function getText: String; override;
     procedure setText(const AValue: String); override;
   public
-    property BevelInner: TBevelCut read FBevelInner write FBevelInner;
-    property BevelOuter: TBevelCut read FBevelOuter write FBevelOuter;
     property BorderStyle: TBorderStyle read FBorderStyle write FBorderStyle;
   end;
 
@@ -3021,7 +3018,7 @@ begin
     StyleContext^.get_background_color(GTK_STATE_FLAG_NORMAL, @AGdkRGBA);
 
     // writeln('ACOLOR R=',AColor.Red,' G=',AColor.green,' B=',AColor.blue);
-    // AColor := TColortoTGDKColor(AValue);
+    // AColor := TColorToTGDKColor(AValue);
     {AGdkRGBA.alpha := 0;
     AGdkRGBA.red := AColor.red / 65535.00;
     AGdkRGBA.blue := AColor.blue / 65535.00;
@@ -3033,7 +3030,7 @@ begin
     FWidget^.override_background_color(GTK_STATE_FLAG_SELECTED, @AGdkRGBA);
   end else
   begin
-    AColor := TColortoTGDKColor(AValue);
+    AColor := TColorToTGDKColor(AValue);
     // writeln('ACOLOR R=',AColor.Red,' G=',AColor.green,' B=',AColor.blue);
     //inherited SetColor(AValue);
   end;
@@ -3045,8 +3042,6 @@ var
 begin
   FHasPaint := True;
   FBorderStyle := bsNone;
-  FBevelInner := bvNone;
-  FBevelOuter := bvNone;
   // wtLayout = using GtkLayout
   // FWidgetType := [wtWidget, wtLayout];
   // Result := TGtkLayout.new(nil, nil);
@@ -3075,10 +3070,10 @@ var
   NColor: TColor;
 begin
   inherited DoBeforeLCLPaint;
-  // example how to paint borderstyle/bevels of TPanel before we send event to lcl
-  DC := TGtk3DeviceContext(FContext);
   if not Visible then
     exit;
+
+  DC := TGtk3DeviceContext(FContext);
 
   NColor := LCLObject.Color;
   if (NColor <> clNone) and (NColor <> clDefault) then
@@ -3088,7 +3083,10 @@ begin
   end;
 
   if BorderStyle <> bsNone then
-    DC.drawRect(0, 0, LCLObject.Width, LCLObject.Height, LCLObject.Color <> clDefault, True);
+  begin
+    DC.CurrentPen.Color := ColorToRGB(clBtnShadow); // not sure what color to use here?
+    DC.drawRect(0, 0, LCLObject.Width, LCLObject.Height, False, True);
+  end;
 end;
 
 function TGtk3Panel.getText: String;
@@ -4513,13 +4511,28 @@ end;
 function TGtk3MenuItem.CreateWidget(const Params: TCreateParams): PGtkWidget;
 var
   ndx:integer;
-  pmenu:TMenuItem;
   pl:PGsList;
+  parentMenu:TMenuItem;
+  picon:PGtkImage;
+  pmenu:PGtkMenuItem;
+  pimgmenu:PgtkImageMenuItem absolute pmenu;
+  img:TGtk3Image;
 begin
+  Result:=nil;
   FWidgetType := [wtWidget, wtMenuItem];
   if MenuItem.Caption = cLineCaption then
     Result := TGtkSeparatorMenuItem.new
   else
+  if (MenuItem.HasIcon) then
+  begin
+    pimgmenu := TGtkImageMenuItem.new();
+    MenuItem.UpdateImage(true);
+    img:=Tgtk3Image(MenuItem.Bitmap.Handle);
+    picon := TGtkImage.new_from_pixbuf(img.Handle);
+    pimgmenu^.set_image(picon);
+    pimgmenu^.set_always_show_image(true);
+    Result:=pimgmenu;
+  end else
   if MenuItem.RadioItem and not MenuItem.HasIcon then
   begin
     Result := TGtkRadioMenuItem.new(nil);
@@ -4528,31 +4541,29 @@ begin
       ndx:=menuItem.Parent.IndexOf(MenuItem);
       if (ndx>0) then
       begin
-        pMenu:=menuItem.Parent.Items[ndx-1];
-        if (MenuItem.GroupIndex>0) and (pMenu.GroupIndex=MenuItem.GroupIndex) then
+        ParentMenu:=menuItem.Parent.Items[ndx-1];
+        if (MenuItem.GroupIndex>0) and (ParentMenu.GroupIndex=MenuItem.GroupIndex) then
         begin
-          pl:=PGtkRadioMenuItem(TGtk3MenuItem(pMenu.Handle).Widget)^.get_group;
+          pl:=PGtkRadioMenuItem(TGtk3MenuItem(ParentMenu.Handle).Widget)^.get_group;
           PGtkRadioMenuItem(Result)^.set_group(pl);
         end;
       end;
     end;
   end
   else
-  if MenuItem.IsCheckItem or MenuItem.HasIcon then
+  if MenuItem.IsCheckItem and not MenuItem.HasIcon then
     Result := TGtkCheckMenuItem.new
   else
     Result := TGtkMenuItem.new;
 
-  if MenuItem.Caption <> cLineCaption then
+  if Assigned(Result) and (MenuItem.Caption <> cLineCaption) {and not MenuItem.HasIcon} then
   begin
     PGtkMenuItem(Result)^.use_underline := True;
     PGtkMenuItem(Result)^.set_label(PgChar(ReplaceAmpersandsWithUnderscores(MenuItem.Caption)));
     PGtkMenuItem(Result)^.set_sensitive(MenuItem.Enabled);
-    // there's nothing like this in Gtk3
-    // if MenuItem.RightJustify then
-    //  gtk_menu_item_right_justify(PGtkMenuItem(Widget));
-
   end;
+
+
 end;
 
 constructor TGtk3MenuItem.Create(const AMenuItem: TMenuItem);
@@ -5809,6 +5820,27 @@ begin
   if AGtkColumn <> nil then
   begin
     AGtkColumn^.set_visible(AVisible and (TListView(LCLObject).ViewStyle in [vsList, vsReport]));
+  end;
+end;
+
+procedure TGtk3ListView.ColumnSetSortIndicator(const AIndex: Integer;
+  const AColumn: TListColumn; const ASortIndicator: TSortIndicator);
+const
+  GtkOrder : array [ TSortIndicator] of TGtkSortType = (0, {GTK_SORT_ASCENDING}0, {GTK_SORT_DESCENDING}1);
+var
+  AGtkColumn: PGtkTreeViewColumn;
+begin
+  AGtkColumn := PGtkTreeView(getContainerWidget)^.get_column(AIndex);
+
+  if AGtkColumn <> nil then
+  begin
+    if ASortIndicator = siNone then
+      AGtkColumn^.set_sort_indicator(false)
+    else
+    begin
+      AGtkColumn^.set_sort_indicator(true);
+      AgtkColumn^.set_sort_order(GtkOrder[ASortIndicator]);
+    end;
   end;
 end;
 

@@ -269,69 +269,33 @@ end;
 
 
 {------------------------------------------------------------------------------
-  function CreatePChar(const s: string): PChar;
-
   Allocates a new PChar
- ------------------------------------------------------------------------------}
+ ------------------------------------------------------------------------------
 function CreatePChar(const s: string): PChar;
 begin
   Result:=StrAlloc(length(s) + 1);
   StrPCopy(Result, s);
 end;
-
-{------------------------------------------------------------------------------
-  function ComparePChar(P1, P2: PChar): boolean;
-
-  Checks if P1 and P2 have the same content.
- ------------------------------------------------------------------------------}
-function ComparePChar(P1, P2: PChar): boolean;
-begin
-  if (P1<>P2) then begin
-    if (P1<>nil) and (P2<>nil) then begin
-      while (P1^=P2^) do begin
-        if P1^<>#0 then begin
-          inc(P1);
-          inc(P2);
-        end else begin
-          Result:=true;
-          exit;
-        end;
-      end;
-    end;
-    Result:=false;
-  end else begin
-    Result:=true;
-  end;
-end;
-
-{------------------------------------------------------------------------------
-  function FindChar(c: char; p:PChar; Max: integer): integer;
- ------------------------------------------------------------------------------}
+}
 function FindChar(c: char; p:PChar; Max: integer): integer;
 begin
   Result:=0;
-  while (Result<Max) do begin
-    if p[Result]<>c then
-      inc(Result)
-    else
-      exit;
+  while Result<Max do begin
+    if p[Result]=c then exit;
+    inc(Result);
   end;
   Result:=-1;
 end;
 
 {------------------------------------------------------------------------------
-  function FindLineLen(p: PChar; Max: integer): integer;
-  
   Find line end
  ------------------------------------------------------------------------------}
 function FindLineLen(p: PChar; Max: integer): integer;
 begin
   Result:=0;
-  while (Result<Max) do begin
-    if not (p[Result] in [#10,#13]) then
-      inc(Result)
-    else
-      exit;
+  while Result<Max do begin
+    if p[Result] in [#10,#13] then exit;
+    inc(Result);
   end;
   Result:=-1;
 end;
@@ -4987,7 +4951,7 @@ end;
 function DesignSignalNameToType(Name: PChar; After: boolean): TDesignSignalType;
 begin
   for Result:=Low(TDesignSignalType) to High(TDesignSignalType) do
-    if ComparePChar(DesignSignalNames[Result],Name)
+    if SamePChar(DesignSignalNames[Result],Name)
     and (DesignSignalAfter[Result]=After) then exit;
   Result:=dstUnknown;
 end;
@@ -8993,83 +8957,22 @@ begin
 end;
 
 {-------------------------------------------------------------------------------
-  function Ampersands2Underscore(Src: PChar) : PChar;
-
   Creates a new PChar. Deletes escaping ampersands, replaces the first single
-  ampersand with an underscore and deleting all other single ampersands.
+  ampersand with an underscore and deletes all other single ampersands.
 -------------------------------------------------------------------------------}
 function Ampersands2Underscore(Src: PChar) : PChar;
 var
-  i, j: Longint;
-  ShortenChars, FirstAmpersand, NewLength, SrcLength: integer;
+  s: String;
 begin
-  // count ampersands and find first ampersand
-  ShortenChars:= 0;  // chars to delete
-  FirstAmpersand:= -1;
-  SrcLength:= StrLen(Src);
-
-  { Look for amperands. If found, check if it is an escaped ampersand.
-    If it is, don't count it in. }
-  i:=0;
-  while i<SrcLength do begin
-    if Src[i] = '&' then begin
-      if (i < SrcLength - 1) and (Src[i+1] = '&') then begin
-        // escaping ampersand found
-        inc(ShortenChars);
-        inc(i,2);
-        Continue;
-      end else begin
-        // single ampersand found
-        if (FirstAmpersand < 0) then
-          // the first will be replaced ...
-          FirstAmpersand:= i
-        else
-          // ... and all others will be deleted
-          inc(ShortenChars);
-      end; 
-    end;
-    inc(i);
-  end;
-  // create new PChar
-  NewLength:= SrcLength - ShortenChars;
-
-  Result:=StrAlloc(NewLength+1); // +1 for #0 char at end
-
-  // copy string without ampersands
-  i:=0;
-  j:=0;
-  while (j < NewLength) do begin
-    if Src[i] <> '&' then begin
-      // copy normal char
-      Result[j]:= Src[i];
-    end else begin
-      // ampersand
-      if (i < (SrcLength - 1)) and (Src[i+1] = '&') then begin
-        // escaping ampersand found
-        inc(i);
-        Result[j]:='&';
-      end else begin
-        // single ampersand found
-        if i = FirstAmpersand then begin
-          // replace first single ampersand with underscore
-          Result[j]:='_';
-        end else begin
-          // delete single ampersand
-          dec(j);
-        end;
-      end;
-    end;
-    Inc(i);
-    Inc(j);
-  end;
-  Result[NewLength]:=#0;
+  s := StrPas(Src);
+  s := Ampersands2Underscore(s);
+  Result := StrAlloc(Length(s)+1); // +1 for #0 char at end
+  strcopy(Result, PChar(s));
 end;
 
 {-------------------------------------------------------------------------------
-  function Ampersands2Underscore(const ASource: String): String;
-
   Deletes escaping ampersands, replaces the first single
-  ampersand with an underscore and deleting all other single ampersands.
+  ampersand with an underscore and deletes all other single ampersands.
 -------------------------------------------------------------------------------}
 function Ampersands2Underscore(const ASource: String): String;
 var
@@ -9082,25 +8985,19 @@ begin
   n := 1;
   while n <= Length(Result) do
   begin
-    if Result[n] = '&'
-    then begin
-      if (n < Length(Result))
-      and (Result[n + 1] = '&')
-      then begin
-        // we got a &&, remove the first
-        Delete(Result, n, 1);
-        Inc(n);
-        Continue;
-      end;
+    if Result[n] = '&' then
+    begin
       if FirstFound
+      or ( (n < Length(Result)) and (Result[n+1] = '&') ) // got &&
       then begin
-        // simply remove it
         Delete(Result, n, 1);
-        Continue;
+        if not FirstFound then
+          Inc(n);               // Skip the second & of &&
+      end
+      else begin
+        FirstFound := True;
+        Result[n] := '_';
       end;
-      // if we are here it's our first
-      FirstFound := True;
-      Result[n] := '_';
     end;
     Inc(n);
   end;
@@ -9109,95 +9006,6 @@ end;
 function EscapeUnderscores(const Str: String): String;
 begin
   Result := StringReplace(Str, '_', '__', [rfReplaceAll]);
-end;
-
-{-------------------------------------------------------------------------------
-  function RemoveAmpersands(Src: PChar; LineLength : Longint) : PChar;
-
-  Creates a new PChar removing all escaping ampersands.
--------------------------------------------------------------------------------}
-function RemoveAmpersands(Src: PChar; LineLength : Longint) : PChar;
-var
-  i, j: Longint;
-  ShortenChars, NewLength, SrcLength: integer;
-begin
-  // count ampersands and find first ampersand
-  ShortenChars:= 0;  // chars to delete
-  SrcLength:= LineLength;
-
-  { Look for amperands. If found, check if it is an escaped ampersand.
-    If it is, don't count it in. }
-  i:=0;
-  while i<SrcLength do begin
-    if Src[i] = '&' then begin
-      if (i < SrcLength - 1) and (Src[i+1] = '&') then begin
-        // escaping ampersand found
-        inc(ShortenChars);
-        inc(i,2);
-        Continue;
-      end
-      else
-        inc(ShortenChars);
-    end;
-    inc(i);
-  end;
-  // create new PChar
-  NewLength:= SrcLength - ShortenChars;
-
-  Result:=StrAlloc(NewLength+1); // +1 for #0 char at end
-
-  // copy string without ampersands
-  i:=0;
-  j:=0;
-  while (j < NewLength) do begin
-    if Src[i] <> '&' then begin
-      // copy normal char
-      Result[j]:= Src[i];
-    end else begin
-      // ampersand
-      if (i < (SrcLength - 1)) and (Src[i+1] = '&') then begin
-        // escaping ampersand found
-        inc(i);
-        Result[j]:='&';
-      end else
-        // delete single ampersand
-        dec(j);
-    end;
-    Inc(i);
-    Inc(j);
-  end;
-  Result[NewLength]:=#0;
-end;
-
-{-------------------------------------------------------------------------------
-  function RemoveAmpersands(const ASource: String): String;
-
-  Removing all escaping ampersands.
--------------------------------------------------------------------------------}
-function RemoveAmpersands(const ASource: String): String;
-var
-  n: Integer;
-begin
-  Result := ASource;
-  n := 1;
-  while n <= Length(Result) do
-  begin
-    if Result[n] = '&'
-    then begin
-      if (n < Length(Result))
-      and (Result[n + 1] = '&')
-      then begin
-        // we got a &&, remove the first
-        Delete(Result, n, 1);
-        Inc(n);
-        Continue;
-      end;
-      // simply remove it
-      Delete(Result, n, 1);
-      Continue;
-    end;
-    Inc(n);
-  end;
 end;
 
 {-------------------------------------------------------------------------------
@@ -9263,22 +9071,16 @@ procedure GetTextExtentIgnoringAmpersands(TheFont: TGtkIntfFont;
   Str : PChar; StrLength: integer;
   lbearing, rbearing, width, ascent, descent : Pgint);
 var
-  NewStr : PChar;
-  i: integer;
+  NewStr: PChar;
 begin
-  NewStr:=Str;
-  // first check if Str contains an ampersand:
-  if (Str<>nil) then begin
-    i:=0;
-    while (Str[i]<>'&') and (i<StrLength) do inc(i);
-    if i<StrLength then begin
-      NewStr := RemoveAmpersands(Str, StrLength);
-      StrLength:=StrLen(NewStr);
-    end;
-  end;
+  // check if Str contains an ampersand before removing them all.
+  if StrLScan(Str, '&', StrLength) <> nil then
+    NewStr := RemoveAmpersands(Str, StrLength)
+  else
+    NewStr := Str;
   gdk_text_extents(TheFont, NewStr, StrLength,
                    lbearing, rBearing, width, ascent, descent);
-  if NewStr<>Str then
+  if NewStr <> Str then
     StrDispose(NewStr);
 end;
 

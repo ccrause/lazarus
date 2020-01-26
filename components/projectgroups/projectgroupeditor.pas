@@ -749,19 +749,39 @@ end;
 procedure TProjectGroupEditorForm.TVPGKeyDown(Sender: TObject; var Key: Word;
   Shift: TShiftState);
 begin
-  if Shift=[ssCtrl] then
-    case Key of
-      VK_UP:
-      begin
-        TBTargetUp.Click;
-        Key := 0;
-      end;
-      VK_DOWN:
-      begin
-        TBTargetLater.Click;
-        Key := 0;
-      end;
+  case Key of
+    VK_RETURN:
+    begin
+      TVPGDblClick(Sender);
+      Key := 0;
     end;
+    VK_F5:
+    begin
+      TBReload.Click;
+      Key := 0;
+    end;
+    VK_UP:
+    if Shift=[ssCtrl] then
+    begin
+      TBTargetUp.Click;
+      Key := 0;
+    end;
+    VK_DOWN:
+    if Shift=[ssCtrl] then
+    begin
+      TBTargetLater.Click;
+      Key := 0;
+    end;
+    Ord('S'):
+    begin
+      if Shift=[ssCtrl] then
+        TBSave.Click
+      else
+      if Shift=[ssCtrl, ssShift] then
+        PMISaveAs.Click;
+      Key := 0;
+    end;
+  end;
 end;
 
 procedure TProjectGroupEditorForm.TVPGMouseDown(Sender: TObject;
@@ -950,11 +970,9 @@ begin
   begin
     PG:=TIDEProjectGroup(ProjectGroup);
     if PG.Modified then begin
-      // ToDo: revert
-      IDEMessageDialog(lisNeedSave, lisPleaseSaveYourChangesBeforeReloadingTheProjectGrou,
-        mtError,[mbOK]);
       PG.UpdateMissing;
-      exit;
+      if IDEMessageDialog(lisProjectGroupModified, lisChangesGetLostAtReload, mtConfirmation, mbYesNo)<>mrYes then
+        exit;
     end;
     ProjectGroup:=nil;
     try

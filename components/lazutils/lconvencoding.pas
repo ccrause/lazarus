@@ -31,8 +31,18 @@ uses
   SysUtils, Classes, dos, LazUTF8
   {$IFDEF EnableIconvEnc},iconvenc{$ENDIF};
 
+type
+  TConvertEncodingErrorMode = (
+    ceemSkip,
+    ceemException,
+    ceemReplace,
+    ceemReturnEmpty
+    );
+
 var
-  ConvertEncodingFromUtf8RaisesException: boolean = False;
+  //Global variable which controls behaviour of encoding conversion error, in 3 places:
+  //a) UTF8 to single byte encoding, b) DBCS (Asian) encoding to UTF8, c) UTF8 to DBCS
+  ConvertEncodingErrorMode: TConvertEncodingErrorMode = ceemSkip;
 
 //encoding names
 const
@@ -2105,8 +2115,19 @@ begin
         inc(Dest);
       end
       else
-      if ConvertEncodingFromUtf8RaisesException then
-        raise EConvertError.Create('Cannot convert UTF8 to single byte');
+      case ConvertEncodingErrorMode of
+        ceemSkip:
+          begin end;
+        ceemException:
+          raise EConvertError.Create('Cannot convert UTF8 to single byte');
+        ceemReplace:
+          begin
+            Dest^:='?';
+            inc(Dest);
+          end;
+        ceemReturnEmpty:
+          Exit('');
+      end;
     end;
   end;
   SetLength(Result,Dest-PChar(Result));

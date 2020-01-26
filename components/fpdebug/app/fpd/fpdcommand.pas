@@ -38,9 +38,9 @@ interface
 uses
   SysUtils, Classes,
 {$ifdef windows}
-  Windows, fgl,
+  Windows,
 {$endif}
-  LCLProc, FpDbgInfo, FpDbgClasses, DbgIntfBaseTypes, FpDbgUtil, CustApp,
+  fgl, LCLProc, FpDbgInfo, FpDbgClasses, DbgIntfBaseTypes, FpDbgUtil, CustApp,
   FpPascalParser,
   FPDbgController,
   FpPascalBuilder,
@@ -59,7 +59,7 @@ uses
 
 type
   TFPDCommandHandler = procedure(AParams: String; out CallProcessLoop: boolean);
-  TBreakPointIdMap = class(specialize TFPGMap<Integer, TFpInternalBreakpoint>)
+  TBreakPointIdMap = class(specialize TFPGMapObject<Integer, TFpInternalBreakpoint>)
   public
     function DoBreakPointCompare(Key1, Key2: Pointer): Integer;
   end;
