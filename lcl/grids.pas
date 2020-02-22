@@ -1323,6 +1323,7 @@ type
     procedure EraseBackground(DC: HDC); override;
     function  Focused: Boolean; override;
     function  HasMultiSelection: Boolean;
+    procedure HideSortArrow;
     procedure InvalidateCell(aCol, aRow: Integer); overload;
     procedure InvalidateCol(ACol: Integer);
     procedure InvalidateRange(const aRange: TRect);
@@ -3274,6 +3275,12 @@ begin
     QuickSort(IndxFrom, IndxTo);
     EndUpdate;
   end;
+end;
+
+procedure TCustomGrid.HideSortArrow;
+begin
+  FSortColumn := -1;
+  InvalidateGrid;
 end;
 
 procedure TCustomGrid.doTopleftChange(DimChg: Boolean);
@@ -11700,7 +11707,11 @@ begin
             if bTagEnd then // table end cell tag </td>
             begin
               if IsColumnIndexValid(bCol) and IsRowIndexValid(bRow) then
-                Cells[bCol, bRow] := ReplaceEntities(bCellStr);
+              begin
+                bCellStr := ReplaceEntities(bCellStr);
+                DoCellProcess(bCol, bRow, cpPaste, bCellStr);
+                Cells[bCol, bRow] := bCellStr;
+              end;
               bSelRect.Right := bCol;
               Inc(bCol);
               bCellStr := '';
@@ -11724,7 +11735,11 @@ begin
       end;
     end;
 
-    if (bCol = bStartCol) and (bRow = bStartRow) then Cells[bCol, bRow] := TheText; //set text in cell if clipboard has CF_HTML fomat, but havent HTML table
+    if (bCol = bStartCol) and (bRow = bStartRow) then
+    begin
+      DoCellProcess(bCol, bRow, cpPaste, TheText);
+      Cells[bCol, bRow] := TheText; //set text in cell if clipboard has CF_HTML fomat, but havent HTML table
+    end;
     Selection := bSelRect; // set correct selection
   end;
 end;

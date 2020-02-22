@@ -490,9 +490,8 @@ var
 begin
   with AScrollBar do
   begin
-    AMax := Max - 1;
+    AMax := Max;
     if AMax < Min then AMax := Min;
-    if AMax < Max then AMax := Max;
 
     ScrollInfo.cbSize := SizeOf(TScrollInfo);
     ScrollInfo.fMask := SIF_POS or SIF_Range or SIF_PAGE;
@@ -501,7 +500,10 @@ begin
     ScrollInfo.nPage := PageSize;
     ScrollInfo.nPos := Position;
 
-    SendMessage(Handle, SBM_SETSCROLLINFO, WParam(True), LParam(@ScrollInfo));
+    { ~bk 2019.12.11
+       https://docs.microsoft.com/en-us/windows/win32/controls/sbm-setscrollinfo
+       says that "they should use the SetScrollInfo function".}
+    SetScrollInfo(Handle, SB_CTL, ScrollInfo, IsEnabled);
     case Kind of
       sbHorizontal:
         SetWindowLong(Handle, GWL_STYLE, GetWindowLong(Handle, GWL_STYLE) or SBS_HORZ);

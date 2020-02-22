@@ -2204,10 +2204,26 @@ end;
 function TGDBMIDebuggerChangeFilenameBase.DoChangeFilename: Boolean;
 var
   R: TGDBMIExecResult;
-  List: TGDBMINameValueList;
   S, FileName: String;
+
+  procedure SetErrorMsg;
+  var
+    List: TGDBMINameValueList;
+  begin
+    if (FErrorMsg = '') or
+       (pos('no such file', LowerCase(FErrorMsg)) > 0) or
+       (pos('not exist', LowerCase(FErrorMsg)) < 0)
+    then begin
+      List := TGDBMINameValueList.Create(R);
+      FErrorMsg := DeleteEscapeChars((List.Values['msg']));
+      List.Free;
+    end;
+    Result := False;
+  end;
+
 begin
   Result := False;
+  FErrorMsg := '';
   FContext.ThreadContext := ccNotRequired;
   FContext.StackContext := ccNotRequired;
 
@@ -2218,6 +2234,8 @@ begin
   {$IFDEF darwin}
   if  (R.State = dsError) and (FileName <> '')
   then begin
+    SetErrorMsg;
+
     S := FTheDebugger.InternalFilename + '/Contents/MacOS/' + ExtractFileNameOnly(Filename);
     S := FTheDebugger.ConvertToGDBPath(S, cgptExeName);
     Result := ExecuteCommand('-file-exec-and-symbols %s', [S], R);
@@ -2226,6 +2244,8 @@ begin
   {$ENDIF}
   if (R.State = dsError)  and (FileName <> '') then
   begin
+    SetErrorMsg;
+
     FTheDebugger.InternalFilename := Filename + '.elf';
     S := FTheDebugger.ConvertToGDBPath(FTheDebugger.FileName, cgptExeName);
     Result := ExecuteCommand('-file-exec-and-symbols %s', [S], R);
@@ -2234,10 +2254,7 @@ begin
 
   if  (R.State = dsError) and (FTheDebugger.FileName <> '')
   then begin
-    List := TGDBMINameValueList.Create(R);
-    FErrorMsg := DeleteEscapeChars((List.Values['msg']));
-    List.Free;
-    Result := False;
+    SetErrorMsg;
     Exit;
   end;
 end;
@@ -5647,18 +5664,12 @@ begin
     FTheDebugger.FFpcSpecificHandlerCallFin.SetByAddrMethod := ibmAddrDirect;
     FTheDebugger.FFpcSpecificHandler.SetByAddrMethod := ibmAddrIndirect; // must be at first asm line
 
-{$IFdef WITH_GDB_FORCE_EXCEPTBREAK}
-    FTheDebugger.FExceptionBreak.SetByAddr(Self, True);
-    FTheDebugger.FBreakErrorBreak.SetByAddr(Self, True);
-    FTheDebugger.FRunErrorBreak.SetByAddr(Self, True);
-{$Else}
     if ieRaiseBreakPoint in DbgProp.InternalExceptionBreakPoints
     then FTheDebugger.FExceptionBreak.SetByAddr(Self);
     if ieBreakErrorBreakPoint in DbgProp.InternalExceptionBreakPoints
     then FTheDebugger.FBreakErrorBreak.SetByAddr(Self);
     if ieRunErrorBreakPoint in DbgProp.InternalExceptionBreakPoints
     then FTheDebugger.FRunErrorBreak.SetByAddr(Self);
-{$ENDIF}
     if (not ((FTheDebugger.FExceptionBreak.IsBreakSet  or not (ieRaiseBreakPoint      in DbgProp.InternalExceptionBreakPoints)) and
              (FTheDebugger.FBreakErrorBreak.IsBreakSet or not (ieBreakErrorBreakPoint in DbgProp.InternalExceptionBreakPoints)) and
              (FTheDebugger.FRunErrorBreak.IsBreakSet   or not (ieRunErrorBreakPoint   in DbgProp.InternalExceptionBreakPoints)) )) and
@@ -8329,11 +8340,9 @@ begin
   FFpcSpecificHandlerCallFin:= TGDBMIInternalBreakPoint.Create('');
   FSehFinallyBreaks  := TGDBMIInternalSehFinallyBreakPointList.Create;
   FSehCatchesBreaks  := TGDBMIInternalAddrBreakPointList.Create;
-{$IFdef WITH_GDB_FORCE_EXCEPTBREAK}
-  FBreakErrorBreak.UseForceFlag := True;
-  FRunErrorBreak.UseForceFlag := True;
-  FExceptionBreak.UseForceFlag := True;
-{$ENDIF}
+  FBreakErrorBreak.UseForceFlag := not TGDBMIDebuggerProperties(GetProperties).DisableForcedBreakpoint;
+  FRunErrorBreak.UseForceFlag   := not TGDBMIDebuggerProperties(GetProperties).DisableForcedBreakpoint;
+  FExceptionBreak.UseForceFlag  := not TGDBMIDebuggerProperties(GetProperties).DisableForcedBreakpoint;
 
   FInstructionQueue := TGDBMIDbgInstructionQueue.Create(Self);
   FCommandQueue := TGDBMIDebuggerCommandList.Create;
@@ -12626,7 +12635,9 @@ begin
   FBreaks[ALoc].BreakAddr := 0;
   FBreaks[ALoc].BreakFunction := '';
 
-  if UseForceFlag and ACmd.FTheDebugger.CanForceBreakPoints then
+  if UseForceFlag and ACmd.FTheDebugger.CanForceBreakPoints and
+     (ABreakLoc <> '') and not(ABreakLoc[1] in ['+', '*'])
+  then
   begin
     if (not ACmd.ExecuteCommand('-break-insert -f %s', [ABreakLoc], R)) or
        (R.State = dsError)

@@ -405,7 +405,8 @@ begin
       if (reg <> nil) then
         reg.Count;
       for n := 0 to lvRegisters.Items.Count - 1 do
-        lvRegisters.Items[n].SubItems[0] := '<Unavailable>';
+        if lvRegisters.Items[n].SubItems[0] <> '<Unavailable>' then
+          lvRegisters.Items[n].SubItems[0] := '<Unavailable>';
       exit;
     end;
 
@@ -466,12 +467,16 @@ end;
 
 procedure TRegistersDlg.DoBeginUpdate;
 begin
+  {$IFnDEF WINDOWS}
   lvRegisters.BeginUpdate;
+  {$ENDIF}
 end;
 
 procedure TRegistersDlg.DoEndUpdate;
 begin
+  {$IFnDEF WINDOWS}
   lvRegisters.EndUpdate;
+  {$ENDIF}
   if FNeedUpdateAgain then RegistersChanged(nil);
 end;
 

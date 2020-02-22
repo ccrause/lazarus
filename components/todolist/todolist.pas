@@ -34,17 +34,15 @@
   Abstract:
     List all to do comments of current project and the file
     projectname.todo.
-    {TODO -oOwnerName -cCategoryName: Todo_text}
-    {DONE -oOwnerName -cCategoryName: Todo_text}
-    {#todo -oOwnerName -cCategoryName: Todo_text}
-    {#done -oOwnerName -cCategoryName: Todo_text}
+    {TODO Priority -oOwnerName -cCategoryName: Todo_text}
+    {DONE Priority -oOwnerName -cCategoryName: Todo_text}
+    {#todo Priority -oOwnerName -cCategoryName: Todo_text}
+    {#done Priority -oOwnerName -cCategoryName: Todo_text}
 
-    the -o and -c tags are optional.
+    the Priority, -o and -c tags are optional.
 
-    If the -o and -c tags are not used, then the variant without semicolon is
-    allowed too:
-    {TODO Todo_text}
-    {DONE Todo_text}
+    If the -o and -c tags are not used, then the variant without colon is
+    allowed too for the #todo and #done forms only:
     {#todo Todo_text}
     {#done Todo_text}
 
@@ -169,7 +167,6 @@ type
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift:TShiftState);
     procedure FormShow(Sender: TObject);
     procedure lvTodoClick(Sender: TObject);
-    procedure lvTodoColumnClick(Sender : TObject; Column : TListColumn);
     procedure lvTodoCompare(Sender : TObject; Item1, Item2 : TListItem;
       {%H-}Data : Integer; var Compare : Integer);
     procedure SaveDialogShow(Sender: TObject);
@@ -349,26 +346,6 @@ begin
   acGoto.Execute;
 end;
 
-procedure TIDETodoWindow.lvTodoColumnClick(Sender : TObject; Column : TListColumn);
-Var
-  aListItem : TListItem;
-begin
-  aListItem := lvTodo.Selected;
-
-  If lvTodo.SortDirection = sdAscending then
-    lvTodo.SortDirection := sdDescending
-  Else
-    lvTodo.SortDirection := sdAscending;
-
-  lvTodo.SortColumn := Column.Index;
-
-  lvTodo.Selected := nil;  // Otherwise wrong selection - bug??
-  lvTodo.Selected := aListItem;
-
-  lvTodo.Update;  // First row not redrawn?
-  //lvTodo.Repaint;
-end;
-
 procedure TIDETodoWindow.lvTodoCompare(Sender : TObject;
   Item1, Item2 : TListItem; Data : Integer; var Compare : Integer);
 var
@@ -495,12 +472,12 @@ procedure TIDETodoWindow.CreateToDoItem(aTLFile: TTLScannedFile;
 var
   N, Strlen: Integer;
   TempStr, ParsingString, LowerString : string;
-  IsAltNotation, IsDone, HasSemiColon: boolean;
+  IsAltNotation, IsDone, HasColon: boolean;
   aChar: char;
   TodoItem: TTodoItem;
 
 const
-  cSemiColon  = ':';
+  cColon  = ':';
   cWhiteSpace = ' ';
   
   Procedure SetItemFields(aItem: TTodoItem; aStr: String);
@@ -581,9 +558,9 @@ begin
   else
     Delete(ParsingString, 1, 5);
 
-  HasSemiColon := Pos(cSemiColon, ParsingString)>0;
-  // Alternative keyword requires a semicolon to prevent false positives.
-  if HasSemiColon or not IsAltNotation then
+  HasColon := Pos(cColon, ParsingString)>0;
+  // Alternative keyword requires a colon to prevent false positives.
+  if HasColon or not IsAltNotation then
   begin
     TodoItem := TTodoItem.Create(aTLFile);
     TodoItem.Done := IsDone;
@@ -593,18 +570,18 @@ begin
     if aTLFile<>nil then
       aTLFile.Add(TodoItem);
 
-    if HasSemiColon then
+    if HasColon then
     begin
       // Parse priority, owner and category
       n := 1;
       TempStr := '';
       Strlen  := Length(ParsingString);
 
-      while (n <= StrLen) and (ParsingString[n]<>cSemiColon) do
+      while (n <= StrLen) and (ParsingString[n]<>cColon) do
       begin
         aChar := ParsingString[n];
         // Add char to temporary string
-        if (aChar<>cSemiColon) and (aChar<>cWhiteSpace) then
+        if (aChar<>cColon) and (aChar<>cWhiteSpace) then
           TempStr := TempStr + aChar
         // Process temporary string
         else
