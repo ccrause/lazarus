@@ -3293,6 +3293,10 @@ msgstr "Viditelný kurzor v neaktivním editoru"
 msgid "Caret in unfocused editor does not blink"
 msgstr "Kurzor nebliká v neaktivním okně"
 
+#: lazarusidestrconsts.dlgpoansiutf8
+msgid "ANSI codepage is UTF-8 (Windows 10 1903+)"
+msgstr ""
+
 #: lazarusidestrconsts.dlgpoapplication
 msgid "Application"
 msgstr "Aplikace"
@@ -21539,6 +21543,10 @@ msgstr "Přesunout kurzor dolů"
 msgid "Duplicate line (or lines in selection)"
 msgstr ""
 
+#: lazarusidestrconsts.srkmecduplicateselection
+msgid "Duplicate selection"
+msgstr ""
+
 #: lazarusidestrconsts.srkmeceditorbottom
 msgid "Move cursor to absolute end"
 msgstr "Přesunout ukazatel na úplný konec"
@@ -21857,11 +21865,27 @@ msgid "Move editor rightmost"
 msgstr "Přesunout editor zcela vpravo"
 
 #: lazarusidestrconsts.srkmecmovelinedown
-msgid "Move one line down"
+msgid "Move line down"
 msgstr ""
 
 #: lazarusidestrconsts.srkmecmovelineup
-msgid "Move one line up"
+msgid "Move line up"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectdown
+msgid "Move selection down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectleft
+msgid "Move selection left"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectright
+msgid "Move selection right"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectup
+msgid "Move selection up"
 msgstr ""
 
 #: lazarusidestrconsts.srkmecmultipaste

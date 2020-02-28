@@ -217,11 +217,10 @@ type
     procedure DeleteObjects;
   public
     procedure drawPixel(x, y: Integer; AColor: TColor);
+    function getPixel(x, y: Integer): TColor;
     procedure drawRect(x1, y1, w, h: Integer; const AFill, ABorder: Boolean);
     procedure drawRoundRect(x, y, w, h, rx, ry: Integer);
-    procedure drawText(x: Integer; y: Integer; const s: String); overload;
-    procedure drawText(x,y,w,h,flags: Integer; const s: String); overload;
-    procedure drawLine(x1: Integer; y1: Integer; x2: Integer; y2: Integer);
+    procedure drawText(x, y: Integer; AText: PChar; ALen: Integer);
     procedure drawEllipse(x, y, w, h: Integer; AFill, ABorder: Boolean);
     procedure drawSurface(targetRect: PRect; Surface: Pcairo_surface_t; sourceRect: PRect;
       mask: PGdkPixBuf; maskRect: PRect);
@@ -1225,6 +1224,21 @@ begin
   cairo_stroke(Widget);
 end;
 
+function TGtk3DeviceContext.getPixel(x, y: Integer): TColor;
+var
+  pixbuf: PGdkPixbuf;
+  pixels: pointer;
+begin
+  Result := 0;
+  pixbuf := gdk_pixbuf_get_from_surface(CairoSurface, X, Y, 1, 1);
+  if Assigned(pixbuf) then
+  begin
+    pixels := gdk_pixbuf_get_pixels(pixbuf);
+    if Assigned(pixels) then
+      Result := PLongInt(pixels)^ and $FFFFFF; // take first 3 bytes at pixels^
+  end;
+end;
+
 procedure TGtk3DeviceContext.drawRect(x1, y1, w, h: Integer; const AFill, ABorder: Boolean);
 begin
   cairo_save(Widget);
@@ -1253,73 +1267,46 @@ begin
   RoundRect(x, y, w, h, rx, ry);
 end;
 
-procedure TGtk3DeviceContext.drawText(x: Integer; y: Integer; const s: String);
+procedure TGtk3DeviceContext.drawText(X, Y: Integer; AText: PChar; ALen: Integer);
 var
-  e: cairo_font_extents_t;
-  R: Double;
-  G: Double;
-  B: Double;
+  R, G, B: Double;
+  gColor: TGdkColor;
+  Attr: PPangoAttribute;
+  AttrList: PPangoAttrList;
+  UseBack: boolean;
+  ornt:integer;
 begin
   cairo_save(Widget);
   try
-    // TranslateCairoToDevice;
-    // cairo_surface_get_device_offset(CairoSurface, @dx, @dy);
-    cairo_font_extents(Widget, @e);
-    if e.ascent <> 0 then
-    begin
-      // writeln('EXTENTS !!!! ',Format('%2.2n',[e.ascent]));
-    end;
-    cairo_move_to(Widget, x, y {+ e.ascent});
-    // writeln('DevOffset ',Format('dx %2.2n dy %2.2n x %d y %d text %s',
-    //  [dx, dy, x, y, s]));
-    // pango_renderer_activate();
-    // pango_cairo_show_layout(Widget, Layout);
-    ColorToCairoRGB(TColor(CurrentTextColor), R, G , B);
+    cairo_move_to(Widget, X, Y);
+    ornt := Self.FCurrentFont.FLogFont.lfOrientation;
+    if ornt<>0 then
+      cairo_rotate(Widget, - pi * (ornt / 10)/180);
+    ColorToCairoRGB(TColor(CurrentTextColor), R, G, B);
     cairo_set_source_rgb(Widget, R, G, B);
-    // writeln('DRAWINGTEXT ',S,' WITH R=',dbgs(R),' G=',dbgs(G),' B=',dbgs(B));
-    FCurrentFont.Layout^.set_text(PChar(S), length(S));
-    // writeln('Family: ',FCurrentFont.Handle^.get_family,' size ',FCurrentFont.Handle^.get_size,' weight ',FCurrentFont.Handle^.get_weight);
+
+    FCurrentFont.Layout^.set_text(AText, ALen);
+
+    UseBack := FCurrentBrush.Style <> BS_NULL;
+    if UseBack then
+    begin
+      gColor := TColorToTGDKColor(FCurrentBrush.Color);
+      AttrList := pango_attr_list_new;
+      Attr := pango_attr_background_new(gColor.red, gColor.green, gColor.blue);
+      pango_attr_list_insert(AttrList, Attr);
+      FCurrentFont.Layout^.set_attributes(AttrList);
+    end;
+
     pango_cairo_show_layout(Widget, FCurrentFont.Layout);
+
+    if UseBack then
+    begin
+      FCurrentFont.Layout^.set_attributes(nil);
+      pango_attribute_destroy(Attr);
+    end;
   finally
     cairo_restore(Widget);
   end;
-end;
-
-procedure TGtk3DeviceContext.drawText(x, y, w, h, flags: Integer; const s: String
-  );
-var
-  e: cairo_font_extents_t;
-  R: Double;
-  G: Double;
-  B: Double;
-  // dx, dy: Double;
-begin
-  cairo_save(Widget);
-  try
-    // TranslateCairoToDevice;
-    // cairo_surface_get_device_offset(CairoSurface, @dx, @dy);
-    cairo_font_extents(Widget, @e);
-    if e.ascent <> 0 then
-    begin
-      // writeln('2.EXTENTS !!!! ',Format('%2.2n',[e.ascent]));
-    end;
-    cairo_move_to(Widget, x, y + e.ascent);
-    ColorToCairoRGB(CurrentTextColor, R, G , B);
-    cairo_set_source_rgb(Widget, R, G, B);
-    // cairo_show_text(Widget, PChar(s));
-    FCurrentFont.Layout^.set_text(PChar(S), length(S));
-    pango_cairo_show_layout(Widget, FCurrentFont.Layout);
-  finally
-    cairo_restore(Widget);
-  end;
-end;
-
-procedure TGtk3DeviceContext.drawLine(x1: Integer; y1: Integer; x2: Integer;
-  y2: Integer);
-begin
-  ApplyPen;
-  cairo_move_to(Widget, x1, y1);
-  cairo_line_to(Widget, x2, y2);
 end;
 
 procedure TGtk3DeviceContext.drawEllipse(x, y, w, h: Integer; AFill, ABorder: Boolean);

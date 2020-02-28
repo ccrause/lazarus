@@ -1749,11 +1749,9 @@ begin
   {$IFDEF VerboseDrag}
   DebugLn('TControl.DragOver ',Name,':',ClassName,' XY=',IntToStr(X),',',IntToStr(Y));
   {$ENDIF}
-  Accept := False;
-  if Assigned(FOnDragOver) then begin
-    Accept := True;
+  Accept := Assigned(FOnDragOver);
+  if Accept then
     FOnDragOver(Self,Source,X,Y,State,Accept);
-  end;
 end;
 
 {------------------------------------------------------------------------------
@@ -4269,6 +4267,15 @@ class procedure TControl.WSRegisterClass;
 begin
   inherited WSRegisterClass;
   RegisterControl;
+  RegisterPropertyToSkip(TControl, 'AlignWithMargins', 'VCL compatibility property', '');
+  RegisterPropertyToSkip(TControl, 'Ctl3D',            'VCL compatibility property', '');
+  RegisterPropertyToSkip(TControl, 'ParentCtl3D',      'VCL compatibility property', '');
+  RegisterPropertyToSkip(TControl, 'IsControl',        'VCL compatibility property', '');
+  RegisterPropertyToSkip(TControl, 'DesignSize',       'VCL compatibility property', '');
+  RegisterPropertyToSkip(TControl, 'ExplicitLeft',     'VCL compatibility property', '');
+  RegisterPropertyToSkip(TControl, 'ExplicitHeight',   'VCL compatibility property', '');
+  RegisterPropertyToSkip(TControl, 'ExplicitTop',      'VCL compatibility property', '');
+  RegisterPropertyToSkip(TControl, 'ExplicitWidth',    'VCL compatibility property', '');
 end;
 
 function TControl.GetCursor: TCursor;

@@ -1,16 +1,16 @@
-# Olexandr Pylypchuk <pilipchukap@rambler.ru>, 2017, 2019.
+# Olexandr Pylypchuk <pilipchukap@rambler.ru>, 2017, 2019, 2020.
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Last-Translator: Olexandr Pylypchuk <lxlalexlxl@ukr.net>\n"
-"PO-Revision-Date: 2019-12-24 10:21+0200\n"
+"PO-Revision-Date: 2020-02-18 22:27+0200\n"
 "Project-Id-Version: \n"
 "Language-Team: Ukrainian <kde-i18n-doc@kde.org>\n"
 "Language: uk\n"
 "Content-Transfer-Encoding: 8bit\n"
 "MIME-Version: 1.0\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
-"X-Generator: Lokalize 2.0\n"
+"X-Generator: Lokalize 19.04.3\n"
 
 #: projectgroupstrconst.lisabort
 msgid "Abort"
@@ -51,6 +51,10 @@ msgstr "Режим збирання не знайдено"
 #, object-pascal-format
 msgid "Build mode \"%s\" not found."
 msgstr "Режим збирання \"%s\" не знайдено."
+
+#: projectgroupstrconst.lischangesgetlostatreload
+msgid "There are unsaved changes that get lost if you reload the project group. Do you really want to reload?"
+msgstr "Є не збережені зміни, які будуть втрачені, якщо перезавантажити групу проєктів. Справді бажаєте перезавантажити?"
 
 #: projectgroupstrconst.liscompileandbuildcompiletarget
 msgid "\"Compile\" and \"Build\" compile target"
@@ -144,10 +148,6 @@ msgstr "Програму lazbuild не знайдено"
 msgid "More"
 msgstr "Більше"
 
-#: projectgroupstrconst.lisneedsave
-msgid "Need save"
-msgstr "Потрібно зберегти"
-
 #: projectgroupstrconst.lisnewprojectgroup
 msgctxt "projectgroupstrconst.lisnewprojectgroup"
 msgid "New project group"
@@ -225,11 +225,6 @@ msgstr "Пакунок \"%s\" не знайдено."
 #: projectgroupstrconst.lispascalfilepasppp
 msgid "Pascal files (*.pas;*.pp;*.p)"
 msgstr "Файли Паскалю (*.pas;*.pp;*.p)"
-
-#: projectgroupstrconst.lispleasesaveyourchangesbeforereloadingtheprojectgrou
-msgctxt "projectgroupstrconst.lispleasesaveyourchangesbeforereloadingtheprojectgrou"
-msgid "Please save your changes before reloading the project group."
-msgstr "Збережіть ваші зміни перед перезавантаженням групи проєктів."
 
 #: projectgroupstrconst.lisprojectgroup
 #, object-pascal-format

@@ -2715,6 +2715,7 @@ resourcestring
   dlgPODpiAwarenessOldOnNewPerMonitorV2 = 'Vista-8: on, 8.1/10+: per monitor/V2';
   dlgPOUIAccess = 'UI Access (uiAccess)';
   dlgPOLongPathAware = 'Long path awareness';
+  dlgPOAnsiUTF8  = 'ANSI codepage is UTF-8 (Windows 10 1903+)';
   dlgPOAsInvoker = 'as invoker (asInvoker)';
   dlgPOHighestAvailable = 'highest available (highestAvailable)';
   dlgPORequireAdministrator = 'require administrator (requireAdministrator)';
@@ -3126,9 +3127,14 @@ resourcestring
   srkmecCopyAddCurrentLine    = 'Copy current line (Add to Clipboard)';
   srkmecCutCurrentLine        = 'Cut current line';
   srkmecCutAddCurrentLine     = 'Cut current line (Add to Clipboard)';
-  srkmecMoveLineUp            = 'Move one line up';
-  srkmecMoveLineDown          = 'Move one line down';
+  srkmecMoveLineUp            = 'Move line up';
+  srkmecMoveLineDown          = 'Move line down';
   srkmecDuplicateLine         = 'Duplicate line (or lines in selection)';
+  srkmecDuplicateSelection    = 'Duplicate selection';
+  srkmecMoveSelectUp          = 'Move selection up';
+  srkmecMoveSelectDown        = 'Move selection down';
+  srkmecMoveSelectLeft        = 'Move selection left';
+  srkmecMoveSelectRight       = 'Move selection right';
 
   srkmecMultiPaste            = 'MultiPaste';
   srkmecScrollUp              = 'Scroll up one line';

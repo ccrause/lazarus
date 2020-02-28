@@ -1301,6 +1301,7 @@ type
     FBreakID: Integer;
     FHitCnt: Integer;
     FValid: TValidState;
+    FBaseValid: TValidState; // insert-state / without condition or other attribs
     FWatchData: String;
     FWatchKind: TDBGWatchPointKind;
     FWatchScope: TDBGWatchPointScope;
@@ -1354,6 +1355,7 @@ type
     FExpression: string;
     FUpdateEnabled: Boolean;
     FUpdateExpression: Boolean;
+    FValid: TValidState;
   protected
     function DoExecute: Boolean; override;
   public
@@ -1378,6 +1380,7 @@ type
     FParsedExpression: String;
     FCurrentCmd: TGDBMIDebuggerCommandBreakPointBase;
     FUpdateFlags: TGDBMIBreakPointUpdateFlags;
+    FBaseValid: TValidState; // insert-state / without condition or other attribs
     procedure DoLogExpressionCallback(Sender: TObject; ASuccess: Boolean;
       ResultText: String; ResultDBGType: TDBGType);
     procedure SetBreakPoint;
@@ -2201,10 +2204,26 @@ end;
 function TGDBMIDebuggerChangeFilenameBase.DoChangeFilename: Boolean;
 var
   R: TGDBMIExecResult;
-  List: TGDBMINameValueList;
   S, FileName: String;
+
+  procedure SetErrorMsg;
+  var
+    List: TGDBMINameValueList;
+  begin
+    if (FErrorMsg = '') or
+       (pos('no such file', LowerCase(FErrorMsg)) > 0) or
+       (pos('not exist', LowerCase(FErrorMsg)) < 0)
+    then begin
+      List := TGDBMINameValueList.Create(R);
+      FErrorMsg := DeleteEscapeChars((List.Values['msg']));
+      List.Free;
+    end;
+    Result := False;
+  end;
+
 begin
   Result := False;
+  FErrorMsg := '';
   FContext.ThreadContext := ccNotRequired;
   FContext.StackContext := ccNotRequired;
 
@@ -2215,6 +2234,8 @@ begin
   {$IFDEF darwin}
   if  (R.State = dsError) and (FileName <> '')
   then begin
+    SetErrorMsg;
+
     S := FTheDebugger.InternalFilename + '/Contents/MacOS/' + ExtractFileNameOnly(Filename);
     S := FTheDebugger.ConvertToGDBPath(S, cgptExeName);
     Result := ExecuteCommand('-file-exec-and-symbols %s', [S], R);
@@ -2223,6 +2244,8 @@ begin
   {$ENDIF}
   if (R.State = dsError)  and (FileName <> '') then
   begin
+    SetErrorMsg;
+
     FTheDebugger.InternalFilename := Filename + '.elf';
     S := FTheDebugger.ConvertToGDBPath(FTheDebugger.FileName, cgptExeName);
     Result := ExecuteCommand('-file-exec-and-symbols %s', [S], R);
@@ -2231,10 +2254,7 @@ begin
 
   if  (R.State = dsError) and (FTheDebugger.FileName <> '')
   then begin
-    List := TGDBMINameValueList.Create(R);
-    FErrorMsg := DeleteEscapeChars((List.Values['msg']));
-    List.Free;
-    Result := False;
+    SetErrorMsg;
     Exit;
   end;
 end;
@@ -5644,18 +5664,12 @@ begin
     FTheDebugger.FFpcSpecificHandlerCallFin.SetByAddrMethod := ibmAddrDirect;
     FTheDebugger.FFpcSpecificHandler.SetByAddrMethod := ibmAddrIndirect; // must be at first asm line
 
-{$IFdef WITH_GDB_FORCE_EXCEPTBREAK}
-    FTheDebugger.FExceptionBreak.SetByAddr(Self, True);
-    FTheDebugger.FBreakErrorBreak.SetByAddr(Self, True);
-    FTheDebugger.FRunErrorBreak.SetByAddr(Self, True);
-{$Else}
     if ieRaiseBreakPoint in DbgProp.InternalExceptionBreakPoints
     then FTheDebugger.FExceptionBreak.SetByAddr(Self);
     if ieBreakErrorBreakPoint in DbgProp.InternalExceptionBreakPoints
     then FTheDebugger.FBreakErrorBreak.SetByAddr(Self);
     if ieRunErrorBreakPoint in DbgProp.InternalExceptionBreakPoints
     then FTheDebugger.FRunErrorBreak.SetByAddr(Self);
-{$ENDIF}
     if (not ((FTheDebugger.FExceptionBreak.IsBreakSet  or not (ieRaiseBreakPoint      in DbgProp.InternalExceptionBreakPoints)) and
              (FTheDebugger.FBreakErrorBreak.IsBreakSet or not (ieBreakErrorBreakPoint in DbgProp.InternalExceptionBreakPoints)) and
              (FTheDebugger.FRunErrorBreak.IsBreakSet   or not (ieRunErrorBreakPoint   in DbgProp.InternalExceptionBreakPoints)) )) and
@@ -8326,11 +8340,9 @@ begin
   FFpcSpecificHandlerCallFin:= TGDBMIInternalBreakPoint.Create('');
   FSehFinallyBreaks  := TGDBMIInternalSehFinallyBreakPointList.Create;
   FSehCatchesBreaks  := TGDBMIInternalAddrBreakPointList.Create;
-{$IFdef WITH_GDB_FORCE_EXCEPTBREAK}
-  FBreakErrorBreak.UseForceFlag := True;
-  FRunErrorBreak.UseForceFlag := True;
-  FExceptionBreak.UseForceFlag := True;
-{$ENDIF}
+  FBreakErrorBreak.UseForceFlag := not TGDBMIDebuggerProperties(GetProperties).DisableForcedBreakpoint;
+  FRunErrorBreak.UseForceFlag   := not TGDBMIDebuggerProperties(GetProperties).DisableForcedBreakpoint;
+  FExceptionBreak.UseForceFlag  := not TGDBMIDebuggerProperties(GetProperties).DisableForcedBreakpoint;
 
   FInstructionQueue := TGDBMIDbgInstructionQueue.Create(Self);
   FCommandQueue := TGDBMIDebuggerCommandList.Create;
@@ -10082,11 +10094,14 @@ end;
 
 function TGDBMIDebuggerCommandBreakPointBase.ExecBreakCondition(ABreakId: Integer;
   AnExpression: string): Boolean;
+var
+  R: TGDBMIExecResult;
 begin
   Result := False;
   if ABreakID = 0 then Exit;
 
-  Result := ExecuteCommand('-break-condition %d %s', [ABreakID, UpperCaseSymbols(AnExpression)], []);
+  Result := ExecuteCommand('-break-condition %d %s', [ABreakID, UpperCaseSymbols(AnExpression)], R) and
+    (R.State <> dsError);
 end;
 
 { TGDBMIDebuggerCommandBreakInsert }
@@ -10210,6 +10225,7 @@ begin
   FContext.StackContext := ccNotRequired;
 
   FValid := vsInvalid;
+  FBaseValid := vsInvalid;
   DefaultTimeOut := DebuggerProperties.TimeoutForEval;
   try
     if FReplaceId <> 0
@@ -10217,12 +10233,15 @@ begin
 
     if ExecBreakInsert(FBreakID, FHitCnt, FAddr, Pending) then
       FValid := vsValid;
+    FBaseValid := FValid;
     if FValid = vsInvalid then Exit;
     if Pending then
       FValid := vsPending;
 
-    if (FExpression <> '') and not (dcsCanceled in SeenStates)
-    then ExecBreakCondition(FBreakID, FExpression);
+    if (FExpression <> '') and not (dcsCanceled in SeenStates) then begin
+      if not ExecBreakCondition(FBreakID, FExpression) then
+        FValid := vsInvalid;
+    end;
 
     if not (dcsCanceled in SeenStates)
     then ExecBreakEnabled(FBreakID, FEnabled);
@@ -10323,13 +10342,16 @@ end;
 function TGDBMIDebuggerCommandBreakUpdate.DoExecute: Boolean;
 begin
   Result := True;
+  FValid := vsValid;
   FContext.ThreadContext := ccNotRequired;
   FContext.StackContext := ccNotRequired;
 
   DefaultTimeOut := DebuggerProperties.TimeoutForEval;
   try
-  if FUpdateExpression
-  then ExecBreakCondition(FBreakID, FExpression);
+  if FUpdateExpression then begin
+    if not ExecBreakCondition(FBreakID, FExpression) then
+      FValid := vsInvalid;
+  end;
   if FUpdateEnabled
   then ExecBreakEnabled(FBreakID, FEnabled);
   finally
@@ -10483,7 +10505,7 @@ begin
   then SetBreakpoint;
 end;
 
-procedure TGDBMIBreakPoint.SetBreakpoint;
+procedure TGDBMIBreakPoint.SetBreakPoint;
 begin
   if Debugger = nil then Exit;
   if IsUpdating
@@ -10577,11 +10599,20 @@ begin
   if Sender = FCurrentCmd
   then FCurrentCmd := nil;
 
+  if (Sender is TGDBMIDebuggerCommandBreakUpdate) then begin
+    if TGDBMIDebuggerCommandBreakUpdate(Sender).FValid = vsInvalid then
+      SetValid(vsInvalid)
+    else
+    if FBaseValid = vsValid then
+      SetValid(vsValid);
+  end
+  else
   if (Sender is TGDBMIDebuggerCommandBreakInsert)
   then begin
     // Check Insert Result
     BeginUpdate;
 
+    FBaseValid := TGDBMIDebuggerCommandBreakInsert(Sender).FBaseValid;
     case TGDBMIDebuggerCommandBreakInsert(Sender).Valid of
       vsValid: SetValid(vsValid);
       vsPending: SetValid(vsPending);
@@ -12604,7 +12635,9 @@ begin
   FBreaks[ALoc].BreakAddr := 0;
   FBreaks[ALoc].BreakFunction := '';
 
-  if UseForceFlag and ACmd.FTheDebugger.CanForceBreakPoints then
+  if UseForceFlag and ACmd.FTheDebugger.CanForceBreakPoints and
+     (ABreakLoc <> '') and not(ABreakLoc[1] in ['+', '*'])
+  then
   begin
     if (not ACmd.ExecuteCommand('-break-insert -f %s', [ABreakLoc], R)) or
        (R.State = dsError)

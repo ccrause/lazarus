@@ -329,6 +329,8 @@ procedure TextViewSetAllignment(txt: NSTextView; align: TAlignment);
 procedure TextFieldSetAllignment(txt: NSTextField; align: TAlignment);
 procedure TextFieldSetBorderStyle(txt: NSTextField; astyle: TBorderStyle);
 procedure RadioButtonSwitchSiblings(checkedRadio: NSButton);
+procedure ButtonSetState(btn: NSButton; NewState: TCheckBoxState;
+  SkipChangeEvent: Boolean = true);
 
 procedure ScrollViewSetScrollStyles(AScroll: TCocoaScrollView; AStyles: TScrollStyle);
 
@@ -445,6 +447,34 @@ begin
     begin
       NSButton(SubView).setState(NSOffState);
     end;
+end;
+
+procedure ButtonSetState(btn: NSButton; NewState: TCheckBoxState;
+  SkipChangeEvent: Boolean = true);
+const
+  buttonState: array [TcheckBoxState] of NSInteger =
+    (NSOffState, NSOnState, NSMixedState);
+var
+  cb : IButtonCallback;
+begin
+  if NewState = cbGrayed then
+    {$ifdef BOOLFIX}
+    btn.setAllowsMixedState_(Ord(true));
+    {$else}
+    btn.setAllowsMixedState(true);
+    {$endif}
+  if SkipChangeEvent and (btn.isKindOfClass(TCocoaButton)) then
+  begin
+    //todo: This place needs a cleanup!
+    //      Assigning state, while having callback removed
+    //      TCocoaButton.setState is causing OnChange event, if callback is not nil
+    cb := TCocoaButton(btn).callback;
+    TCocoaButton(btn).callback := nil;
+    btn.setState(buttonState[NewState]);
+    TCocoaButton(btn).callback := cb;
+  end
+  else
+    btn.setState(buttonState[NewState]);
 end;
 
 procedure ScrollViewSetScrollStyles(AScroll: TCocoaScrollView; AStyles: TScrollStyle);
@@ -773,7 +803,8 @@ end;
 class function TCocoaWSCustomCheckBox.CreateHandle(const AWinControl: TWinControl;
   const AParams: TCreateParams): TLCLIntfHandle;
 var
-  btn: NSButton;
+  btn: TCocoaButton;
+  cb: IButtonCallback;
 begin
   btn := AllocButton(AWinControl, TLCLCheckBoxCallBack, AParams, 0, NSSwitchButton);
   // changes in AllowGrayed are never sent to WS!
@@ -784,6 +815,7 @@ begin
     {$else}
     NSButton(btn).setAllowsMixedState(true);
     {$endif}
+    ;
   Result := TLCLIntfHandle(btn);
 end;
 
@@ -820,16 +852,8 @@ class procedure TCocoaWSCustomCheckBox.SetState(
 const
   buttonState: array [TcheckBoxState] of NSInteger = (NSOffState, NSOnState, NSMixedState);
 begin
-  if ACustomCheckBox.HandleAllocated then
-  begin
-    if NewState = cbGrayed then
-      {$ifdef BOOLFIX}
-      NSButton(ACustomCheckBox.Handle).setAllowsMixedState_(Ord(true));
-      {$else}
-      NSButton(ACustomCheckBox.Handle).setAllowsMixedState(true);
-      {$endif}
-    NSButton(ACustomCheckBox.Handle).setState(buttonState[NewState]);
-  end;
+  if not ACustomCheckBox.HandleAllocated then Exit;
+  ButtonSetState(NSButton(ACustomCheckBox.Handle), NewState);
 end;
 
 class procedure TCocoaWSCustomCheckBox.GetPreferredSize(
@@ -872,7 +896,7 @@ end;
 class function TCocoaWSRadioButton.CreateHandle(const AWinControl: TWinControl;
   const AParams: TCreateParams): TLCLIntfHandle;
 var
-  btn: NSButton;
+  btn: TCocoaButton;
 begin
   btn := AllocButton(AWinControl, TLCLRadioButtonCallback, AParams, 0, NSRadioButton);
   Result := TLCLIntfHandle(btn);
@@ -880,10 +904,14 @@ end;
 
 class procedure TCocoaWSRadioButton.SetState(
   const ACustomCheckBox: TCustomCheckBox; const NewState: TCheckBoxState);
+var
+  btn : NSButton;
 begin
+  if not ACustomCheckBox.HandleAllocated then Exit;
+  btn := NSButton(ACustomCheckBox.Handle);
   if NewState = cbChecked then
-    RadioButtonSwitchSiblings(NSButton(ACustomCheckBox.Handle));
-  TCocoaWSCustomCheckBox.SetState(ACustomCheckBox, NewState);
+    RadioButtonSwitchSiblings(btn);
+  ButtonSetState(btn, NewState);
 end;
 
 { TCocoaWSCustomStaticText }
@@ -943,6 +971,7 @@ begin
   end;
   TextFieldSetAllignment(field, TCustomEdit(AWinControl).Alignment);
   TextFieldSetBorderStyle(field, TCustomEdit(AWinControl).BorderStyle);
+  UpdateFocusRing(field, TCustomEdit(AWinControl).BorderStyle);
 
   Result:=TLCLIntfHandle(field);
 end;
@@ -969,6 +998,7 @@ begin
   if not Assigned(field) then Exit;
   field.setBordered_( ObjCBool(ABorderStyle <> bsNone) );
   field.setBezeled_( ObjCBool(ABorderStyle <> bsNone) );
+  UpdateFocusRing(field, ABorderStyle);
 end;
 
 class function TCocoaWSCustomEdit.GetSelStart(const ACustomEdit: TCustomEdit): integer;
@@ -1440,6 +1470,7 @@ begin
   scr.setDrawsBackground(false);
 
   ScrollViewSetBorderStyle(scr, TCustomMemo(AWinControl).BorderStyle);
+  UpdateFocusRing(txt, TCustomMemo(AWinControl).BorderStyle);
 
   nr:=scr.documentVisibleRect;
   txt.setFrame(nr);
@@ -1531,6 +1562,7 @@ begin
   if not Assigned(sv) then Exit;
 
   ScrollViewSetBorderStyle(sv, ABorderStyle);
+  UpdateFocusRing(NSView(sv.documentView), ABorderStyle);
 end;
 
 class function TCocoaWSCustomMemo.GetCaretPos(const ACustomEdit: TCustomEdit): TPoint;
@@ -1935,6 +1967,10 @@ begin
   scr.minInt:=TCustomScrollBar(AWinControl).Min;
   scr.maxInt:=TCustomScrollBar(AWinControl).Max;
   scr.pageInt:=TCustomScrollBar(AWinControl).PageSize;
+  scr.largeInc:=abs(TCustomScrollBar(AWinControl).LargeChange);
+  scr.smallInc:=abs(TCustomScrollBar(AWinControl).SmallChange);
+  if scr.largeInc=0 then scr.largeInc:=1;
+  if scr.smallInc=0 then scr.smallInc:=1;
 
   Result:=TLCLIntfHandle(scr);
 
@@ -2086,6 +2122,7 @@ begin
   scroll.setHasVerticalScroller(true);
   scroll.setAutohidesScrollers(true);
   ScrollViewSetBorderStyle(scroll, lclListBox.BorderStyle);
+  UpdateFocusRing(list, lclListBox.BorderStyle);
 
   Result := TLCLIntfHandle(scroll);
 end;
@@ -2198,6 +2235,7 @@ begin
   if not Assigned(list) then Exit;
 
   ScrollViewSetBorderStyle(list.enclosingScrollView, ABorderStyle);
+  UpdateFocusRing(list, ABorderStyle);
 end;
 
 class procedure TCocoaWSCustomListBox.SetItemIndex(const ACustomListBox: TCustomListBox; const AIndex: integer);

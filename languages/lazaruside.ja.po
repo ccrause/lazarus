@@ -3352,6 +3352,10 @@ msgstr "固着カーソル"
 msgid "Caret in unfocused editor does not blink"
 msgstr ""
 
+#: lazarusidestrconsts.dlgpoansiutf8
+msgid "ANSI codepage is UTF-8 (Windows 10 1903+)"
+msgstr ""
+
 #: lazarusidestrconsts.dlgpoapplication
 msgid "Application"
 msgstr "アプリケーション"
@@ -21718,6 +21722,10 @@ msgstr "カーソルを下に移動"
 msgid "Duplicate line (or lines in selection)"
 msgstr ""
 
+#: lazarusidestrconsts.srkmecduplicateselection
+msgid "Duplicate selection"
+msgstr ""
+
 #: lazarusidestrconsts.srkmeceditorbottom
 msgid "Move cursor to absolute end"
 msgstr "カーソルを末尾に移動"
@@ -22038,11 +22046,27 @@ msgid "Move editor rightmost"
 msgstr "エディタを右端に移動"
 
 #: lazarusidestrconsts.srkmecmovelinedown
-msgid "Move one line down"
+msgid "Move line down"
 msgstr ""
 
 #: lazarusidestrconsts.srkmecmovelineup
-msgid "Move one line up"
+msgid "Move line up"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectdown
+msgid "Move selection down"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectleft
+msgid "Move selection left"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectright
+msgid "Move selection right"
+msgstr ""
+
+#: lazarusidestrconsts.srkmecmoveselectup
+msgid "Move selection up"
 msgstr ""
 
 #: lazarusidestrconsts.srkmecmultipaste

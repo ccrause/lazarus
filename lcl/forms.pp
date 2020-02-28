@@ -268,20 +268,20 @@ type
     FDesignTimePPI: Integer;
     FPixelsPerInch: Integer;
 
+    function DesignTimePPIIsStored: Boolean;
     procedure SetDesignTimePPI(const ADesignTimePPI: Integer);
   protected
     procedure SetScaled(const AScaled: Boolean); virtual;
 
     procedure DoAutoAdjustLayout(const AMode: TLayoutAdjustmentPolicy;
       const AXProportion, AYProportion: Double); override;
-    procedure Loaded; override;
   public
     constructor Create(TheOwner: TComponent); override;
 
     procedure AutoAdjustLayout(AMode: TLayoutAdjustmentPolicy; const AFromPPI,
       AToPPI, AOldFormWidth, ANewFormWidth: Integer); override;
   public
-    property DesignTimePPI: Integer read FDesignTimePPI write SetDesignTimePPI default 96;
+    property DesignTimePPI: Integer read FDesignTimePPI write SetDesignTimePPI stored DesignTimePPIIsStored;
     property PixelsPerInch: Integer read FPixelsPerInch write FPixelsPerInch stored False;
     property Scaled: Boolean read FScaled write SetScaled default True;
   end;
@@ -435,8 +435,8 @@ type
   );
 
   TCloseEvent = procedure(Sender: TObject; var CloseAction: TCloseAction) of object;
-  TCloseQueryEvent = procedure(Sender : TObject; var CanClose : boolean) of object;
-  TDropFilesEvent = procedure (Sender: TObject; const FileNames: Array of String) of object;
+  TCloseQueryEvent = procedure(Sender : TObject; var CanClose: Boolean) of object;
+  TDropFilesEvent = procedure (Sender: TObject; const FileNames: array of string) of object;
   THelpEvent = function(Command: Word; Data: PtrInt; var CallHelp: Boolean): Boolean of object;
   TShortCutEvent = procedure (var Msg: TLMKey; var Handled: Boolean) of object;
   TModalDialogFinished = procedure (Sender: TObject; AResult: Integer) of object;
@@ -755,6 +755,7 @@ type
     FLCLVersion: string;
     function LCLVersionIsStored: boolean;
   protected
+    class procedure WSRegisterClass; override;
     procedure CreateWnd; override;
     procedure Loaded; override;
   public
@@ -2282,10 +2283,6 @@ begin
 end;
 
 initialization
-  RegisterPropertyToSkip(TForm, 'OldCreateOrder', 'VCL compatibility property', '');
-  RegisterPropertyToSkip(TForm, 'TextHeight', 'VCL compatibility property', '');
-  RegisterPropertyToSkip(TForm, 'Scaled', 'VCL compatibility property', '');
-  RegisterPropertyToSkip(TForm, 'TransparentColorValue', 'VCL compatibility property', '');
   LCLProc.OwnerFormDesignerModifiedProc:=@IfOwnerIsFormThenDesignerModified;
   ThemesImageDrawEvent:=@ImageDrawEvent;
   IsFormDesign := @IsFormDesignFunction;

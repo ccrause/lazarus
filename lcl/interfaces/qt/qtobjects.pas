@@ -2526,7 +2526,7 @@ begin
       Palette := QWidget_palette(Parent);
   end;
   // since q_DrawWinPanel doesnot supports lineWidth we should do it ourself
-  for i := 1 to lineWidth - 2 do
+  for i := 1 to lineWidth - 1 do
   begin
     q_DrawWinPanel(Widget, x, y, w, h, Palette, Sunken);
     inc(x);
@@ -3132,8 +3132,9 @@ begin
   SelFont := AFont;
   if (AFont.FHandle <> nil) and (Widget <> nil) then
   begin
-    QFnt := QPainter_font(Widget);
-    AssignQtFont(AFont.FHandle, QFnt);
+    QFnt := QFont_Create(AFont.FHandle);
+    QPainter_setFont(Widget, QFnt);
+    QFont_destroy(QFnt);
     vFont.Angle := AFont.Angle;
   end;
 end;

@@ -79,7 +79,8 @@ begin
   inherited AfterConstruction;
 
   MonPPI := Monitor.PixelsPerInch;
-  if Application.Scaled and Scaled and (MonPPI > 0) and (MonPPI <> PixelsPerInch) then
+  if Application.Scaled and Scaled and (MonPPI > 0) and (MonPPI <> PixelsPerInch)
+  and not (csDesigning in ComponentState) then
     AutoAdjustLayout(lapAutoAdjustForDPI, PixelsPerInch, MonPPI,
                      Width, MulDiv(Width, MonPPI, PixelsPerInch));
 end;
@@ -2687,6 +2688,8 @@ begin
   {$ENDIF}
   DisableAlign;
   try
+    if Application.Scaled and Scaled then
+      FixDesignFontsPPIWithChildren(FDesignTimePPI);
     inherited Loaded;
   finally
     EnableAlign;
@@ -3110,6 +3113,15 @@ end;
 function TForm.LCLVersionIsStored: boolean;
 begin
   Result:=Parent=nil;
+end;
+
+class procedure TForm.WSRegisterClass;
+begin
+  inherited WSRegisterClass;
+  RegisterPropertyToSkip(TForm, 'OldCreateOrder', 'VCL compatibility property', '');
+  RegisterPropertyToSkip(TForm, 'TextHeight', 'VCL compatibility property', '');
+  RegisterPropertyToSkip(TForm, 'Scaled', 'VCL compatibility property', '');
+  RegisterPropertyToSkip(TForm, 'TransparentColorValue', 'VCL compatibility property', '');
 end;
 
 procedure TForm.CreateWnd;

@@ -3440,6 +3440,7 @@ components/lazutils/lcsvutils.pas svneol=native#text/pascal
 components/lazutils/lookupstringlist.pas svneol=native#text/pascal
 components/lazutils/maps.pp svneol=native#text/pascal
 components/lazutils/masks.pas svneol=native#text/pascal
+components/lazutils/objectlists.pas svneol=native#text/pascal
 components/lazutils/paswstring.pas svneol=native#text/pascal
 components/lazutils/stringhashlist.pas svneol=native#text/pascal
 components/lazutils/test/TestLazStorageMem.lpi svneol=native#text/plain
@@ -6242,6 +6243,7 @@ docs/xml/lazutils/lazloggerprofiling.xml svneol=native#text/plain
 docs/xml/lazutils/lazmethodlist.xml svneol=native#text/plain
 docs/xml/lazutils/lazstringutils.xml svneol=native#text/plain
 docs/xml/lazutils/lazsysutils.xml svneol=native#text/plain
+docs/xml/lazutils/laztracer.xml -text svneol=native#text/plain
 docs/xml/lazutils/lazunicode.xml svneol=native#text/plain
 docs/xml/lazutils/lazutf16.xml svneol=native#text/plain
 docs/xml/lazutils/lazutf8.xml svneol=native#text/plain
@@ -7576,7 +7578,6 @@ ide/newdialog.pas svneol=native#text/pascal
 ide/newprojectdlg.lfm svneol=native#text/plain
 ide/newprojectdlg.pp svneol=native#text/pascal
 ide/notifyprocessend.pas svneol=native#text/pascal
-ide/objectlists.pas svneol=native#text/pascal
 ide/pas2jsmsg.txt svneol=native#text/plain
 ide/patheditordlg.lfm svneol=native#text/pascal
 ide/patheditordlg.pas svneol=native#text/pascal
@@ -7697,6 +7698,12 @@ images/actions/autocomplete_200.png -text
 images/actions/execute.png -text
 images/actions/execute_150.png -text svneol=unset#image/png
 images/actions/execute_200.png -text svneol=unset#image/png
+images/actions/filter_any_place.png -text svneol=unset#image/png
+images/actions/filter_any_place_150.png -text svneol=unset#image/png
+images/actions/filter_any_place_200.png -text svneol=unset#image/png
+images/actions/filter_from_begin.png -text svneol=unset#image/png
+images/actions/filter_from_begin_150.png -text svneol=unset#image/png
+images/actions/filter_from_begin_200.png -text svneol=unset#image/png
 images/actions/laz_add.png -text svneol=unset#image/png
 images/actions/laz_add_150.png -text
 images/actions/laz_add_200.png -text
@@ -8862,6 +8869,9 @@ images/menu/menu_search_previous_bookmark_200.png -text
 images/menu/menu_search_previous_error.png -text svneol=unset#image/png
 images/menu/menu_search_previous_error_150.png -text svneol=unset#image/png
 images/menu/menu_search_previous_error_200.png -text svneol=unset#image/png
+images/menu/menu_search_procedure_list.png -text svneol=unset#image/png
+images/menu/menu_search_procedure_list_150.png -text svneol=unset#image/png
+images/menu/menu_search_procedure_list_200.png -text svneol=unset#image/png
 images/menu/menu_search_replace.png -text svneol=unset#image/png
 images/menu/menu_search_replace_150.png -text
 images/menu/menu_search_replace_200.png -text
@@ -11262,7 +11272,7 @@ packager/globallinks/filefindlaz-1.0.2.lpl svneol=native#text/plain
 packager/globallinks/fpcunitconsolerunner-1.lpl svneol=native#text/plain
 packager/globallinks/fpcunitide-0.1.lpl svneol=native#text/plain
 packager/globallinks/fpcunittestrunner-0.1.lpl svneol=native#text/plain
-packager/globallinks/fpdebug-0.lpl svneol=native#text/pascal
+packager/globallinks/fpdebug-0.9.lpl svneol=native#text/pascal
 packager/globallinks/fppkgpackagemanager-0.1.lpl svneol=native#text/plain
 packager/globallinks/fpvectorial2aggpaspkg-0.lpl svneol=native#text/plain
 packager/globallinks/fpvectorialpkg-0.lpl svneol=native#text/plain
@@ -11286,7 +11296,7 @@ packager/globallinks/lazcustforms-1.lpl svneol=native#text/plain
 packager/globallinks/lazdaemon-0.9.9.lpl svneol=native#text/plain
 packager/globallinks/lazdatadict-0.lpl svneol=native#text/plain
 packager/globallinks/lazdbexport-1.lpl svneol=native#text/plain
-packager/globallinks/lazdebuggerfp-0.lpl svneol=native#text/plain
+packager/globallinks/lazdebuggerfp-0.9.lpl svneol=native#text/plain
 packager/globallinks/lazdebuggerfpdserver-0.1.lpl svneol=native#text/plain
 packager/globallinks/lazdebuggerfpgdbmi-0.1.lpl svneol=native#text/plain
 packager/globallinks/lazdebuggerfplldb-0.lpl svneol=native#text/plain

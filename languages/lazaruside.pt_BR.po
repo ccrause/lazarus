@@ -3267,6 +3267,10 @@ msgstr "Cursor texto visível em editor fora de foco"
 msgid "Caret in unfocused editor does not blink"
 msgstr "Cursor texto em editor fora de foco não pisca"
 
+#: lazarusidestrconsts.dlgpoansiutf8
+msgid "ANSI codepage is UTF-8 (Windows 10 1903+)"
+msgstr "Código de página ANSI é UTF-8 (Windows 10 1903+)"
+
 #: lazarusidestrconsts.dlgpoapplication
 msgid "Application"
 msgstr "Aplicação"
@@ -21511,6 +21515,10 @@ msgstr "Mover cursor abaixo"
 msgid "Duplicate line (or lines in selection)"
 msgstr "Duplicar linha (ou linhas na seleção)"
 
+#: lazarusidestrconsts.srkmecduplicateselection
+msgid "Duplicate selection"
+msgstr "Seleção duplicada"
+
 #: lazarusidestrconsts.srkmeceditorbottom
 msgid "Move cursor to absolute end"
 msgstr "Mover o cursor para o final absoluto"
@@ -21829,12 +21837,28 @@ msgid "Move editor rightmost"
 msgstr "Mover editor extremo direito"
 
 #: lazarusidestrconsts.srkmecmovelinedown
-msgid "Move one line down"
-msgstr "Mover uma linha abaixo"
+msgid "Move line down"
+msgstr "Mover linha abaixo"
 
 #: lazarusidestrconsts.srkmecmovelineup
-msgid "Move one line up"
-msgstr "Mover uma linha acima"
+msgid "Move line up"
+msgstr "Mover linha acima"
+
+#: lazarusidestrconsts.srkmecmoveselectdown
+msgid "Move selection down"
+msgstr "Mover seleção abaixo"
+
+#: lazarusidestrconsts.srkmecmoveselectleft
+msgid "Move selection left"
+msgstr "Mover seleção à esquerda"
+
+#: lazarusidestrconsts.srkmecmoveselectright
+msgid "Move selection right"
+msgstr "Mover seleção à direita"
+
+#: lazarusidestrconsts.srkmecmoveselectup
+msgid "Move selection up"
+msgstr "Mover seleção acima"
 
 #: lazarusidestrconsts.srkmecmultipaste
 msgctxt "lazarusidestrconsts.srkmecmultipaste"

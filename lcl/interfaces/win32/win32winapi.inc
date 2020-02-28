@@ -849,16 +849,16 @@ begin
   FontName := LogFont.lfFaceName;
 
   TempLogFont := LogFont;
-  if SameText(FontName, DefFontData.Name) then
+  if IsFontNameDefault(FontName) then
   begin
     TempLogFontW.lfFaceName := UTF8ToUTF16(FMetrics.lfMessageFont.lfFaceName); // FMetrics must be UTF16
-    if TempLogFont.lfHeight = 0 then
-      TempLogFont.lfHeight := FMetrics.lfMessageFont.lfHeight;
   end
   else
   begin
     TempLogFontW.lfFaceName := UTF8ToUTF16(FontName);
   end;
+  if TempLogFont.lfHeight = 0 then
+    TempLogFont.lfHeight := FMetrics.lfMessageFont.lfHeight;
   Result := Windows.CreateFontIndirectW(@TempLogFontW);
 end;
 
@@ -3375,7 +3375,9 @@ begin
   ScrollInfo.cbSize:=sizeof(ScrollInfo);
   if (ScrollInfo.fMask and SIF_Range > 0) then
     ScrollInfo.nMax := Max(ScrollInfo.nMin, ScrollInfo.nMax - 1);
-  Result := Windows.SetScrollInfo(Handle, SBStyle, @ScrollInfo, BRedraw);
+  { ~bk passing BRedraw True/False might change the windows visual enabled state
+        that would not be reflected in TScollBar.Enabled property }
+  Result := Windows.SetScrollInfo(Handle, SBStyle, @ScrollInfo, BRedraw and WidgetSet.IsWindowEnabled(Handle));
 end;
 
 {------------------------------------------------------------------------------
