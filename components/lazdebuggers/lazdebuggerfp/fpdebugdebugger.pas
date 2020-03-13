@@ -103,7 +103,7 @@ type
     procedure DoResolveEvent(var AnEvent: TFPDEvent; AnEventThread: TDbgThread; out Finished: boolean); override;
     procedure InternalContinue(AProcess: TDbgProcess; AThread: TDbgThread); override;
   public
-    constructor Create(AController: TDbgController; AnAfterFinCallAddr: TDbgPtr);
+    constructor Create(AController: TDbgController; AnAfterFinCallAddr: TDbgPtr); reintroduce;
   end;
 
   { TFpDebugExceptionStepping }
@@ -203,7 +203,7 @@ type
     FMemManager: TFpDbgMemManager;
     FExceptionStepper: TFpDebugExceptionStepping;
     FConsoleOutputThread: TThread;
-    {$ifdef linux}
+    // Helper vars to run in debug-thread
     FCacheLine: cardinal;
     FCacheFileName: string;
     FCacheLib: TDbgLibrary;
@@ -215,7 +215,7 @@ type
     FCacheScope: TDBGWatchPointScope;
     FCacheThreadId, FCacheStackFrame: Integer;
     FCacheContext: TFpDbgInfoContext;
-    {$endif linux}
+    //
     function GetClassInstanceName(AnAddr: TDBGPtr): string;
     function ReadAnsiString(AnAddr: TDbgPtr): string;
     procedure HandleSoftwareException(out AnExceptionLocation: TDBGLocationRec; var continue: boolean);
@@ -267,8 +267,8 @@ type
     procedure DoOnIdle;
     procedure DoState(const OldState: TDBGState); override;
     function GetIsIdle: Boolean; override;
-    {$ifdef linux}
   protected
+    // Helper vars to run in debug-thread
     FCallStackEntryListThread: TDbgThread;
     FCallStackEntryListFrameRequired: Integer;
     FParamAsString: String;
@@ -284,7 +284,7 @@ type
     procedure DoFreeBreakpoint;
     procedure DoFindContext;
     procedure DoGetParamsAsString;
-    {$endif linux}
+    //
     function AddBreak(const ALocation: TDbgPtr; AnEnabled: Boolean = True): TFpDbgBreakpoint; overload;
     function AddBreak(const AFileName: String; ALine: Cardinal; AnEnabled: Boolean = True): TFpDbgBreakpoint; overload;
     function AddBreak(const AFuncName: String; ALib: TDbgLibrary = nil; AnEnabled: Boolean = True): TFpDbgBreakpoint; overload;
@@ -455,7 +455,8 @@ implementation
 
 uses
   FpDbgUtil,
-  FpDbgDisasX86;
+  FpDbgDisasX86,
+  FpDbgCommon;
 
 var
   DBG_VERBOSE, DBG_BREAKPOINTS, FPDBG_COMMANDS: PLazLoggerLogGroup;
@@ -467,13 +468,11 @@ type
   TFpDbgMemReader = class(TDbgMemReader)
   private
     FFpDebugDebugger: TFpDebugDebugger;
-    {$ifdef linux}
     FRegNum: Cardinal;
     FRegValue: TDbgPtr;
     FRegContext: TFpDbgAddressContext;
     FRegResult: Boolean;
     procedure DoReadRegister;
-    {$endif linux}
   protected
     function GetDbgProcess: TDbgProcess; override;
     function GetDbgThread(AContext: TFpDbgAddressContext): TDbgThread; override;
@@ -510,7 +509,7 @@ procedure TDbgControllerStepOverFirstFinallyLineCmd.DoResolveEvent(
   var AnEvent: TFPDEvent; AnEventThread: TDbgThread; out Finished: boolean);
 begin
   Finished := (FThread.CompareStepInfo(0, True) <> dcsiSameLine) or
-              (NextOpCode = OPret) or IsSteppedOut;
+              (NextInstruction.IsReturnInstruction) or IsSteppedOut;
 
   if Finished then
     AnEvent := deFinishedStep
@@ -523,6 +522,8 @@ end;
 
 procedure TDbgControllerStepOverOrFinallyCmd.InternalContinue(
   AProcess: TDbgProcess; AThread: TDbgThread);
+var
+  Instr: TDbgAsmInstruction;
 begin
 {
 00000001000374AE 4889C1                   mov rcx,rax
@@ -531,21 +532,25 @@ begin
 00000001000374BB E89022FEFF               call -$0001DD70
 
 }
-  if (AThread = FThread) then
-    case NextOpCode of
-      OPmov:
-        if UpperCase(NextInstruction.Operand[2].Value) = 'RBP' then
-          FFinState := fsMov;
-      OPcall:
-        if FFinState = fsMov then begin
-          CheckForCallAndSetBreak;
-          FProcess.Continue(FProcess, FThread, True); // Step into
-          FFinState := fsCall;
-          exit;
-        end;
-      else
-        FFinState := fsNone;
+  if (AThread = FThread) then begin
+    Instr := NextInstruction;
+    if Instr is TX86AsmInstruction then begin
+      case TX86AsmInstruction(Instr).X86OpCode of
+        OPmov:
+          if UpperCase(TX86AsmInstruction(Instr).X86Instruction.Operand[2].Value) = 'RBP' then
+            FFinState := fsMov;
+        OPcall:
+          if FFinState = fsMov then begin
+            CheckForCallAndSetBreak;
+            FProcess.Continue(FProcess, FThread, True); // Step into
+            FFinState := fsCall;
+            exit;
+          end;
+        else
+          FFinState := fsNone;
+      end;
     end;
+  end;
   inherited InternalContinue(AProcess, AThread);
 end;
 
@@ -582,7 +587,7 @@ begin
   if IsAtOrOutOfHiddenBreakFrame then
     RemoveHiddenBreak;
 
-  Finished := IsSteppedOut or FDone or ((not HasHiddenBreak) and (NextOpCode = OPret));
+  Finished := IsSteppedOut or FDone or ((not HasHiddenBreak) and (NextInstruction.IsReturnInstruction));
   if Finished then
     AnEvent := deFinishedStep
   else
@@ -594,8 +599,9 @@ procedure TDbgControllerStepThroughFpcSpecialHandler.InternalContinue(
   AProcess: TDbgProcess; AThread: TDbgThread);
 begin
   {$PUSH}{$Q-}{$R-}
-  if (AThread = FThread) and (NextOpCode = OPcall) and
-     (FThread.GetInstructionPointerRegisterValue + NextInstructionLen = FAfterFinCallAddr)
+  if (AThread = FThread) and
+     (NextInstruction.IsCallInstruction) and
+     (FThread.GetInstructionPointerRegisterValue + NextInstruction.InstructionLength = FAfterFinCallAddr)
   then begin
     RemoveHiddenBreak;
     FProcess.Continue(FProcess, FThread, True);
@@ -792,12 +798,10 @@ begin
     Result := FFpDebugDebugger.FDbgController.CurrentThread;
 end;
 
-{$ifdef linux}
 procedure TFpDbgMemReader.DoReadRegister;
 begin
   FRegResult := inherited ReadRegister(FRegNum, FRegValue, FRegContext);
 end;
-{$endif linux}
 
 constructor TFpDbgMemReader.create(AFpDebugDebuger: TFpDebugDebugger);
 begin
@@ -818,15 +822,16 @@ end;
 function TFpDbgMemReader.ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr;
   AContext: TFpDbgAddressContext): Boolean;
 begin
-{$ifdef linux}
-  FRegNum := ARegNum;
-  FRegContext := AContext;
-  FFpDebugDebugger.ExecuteInDebugThread(@DoReadRegister);
-  AValue := FRegValue;
-  result := FRegResult;
-{$else linux}
-  result := inherited ReadRegister(ARegNum, AValue, AContext);
-{$endif linux}
+  if FFpDebugDebugger.FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FRegNum := ARegNum;
+    FRegContext := AContext;
+    FFpDebugDebugger.ExecuteInDebugThread(@DoReadRegister);
+    AValue := FRegValue;
+    result := FRegResult;
+  end
+  else
+    result := inherited ReadRegister(ARegNum, AValue, AContext);
 end;
 
 { TCallstackAsyncRequest }
@@ -1291,25 +1296,27 @@ end;
 
 function TFPDBGDisassembler.PrepareEntries(AnAddr: TDbgPtr; ALinesBefore, ALinesAfter: Integer): boolean;
 var
-  ARange: TDBGDisassemblerEntryRange;
+  ARange, AReversedRange: TDBGDisassemblerEntryRange;
   AnEntry: TDisassemblerEntry;
-  CodeBin: array[0..20] of byte;
+  CodeBin: TBytes;
   p: pointer;
   ADump,
   AStatement,
   ASrcFileName: string;
   ASrcFileLine: integer;
-  i,j: Integer;
+  i,j, sz, bytesDisassembled, bufOffset: Integer;
   Sym: TFpSymbol;
   StatIndex: integer;
   FirstIndex: integer;
-  ALastAddr: TDBGPtr;
+  ALastAddr, tmpAddr, tmpPointer, prevInstructionSize: TDBGPtr;
+  ADisassembler: TDbgAsmDecoder;
 
 begin
   Result := False;
   if (Debugger = nil) or not(Debugger.State = dsPause) then
     exit;
 
+  ADisassembler := TFpDebugDebugger(Debugger).FDbgController.CurrentProcess.Disassembler;
   Sym:=nil;
   ASrcFileLine:=0;
   ASrcFileName:='';
@@ -1319,22 +1326,126 @@ begin
   ARange.RangeStartAddr:=AnAddr;
   ALastAddr:=0;
 
-  Assert(ALinesBefore<>0,'TFPDBGDisassembler.PrepareEntries LinesBefore not supported');
+  if (ALinesBefore > 0) and
+    ADisassembler.CanReverseDisassemble then
+   begin
+     AReversedRange := TDBGDisassemblerEntryRange.Create;
+     tmpAddr := AnAddr;  // do not modify AnAddr in this loop
+     // Large enough block of memory for whole loop
+     sz := ADisassembler.MaxInstructionSize * ALinesBefore;
+     SetLength(CodeBin, sz);
 
-  for i := 0 to ALinesAfter-1 do
+     // TODO: Check if AnAddr is at lower address than length(CodeBin)
+     //       and ensure ReadData size doesn't exceed available target memory.
+     //       Fill out of bounds memory in buffer with "safe" value e.g. 0
+     if sz + ADisassembler.MaxInstructionSize > AnAddr then
+     begin
+       FillByte(CodeBin[0], sz, 0);
+       // offset into buffer where active memory should start
+       bufOffset := sz - AnAddr;
+       // size of active memory to read
+       sz := integer(AnAddr);
+     end
+     else
+     begin
+       bufOffset := 0;
+     end;
+
+     // Everything now counts back from starting address...
+     bytesDisassembled := 0;
+     // Only read up to byte before this address
+     if not TFpDebugDebugger(Debugger).ReadData(tmpAddr-sz, sz, CodeBin[bufOffset]) then
+       DebugLn(Format('Reverse disassemble: Failed to read memory at %s.', [FormatAddress(tmpAddr)]))
+     else
+       for i := 0 to ALinesBefore-1 do
+       begin
+         if bytesDisassembled >= sz then
+           break;
+
+         tmpPointer := TDBGPtr(@CodeBin[bufOffset]) + TDBGPtr(sz) - TDBGPtr(bytesDisassembled);
+         p := pointer(tmpPointer);
+         ADisassembler.ReverseDisassemble(p, ADump, AStatement); // give statement before pointer p, pointer p points to decoded instruction on return
+         prevInstructionSize := tmpPointer - PtrUInt(p);
+         bytesDisassembled := bytesDisassembled + prevInstructionSize;
+         DebugLn(DBG_VERBOSE, format('Disassembled: [%.8X:  %s] %s',[tmpAddr, ADump, Astatement]));
+
+         Dec(tmpAddr, prevInstructionSize);
+         Sym := TFpDebugDebugger(Debugger).FDbgController.CurrentProcess.FindProcSymbol(tmpAddr);
+         // If this is the last statement for this source-code-line, fill the
+         // SrcStatementCount from the prior statements.
+         if (assigned(sym) and ((ASrcFileName<>sym.FileName) or (ASrcFileLine<>sym.Line))) or
+           (not assigned(sym) and ((ASrcFileLine<>0) or (ASrcFileName<>''))) then
+         begin
+           for j := 0 to StatIndex-1 do
+           begin
+             with AReversedRange.EntriesPtr[FirstIndex+j]^ do
+               SrcStatementCount := StatIndex;
+           end;
+           StatIndex := 0;
+           FirstIndex := i;
+         end;
+
+         if assigned(sym) then
+         begin
+           ASrcFileName:=sym.FileName;
+           ASrcFileLine:=sym.Line;
+           sym.ReleaseReference;
+         end
+         else
+         begin
+           ASrcFileName:='';
+           ASrcFileLine:=0;
+         end;
+         AnEntry.Addr := tmpAddr;
+         AnEntry.Dump := ADump;
+         AnEntry.Statement := AStatement;
+         AnEntry.SrcFileLine:=ASrcFileLine;
+         AnEntry.SrcFileName:=ASrcFileName;
+         AnEntry.SrcStatementIndex:=StatIndex;  // should be inverted for reverse parsing
+         AReversedRange.Append(@AnEntry);
+         inc(StatIndex);
+       end;
+
+     if AReversedRange.Count>0 then
+     begin
+       // Update start of range
+       ARange.RangeStartAddr := tmpAddr;
+       // Copy range in revese order of entries
+       for i := 0 to AReversedRange.Count-1 do
+       begin
+         // Reverse order of statements
+         with AReversedRange.Entries[AReversedRange.Count-1 - i] do
+         begin
+           for j := 0 to SrcStatementCount-1 do
+             SrcStatementIndex := SrcStatementCount - 1 - j;
+         end;
+
+         ARange.Append(AReversedRange.EntriesPtr[AReversedRange.Count-1 - i]);
+       end;
+     end;
+     // Entries are all pointers, don't free entries
+     FreeAndNil(AReversedRange);
+   end;
+
+  if ALinesAfter > 0 then
+  begin
+  sz := ALinesAfter * ADisassembler.MaxInstructionSize;
+  SetLength(CodeBin, sz);
+  bytesDisassembled := 0;
+  if not TFpDebugDebugger(Debugger).ReadData(AnAddr, sz, CodeBin[0]) then
     begin
-    if not TFpDebugDebugger(Debugger).ReadData(AnAddr,sizeof(CodeBin),CodeBin) then
+    DebugLn(Format('Disassemble: Failed to read memory at %s.', [FormatAddress(AnAddr)]));
+    inc(AnAddr);
+    end
+  else
+    for i := 0 to ALinesAfter-1 do
       begin
-      DebugLn(Format('Disassemble: Failed to read memory at %s.', [FormatAddress(AnAddr)]));
-      inc(AnAddr);
-      end
-    else
-      begin
-      p := @CodeBin;
-      FpDbgDisasX86.Disassemble(p, TFpDebugDebugger(Debugger).FDbgController.CurrentProcess.Mode=dm64, ADump, AStatement);
+      p := @CodeBin[bytesDisassembled];
+      ADisassembler.Disassemble(p, ADump, AStatement);
 
+      prevInstructionSize := p - @CodeBin[bytesDisassembled];
+      bytesDisassembled := bytesDisassembled + prevInstructionSize;
       Sym := TFpDebugDebugger(Debugger).FDbgController.CurrentProcess.FindProcSymbol(AnAddr);
-
       // If this is the last statement for this source-code-line, fill the
       // SrcStatementCount from the prior statements.
       if (assigned(sym) and ((ASrcFileName<>sym.FileName) or (ASrcFileLine<>sym.Line))) or
@@ -1366,9 +1477,11 @@ begin
       ARange.Append(@AnEntry);
       ALastAddr:=AnAddr;
       inc(StatIndex);
-      Inc(AnAddr, {%H-}PtrUInt(p) - {%H-}PtrUInt(@CodeBin));
+      Inc(AnAddr, prevInstructionSize);
       end;
-    end;
+  end
+  else
+    ALastAddr := AnAddr;
 
   if ARange.Count>0 then
     begin
@@ -2899,7 +3012,6 @@ begin
   Result := FIsIdle;
 end;
 
-{$ifdef linux}
 procedure TFpDebugDebugger.DoAddBreakLine;
 begin
   FCacheBreakpoint := TDbgInstance(FDbgController.CurrentProcess).AddBreak(FCacheFileName, FCacheLine, FCacheBoolean);
@@ -2951,94 +3063,99 @@ begin
   FParamAsString := FParamAsStringStackEntry.GetParamsAsString(FParamAsStringPrettyPrinter);
 end;
 
-{$endif linux}
 
 function TFpDebugDebugger.AddBreak(const ALocation: TDbgPtr; AnEnabled: Boolean
   ): TFpDbgBreakpoint;
 begin
-{$ifdef linux}
-  FCacheLocation:=ALocation;
-  FCacheBoolean:=AnEnabled;
-  ExecuteInDebugThread(@DoAddBreakLocation);
-  result := FCacheBreakpoint;
-{$else linux}
-  if ALocation = 0 then
-    result := FDbgController.CurrentProcess.AddBreak(nil, AnEnabled)
+  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FCacheLocation:=ALocation;
+    FCacheBoolean:=AnEnabled;
+    ExecuteInDebugThread(@DoAddBreakLocation);
+    result := FCacheBreakpoint;
+  end
   else
-    result := FDbgController.CurrentProcess.AddBreak(ALocation, AnEnabled);
-{$endif linux}
+    if ALocation = 0 then
+      result := FDbgController.CurrentProcess.AddBreak(nil, AnEnabled)
+    else
+      result := FDbgController.CurrentProcess.AddBreak(ALocation, AnEnabled);
 end;
 
 function TFpDebugDebugger.AddBreak(const AFileName: String; ALine: Cardinal;
   AnEnabled: Boolean): TFpDbgBreakpoint;
 begin
-{$ifdef linux}
-  FCacheFileName:=AFileName;
-  FCacheLine:=ALine;
-  FCacheBoolean:=AnEnabled;
-  ExecuteInDebugThread(@DoAddBreakLine);
-  result := FCacheBreakpoint;
-{$else linux}
-  result := TDbgInstance(FDbgController.CurrentProcess).AddBreak(AFileName, ALine, AnEnabled);
-{$endif linux}
+  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FCacheFileName:=AFileName;
+    FCacheLine:=ALine;
+    FCacheBoolean:=AnEnabled;
+    ExecuteInDebugThread(@DoAddBreakLine);
+    result := FCacheBreakpoint;
+  end
+  else
+    result := TDbgInstance(FDbgController.CurrentProcess).AddBreak(AFileName, ALine, AnEnabled);
 end;
 
 function TFpDebugDebugger.AddBreak(const AFuncName: String; ALib: TDbgLibrary;
   AnEnabled: Boolean): TFpDbgBreakpoint;
 begin
-{$ifdef linux}
-  FCacheFileName:=AFuncName;
-  FCacheLib:=ALib;
-  FCacheBoolean:=AnEnabled;
-  ExecuteInDebugThread(@DoAddBreakFuncLib);
-  result := FCacheBreakpoint;
-{$else linux}
-  if ALib <> nil then
-    result := ALib.AddBreak(AFuncName, AnEnabled)
+  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FCacheFileName:=AFuncName;
+    FCacheLib:=ALib;
+    FCacheBoolean:=AnEnabled;
+    ExecuteInDebugThread(@DoAddBreakFuncLib);
+    result := FCacheBreakpoint;
+  end
   else
-    result := TDbgInstance(FDbgController.CurrentProcess).AddBreak(AFuncName, AnEnabled);
-{$endif linux}
+    if ALib <> nil then
+      result := ALib.AddBreak(AFuncName, AnEnabled)
+    else
+      result := TDbgInstance(FDbgController.CurrentProcess).AddBreak(AFuncName, AnEnabled);
 end;
 
 function TFpDebugDebugger.AddWatch(const ALocation: TDBGPtr; ASize: Cardinal;
   AReadWrite: TDBGWatchPointKind; AScope: TDBGWatchPointScope
   ): TFpDbgBreakpoint;
 begin
-{$ifdef linux}
-  FCacheLocation:=ALocation;
-  FCacheLine:=ASize;
-  FCacheReadWrite:=AReadWrite;
-  FCacheScope:=AScope;
-  ExecuteInDebugThread(@DoAddBWatch);
-  result := FCacheBreakpoint;
-{$else linux}
-  result := FDbgController.CurrentProcess.AddWatch(ALocation, ASize, AReadWrite, AScope);
-{$endif linux}
+  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FCacheLocation:=ALocation;
+    FCacheLine:=ASize;
+    FCacheReadWrite:=AReadWrite;
+    FCacheScope:=AScope;
+    ExecuteInDebugThread(@DoAddBWatch);
+    result := FCacheBreakpoint;
+  end
+  else
+    result := FDbgController.CurrentProcess.AddWatch(ALocation, ASize, AReadWrite, AScope);
 end;
 
 procedure TFpDebugDebugger.FreeBreakpoint(
   const ABreakpoint: TFpDbgBreakpoint);
 begin
-{$ifdef linux}
   if ABreakpoint = nil then exit;
-  FCacheBreakpoint:=ABreakpoint;
-  ExecuteInDebugThread(@DoFreeBreakpoint);
-{$else linux}
-  ABreakpoint.Free;
-{$endif linux}
+  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FCacheBreakpoint:=ABreakpoint;
+    ExecuteInDebugThread(@DoFreeBreakpoint);
+  end
+  else
+    ABreakpoint.Free;
 end;
 
 function TFpDebugDebugger.ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean;
 begin
-{$ifdef linux}
-  FCacheLocation := AAdress;
-  FCacheLine:=ASize;
-  FCachePointer := @AData;
-  ExecuteInDebugThread(@DoReadData);
-  result := FCacheBoolean;
-{$else linux}
-  result:=FDbgController.CurrentProcess.ReadData(AAdress, ASize, AData);
-{$endif linux}
+  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FCacheLocation := AAdress;
+    FCacheLine:=ASize;
+    FCachePointer := @AData;
+    ExecuteInDebugThread(@DoReadData);
+    result := FCacheBoolean;
+  end
+  else
+    result:=FDbgController.CurrentProcess.ReadData(AAdress, ASize, AData);
 end;
 
 function TFpDebugDebugger.ReadAddress(const AAdress: TDbgPtr; out AData: TDBGPtr): Boolean;
@@ -3070,38 +3187,41 @@ begin
      (AThread.CallStackEntryList <> nil) and
      (AFrameRequired < AThread.CallStackEntryList.Count) then
     exit;
-{$ifdef linux}
-  FCallStackEntryListThread := AThread;
-  FCallStackEntryListFrameRequired := AFrameRequired;
-  ExecuteInDebugThread(@DoPrepareCallStackEntryList);
-{$else linux}
-  AThread.PrepareCallStackEntryList(AFrameRequired);
-{$endif linux}
+  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FCallStackEntryListThread := AThread;
+    FCallStackEntryListFrameRequired := AFrameRequired;
+    ExecuteInDebugThread(@DoPrepareCallStackEntryList);
+  end
+  else
+    AThread.PrepareCallStackEntryList(AFrameRequired);
 end;
 
 function TFpDebugDebugger.FindContext(AThreadId, AStackFrame: Integer): TFpDbgInfoContext;
 begin
-{$ifdef linux}
-  FCacheThreadId := AThreadId;
-  FCacheStackFrame := AStackFrame;
-  ExecuteInDebugThread(@DoFindContext);
-  Result := FCacheContext;
-{$else linux}
-  Result := FDbgController.CurrentProcess.FindContext(AThreadId, AStackFrame);
-{$endif linux}
+  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FCacheThreadId := AThreadId;
+    FCacheStackFrame := AStackFrame;
+    ExecuteInDebugThread(@DoFindContext);
+    Result := FCacheContext;
+  end
+  else
+    Result := FDbgController.CurrentProcess.FindContext(AThreadId, AStackFrame);
 end;
 
 function TFpDebugDebugger.GetParamsAsString(AStackEntry: TDbgCallstackEntry;
   APrettyPrinter: TFpPascalPrettyPrinter): string;
 begin
-{$ifdef linux}
-  FParamAsStringStackEntry := AStackEntry;
-  FParamAsStringPrettyPrinter := APrettyPrinter;
-  ExecuteInDebugThread(@DoGetParamsAsString);
-  Result := FParamAsString;
-{$else linux}
-  Result := AStackEntry.GetParamsAsString(APrettyPrinter);
-{$endif linux}
+  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FParamAsStringStackEntry := AStackEntry;
+    FParamAsStringPrettyPrinter := APrettyPrinter;
+    ExecuteInDebugThread(@DoGetParamsAsString);
+    Result := FParamAsString;
+  end
+  else
+    Result := AStackEntry.GetParamsAsString(APrettyPrinter);
 end;
 
 constructor TFpDebugDebugger.Create(const AExternalDebugger: String);

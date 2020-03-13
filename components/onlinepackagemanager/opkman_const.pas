@@ -194,7 +194,7 @@ resourcestring
   rsMainFrm_PackageAlreadyDownloaded = 'The following repository packages already exist in the target folder. Continue?';
   rsMainFrm_PackageUpdateWarning = 'Installing packages from external link is not without a risk!' + sLineBreak + 'Only install if you trust the package maintainer. Continue?';
   rsMainFrm_PackageUpdate0 = 'The following repository packages are not available externally. The packages will be skipped. Continue?';
-  rsMainFrm_PackageUpdate1 = 'None of the checked repository packages are available externally.';
+  rsMainFrm_PackageUpdate1 = 'None of the checked repository packages are available externally. Please make sure that package updates are enabled by default:' + sLineBreak + 'Options->General->Check for package updates.';
   rsMainFrm_rsMessageNoPackage = 'No packages to show.';
   rsMainFrm_rsMessageParsingJSON = 'Parsing JSON. Please wait...';
   rsMainFrm_rsMessageDownload = 'Downloading package list. Please wait...';
@@ -265,6 +265,8 @@ resourcestring
   rsOptions_tsFolders_Caption = 'Folders';
   rsOptions_tsProfiles_Caption = 'Profiles';
   rsOptions_lbRemoteRepository_Caption = 'Remote repository';
+  rsOptions_cbLoadJsonLocally_Caption = 'If available, parse the JSON from local source';
+  rsOptions_cbLoadJsonLocally_Hint = 'If this option is checked the JSON is parsed from a local source (useful if the internet connection is slow). After 25 local parses, OPM will attempt a live update.';
   rsOptions_cbForceDownloadExtract_Caption = 'Always force download and extract';
   rsOptions_cbForceDownloadExtract_Hint = 'If this option is checked the packages are always re-downloaded/extracted before install';
   rsOptions_lbConTimeOut_Caption = 'Connection timeout (seconds):';

@@ -28,7 +28,7 @@ uses
   // LCL
   SysUtils, Classes, types, Controls, LCLType, Forms,
   // Widgetset
-  InterfaceBase, WSForms, WSProc, WSLCLClasses;
+  WSForms, WSProc, WSLCLClasses;
 
 type
 
@@ -265,6 +265,11 @@ end;
  ------------------------------------------------------------------------------}
 class procedure TQtWSCustomForm.CloseModal(const ACustomForm: TCustomForm);
 begin
+  {issue #36773}
+  {$IFDEF HASX11}
+  Application.CancelHint;
+  QtWidgetSet.RemoveAllHintsHandles;
+  {$ENDIF}
   inherited CloseModal(ACustomForm);
 end;
 
@@ -662,6 +667,11 @@ end;
  ------------------------------------------------------------------------------}
 class procedure TQtWSCustomForm.ShowModal(const ACustomForm: TCustomForm);
 begin
+  {issue #36773}
+  {$IFDEF HASX11}
+  Application.CancelHint;
+  QtWidgetSet.RemoveAllHintsHandles;
+  {$ENDIF}
   {
     Setting modal flags is done in TQtWSCustomControl.ShowHide
     Since that flags has effect only when Widget is not visible
@@ -1041,8 +1051,7 @@ begin
   end;
 end;
 
-class function TQtWSCustomForm.CanFocus(const AWinControl: TWinControl
-  ): Boolean;
+class function TQtWSCustomForm.CanFocus(const AWinControl: TWinControl): Boolean;
 var
   Widget: TQtWidget;
 begin
@@ -1072,9 +1081,7 @@ var
 begin
   if not WSCheckHandleAllocated(AWinControl, 'ShowHide') then
     Exit;
-
   AWidget := TQtHintWindow(AWinControl.Handle);
-
   AWidget.BeginUpdate;
   AWidget.setVisible(AWinControl.HandleObjectShouldBeVisible);
   AWidget.EndUpdate;

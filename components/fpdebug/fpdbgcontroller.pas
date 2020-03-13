@@ -9,7 +9,7 @@ uses
   Classes,
   SysUtils,
   Maps,
-  LazLoggerBase,
+  LazLoggerBase, LazClasses,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
   FpDbgDisasX86,
   FpDbgClasses, FpDbgInfo;
@@ -39,15 +39,16 @@ type
     FProcess: TDbgProcess;
     FThreadRemoved: boolean;
     FIsInitialized: Boolean;
+    FNextInstruction: TDbgAsmInstruction;
     procedure Init; virtual;
-    function IsAtCallInstruction: Integer;
-    function GetAsmInstruction(var AnInstr: TInstruction): Integer;
     procedure DoResolveEvent(var AnEvent: TFPDEvent; AnEventThread: TDbgThread; out Finished: boolean); virtual; abstract;
   public
     constructor Create(AController: TDbgController); virtual;
+    destructor Destroy; override;
     procedure DoBeforeLoopStart;
     procedure DoContinue(AProcess: TDbgProcess; AThread: TDbgThread); virtual; abstract;
-    procedure ResolveEvent(var AnEvent: TFPDEvent; AnEventThread: TDbgThread; out Finished: boolean); virtual;
+    procedure ResolveEvent(var AnEvent: TFPDEvent; AnEventThread: TDbgThread; out Finished: boolean);
+    function NextInstruction: TDbgAsmInstruction; inline;
     property Thread: TDbgThread read FThread write SetThread;
   end;
 
@@ -78,11 +79,7 @@ type
     FIsSteppedOut: Boolean;
     FHiddenBreakpoint: TFpInternalBreakpoint;
     FHiddenBreakAddr, FHiddenBreakInstrPtr, FHiddenBreakFrameAddr, FHiddenBreakStackPtrAddr: TDBGPtr;
-    FNextInstruction: TInstruction;
-    FNextInstructionLen: Integer;
     function GetIsSteppedOut: Boolean;
-    function GetNextInstructionLen: integer; inline;
-    function GetNextOpCode: TOpCode; inline;
   protected
     function IsAtHiddenBreak: Boolean; inline;
     function HasHiddenBreak: Boolean; inline;
@@ -90,8 +87,6 @@ type
     function IsAtOrOutOfHiddenBreakFrame: Boolean;  inline; // Stopped in/out-of the origin frame, maybe by a breakpoint after an exception
     procedure SetHiddenBreak(AnAddr: TDBGPtr);
     procedure RemoveHiddenBreak;
-    property NextInstruction: TInstruction read FNextInstruction;
-
     function CheckForCallAndSetBreak: boolean; // True, if break is newly set
 
     procedure Init; override;
@@ -102,8 +97,6 @@ type
 
     property StoredStackFrame: TDBGPtr read FStoredStackFrame;
     property IsSteppedOut: Boolean read GetIsSteppedOut;
-    property NextInstructionLen: integer read GetNextInstructionLen;
-    property NextOpCode: TOpCode read GetNextOpCode;
   end;
 
   { TDbgControllerStepOverInstructionCmd }
@@ -190,6 +183,7 @@ type
     FOnLibraryUnloadedEvent: TOnLibraryUnloadedEvent;
     FOnThreadBeforeProcessLoop: TNotifyEvent;
     FOnThreadProcessLoopCycleEvent: TOnProcessLoopCycleEvent;
+    FOsDbgClasses: TOSDbgClasses;
     FRunning, FPauseRequest: cardinal;
     FAttachToPid: Integer;
     FDetaching: cardinal;
@@ -214,6 +208,8 @@ type
     procedure SetExecutableFilename(AValue: string);
     procedure DoOnDebugInfoLoaded(Sender: TObject);
     procedure SetParams(AValue: TStringList);
+
+    procedure CheckExecutableAndLoadClasses;
   protected
     FMainProcess: TDbgProcess;
     FCurrentProcess: TDbgProcess;
@@ -239,6 +235,7 @@ type
     procedure ProcessLoop;
     procedure SendEvents(out continue: boolean);
     property CurrentCommand: TDbgControllerCmd read FCommand;
+    property OsDbgClasses: TOSDbgClasses read FOsDbgClasses;
 
     property ExecutableFilename: string read FExecutableFilename write SetExecutableFilename;
     property AttachToPid: Integer read FAttachToPid write FAttachToPid;
@@ -279,6 +276,9 @@ type
 
 implementation
 
+uses
+  FpImgReaderBase, FpDbgCommon;
+
 var
   DBG_VERBOSE, DBG_WARNINGS, FPDBG_COMMANDS: PLazLoggerLogGroup;
 
@@ -297,35 +297,17 @@ begin
   //
 end;
 
-function TDbgControllerCmd.IsAtCallInstruction: Integer;
-var
-  CodeBin: array[0..20] of byte;
-begin
-  Result := 0;
-  if FProcess.ReadData(FThread.GetInstructionPointerRegisterValue, sizeof(CodeBin), CodeBin) then
-    Result := IsCallInstruction(@CodeBin, FProcess.Mode=dm64);
-end;
-
-function TDbgControllerCmd.GetAsmInstruction(var AnInstr: TInstruction
-  ): Integer;
-var
-  CodeBin: array[0..20] of byte;
-  p: Pointer;
-begin
-  Result := 0;
-  AnInstr.OpCode := OPX_Invalid;
-  if FProcess.ReadData(FThread.GetInstructionPointerRegisterValue, sizeof(CodeBin), CodeBin) then begin
-    p := @CodeBin;
-    Disassemble(p, FProcess.Mode=dm64, AnInstr);
-    Result := p - @CodeBin[0];
-  end;
-end;
-
 constructor TDbgControllerCmd.Create(AController: TDbgController);
 begin
   FController := AController;
   FProcess := FController.CurrentProcess;
   FThread := FController.CurrentThread;
+end;
+
+destructor TDbgControllerCmd.Destroy;
+begin
+  inherited Destroy;
+  ReleaseRefAndNil(FNextInstruction);
 end;
 
 procedure TDbgControllerCmd.DoBeforeLoopStart;
@@ -340,6 +322,7 @@ procedure TDbgControllerCmd.ResolveEvent(var AnEvent: TFPDEvent;
 var
   dummy: TDbgThread;
 begin
+  ReleaseRefAndNil(FNextInstruction); // instruction from last pause
   Finished := FThreadRemoved;
   if Finished then
     exit;
@@ -357,6 +340,15 @@ begin
       exit;
   end;
   DoResolveEvent(AnEvent, AnEventThread, Finished);
+end;
+
+function TDbgControllerCmd.NextInstruction: TDbgAsmInstruction;
+begin
+  if FNextInstruction = nil then begin
+    FNextInstruction := FProcess.Disassembler.GetInstructionInfo(FThread.GetInstructionPointerRegisterValue);
+    FNextInstruction.AddReference;
+  end;
+  Result := FNextInstruction;
 end;
 
 { TDbgControllerContinueCmd }
@@ -397,20 +389,6 @@ begin
 end;
 
 { TDbgControllerHiddenBreakStepBaseCmd }
-
-function TDbgControllerHiddenBreakStepBaseCmd.GetNextInstructionLen: integer;
-begin
-  if FNextInstruction.OpCode = OPX_InternalUnknown then
-    FNextInstructionLen := GetAsmInstruction(FNextInstruction);
-  Result := FNextInstructionLen;
-end;
-
-function TDbgControllerHiddenBreakStepBaseCmd.GetNextOpCode: TOpCode;
-begin
-  if FNextInstruction.OpCode = OPX_InternalUnknown then
-    FNextInstructionLen := GetAsmInstruction(FNextInstruction);
-  Result := FNextInstruction.OpCode;
-end;
 
 function TDbgControllerHiddenBreakStepBaseCmd.GetIsSteppedOut: Boolean;
 var
@@ -492,10 +470,10 @@ begin
   Result := FHiddenBreakpoint = nil;
   if not Result then
     exit;
-  Result := NextOpCode = OPcall;
+  Result := NextInstruction.IsCallInstruction;
   if Result then
     {$PUSH}{$Q-}{$R-}
-    SetHiddenBreak(FThread.GetInstructionPointerRegisterValue + NextInstructionLen);
+    SetHiddenBreak(FThread.GetInstructionPointerRegisterValue + NextInstruction.InstructionLength);
     {$POP}
 end;
 
@@ -514,16 +492,18 @@ end;
 
 procedure TDbgControllerHiddenBreakStepBaseCmd.DoContinue(AProcess: TDbgProcess;
   AThread: TDbgThread);
+var
+  r: Boolean;
 begin
+  if (AThread = FThread) then
+    r := NextInstruction.IsReturnInstruction
+  else
+    r := False;
   InternalContinue(AProcess, AThread);
-  if (AThread = FThread) then begin
-    if ((FNextInstruction.OpCode = OPret) or (FNextInstruction.OpCode = OPretf)) and
-       (FHiddenBreakpoint = nil)
-    then
-      FIsSteppedOut := True;
-  end;
-  FNextInstruction.OpCode := OPX_InternalUnknown;
-  FNextInstructionLen := 0;
+  if r and
+     (FHiddenBreakpoint = nil)
+  then
+    FIsSteppedOut := True;
 end;
 
 { TDbgControllerStepOverInstructionCmd }
@@ -533,7 +513,7 @@ procedure TDbgControllerStepOverInstructionCmd.InternalContinue(
 begin
   assert(FProcess=AProcess, 'TDbgControllerStepOverInstructionCmd.DoContinue: FProcess=AProcess');
   if (AThread = FThread) then
-    CheckForCallAndSetBreak;
+  CheckForCallAndSetBreak;
   FProcess.Continue(FProcess, FThread, FHiddenBreakpoint = nil);
 end;
 
@@ -690,7 +670,7 @@ begin
   end;
 
   inc(FStepCount);
-  if IsAtCallInstruction > 0 then
+  if NextInstruction.IsCallInstruction then
     inc(FNestDepth);
 
   // FNestDepth = 2  => About to step into 3rd level nested
@@ -708,7 +688,7 @@ procedure TDbgControllerStepOverLineCmd.InternalContinue(AProcess: TDbgProcess;
 begin
   assert(FProcess=AProcess, 'TDbgControllerStepOverLineCmd.DoContinue: FProcess=AProcess');
   if (AThread = FThread) then
-    CheckForCallAndSetBreak;
+  CheckForCallAndSetBreak;
   FProcess.Continue(FProcess, FThread, FHiddenBreakpoint = nil);
 end;
 
@@ -746,12 +726,8 @@ end;
 
 function TDbgControllerStepOutCmd.GetOutsideFrame(var AnOutside: Boolean
   ): Boolean;
-var
-  CodeBin: array[0..30] of byte;
 begin
-  Result := (FProcess.ReadData(FThread.GetInstructionPointerRegisterValue, sizeof(CodeBin), CodeBin) and
-             GetFunctionFrameInfo(@CodeBin[0], sizeof(CodeBin), FProcess.Mode=dm64, AnOutside)
-            );
+  Result := FProcess.Disassembler.GetFunctionFrameInfo(FThread.GetInstructionPointerRegisterValue, AnOutside);
 end;
 
 procedure TDbgControllerStepOutCmd.SetReturnAdressBreakpoint(
@@ -780,46 +756,44 @@ end;
 procedure TDbgControllerStepOutCmd.InternalContinue(AProcess: TDbgProcess;
   AThread: TDbgThread);
 var
-  Opc: TOpCode;
   Outside: Boolean;
 begin
   assert(FProcess=AProcess, 'TDbgControllerStepOutCmd.DoContinue: FProcess=AProcess');
 
   if (AThread = FThread) then begin
-    if IsSteppedOut then begin
-      CheckForCallAndSetBreak;
+  if IsSteppedOut then begin
+    CheckForCallAndSetBreak;
+  end
+  else
+  if not assigned(FHiddenBreakpoint) then begin
+    if GetOutsideFrame(Outside) then begin
+      SetReturnAdressBreakpoint(AProcess, Outside);
     end
     else
-    if not assigned(FHiddenBreakpoint) then begin
-      if GetOutsideFrame(Outside) then begin
-        SetReturnAdressBreakpoint(AProcess, Outside);
-      end
-      else
-      if FStepCount < 12 then
+    if FStepCount < 12 then
+    begin
+      // During the prologue and epiloge of a procedure the call-stack might not been
+      // setup already. To avoid problems in these cases, start with a few (max
+      // 12) single steps.
+      Inc(FStepCount);
+      if NextInstruction.IsCallInstruction or NextInstruction.IsLeaveStackFrame then  // asm "call" // set break before "leave" or the frame becomes unavail
       begin
-        // During the prologue and epiloge of a procedure the call-stack might not been
-        // setup already. To avoid problems in these cases, start with a few (max
-        // 12) single steps.
-        Inc(FStepCount);
-        Opc := NextOpCode;
-        if (Opc = OPcall) or (Opc = OPleave)  then  // asm "call" // set break before "leave" or the frame becomes unavail
-        begin
-          SetReturnAdressBreakpoint(AProcess, False);
-        end
-        else
-        if (Opc = OPret) or (Opc = OPretf) then  // asm "ret"
-        begin
-          FStepCount := MaxInt; // Do one more single-step, and we're finished.
-          FProcess.Continue(FProcess, FThread, True);
-          exit;
-        end;
-      end
-      else
-      begin
-        // Enough with the single-stepping
         SetReturnAdressBreakpoint(AProcess, False);
+      end
+      else
+      if NextInstruction.IsReturnInstruction then  // asm "ret"
+      begin
+        FStepCount := MaxInt; // Do one more single-step, and we're finished.
+        FProcess.Continue(FProcess, FThread, True);
+        exit;
       end;
+    end
+    else
+    begin
+      // Enough with the single-stepping
+      SetReturnAdressBreakpoint(AProcess, False);
     end;
+  end;
   end;
 
   FProcess.Continue(FProcess, FThread, FHiddenBreakpoint = nil);
@@ -900,6 +874,31 @@ procedure TDbgController.SetParams(AValue: TStringList);
 begin
   if FParams=AValue then Exit;
   FParams.Assign(AValue);
+end;
+
+procedure TDbgController.CheckExecutableAndLoadClasses;
+var
+  source: TDbgFileLoader;
+  imgReader: TDbgImageReader;
+  ATargetInfo: TTargetDescriptor;
+begin
+  if (FExecutableFilename <> '') and FileExists(FExecutableFilename) then
+  begin
+   DebugLn(DBG_VERBOSE, 'TDbgController.CheckExecutableAndLoadClasses');
+    try
+      source := TDbgFileLoader.Create(FExecutableFilename);
+      imgReader := GetImageReader(source, nil, false);
+
+      ATargetInfo := imgReader.TargetInfo;
+    finally
+      FreeAndNil(imgReader);  // TODO: Store object reference, it will be needed again
+      FreeAndNil(source);
+    end;
+  end
+  else
+    ATargetInfo := hostDescriptor;
+
+  FOsDbgClasses := FpDbgClasses.GetDbgProcessClass(ATargetInfo);
 end;
 
 procedure TDbgController.SetExecutableFilename(AValue: string);
@@ -1008,13 +1007,22 @@ begin
     Exit;
     end;
 
+  // Get exe info, load classes
+  CheckExecutableAndLoadClasses;
+  if not Assigned(OsDbgClasses) then
+  begin
+    result := false;
+    DebugLn(DBG_WARNINGS, 'Error - No support registered for debug target');
+    exit;
+  end;
+
   Flags := [];
   if RedirectConsoleOutput then Include(Flags, siRediretOutput);
   if ForceNewConsoleWin then Include(Flags, siForceNewConsole);
   if AttachToPid <> 0 then
-    FCurrentProcess := OSDbgClasses.DbgProcessClass.AttachToInstance(FExecutableFilename, AttachToPid)
+    FCurrentProcess := OSDbgClasses.DbgProcessClass.AttachToInstance(FExecutableFilename, AttachToPid, OsDbgClasses)
   else
-    FCurrentProcess := OSDbgClasses.DbgProcessClass.StartInstance(FExecutableFilename, Params, Environment, WorkingDirectory, FConsoleTty, Flags);
+    FCurrentProcess := OSDbgClasses.DbgProcessClass.StartInstance(FExecutableFilename, Params, Environment, WorkingDirectory, FConsoleTty, Flags, OsDbgClasses);
   if assigned(FCurrentProcess) then
     begin
     FProcessMap.Add(FCurrentProcess.ProcessID, FCurrentProcess);
@@ -1288,10 +1296,16 @@ begin
   case FPDEvent of
     deCreateProcess:
       begin
-      (* Only events for the main process get here / See ProcessLoop *)
-        FCurrentProcess.LoadInfo;
-        if not FCurrentProcess.DbgInfo.HasInfo then
-          DebugLn(DBG_WARNINGS, 'No Dwarf-debug information available. The debugger will not function properly. [CurrentProcess='+dbgsname(FCurrentProcess)+',DbgInfo='+dbgsname(FCurrentProcess.DbgInfo)+']');
+        (* Only events for the main process get here / See ProcessLoop *)
+        if not Assigned(FCurrentProcess.DbgInfo) then
+          FCurrentProcess.LoadInfo;
+
+        DebugLn(DBG_WARNINGS and (not Assigned(FCurrentProcess.DbgInfo) or not(FCurrentProcess.DbgInfo.HasInfo)),
+          ['TDbgController.SendEvents called - deCreateProcess - No debug info. [CurrentProcess=',dbgsname(FCurrentProcess),',DbgInfo=',dbgsname(FCurrentProcess.DbgInfo),']']);
+        DebugLn(DBG_VERBOSE, Format('  Target.MachineType = %d', [FCurrentProcess.DbgInfo.TargetInfo.machineType]));
+        DebugLn(DBG_VERBOSE, Format('  Target.Bitness     = %d', [FCurrentProcess.DbgInfo.TargetInfo.bitness]));
+        DebugLn(DBG_VERBOSE, Format('  Target.byteOrder   = %d', [FCurrentProcess.DbgInfo.TargetInfo.byteOrder]));
+        DebugLn(DBG_VERBOSE, Format('  Target.OS          = %d', [FCurrentProcess.DbgInfo.TargetInfo.OS]));
 
         DoOnDebugInfoLoaded(self);
 

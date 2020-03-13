@@ -48,7 +48,13 @@ uses
   FPDLoop,
   FpDbgClasses,
   FpDbgDwarfConst,
-  FpDbgDwarf;
+  FpDbgDwarf,
+  // The debug classes auto register with initialization, so include them somewhere
+  // The $ifdef below will not work for cross debugging of a remote target
+  {$ifdef DARWIN}FpDbgDarwinClasses,{$endif}
+  {$ifdef LINUX}FpDbgLinuxClasses,{$endif}
+  FpDbgAvrClasses,
+  FpDbgCommon;
 
 {$ifdef windows}
 function CtrlCHandler(CtrlType: Cardinal): BOOL; stdcall;

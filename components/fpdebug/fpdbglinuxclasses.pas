@@ -14,13 +14,14 @@ uses
   termio, fgl,
   process,
   FpDbgClasses,
-  FpDbgLoader,
+  FpDbgLoader, FpDbgDisasX86,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
   FpDbgLinuxExtra,
   FpDbgInfo,
   FpDbgUtil,
   UTF8Process,
-  LazLoggerBase, Maps;
+  LazLoggerBase, Maps,
+  FpDbgCommon;
 
 type
   user_regs_struct64 = record
@@ -286,16 +287,18 @@ type
     procedure OnForkEvent(Sender : TObject);
     {$endif}
   protected
+    function GetRequiresExecutionInDebuggerThread: boolean; override;
     procedure InitializeLoaders; override;
     function CreateThread(AthreadIdentifier: THandle; out IsMainThread: boolean): TDbgThread; override;
     function AnalyseDebugEvent(AThread: TDbgThread): TFPDEvent; override;
     function CreateWatchPointData: TFpWatchPointData; override;
   public
     class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings;
-      AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags): TDbgProcess; override;
-    class function AttachToInstance(AFileName: string; APid: Integer
+      AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses): TDbgProcess; override;
+    class function AttachToInstance(AFileName: string; APid: Integer; AnOsClasses: TOSDbgClasses
       ): TDbgProcess; override;
-    constructor Create(const AName: string; const AProcessID, AThreadID: Integer); override;
+    class function isSupported(ATargetInfo: TTargetDescriptor): boolean; override;
+    constructor Create(const AName: string; const AProcessID, AThreadID: Integer; AnOsClasses: TOSDbgClasses); override;
     destructor Destroy; override;
 
     function ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean; override;
@@ -312,8 +315,7 @@ type
     function Continue(AProcess: TDbgProcess; AThread: TDbgThread; SingleStep: boolean): boolean; override;
     function WaitForDebugEvent(out ProcessIdentifier, ThreadIdentifier: THandle): boolean; override;
   end;
-
-procedure RegisterDbgClasses;
+  TDbgLinuxProcessClass = class of TDbgLinuxProcess;
 
 implementation
 
@@ -321,12 +323,6 @@ var
   DBG_VERBOSE, DBG_WARNINGS: PLazLoggerLogGroup;
   GConsoleTty: string;
   GSlavePTyFd: cint;
-
-procedure RegisterDbgClasses;
-begin
-  OSDbgClasses.DbgProcessClass:=TDbgLinuxProcess;
-  OSDbgClasses.DbgThreadClass:=TDbgLinuxThread;
-end;
 
 Function WIFSTOPPED(Status: Integer): Boolean;
 begin
@@ -711,6 +707,11 @@ end;
 
 { TDbgLinuxProcess }
 
+function TDbgLinuxProcess.GetRequiresExecutionInDebuggerThread: boolean;
+begin
+  Result := True;
+end;
+
 procedure TDbgLinuxProcess.InitializeLoaders;
 begin
   TDbgImageLoader.Create(Name).AddToLoaderList(LoaderList);
@@ -734,11 +735,11 @@ begin
 end;
 
 constructor TDbgLinuxProcess.Create(const AName: string; const AProcessID,
-  AThreadID: Integer);
+  AThreadID: Integer; AnOsClasses: TOSDbgClasses);
 begin
   FMasterPtyFd:=-1;
   FPostponedSignals := TFpDbgLinuxSignalQueue.Create;
-  inherited Create(AName, AProcessID, AThreadID);
+  inherited Create(AName, AProcessID, AThreadID, AnOsClasses);
 end;
 
 destructor TDbgLinuxProcess.Destroy;
@@ -750,7 +751,7 @@ end;
 
 class function TDbgLinuxProcess.StartInstance(AFileName: string; AParams,
   AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string;
-  AFlags: TStartInstanceFlags): TDbgProcess;
+  AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses): TDbgProcess;
 var
   PID: TPid;
   AProcess: TProcessUTF8;
@@ -799,7 +800,7 @@ begin
     PID:=AProcess.ProcessID;
 
     sleep(100);
-    result := TDbgLinuxProcess.Create(AFileName, Pid, -1);
+    result := TDbgLinuxProcess.Create(AFileName, Pid, -1, AnOsClasses);
     TDbgLinuxProcess(result).FMasterPtyFd := AMasterPtyFd;
     TDbgLinuxProcess(result).FProcProcess := AProcess;
   except
@@ -817,14 +818,21 @@ begin
 end;
 
 class function TDbgLinuxProcess.AttachToInstance(AFileName: string;
-  APid: Integer): TDbgProcess;
+  APid: Integer; AnOsClasses: TOSDbgClasses): TDbgProcess;
 begin
   Result := nil;
   fpPTrace(PTRACE_ATTACH, APid, nil, Pointer(PTRACE_O_TRACECLONE));
 
-  result := TDbgLinuxProcess.Create(AFileName, APid, 0);
+  result := TDbgLinuxProcess.Create(AFileName, APid, 0, AnOsClasses);
 
   // TODO: change the filename to the actual exe-filename. Load the correct dwarf info
+end;
+
+class function TDbgLinuxProcess.isSupported(ATargetInfo: TTargetDescriptor
+  ): boolean;
+begin
+  result := (ATargetInfo.OS = osLinux) and
+            (ATargetInfo.machineType in [mt386, mtX86_64]);
 end;
 
 function TDbgLinuxProcess.ReadData(const AAdress: TDbgPtr;
@@ -1366,4 +1374,11 @@ end;
 initialization
   DBG_VERBOSE := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
   DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
+
+  RegisterDbgOsClasses(TOSDbgClasses.Create(
+    TDbgLinuxProcess,
+    TDbgLinuxThread,
+    TX86AsmDecoder
+  ));
+
 end.

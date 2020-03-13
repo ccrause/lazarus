@@ -29,7 +29,7 @@ unit opkman_mainfrm;
 interface
 
 uses
-  Classes, SysUtils, fpjson, Graphics, laz.VirtualTrees,
+  Classes, SysUtils, fpjson, Graphics, laz.VirtualTrees, md5,
   // LCL
   Forms, Controls, Dialogs, StdCtrls, ExtCtrls, Buttons, Menus, ComCtrls, Clipbrd,
   InterfaceBase, LCLIntf, LCLVersion, LCLProc, LCLPlatformDef,
@@ -257,6 +257,11 @@ end;
 
 
 procedure TMainFrm.GetPackageList(const ARepositoryHasChanged: Boolean = False);
+var
+  JSONFile: String;
+  JSON: TJSONStringType;
+  MS: TMemoryStream;
+  SuccessfullyLoaded: Boolean;
 begin
   cbFilterBy.ItemIndex := 0;
   cbFilterByChange(cbFilterBy);
@@ -269,8 +274,44 @@ begin
     SetupMessage(rsMainFrm_rsMessageChangingRepository);
     Sleep(1500);
   end;
-  SetupMessage(rsMainFrm_rsMessageDownload);
-  PackageDownloader.DownloadJSON(Options.ConTimeOut*1000);
+
+  SuccessfullyLoaded := False;
+  JSONFile := ExtractFilePath(LocalRepositoryConfigFile) + 'packagelist' + '_' + MD5Print(MD5String(Options.RemoteRepository[Options.ActiveRepositoryIndex])) + '.json';
+  if Options.LoadJsonLocally and (Options.LoadJsonLocallyCnt < 25) and FileExists(JSONFile) and (FileSizeUtf8(JSONFile) > 0) then
+  begin
+    MS := TMemoryStream.Create;
+    try
+      MS.LoadFromFile(JSONFile);
+      MS.Position := 0;
+      SetLength(JSON, MS.Size);
+      MS.Read(Pointer(JSON)^, Length(JSON));
+      try
+        SuccessfullyLoaded := SerializablePackages.JSONToPackages(JSON);
+      except
+      end;
+      if SuccessfullyLoaded then
+      begin
+        DoOnJSONDownloadCompleted(Self, JSON, etNone);
+        Options.LoadJsonLocallyCnt := Options.LoadJsonLocallyCnt + 1;
+      end
+      else
+        Options.LoadJsonLocallyCnt := 25;
+      Options.Changed := True;
+    finally
+      MS.Free;
+    end;
+  end;
+
+  if not SuccessfullyLoaded then
+  begin
+    if Options.LoadJsonLocally then
+    begin
+      Options.LoadJsonLocallyCnt := 0;
+      Options.Changed := True;
+    end;
+    SetupMessage(rsMainFrm_rsMessageDownload);
+    PackageDownloader.DownloadJSON(Options.ConTimeOut*1000);
+  end;
 end;
 
 function TMainFrm.IsSomethingChecked(const AResolveDependencies: Boolean = True): Boolean;
@@ -399,7 +440,8 @@ begin
   case AErrTyp of
     etNone:
       begin
-        SetupMessage(rsMainFrm_rsMessageParsingJSON);
+        if (not Options.LoadJsonLocally) then
+          SetupMessage(rsMainFrm_rsMessageParsingJSON);
         if (SerializablePackages.Count = 0) then
         begin
           EnableDisableControls(True);
@@ -1030,11 +1072,11 @@ var
 begin
   if MessageDlgEx(rsMainFrm_rsRepositoryCleanup0, mtInformation, [mbYes, mbNo], Self) = mrYes then
   begin
-    Screen.Cursor := crHourGlass;
+    Screen.BeginWaitCursor;
     try
       Cnt := SerializablePackages.Cleanup;
     finally
-      Screen.Cursor := crDefault;
+      Screen.EndWaitCursor;
     end;
     MessageDlgEx(Format(rsMainFrm_rsRepositoryCleanup1, [IntToStr(Cnt)]),
       mtInformation, [mbOk], Self);

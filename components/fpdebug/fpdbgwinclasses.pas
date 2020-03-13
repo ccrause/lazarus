@@ -116,13 +116,13 @@ uses
   FpDbgWinExtra,
   strutils,
   FpDbgInfo,
-  FpDbgLoader,
+  FpDbgLoader, FpDbgDisasX86,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
-  LazLoggerBase, UTF8Process;
+  LazLoggerBase, UTF8Process,
+  FpDbgCommon;
 
 type
 
-  TWinBitness = (b32, b64);
   TFpWinCtxFlags = (cfSkip, cfControl, cfFull);
 
   { TDbgWinThread }
@@ -165,7 +165,7 @@ type
     FInfo: TCreateProcessDebugInfo;
     FProcProcess: TProcessUTF8;
     FJustStarted, FTerminated: boolean;
-    FBitness: TWinBitness;
+    FBitness: TBitness;
     function GetFullProcessImageName(AProcessHandle: THandle): string;
     function GetModuleFileName(AModuleHandle: THandle): string;
     function GetProcFilename(AProcess: TDbgProcess; lpImageName: LPVOID; fUnicode: word; hFile: handle): string;
@@ -177,7 +177,7 @@ type
     procedure InitializeLoaders; override;
     function CreateWatchPointData: TFpWatchPointData; override;
   public
-    constructor Create(const AFileName: string; const AProcessID, AThreadID: Integer); override;
+    constructor Create(const AFileName: string; const AProcessID, AThreadID: Integer; AnOsClasses: TOSDbgClasses); override;
     destructor Destroy; override;
 
     function ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean; override;
@@ -188,8 +188,11 @@ type
     procedure Interrupt; // required by app/fpd
     function  HandleDebugEvent(const ADebugEvent: TDebugEvent): Boolean;
 
-    class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags): TDbgProcess; override;
-    class function AttachToInstance(AFileName: string; APid: Integer): TDbgProcess; override;
+    class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses): TDbgProcess; override;
+    class function AttachToInstance(AFileName: string; APid: Integer; AnOsClasses: TOSDbgClasses): TDbgProcess; override;
+
+    class function isSupported(ATargetInfo: TTargetDescriptor): boolean; override;
+
     function Continue(AProcess: TDbgProcess; AThread: TDbgThread; SingleStep: boolean): boolean; override;
     function Detach(AProcess: TDbgProcess; AThread: TDbgThread): boolean; override;
     function WaitForDebugEvent(out ProcessIdentifier, ThreadIdentifier: THandle): boolean; override;
@@ -206,6 +209,7 @@ type
     function  AddLib(const AInfo: TLoadDLLDebugInfo): TDbgLibrary;
     procedure RemoveLib(const AInfo: TUnloadDLLDebugInfo);
   end;
+  TDbgWinProcessClass = class of TDbgWinProcess;
 
   { tDbgWinLibrary }
 
@@ -219,8 +223,6 @@ type
       const AModuleHandle: THandle; const ABaseAddr: TDbgPtr; AInfo: TLoadDLLDebugInfo);
   end;
 
-
-procedure RegisterDbgClasses;
 
 implementation
 
@@ -334,13 +336,6 @@ begin
   DebugLn(DBG_WARNINGS and (_Wow64GetThreadContext = nil), ['WARNING: Failed to get Wow64GetThreadContext']);
   DebugLn(DBG_WARNINGS and (_Wow64SetThreadContext = nil), ['WARNING: Failed to get Wow64SetThreadContext']);
   {$endif}
-end;
-
-procedure RegisterDbgClasses;
-begin
-  OSDbgClasses.DbgThreadClass:=TDbgWinThread;
-  OSDbgClasses.DbgBreakpointClass:=TFpInternalBreakpoint;
-  OSDbgClasses.DbgProcessClass:=TDbgWinProcess;
 end;
 
 procedure TDbgWinProcess.LogLastError;
@@ -482,14 +477,14 @@ begin
 end;
 
 constructor TDbgWinProcess.Create(const AFileName: string; const AProcessID,
-  AThreadID: Integer);
+  AThreadID: Integer; AnOsClasses: TOSDbgClasses);
 begin
   {$ifdef cpui386}
   FBitness := b32;
   {$else}
   FBitness := b64;
   {$endif}
-  inherited Create(AFileName, AProcessID, AThreadID);
+  inherited Create(AFileName, AProcessID, AThreadID, AnOsClasses);
 end;
 
 destructor TDbgWinProcess.Destroy;
@@ -618,7 +613,7 @@ end;
 
 class function TDbgWinProcess.StartInstance(AFileName: string; AParams,
   AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string;
-  AFlags: TStartInstanceFlags): TDbgProcess;
+  AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses): TDbgProcess;
 var
   AProcess: TProcessUTF8;
 begin
@@ -634,7 +629,7 @@ begin
     AProcess.CurrentDirectory:=AWorkingDirectory;
     AProcess.Execute;
 
-    result := TDbgWinProcess.Create(AFileName, AProcess.ProcessID, AProcess.ThreadID);
+    result := TDbgWinProcess.Create(AFileName, AProcess.ProcessID, AProcess.ThreadID, AnOsClasses);
     TDbgWinProcess(result).FProcProcess := AProcess;
   except
     on E: Exception do
@@ -652,8 +647,8 @@ begin
   end;
 end;
 
-class function TDbgWinProcess.AttachToInstance(AFileName: string; APid: Integer
-  ): TDbgProcess;
+class function TDbgWinProcess.AttachToInstance(AFileName: string;
+  APid: Integer; AnOsClasses: TOSDbgClasses): TDbgProcess;
 begin
   Result := nil;
   if _DebugActiveProcess = nil then
@@ -661,8 +656,15 @@ begin
   if not _DebugActiveProcess(APid) then
     exit;
 
-  result := TDbgWinProcess.Create(AFileName, APid, 0);
+  result := TDbgWinProcess.Create(AFileName, APid, 0, AnOsClasses);
   // TODO: change the filename to the actual exe-filename. Load the correct dwarf info
+end;
+
+class function TDbgWinProcess.isSupported(ATargetInfo: TTargetDescriptor
+  ): boolean;
+begin
+  result := (ATargetInfo.OS = osWindows) and
+            (ATargetInfo.machineType in [mt386, mtX86_64]);
 end;
 
 function TDbgWinProcess.Continue(AProcess: TDbgProcess; AThread: TDbgThread;
@@ -1741,5 +1743,12 @@ initialization
 
   DBG_VERBOSE := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
   DBG_WARNINGS := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
+
+  RegisterDbgOsClasses(TOSDbgClasses.Create(
+    TDbgWinProcess,
+    TDbgWinThread,
+    TX86AsmDecoder
+  ));
+
 end.
 

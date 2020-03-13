@@ -769,6 +769,8 @@ type
     procedure Previous;
     { mdi related routine}
     procedure Tile;
+    { mdi related routine}
+    procedure ArrangeIcons;
     { mdi related property}
     property ClientHandle;
 
@@ -1039,6 +1041,7 @@ type
     FActiveCustomForm: TCustomForm;
     FActiveForm: TForm;
     FCursor: TCursor;
+    FTempCursors: array of TCursor;
     FCursorMap: TMap;
     FCustomForms: TFPList;
     FCustomFormsZOrdered: TFPList;
@@ -1081,6 +1084,7 @@ type
     function GetMonitor(Index: Integer): TMonitor;
     function GetMonitorCount: Integer;
     function GetPrimaryMonitor: TMonitor;
+    function GetRealCursor: TCursor;
     function GetWidth : Integer;
     procedure AddForm(AForm: TCustomForm);
     procedure RemoveForm(AForm: TCustomForm);
@@ -1158,11 +1162,17 @@ type
       MonitorDefault: TMonitorDefaultTo = mdNearest): TMonitor;
     function MonitorFromWindow(const Handle: THandle;
       MonitorDefault: TMonitorDefaultTo = mdNearest): TMonitor;
+
+    procedure BeginTempCursor(const aCursor: TCursor);
+    procedure EndTempCursor(const aCursor: TCursor);
+    procedure BeginWaitCursor;
+    procedure EndWaitCursor;
   public
     property ActiveControl: TWinControl read FActiveControl;
     property ActiveCustomForm: TCustomForm read FActiveCustomForm;
     property ActiveForm: TForm read FActiveForm;
     property Cursor: TCursor read FCursor write SetCursor;
+    property RealCursor: TCursor read GetRealCursor;
     property Cursors[Index: Integer]: HCURSOR read GetCursors write SetCursors;
     property CustomFormCount: Integer read GetCustomFormCount;
     property CustomForms[Index: Integer]: TCustomForm read GetCustomForms;

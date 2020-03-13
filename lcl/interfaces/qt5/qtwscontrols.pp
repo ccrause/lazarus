@@ -271,8 +271,7 @@ begin
 end;
 
 class procedure TQtWSWinControl.SetBiDiMode(const AWinControl : TWinControl;
-  UseRightToLeftAlign, UseRightToLeftReading, UseRightToLeftScrollBar : Boolean
-  );
+  UseRightToLeftAlign, UseRightToLeftReading, UseRightToLeftScrollBar : Boolean);
 begin
   if not WSCheckHandleAllocated(AWinControl, 'SetBiDiMode') then
     Exit;
@@ -283,7 +282,8 @@ end;
 class procedure TQtWSWinControl.GetPreferredSize(const AWinControl: TWinControl;
   var PreferredWidth, PreferredHeight: integer; WithThemeSpace: Boolean);
 begin
-  Assert(AWinControl.HandleAllocated, 'GetPreferredSize: Handle not allocated');
+  if not WSCheckHandleAllocated(AWinControl, 'GetPreferredSize') then
+    Exit;
   TQtWidget(AWinControl.Handle).PreferredSize(PreferredWidth, PreferredHeight, WithThemeSpace);
 end;
 
@@ -302,12 +302,15 @@ end;
 
 class procedure TQtWSWinControl.SetText(const AWinControl: TWinControl;
   const AText: string);
+var
+  Wdgt: TQtWidget;
 begin
   if not WSCheckHandleAllocated(AWincontrol, 'SetText') then
     Exit;
-  TQtWidget(AWinControl.Handle).BeginUpdate;
-  TQtWidget(AWinControl.Handle).setText(GetUtf8String(AText));
-  TQtWidget(AWinControl.Handle).EndUpdate;
+  Wdgt := TQtWidget(AWinControl.Handle);
+  Wdgt.BeginUpdate;
+  Wdgt.setText(GetUtf8String(AText));
+  Wdgt.EndUpdate;
 end;
 
 class procedure TQtWSWinControl.SetChildZPosition(const AWinControl,
