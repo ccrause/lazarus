@@ -192,10 +192,8 @@ var
 {$endif}
 begin
   Result:=False;
-//{$if defined(unix) or defined(windows)}
   TimeV.tv_usec := timeout_ms * 1000;  // 1 msec
   TimeV.tv_sec := 0;
-//{$endif}
 {$ifdef unix}
   FDS := Default(TFDSet);
   fpFD_Zero(FDS);
@@ -224,19 +222,11 @@ begin
   s := '$'+cmd+'#'+IntToHex(checksum, 2);
   totalSent := Write(s[1], length(s));
 
-  // Debugging
-  //system.WriteLn(s);
-
   result := (totalSent = length(s));
   if not result then
-  begin
-    //WriteLn('* FSendRspCommand error');
     DebugLn(DBG_WARNINGS, ['Warning: TRspConnection.FSendRspCommand error.'])
-  end
   else
-  begin
     DebugLn(DBG_VERBOSE, ['RSP -> ', cmd]);
-  end;
 end;
 
 function TRspConnection.FSendCommandOK(const cmd: string): boolean;
@@ -273,7 +263,6 @@ var
 begin
   i := 0;
   s := '';
-  //IOTimeout := 10;  // sometimes an empty response needs to be swallowed to
   repeat
     c := chr(ReadByte);
     inc(i);
@@ -282,17 +271,13 @@ begin
 
   if c <> '$' then
   begin
-    //WriteLn('* Timeout waiting for RSP reply');
     DebugLn(DBG_WARNINGS, ['Warning: Timeout waiting for RSP reply']);
     result := false;
     retval := '';
     exit;
   end
   else if i > 1 then
-  begin
-    //WriteLn('* Discarding data before start of message: ', s);
     DebugLn(DBG_WARNINGS, ['Warning: Discarding unexpected data before start of new message', s]);
-  end;
 
   c := chr(ReadByte);
   s := '';
@@ -308,7 +293,6 @@ begin
       // Something weird happened
       if c = '#' then
       begin
-        //WriteLn('* Received end of packet marker in escaped sequence: ', c);
         DebugLn(DBG_WARNINGS, ['Warning: Received end of packet marker in escaped sequence: ', c]);
         break;
       end;
@@ -329,12 +313,8 @@ begin
   result := true;
   retval := s;
   if not (calcSum = cksum) then
-  begin
-    //WriteLn('* Reply packet with invalid checksum: ', s);
     DebugLn(DBG_WARNINGS, ['Warning: Reply packet with invalid checksum: ', s]);
-  end;
 
-  //WriteLn('RSP <- ', retval);
   DebugLn(DBG_VERBOSE, ['RSP <- ', retval]);
 end;
 
@@ -419,7 +399,6 @@ constructor TRspConnection.Create(const AHost: String; APort: Word;
   AHandler: TSocketHandler);
 begin
   inherited Create(AHost, APort);
-  //self.IOTimeout := 1000;  // socket read timeout = 1000 ms
 end;
 
 destructor TRspConnection.Destroy;
@@ -632,7 +611,6 @@ begin
     and (length(reply) = 2*sz);
   if Result then
   begin
-    //WriteLn('Read registers reply: ', reply);
     for i := 0 to sz-1 do
       b[i] := StrToInt('$'+reply[2*i+1]+reply[2*i+2]);
     result := true;
