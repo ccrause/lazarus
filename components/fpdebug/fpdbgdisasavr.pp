@@ -597,7 +597,11 @@ begin
                 ACode := format(opRegStr, ['ld', r, s1]);
               end;
               $9201,
-              $9202:
+              $9202,
+              $9204,
+              $9205,
+              $9206,
+              $9207:
               begin // ST Store Indirect Data Space Z 1001 001r rrrr 0Xoo X=0 or XMega instructions X=1
                 r := (code shr 4) and $1f;
                 if (code and 4) = 0 then  // normal AVR8 instruction
@@ -609,7 +613,7 @@ begin
                   ACode := format(opStrReg, ['st', s1, r]);
                 end
                 else
-                begin  // AVR8X instructions
+                begin  // xmega specific instructions
                   case (code and 3) of
                     0: s1 := 'xch';
                     1: s1 := 'las';
@@ -669,7 +673,12 @@ begin
                 r := (code shr 4) and $1f;
                 ACode := format(opReg, ['dec', r]);
               end;
-              $940c,
+              $940b: // DES - Data Encryption Standard (xmega specific)
+              begin
+                r := (code shr 4) and $1f;
+                ACode := format(opConstHex8, ['des', r]);
+	      end;
+	      $940c,
               $940d:
               begin // JMP Long Call to sub, 32 bits
                 k := ((code and $01f0) shr 3) or (code and 1);
@@ -766,12 +775,20 @@ begin
     $c000:
     begin // RJMP 1100 kkkk kkkk kkkk
       a := smallint((word(code) shl 4) and $ffff) div 16;
-      ACode := format(opStr, ['rjmp', '.'+IntToStr(a shl 1)]);
+      if a < 0 then
+        s1 := '.'
+      else
+        s1 := '.+';
+      ACode := format(opStr, ['rjmp', s1 + IntToStr(a shl 1)]);
     end;
     $d000:
     begin // RCALL 1100 kkkk kkkk kkkk
       a := smallint((word(code) shl 4) and $ffff) div 16;
-      ACode := format(opStr, ['rcall', '.'+IntToStr(a shl 1)]);
+      if a < 0 then
+        s1 := '.'
+      else
+        s1 := '.+';
+      ACode := format(opStr, ['rcall', s1 + IntToStr(a shl 1)]);
     end;
     $e000:
     begin // LDI Rd, K 1110 KKKK RRRR KKKK -- aka SER (LDI r, $ff)
@@ -789,37 +806,56 @@ begin
         begin // All the fSREG branches
           a := smallint(smallint(code shl 6) shr 9) * 2; // offset
           k := code and 7;
+          if a < 0 then
+            s1 := '.'
+          else
+            s1 := '.+';
           _set := (code and $0400) = 0; // this bit means BRXC otherwise BRXS
            if (_set) then
-             ACode := format(opStr, [branchIfSetNames[k], '.'+IntToStr(a)])
+             ACode := format(opStr, [branchIfSetNames[k], s1 + IntToStr(a)])
            else
-             ACode := format(opStr, [branchIfClrNames[k], '.'+IntToStr(a)]);
+             ACode := format(opStr, [branchIfClrNames[k], s1 + IntToStr(a)]);
         end;
         $f800,
         $f900:
         begin // BLD – Bit Load from T into a Bit in Register 1111 100r rrrr 0bbb
-          d := (code shr 4) and $1f; // register index
-          k := code and 7;
-          ACode := format(opRegConst, ['bld', d, k]);
+          if code and 8 = 0 then
+          begin
+            d := (code shr 4) and $1f; // register index
+            k := code and 7;
+            ACode := format(opRegConst, ['bld', d, k]);
+          end
+          else
+            ACode := InvalidOpCode(code);
         end;
         $fa00,
         $fb00:
         begin // BST – Bit Store into T from bit in Register 1111 100r rrrr 0bbb
-          r := (code shr 4) and $1f; // register index
-          k := code and 7;
-          ACode := format(opRegConst, ['bst', r, k]);
+          if code and 8 = 0 then
+          begin
+            r := (code shr 4) and $1f; // register index
+            k := code and 7;
+            ACode := format(opRegConst, ['bst', r, k]);
+          end
+          else
+            ACode := InvalidOpCode(code);
         end;
         $fc00,
         $fe00:
         begin // SBRS/SBRC – Skip if Bit in Register is Set/Clear 1111 11sr rrrr 0bbb
-          r := (code shr 4) and $1f; // register index
-          k := code and 7;
-          _set := (code and $0200) <> 0;
-          if _set then
-            ACode := format(opRegConst, ['sbrs', r, k])
+          if code and 8 = 0 then
+          begin
+            r := (code shr 4) and $1f; // register index
+            k := code and 7;
+            _set := (code and $0200) <> 0;
+            if _set then
+              ACode := format(opRegConst, ['sbrs', r, k])
+            else
+              ACode := format(opRegConst, ['sbrc', r, k]);
+	  end
           else
-            ACode := format(opRegConst, ['sbrc', r, k]);
-        end;
+            ACode := InvalidOpCode(code);
+	end;
         else
           ACode := InvalidOpCode(code);
       end;
@@ -828,10 +864,16 @@ begin
       ACode := InvalidOpCode(code);
   end;
 
-  // memory
+  // memory byte stream interpreted as little endian:
+  // a b c d => interpreted as words: ba dc
+  // 0 1 2 3 <= CodeIdx.
+  // CodeIdx resequenced as little endian: 10 32
   ACodeBytes := '';
   for k := 0 to CodeIdx - 1 do
-    ACodeBytes := ACodeBytes + HexStr(pcode[k], 2);
+    if odd(k) then
+     ACodeBytes := ACodeBytes + HexStr(pcode[k-1], 2)
+   else
+     ACodeBytes := ACodeBytes + HexStr(pcode[k+1], 2);
 
   Inc(AAddress, CodeIdx);
 end;
