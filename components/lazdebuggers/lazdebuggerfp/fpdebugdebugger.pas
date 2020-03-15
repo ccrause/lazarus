@@ -72,7 +72,7 @@ type
     FForceNewConsole: boolean;
     {$endif windows}
     FNextOnlyStopOnStartLine: boolean;
-    FHasRemoteConnection: boolean;
+    FUseRemoteConnection: boolean;
     FRemoteConnection: TFpRemoteProperties;
   public
     constructor Create; override;
@@ -87,7 +87,7 @@ type
     {$ifdef windows}
     property ForceNewConsole: boolean read FForceNewConsole write FForceNewConsole;
     {$endif windows}
-    property HasRemoteConnection: boolean read FHasRemoteConnection write FHasRemoteConnection;
+    property UseRemoteConnection: boolean read FUseRemoteConnection write FUseRemoteConnection;
     property RemoteConnection: TFpRemoteProperties read FRemoteConnection write FRemoteConnection;
   end;
 
@@ -757,7 +757,7 @@ constructor TFpDebugDebuggerProperties.Create;
 begin
   inherited Create;
   FNextOnlyStopOnStartLine:=true;
-  FHasRemoteConnection := false;
+  FUseRemoteConnection := false;
   FRemoteConnection := TFpRemoteProperties.Create;
   FRemoteConnection.FHostName := 'localhost';
   FRemoteConnection.FPort := 1234;
@@ -779,7 +779,7 @@ begin
     {$ifdef windows}
     FForceNewConsole:=TFpDebugDebuggerProperties(Source).FForceNewConsole;
     {$endif windows}
-    FHasRemoteConnection := TFpDebugDebuggerProperties(Source).HasRemoteConnection;
+    FUseRemoteConnection := TFpDebugDebuggerProperties(Source).UseRemoteConnection;
     if Assigned(FRemoteConnection) and Assigned(TFpDebugDebuggerProperties(Source).FRemoteConnection) then
       FRemoteConnection.Assign(TFpRemoteProperties(TFpDebugDebuggerProperties(Source).FRemoteConnection));
   end;
@@ -1717,7 +1717,7 @@ end;
 
 procedure TFpDebugThread.Execute;
 begin
-  if TFpDebugDebuggerProperties(FFpDebugDebugger.GetProperties).HasRemoteConnection then begin
+  if TFpDebugDebuggerProperties(FFpDebugDebugger.GetProperties).UseRemoteConnection then begin
     FpDbgRsp.HostName := TFpDebugDebuggerProperties(FFpDebugDebugger.GetProperties).FRemoteConnection.HostName;
     FpDbgRsp.Port := TFpDebugDebuggerProperties(FFpDebugDebugger.GetProperties).FRemoteConnection.Port;
   end;
