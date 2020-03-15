@@ -51,6 +51,20 @@ type
 
   { TFpDebugDebuggerProperties }
 
+  TFpRemoteProperties = class(TDebuggerProperties)
+  private
+    FHostName: string;
+    FPort: integer;
+  public
+    constructor Create; override;
+    procedure Assign(Source: TPersistent); override;
+  published
+    property HostName: string read FHostName write FHostName;
+    property Port: integer read FPort write FPort;
+  end;
+
+  { TFpRemoteProperties }
+
   TFpDebugDebuggerProperties = class(TDebuggerProperties)
   private
     FConsoleTty: string;
@@ -58,10 +72,11 @@ type
     FForceNewConsole: boolean;
     {$endif windows}
     FNextOnlyStopOnStartLine: boolean;
-    FHostName: string;
-    FPort: integer;
+    FHasRemoteConnection: boolean;
+    FRemoteConnection: TFpRemoteProperties;
   public
     constructor Create; override;
+    destructor Destroy; override;
     procedure Assign(Source: TPersistent); override;
     {$ifdef unix}
   published
@@ -72,8 +87,9 @@ type
     {$ifdef windows}
     property ForceNewConsole: boolean read FForceNewConsole write FForceNewConsole;
     {$endif windows}
-    property HostName: string read FHostName write FHostName;
-    property Port: integer read FPort write FPort;  end;
+    property HasRemoteConnection: boolean read FHasRemoteConnection write FHasRemoteConnection;
+    property RemoteConnection: TFpRemoteProperties read FRemoteConnection write FRemoteConnection;
+  end;
 
   { TDbgControllerStepOverOrFinallyCmd
     Step over with detection for finally blocks
@@ -507,6 +523,22 @@ begin
   RegisterDebugger(TFpDebugDebugger);
 end;
 
+{ TFpRemoteProperties }
+
+constructor TFpRemoteProperties.Create;
+begin
+  inherited Create;
+end;
+
+procedure TFpRemoteProperties.Assign(Source: TPersistent);
+begin
+  inherited Assign(Source);
+  if Source is TFpRemoteProperties then begin
+    FHostName := TFpRemoteProperties(Source).HostName;
+    FPort := TFpRemoteProperties(Source).Port;
+  end;
+end;
+
 { TDbgControllerStepOverFirstFinallyLineCmd }
 
 procedure TDbgControllerStepOverFirstFinallyLineCmd.DoResolveEvent(
@@ -725,8 +757,17 @@ constructor TFpDebugDebuggerProperties.Create;
 begin
   inherited Create;
   FNextOnlyStopOnStartLine:=true;
-  FHostName := 'localhost';
-  FPort := 1234;
+  FHasRemoteConnection := false;
+  FRemoteConnection := TFpRemoteProperties.Create;
+  FRemoteConnection.FHostName := 'localhost';
+  FRemoteConnection.FPort := 1234;
+end;
+
+destructor TFpDebugDebuggerProperties.Destroy;
+begin
+  if Assigned(FRemoteConnection) then
+    FreeAndNil(FRemoteConnection);
+  inherited Destroy;
 end;
 
 procedure TFpDebugDebuggerProperties.Assign(Source: TPersistent);
@@ -738,8 +779,9 @@ begin
     {$ifdef windows}
     FForceNewConsole:=TFpDebugDebuggerProperties(Source).FForceNewConsole;
     {$endif windows}
-    FHostName := TFpDebugDebuggerProperties(Source).HostName;
-    FPort := TFpDebugDebuggerProperties(Source).Port;
+    FHasRemoteConnection := TFpDebugDebuggerProperties(Source).HasRemoteConnection;
+    if Assigned(FRemoteConnection) and Assigned(TFpDebugDebuggerProperties(Source).FRemoteConnection) then
+      FRemoteConnection.Assign(TFpRemoteProperties(TFpDebugDebuggerProperties(Source).FRemoteConnection));
   end;
 end;
 
@@ -1675,8 +1717,10 @@ end;
 
 procedure TFpDebugThread.Execute;
 begin
-  FpDbgRsp.HostName := TFpDebugDebuggerProperties(FFpDebugDebugger.GetProperties).HostName;
-  FpDbgRsp.Port := TFpDebugDebuggerProperties(FFpDebugDebugger.GetProperties).Port;
+  if TFpDebugDebuggerProperties(FFpDebugDebugger.GetProperties).HasRemoteConnection then begin
+    FpDbgRsp.HostName := TFpDebugDebuggerProperties(FFpDebugDebugger.GetProperties).FRemoteConnection.HostName;
+    FpDbgRsp.Port := TFpDebugDebuggerProperties(FFpDebugDebugger.GetProperties).FRemoteConnection.Port;
+  end;
   if FFpDebugDebugger.FDbgController.Run then
     FStartSuccessfull:=true;
 
