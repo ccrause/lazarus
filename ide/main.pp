@@ -59,29 +59,30 @@ uses
   MemCheck,
 {$ENDIF}
   // fpc packages
-  Math, Classes, SysUtils, TypInfo, types, strutils, process, Laz_AVL_Tree,
+  Math, Classes, SysUtils, TypInfo, types, strutils, Contnrs, process, Laz_AVL_Tree,
   // LCL
   LCLProc, LCLType, LCLIntf, LResources, HelpIntfs, InterfaceBase, LCLPlatformDef,
-  ComCtrls, Forms, Buttons, Menus, Controls, GraphType, Graphics, ExtCtrls,
-  Dialogs, LclStrConsts,
+  ComCtrls, Forms, Buttons, Menus, Controls, Graphics, ExtCtrls, Dialogs, LclStrConsts,
   // CodeTools
   FileProcs, FindDeclarationTool, LinkScanner, BasicCodeTools, CodeToolsStructs,
   CodeToolManager, CodeCache, DefineTemplates, KeywordFuncLists, CodeTree,
   StdCodeTools, EventCodeTool, CodeCreationDlg, IdentCompletionTool,
   // LazUtils
   // use lazutf8, lazfileutils and lazfilecache after FileProcs and FileUtil
-  FileUtil, LazFileUtils, LazUtilities, LazUTF8, LazUTF8Classes, UTF8Process,
+  FileUtil, LazFileUtils, LazUtilities, LazUTF8, UTF8Process,
   LConvEncoding, Laz2_XMLCfg, LazLoggerBase, LazLogger, LazFileCache, AvgLvlTree,
-  LazStringUtils,
+  GraphType, LazStringUtils,
   LCLExceptionStacktrace,
   // SynEdit
   SynEdit, AllSynEdit, SynEditKeyCmds, SynEditMarks, SynEditHighlighter,
+  // BuildIntf
+  BaseIDEIntf, MacroIntf, NewItemIntf, IDEExternToolIntf, LazMsgWorker,
+  PackageIntf, ProjectIntf, CompOptsIntf, IDEOptionsIntf,
   // IDE interface
   IDEIntf, ObjectInspector, PropEdits, PropEditUtils, EditorSyntaxHighlighterDef,
-  MacroIntf, IDECommands, IDEWindowIntf, ComponentReg, IDEDialogs,
-  SrcEditorIntf, NewItemIntf, IDEExternToolIntf, IDEMsgIntf, LazMsgDialogs,
-  PackageIntf, ProjectIntf, CompOptsIntf, MenuIntf, BaseIDEIntf, LazIDEIntf,
-  IDEOptionsIntf, IDEOptEditorIntf, IDEImagesIntf, ComponentEditors, ToolBarIntf,
+  IDECommands, IDEWindowIntf, ComponentReg, IDEDialogs, SrcEditorIntf, IDEMsgIntf,
+  MenuIntf, LazIDEIntf, IDEOptEditorIntf, IDEImagesIntf, ComponentEditors,
+  ToolBarIntf, SelEdits,
   // protocol
   IDEProtocol,
   // compile
@@ -161,12 +162,6 @@ uses
   MainBar, MainIntf, MainBase;
 
 type
-  TIDECodetoolsDefines = (
-    ctdReady,
-    ctdNeedUpdate,
-    ctdUpdating
-    );
-
   { TMainIDE }
 
   TMainIDE = class(TMainIDEBase)
@@ -348,6 +343,7 @@ type
     procedure mnuStepOverInstrProjectClicked(Sender: TObject);
     procedure mnuStepOutProjectClicked(Sender: TObject);
     procedure mnuRunToCursorProjectClicked(Sender: TObject);
+    procedure mnuStepToCursorProjectClicked(Sender: TObject);
     procedure mnuStopProjectClicked(Sender: TObject);
     procedure mnuAttachDebuggerClicked(Sender: TObject);
     procedure mnuDetachDebuggerClicked(Sender: TObject);
@@ -393,7 +389,7 @@ type
     UpdatePackageCommandsStamp: TPackageCommandsStamp;
     UpdateBookmarkCommandsStamp: TBookmarkCommandsStamp;
     BookmarksStamp: Int64;
-  public
+  //public
     procedure UpdateMainIDECommands(Sender: TObject);
     procedure UpdateFileCommands(Sender: TObject);
     procedure UpdateEditorCommands(Sender: TObject);
@@ -613,7 +609,6 @@ type
                                      const Filename: string; var Source: string);
     function CodeToolBossGetMethodName(const Method: TMethod;
                                        PropOwner: TObject): String;
-    procedure CodeToolBossPrepareTree(Sender: TObject);
     procedure CodeToolBossGetIndenterExamples(Sender: TObject;
                 Code: TCodeBuffer; Step: integer; // starting at 0
                 var CodeBuffers: TFPList; // stopping when CodeBuffers=nil
@@ -627,7 +622,6 @@ type
       Sender: TIdentifierList; FilteredList: TFPList; PriorityCount: Integer);
 
     function CTMacroFunctionProject(Data: Pointer): boolean;
-    procedure CompilerParseStampIncHandler;
     procedure CodeToolBossScannerInit({%H-}Self: TCodeToolManager;
       Scanner: TLinkScanner);
 
@@ -644,15 +638,11 @@ type
     procedure GetLayoutHandler(Sender: TObject; aFormName: string;
             out aBounds: TRect; out DockSibling: string; out DockAlign: TAlign);
   private
-    FUserInputSinceLastIdle: boolean;
     FDesignerToBeFreed: TFilenameToStringTree; // form file names to be freed on idle.
-    fNeedSaveEnvironment: boolean;
-    FCheckFilesOnDiskNeeded: boolean;
+    FComponentAddedDesigner: TDesigner; // Designer and unit where components were added.
+    FComponentAddedUnit: TUnitInfo;
     FRemoteControlTimer: TTimer;
     FRemoteControlFileAge: integer;
-    FRestartWanted: Boolean;
-    FIDECodeToolsDefines: TIDECodetoolsDefines;
-
     FRenamingComponents: TFPList; // list of TComponents currently renaming
     FOIHelpProvider: TAbstractIDEHTMLProvider;
     FWaitForClose: Boolean;
@@ -676,7 +666,7 @@ type
     procedure DoShowSourceOfActiveDesignerForm;
     procedure SetDesigning(AComponent: TComponent; Value: Boolean);
     procedure SetDesignInstance(AComponent: TComponent; Value: Boolean);
-    procedure InvalidateAllDesignerForms;
+    procedure UpdateAndInvalidateDesigners;
     procedure ShowDesignerForm(AForm: TCustomForm);
     procedure DoViewAnchorEditor(State: TIWGetFormState = iwgfShowOnTop);
     procedure DoViewTabOrderEditor(State: TIWGetFormState = iwgfShowOnTop);
@@ -1402,7 +1392,6 @@ begin
   {$IFDEF DebugSearchFPCSrcThread}
   ShowSetupDialog:=true;
   {$ENDIF}
-
   // check lazarus directory
   if (not ShowSetupDialog)
   and (CheckLazarusDirectoryQuality(EnvironmentOptions.GetParsedLazarusDirectory,Note)<>sddqCompatible)
@@ -1433,6 +1422,14 @@ begin
     end;
   end;
 
+  // check 'make' utility
+  if (not ShowSetupDialog)
+  and not (CheckMakeExeQuality(EnvironmentOptions.GetParsedMakeFilename,Note) in [sddqCompatible, sddqMakeNotWithFpc])
+  then begin
+    debugln(['Warning: (lazarus) incompatible make utility: ',EnvironmentOptions.GetParsedMakeFilename]);
+    ShowSetupDialog:=true;
+  end;
+
   // check debugger
   if (not ShowSetupDialog) then begin
     // PackageBoss is not yet loaded...
@@ -1450,14 +1447,6 @@ begin
       debugln(['Warning: (lazarus) missing GDB exe ',EnvironmentOptions.GetParsedLazarusDirectory,' ',Note]);
       ShowSetupDialog:=true;
     end;
-  end;
-
-  // check 'make' utility
-  if (not ShowSetupDialog)
-  and (CheckMakeExeQuality(EnvironmentOptions.GetParsedMakeFilename,Note)<>sddqCompatible)
-  then begin
-    debugln(['Warning: (lazarus) incompatible make utility: ',EnvironmentOptions.GetParsedMakeFilename]);
-    ShowSetupDialog:=true;
   end;
 
   ConfigFile:=EnvironmentOptions.GetParsedFppkgConfig;
@@ -1651,7 +1640,8 @@ begin
     Application.Terminate;
     exit;
   end;
-  fUserInputSinceLastIdle:=true; // Idle work gets done initially before user action.
+  // Idle work gets done initially before user action.
+  FIdleIdeActions := [iiaUserInputSinceLastIdle, iiaUpdateDefineTemplates];
   MainIDEBar.ApplicationIsActivate:=true;
   IDECommandList.AddCustomUpdateEvent(@UpdateMainIDECommands);
   LazIDEInstances.StartListening(@LazInstancesStartNewInstance, @LazInstancesGetOpenedProjectFileName);
@@ -1663,11 +1653,12 @@ end;
 destructor TMainIDE.Destroy;
 begin
   ToolStatus:=itExiting;
+  // IDECommandList may be Nil if the IDE is aborted before updating configuration.
+  if Assigned(IDECommandList) then
+    IDECommandList.RemoveCustomUpdateEvent(@UpdateMainIDECommands);
 
-  IDECommandList.RemoveCustomUpdateEvent(@UpdateMainIDECommands);
-
-  if Assigned(ExternalTools) then
-    ExternalTools.TerminateAll;
+  if Assigned(ExternalToolList) then
+    ExternalToolList.TerminateAll;
 
   if ConsoleVerbosity>0 then
     DebugLn('Hint: (lazarus) [TMainIDE.Destroy]');
@@ -2034,7 +2025,7 @@ begin
       continue;
     case SrcType of
     ctnUnit:
-      if not FilenameIsPascalUnit(SrcFileName) then
+      if not FilenameHasPascalExt(SrcFileName) then
         continue;
     else
       // a pascal program can have any file name
@@ -2128,8 +2119,8 @@ begin
   LazIDESelectDirectory:=@SelectDirectoryHandler;
   InitIDEFileDialog:=@InitIDEFileDialogHandler;
   StoreIDEFileDialog:=@StoreIDEFileDialogHandler;
-  LazMessageDialog:=@IDEMessageDialogHandler;
-  LazQuestionDialog:=@IDEQuestionDialogHandler;
+  LazMessageWorker:=@IDEMessageDialogHandler;
+  LazQuestionWorker:=@IDEQuestionDialogHandler;
   TestCompilerOptions:=@CompilerOptionsDialogTest;
   CheckCompOptsAndMainSrcForNewUnitEvent:=@CheckForNewUnit;
 end;
@@ -2309,7 +2300,7 @@ var
   CmdLineFiles: TStrings;
   i: Integer;
   OpenFlags: TOpenFlags;
-  AFilename: String;
+  AFilename, LastProj: String;
   PkgOpenFlags: TPkgOpenFlags;
 begin
   {$IFDEF IDE_DEBUG}
@@ -2323,10 +2314,10 @@ begin
   // try command line project
   if (CmdLineFiles<>nil) and (CmdLineFiles.Count>0) then begin
     AProjectFilename:=CmdLineFiles[0];
-    if (CompareFileExt(AProjectFilename,'.lpr',false)=0) then
+    if (CompareFileExt(AProjectFilename,'lpr',true)=0) then
       AProjectFilename:=ChangeFileExt(AProjectFilename,'.lpi');
     // only try to load .lpi files, other files are loaded later
-    if (CompareFileExt(AProjectFilename,'.lpi',false)=0) then begin
+    if (CompareFileExt(AProjectFilename,'lpi',true)=0) then begin
       AProjectFilename:=CleanAndExpandFilename(AProjectFilename);
       if FileExistsUTF8(AProjectFilename) then begin
         CmdLineFiles.Delete(0);
@@ -2335,22 +2326,23 @@ begin
     end;
   end;
 
+  LastProj:=EnvironmentOptions.LastSavedProjectFile;
   // try loading last project if lazarus didn't fail last time
   {debugln(['TMainIDE.SetupStartProject ProjectLoaded=',ProjectLoaded,
     ' SkipAutoLoadingLastProject=',SkipAutoLoadingLastProject,
     ' EnvironmentOptions.OpenLastProjectAtStart=',EnvironmentOptions.OpenLastProjectAtStart,
-    ' EnvironmentOptions.LastSavedProjectFile="',EnvironmentOptions.LastSavedProjectFile,'"',
+    ' LastProj="',LastProj,'"',
     ' RestoreProjectClosed=',RestoreProjectClosed,
-    ' FileExistsCached(EnvironmentOptions.LastSavedProjectFile)=',FileExistsCached(EnvironmentOptions.LastSavedProjectFile)
+    ' FileExistsCached(LastProj)=',FileExistsCached(LastProj)
     ]);}
   if (not ProjectLoaded)
   and (not SkipAutoLoadingLastProject)
   and (EnvironmentOptions.OpenLastProjectAtStart)
-  and (EnvironmentOptions.LastSavedProjectFile<>'')
+  and (LastProj<>'')
   and ((EnvironmentOptions.MultipleInstances=mioAlwaysStartNew)
-    or (not LazIDEInstances.ProjectIsOpenInAnotherInstance(EnvironmentOptions.LastSavedProjectFile)))
-  and (EnvironmentOptions.LastSavedProjectFile<>RestoreProjectClosed)
-  and (FileExistsCached(EnvironmentOptions.LastSavedProjectFile))
+    or (not LazIDEInstances.ProjectIsOpenInAnotherInstance(LastProj)))
+  and (LastProj<>RestoreProjectClosed)
+  and (FileExistsCached(LastProj))
   then begin
     if (not IDEProtocolOpts.LastProjectLoadingCrashed)
     or AskIfLoadLastFailingProject then begin
@@ -2359,8 +2351,7 @@ begin
       IDEProtocolOpts.LastProjectLoadingCrashed := True;
       IDEProtocolOpts.Save;
       // try loading the project
-      ProjectLoaded:=
-        (DoOpenProjectFile(EnvironmentOptions.LastSavedProjectFile,[])=mrOk);
+      ProjectLoaded:=DoOpenProjectFile(LastProj,[])=mrOk;
       // protocol that the IDE was able to open the project without crashing
       IDEProtocolOpts.LastProjectLoadingCrashed := false;
       IDEProtocolOpts.Save;
@@ -2376,9 +2367,8 @@ begin
             Include(PkgOpenFlags,pofMultiOpen)
           else
             Exclude(PkgOpenFlags,pofMultiOpen);
-          if PkgBoss.DoOpenPackageFile(AFilename,PkgOpenFlags,true)=mrAbort then begin
+          if PkgBoss.DoOpenPackageFile(AFilename,PkgOpenFlags,true)=mrAbort then
             break;
-          end;
         end;
       end else
       begin
@@ -2390,8 +2380,8 @@ begin
 
   if (not ProjectLoaded) then
   begin
-    if EnvironmentOptions.OpenLastProjectAtStart
-    and (EnvironmentOptions.LastSavedProjectFile=RestoreProjectClosed) then begin
+    if EnvironmentOptions.OpenLastProjectAtStart and (LastProj=RestoreProjectClosed) then
+    begin
       // IDE was closed without a project => restore that state
     end else begin
       // create new project
@@ -2413,7 +2403,7 @@ begin
         // => create a project
         DoNewProject(ProjectDescriptorEmptyProject);
       end;
-      if CompareFileExt(AFilename,'.lpk',false)=0 then begin
+      if CompareFileExt(AFilename,'lpk',true)=0 then begin
         if PkgBoss.DoOpenPackageFile(AFilename,[pofAddToRecent,pofMultiOpen],true)=mrAbort
         then
           break;
@@ -2461,8 +2451,7 @@ begin
     NonModalIDEWindowNames[nmiwSourceNoteBook],alBottom,false,@GetLayoutHandler);
   IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwCodeExplorer],
     nil,@CreateIDEWindow,'72%','120','+170','-200',
-    NonModalIDEWindowNames[nmiwMainIDE],alRight);
-
+     NonModalIDEWindowNames[nmiwSourceNoteBook],alRight);
   IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwUnitDependencies],
     nil,@CreateIDEWindow,'200','200','','');
   IDEWindowCreators.Add(NonModalIDEWindowNames[nmiwFPDocEditor],
@@ -2871,28 +2860,12 @@ end;
 
 procedure TMainIDE.LoadMenuShortCuts;
 
-  function GetCmdAndBtn(ACommand: word; out ToolButton: TIDEButtonCommand): TIDECommand;
-  begin
-    Result:=IDECommandList.FindIDECommand(ACommand);
-    if Result<>nil then
-      ToolButton := RegisterIDEButtonCommand(Result)
-    else
-      ToolButton := nil;
-  end;
-
-  function GetCommand(ACommand: word): TIDECommand;
-  var
-    ToolButton: TIDEButtonCommand;
-  begin
-    Result:=GetCmdAndBtn(ACommand, ToolButton);
-  end;
-
   function GetCommand(ACommand: word; const OnExecute: TNotifyEvent;
     ToolButtonClass: TIDEToolButtonClass = nil): TIDECommand;
   var
     ToolButton: TIDEButtonCommand;
   begin
-    Result:=GetCmdAndBtn(ACommand, ToolButton);
+    Result:=GetIdeCmdAndToolBtn(ACommand, ToolButton);
     if OnExecute<>nil then begin
       if Result.OnExecute<>nil then
         debugln(['WARNING: GetCommand ',ACommand,' OnExecute set twice. Different=',OnExecute<>Result.OnExecute]);
@@ -2913,172 +2886,172 @@ begin
     // file menu
     itmFileNewUnit.Command:=GetCommand(ecNewUnit, nil, TNewUnitToolButton);
     itmFileNewForm.Command:=GetCommand(ecNewForm, nil, TNewFormToolButton);
-    itmFileNewOther.Command:=GetCommand(ecNew);
+    itmFileNewOther.Command:=GetIdeCmdRegToolBtn(ecNew);
     itmFileOpen.Command:=GetCommand(ecOpen, nil, TOpenFileToolButton);
-    itmFileOpenUnit.Command:=GetCommand(ecOpenUnit);
+    itmFileOpenUnit.Command:=GetIdeCmdRegToolBtn(ecOpenUnit);
     GetCommand_ButtonDrop(ecOpenRecent, itmFileRecentOpen);
-    itmFileRevert.Command:=GetCommand(ecRevert);
-    itmFileSave.Command:=GetCommand(ecSave);
-    itmFileSaveAs.Command:=GetCommand(ecSaveAs);
-    itmFileSaveAll.Command:=GetCommand(ecSaveAll);
-    itmFileClose.Command:=GetCommand(ecClose);
-    itmFileCloseAll.Command:=GetCommand(ecCloseAll);
-    itmFileCleanDirectory.Command:=GetCommand(ecCleanDirectory);
-    itmFileQuit.Command:=GetCommand(ecQuit);
+    itmFileRevert.Command:=GetIdeCmdRegToolBtn(ecRevert);
+    itmFileSave.Command:=GetIdeCmdRegToolBtn(ecSave);
+    itmFileSaveAs.Command:=GetIdeCmdRegToolBtn(ecSaveAs);
+    itmFileSaveAll.Command:=GetIdeCmdRegToolBtn(ecSaveAll);
+    itmFileClose.Command:=GetIdeCmdRegToolBtn(ecClose);
+    itmFileCloseAll.Command:=GetIdeCmdRegToolBtn(ecCloseAll);
+    itmFileCleanDirectory.Command:=GetIdeCmdRegToolBtn(ecCleanDirectory);
+    itmFileQuit.Command:=GetIdeCmdRegToolBtn(ecQuit);
 
     // edit menu
-    itmEditUndo.Command:=GetCommand(ecUndo);
-    itmEditRedo.Command:=GetCommand(ecRedo);
-    itmEditCut.Command:=GetCommand(ecCut);
-    itmEditCopy.Command:=GetCommand(ecCopy);
-    itmEditPaste.Command:=GetCommand(ecPaste);
-    itmEditMultiPaste.Command:=GetCommand(ecMultiPaste);
+    itmEditUndo.Command:=GetIdeCmdRegToolBtn(ecUndo);
+    itmEditRedo.Command:=GetIdeCmdRegToolBtn(ecRedo);
+    itmEditCut.Command:=GetIdeCmdRegToolBtn(ecCut);
+    itmEditCopy.Command:=GetIdeCmdRegToolBtn(ecCopy);
+    itmEditPaste.Command:=GetIdeCmdRegToolBtn(ecPaste);
+    itmEditMultiPaste.Command:=GetIdeCmdRegToolBtn(ecMultiPaste);
 
-    itmEditSelectAll.Command:=GetCommand(ecSelectAll);
-    itmEditSelectToBrace.Command:=GetCommand(ecSelectToBrace);
-    itmEditSelectCodeBlock.Command:=GetCommand(ecSelectCodeBlock);
-    itmEditSelectWord.Command:=GetCommand(ecSelectWord);
-    itmEditSelectLine.Command:=GetCommand(ecSelectLine);
-    itmEditSelectParagraph.Command:=GetCommand(ecSelectParagraph);
+    itmEditSelectAll.Command:=GetIdeCmdRegToolBtn(ecSelectAll);
+    itmEditSelectToBrace.Command:=GetIdeCmdRegToolBtn(ecSelectToBrace);
+    itmEditSelectCodeBlock.Command:=GetIdeCmdRegToolBtn(ecSelectCodeBlock);
+    itmEditSelectWord.Command:=GetIdeCmdRegToolBtn(ecSelectWord);
+    itmEditSelectLine.Command:=GetIdeCmdRegToolBtn(ecSelectLine);
+    itmEditSelectParagraph.Command:=GetIdeCmdRegToolBtn(ecSelectParagraph);
 
-    itmEditIndentBlock.Command:=GetCommand(ecBlockIndent);
-    itmEditUnindentBlock.Command:=GetCommand(ecBlockUnindent);
-    itmEditUpperCaseBlock.Command:=GetCommand(ecSelectionUpperCase);
-    itmEditLowerCaseBlock.Command:=GetCommand(ecSelectionLowerCase);
-    itmEditSwapCaseBlock.Command:=GetCommand(ecSelectionSwapCase);
-    itmEditSortBlock.Command:=GetCommand(ecSelectionSort);
-    itmEditTabsToSpacesBlock.Command:=GetCommand(ecSelectionTabs2Spaces);
-    itmEditSelectionBreakLines.Command:=GetCommand(ecSelectionBreakLines);
+    itmEditIndentBlock.Command:=GetIdeCmdRegToolBtn(ecBlockIndent);
+    itmEditUnindentBlock.Command:=GetIdeCmdRegToolBtn(ecBlockUnindent);
+    itmEditUpperCaseBlock.Command:=GetIdeCmdRegToolBtn(ecSelectionUpperCase);
+    itmEditLowerCaseBlock.Command:=GetIdeCmdRegToolBtn(ecSelectionLowerCase);
+    itmEditSwapCaseBlock.Command:=GetIdeCmdRegToolBtn(ecSelectionSwapCase);
+    itmEditSortBlock.Command:=GetIdeCmdRegToolBtn(ecSelectionSort);
+    itmEditTabsToSpacesBlock.Command:=GetIdeCmdRegToolBtn(ecSelectionTabs2Spaces);
+    itmEditSelectionBreakLines.Command:=GetIdeCmdRegToolBtn(ecSelectionBreakLines);
 
-    itmEditInsertCharacter.Command:=GetCommand(ecInsertCharacter);
+    itmEditInsertCharacter.Command:=GetIdeCmdRegToolBtn(ecInsertCharacter);
 
     // search menu
-    itmSearchFind.Command:=GetCommand(ecFind);
-    itmSearchFindNext.Command:=GetCommand(ecFindNext);
-    itmSearchFindPrevious.Command:=GetCommand(ecFindPrevious);
-    itmSearchFindInFiles.Command:=GetCommand(ecFindInFiles);
-    itmSearchFindIdentifierRefs.Command:=GetCommand(ecFindIdentifierRefs);
-    itmSearchReplace.Command:=GetCommand(ecReplace);
-    itmIncrementalFind.Command:=GetCommand(ecIncrementalFind);
-    itmGotoLine.Command:=GetCommand(ecGotoLineNumber);
-    itmJumpBack.Command:=GetCommand(ecJumpBack);
-    itmJumpForward.Command:=GetCommand(ecJumpForward);
-    itmAddJumpPoint.Command:=GetCommand(ecAddJumpPoint);
-    itmJumpToNextError.Command:=GetCommand(ecJumpToNextError);
-    itmJumpToPrevError.Command:=GetCommand(ecJumpToPrevError);
-    itmSetFreeBookmark.Command:=GetCommand(ecSetFreeBookmark);
-    itmJumpToNextBookmark.Command:=GetCommand(ecNextBookmark);
-    itmJumpToPrevBookmark.Command:=GetCommand(ecPrevBookmark);
+    itmSearchFind.Command:=GetIdeCmdRegToolBtn(ecFind);
+    itmSearchFindNext.Command:=GetIdeCmdRegToolBtn(ecFindNext);
+    itmSearchFindPrevious.Command:=GetIdeCmdRegToolBtn(ecFindPrevious);
+    itmSearchFindInFiles.Command:=GetIdeCmdRegToolBtn(ecFindInFiles);
+    itmSearchFindIdentifierRefs.Command:=GetIdeCmdRegToolBtn(ecFindIdentifierRefs);
+    itmSearchReplace.Command:=GetIdeCmdRegToolBtn(ecReplace);
+    itmIncrementalFind.Command:=GetIdeCmdRegToolBtn(ecIncrementalFind);
+    itmGotoLine.Command:=GetIdeCmdRegToolBtn(ecGotoLineNumber);
+    itmJumpBack.Command:=GetIdeCmdRegToolBtn(ecJumpBack);
+    itmJumpForward.Command:=GetIdeCmdRegToolBtn(ecJumpForward);
+    itmAddJumpPoint.Command:=GetIdeCmdRegToolBtn(ecAddJumpPoint);
+    itmJumpToNextError.Command:=GetIdeCmdRegToolBtn(ecJumpToNextError);
+    itmJumpToPrevError.Command:=GetIdeCmdRegToolBtn(ecJumpToPrevError);
+    itmSetFreeBookmark.Command:=GetIdeCmdRegToolBtn(ecSetFreeBookmark);
+    itmJumpToNextBookmark.Command:=GetIdeCmdRegToolBtn(ecNextBookmark);
+    itmJumpToPrevBookmark.Command:=GetIdeCmdRegToolBtn(ecPrevBookmark);
     GetCommand_ButtonDrop(ecJumpToSection, itmJumpToSection);
     itmJumpToInterface.Command:=GetCommand_DropDown(ecJumpToInterface, itmJumpToSection);
     itmJumpToInterfaceUses.Command:=GetCommand_DropDown(ecJumpToInterfaceUses, itmJumpToSection);
     itmJumpToImplementation.Command:=GetCommand_DropDown(ecJumpToImplementation, itmJumpToSection);
     itmJumpToImplementationUses.Command:=GetCommand_DropDown(ecJumpToImplementationUses, itmJumpToSection);
     itmJumpToInitialization.Command:=GetCommand_DropDown(ecJumpToInitialization, itmJumpToSection);
-    GetCmdAndBtn(ecJumpToProcedureHeader, xBtnItem);
+    GetIdeCmdAndToolBtn(ecJumpToProcedureHeader, xBtnItem);
     xBtnItem.Caption := lisMenuJumpToProcedureHeader;
     xBtnItem.OnClick := @SourceEditorManager.JumpToProcedureHeaderClicked;
     xBtnItem.ImageIndex := IDEImages.LoadImage('menu_jumpto_procedureheader');
-    GetCmdAndBtn(ecJumpToProcedureBegin, xBtnItem);
+    GetIdeCmdAndToolBtn(ecJumpToProcedureBegin, xBtnItem);
     xBtnItem.Caption := lisMenuJumpToProcedureBegin;
     xBtnItem.ImageIndex := IDEImages.LoadImage('menu_jumpto_procedurebegin');
     xBtnItem.OnClick := @SourceEditorManager.JumpToProcedureBeginClicked;
-    itmFindBlockOtherEnd.Command:=GetCommand(ecFindBlockOtherEnd);
-    itmFindBlockStart.Command:=GetCommand(ecFindBlockStart);
-    itmFindDeclaration.Command:=GetCommand(ecFindDeclaration);
-    itmOpenFileAtCursor.Command:=GetCommand(ecOpenFileAtCursor);
-    itmGotoIncludeDirective.Command:=GetCommand(ecGotoIncludeDirective);
-    itmSearchProcedureList.Command:=GetCommand(ecProcedureList);
+    itmFindBlockOtherEnd.Command:=GetIdeCmdRegToolBtn(ecFindBlockOtherEnd);
+    itmFindBlockStart.Command:=GetIdeCmdRegToolBtn(ecFindBlockStart);
+    itmFindDeclaration.Command:=GetIdeCmdRegToolBtn(ecFindDeclaration);
+    itmOpenFileAtCursor.Command:=GetIdeCmdRegToolBtn(ecOpenFileAtCursor);
+    itmGotoIncludeDirective.Command:=GetIdeCmdRegToolBtn(ecGotoIncludeDirective);
+    itmSearchProcedureList.Command:=GetIdeCmdRegToolBtn(ecProcedureList);
 
     // view menu
-    itmViewToggleFormUnit.Command:=GetCommand(ecToggleFormUnit);
-    itmViewInspector.Command:=GetCommand(ecToggleObjectInsp);
-    itmViewSourceEditor.Command:=GetCommand(ecToggleSourceEditor);
-    itmViewCodeExplorer.Command:=GetCommand(ecToggleCodeExpl);
-    itmViewFPDocEditor.Command:=GetCommand(ecToggleFPDocEditor);
-    itmViewCodeBrowser.Command:=GetCommand(ecToggleCodeBrowser);
-    itmViewRestrictionBrowser.Command:=GetCommand(ecToggleRestrictionBrowser);
-    itmViewComponents.Command:=GetCommand(ecViewComponents);
-    itmMacroListView.Command:=GetCommand(ecViewMacroList);
-    itmJumpHistory.Command:=GetCommand(ecViewJumpHistory);
-    itmViewMessage.Command:=GetCommand(ecToggleMessages);
-    itmViewSearchResults.Command:=GetCommand(ecToggleSearchResults);
-    itmViewAnchorEditor.Command:=GetCommand(ecViewAnchorEditor);
-    itmViewTabOrder.Command:=GetCommand(ecViewTabOrder);
-    //itmPkgPackageLinks.Command:=GetCommand(ec?);
+    itmViewToggleFormUnit.Command:=GetIdeCmdRegToolBtn(ecToggleFormUnit);
+    itmViewInspector.Command:=GetIdeCmdRegToolBtn(ecToggleObjectInsp);
+    itmViewSourceEditor.Command:=GetIdeCmdRegToolBtn(ecToggleSourceEditor);
+    itmViewCodeExplorer.Command:=GetIdeCmdRegToolBtn(ecToggleCodeExpl);
+    itmViewFPDocEditor.Command:=GetIdeCmdRegToolBtn(ecToggleFPDocEditor);
+    itmViewCodeBrowser.Command:=GetIdeCmdRegToolBtn(ecToggleCodeBrowser);
+    itmViewRestrictionBrowser.Command:=GetIdeCmdRegToolBtn(ecToggleRestrictionBrowser);
+    itmViewComponents.Command:=GetIdeCmdRegToolBtn(ecViewComponents);
+    itmMacroListView.Command:=GetIdeCmdRegToolBtn(ecViewMacroList);
+    itmJumpHistory.Command:=GetIdeCmdRegToolBtn(ecViewJumpHistory);
+    itmViewMessage.Command:=GetIdeCmdRegToolBtn(ecToggleMessages);
+    itmViewSearchResults.Command:=GetIdeCmdRegToolBtn(ecToggleSearchResults);
+    itmViewAnchorEditor.Command:=GetIdeCmdRegToolBtn(ecViewAnchorEditor);
+    itmViewTabOrder.Command:=GetIdeCmdRegToolBtn(ecViewTabOrder);
+    //itmPkgPackageLinks.Command:=GetIdeCmdRegToolBtn(ec?);
 
     // source menu
-    itmSourceCommentBlock.Command:=GetCommand(ecSelectionComment);
-    itmSourceUncommentBlock.Command:=GetCommand(ecSelectionUncomment);
-    itmSourceToggleComment.Command:=GetCommand(ecToggleComment);
-    itmSourceEncloseBlock.Command:=GetCommand(ecSelectionEnclose);
-    itmSourceEncloseInIFDEF.Command:=GetCommand(ecSelectionEncloseIFDEF);
-    itmSourceCompleteCodeInteractive.Command:=GetCommand(ecCompleteCodeInteractive);
-    itmSourceUseUnit.Command:=GetCommand(ecUseUnit);
+    itmSourceCommentBlock.Command:=GetIdeCmdRegToolBtn(ecSelectionComment);
+    itmSourceUncommentBlock.Command:=GetIdeCmdRegToolBtn(ecSelectionUncomment);
+    itmSourceToggleComment.Command:=GetIdeCmdRegToolBtn(ecToggleComment);
+    itmSourceEncloseBlock.Command:=GetIdeCmdRegToolBtn(ecSelectionEnclose);
+    itmSourceEncloseInIFDEF.Command:=GetIdeCmdRegToolBtn(ecSelectionEncloseIFDEF);
+    itmSourceCompleteCodeInteractive.Command:=GetIdeCmdRegToolBtn(ecCompleteCodeInteractive);
+    itmSourceUseUnit.Command:=GetIdeCmdRegToolBtn(ecUseUnit);
 
-    itmSourceSyntaxCheck.Command:=GetCommand(ecSyntaxCheck);
-    itmSourceGuessUnclosedBlock.Command:=GetCommand(ecGuessUnclosedBlock);
+    itmSourceSyntaxCheck.Command:=GetIdeCmdRegToolBtn(ecSyntaxCheck);
+    itmSourceGuessUnclosedBlock.Command:=GetIdeCmdRegToolBtn(ecGuessUnclosedBlock);
     {$IFDEF GuessMisplacedIfdef}
-    itmSourceGuessMisplacedIFDEF.Command:=GetCommand(ecGuessMisplacedIFDEF);
+    itmSourceGuessMisplacedIFDEF.Command:=GetIdeCmdRegToolBtn(ecGuessMisplacedIFDEF);
     {$ENDIF}
 
-    itmSourceInsertCVSAuthor.Command:=GetCommand(ecInsertCVSAuthor);
-    itmSourceInsertCVSDate.Command:=GetCommand(ecInsertCVSDate);
-    itmSourceInsertCVSHeader.Command:=GetCommand(ecInsertCVSHeader);
-    itmSourceInsertCVSID.Command:=GetCommand(ecInsertCVSID);
-    itmSourceInsertCVSLog.Command:=GetCommand(ecInsertCVSLog);
-    itmSourceInsertCVSName.Command:=GetCommand(ecInsertCVSName);
-    itmSourceInsertCVSRevision.Command:=GetCommand(ecInsertCVSRevision);
-    itmSourceInsertCVSSource.Command:=GetCommand(ecInsertCVSSource);
+    itmSourceInsertCVSAuthor.Command:=GetIdeCmdRegToolBtn(ecInsertCVSAuthor);
+    itmSourceInsertCVSDate.Command:=GetIdeCmdRegToolBtn(ecInsertCVSDate);
+    itmSourceInsertCVSHeader.Command:=GetIdeCmdRegToolBtn(ecInsertCVSHeader);
+    itmSourceInsertCVSID.Command:=GetIdeCmdRegToolBtn(ecInsertCVSID);
+    itmSourceInsertCVSLog.Command:=GetIdeCmdRegToolBtn(ecInsertCVSLog);
+    itmSourceInsertCVSName.Command:=GetIdeCmdRegToolBtn(ecInsertCVSName);
+    itmSourceInsertCVSRevision.Command:=GetIdeCmdRegToolBtn(ecInsertCVSRevision);
+    itmSourceInsertCVSSource.Command:=GetIdeCmdRegToolBtn(ecInsertCVSSource);
 
-    itmSourceInsertGPLNotice.Command:=GetCommand(ecInsertGPLNotice);
-    itmSourceInsertGPLNoticeTranslated.Command:=GetCommand(ecInsertGPLNoticeTranslated);
-    itmSourceInsertLGPLNotice.Command:=GetCommand(ecInsertLGPLNotice);
-    itmSourceInsertLGPLNoticeTranslated.Command:=GetCommand(ecInsertLGPLNoticeTranslated);
-    itmSourceInsertModifiedLGPLNotice.Command:=GetCommand(ecInsertModifiedLGPLNotice);
-    itmSourceInsertModifiedLGPLNoticeTranslated.Command:=GetCommand(ecInsertModifiedLGPLNoticeTranslated);
-    itmSourceInsertMITNotice.Command:=GetCommand(ecInsertMITNotice);
-    itmSourceInsertMITNoticeTranslated.Command:=GetCommand(ecInsertMITNoticeTranslated);
-    itmSourceInsertUsername.Command:=GetCommand(ecInsertUserName);
-    itmSourceInsertDateTime.Command:=GetCommand(ecInsertDateTime);
-    itmSourceInsertChangeLogEntry.Command:=GetCommand(ecInsertChangeLogEntry);
-    itmSourceInsertGUID.Command:=GetCommand(ecInsertGUID);
-    itmSourceInsertFilename.Command:=GetCommand(ecInsertFilename);
+    itmSourceInsertGPLNotice.Command:=GetIdeCmdRegToolBtn(ecInsertGPLNotice);
+    itmSourceInsertGPLNoticeTranslated.Command:=GetIdeCmdRegToolBtn(ecInsertGPLNoticeTranslated);
+    itmSourceInsertLGPLNotice.Command:=GetIdeCmdRegToolBtn(ecInsertLGPLNotice);
+    itmSourceInsertLGPLNoticeTranslated.Command:=GetIdeCmdRegToolBtn(ecInsertLGPLNoticeTranslated);
+    itmSourceInsertModifiedLGPLNotice.Command:=GetIdeCmdRegToolBtn(ecInsertModifiedLGPLNotice);
+    itmSourceInsertModifiedLGPLNoticeTranslated.Command:=GetIdeCmdRegToolBtn(ecInsertModifiedLGPLNoticeTranslated);
+    itmSourceInsertMITNotice.Command:=GetIdeCmdRegToolBtn(ecInsertMITNotice);
+    itmSourceInsertMITNoticeTranslated.Command:=GetIdeCmdRegToolBtn(ecInsertMITNoticeTranslated);
+    itmSourceInsertUsername.Command:=GetIdeCmdRegToolBtn(ecInsertUserName);
+    itmSourceInsertDateTime.Command:=GetIdeCmdRegToolBtn(ecInsertDateTime);
+    itmSourceInsertChangeLogEntry.Command:=GetIdeCmdRegToolBtn(ecInsertChangeLogEntry);
+    itmSourceInsertGUID.Command:=GetIdeCmdRegToolBtn(ecInsertGUID);
+    itmSourceInsertFilename.Command:=GetIdeCmdRegToolBtn(ecInsertFilename);
 
-    itmSourceUnitInfo.Command:=GetCommand(ecViewUnitInfo);
-    itmSourceUnitDependencies.Command:=GetCommand(ecViewUnitDependencies);
+    itmSourceUnitInfo.Command:=GetIdeCmdRegToolBtn(ecViewUnitInfo);
+    itmSourceUnitDependencies.Command:=GetIdeCmdRegToolBtn(ecViewUnitDependencies);
 
     // refactor menu
-    itmRefactorRenameIdentifier.Command:=GetCommand(ecRenameIdentifier);
-    itmRefactorExtractProc.Command:=GetCommand(ecExtractProc);
-    itmRefactorInvertAssignment.Command:=GetCommand(ecInvertAssignment);
+    itmRefactorRenameIdentifier.Command:=GetIdeCmdRegToolBtn(ecRenameIdentifier);
+    itmRefactorExtractProc.Command:=GetIdeCmdRegToolBtn(ecExtractProc);
+    itmRefactorInvertAssignment.Command:=GetIdeCmdRegToolBtn(ecInvertAssignment);
 
-    itmRefactorShowAbstractMethods.Command:=GetCommand(ecShowAbstractMethods);
-    itmRefactorShowEmptyMethods.Command:=GetCommand(ecRemoveEmptyMethods);
-    itmRefactorShowUnusedUnits.Command:=GetCommand(ecRemoveUnusedUnits);
+    itmRefactorShowAbstractMethods.Command:=GetIdeCmdRegToolBtn(ecShowAbstractMethods);
+    itmRefactorShowEmptyMethods.Command:=GetIdeCmdRegToolBtn(ecRemoveEmptyMethods);
+    itmRefactorShowUnusedUnits.Command:=GetIdeCmdRegToolBtn(ecRemoveUnusedUnits);
     {$IFDEF EnableFindOverloads}
-    itmRefactorFindOverloads.Command:=GetCommand(ecFindOverloads);
+    itmRefactorFindOverloads.Command:=GetIdeCmdRegToolBtn(ecFindOverloads);
     {$ENDIF}
-    itmRefactorMakeResourceString.Command:=GetCommand(ecMakeResourceString);
+    itmRefactorMakeResourceString.Command:=GetIdeCmdRegToolBtn(ecMakeResourceString);
 
     // project menu
-    itmProjectNew.Command:=GetCommand(ecNewProject);
-    itmProjectNewFromFile.Command:=GetCommand(ecNewProjectFromFile);
+    itmProjectNew.Command:=GetIdeCmdRegToolBtn(ecNewProject);
+    itmProjectNewFromFile.Command:=GetIdeCmdRegToolBtn(ecNewProjectFromFile);
     itmProjectOpen.Command:=GetCommand_DropDown(ecOpenProject, itmProjectRecentOpen);
     GetCommand_ButtonDrop(ecOpenRecentProject, itmProjectRecentOpen);
-    itmProjectClose.Command:=GetCommand(ecCloseProject);
-    itmProjectSave.Command:=GetCommand(ecSaveProject);
-    itmProjectSaveAs.Command:=GetCommand(ecSaveProjectAs);
-    itmProjectResaveFormsWithI18n.Command:=GetCommand(ecProjectResaveFormsWithI18n);
-    itmProjectPublish.Command:=GetCommand(ecPublishProject);
-    itmProjectInspector.Command:=GetCommand(ecProjectInspector);
-    itmProjectOptions.Command:=GetCommand(ecProjectOptions);
-    itmProjectAddTo.Command:=GetCommand(ecAddCurUnitToProj);
-    itmProjectRemoveFrom.Command:=GetCommand(ecRemoveFromProj);
-    itmProjectViewUnits.Command:=GetCommand(ecViewProjectUnits);
-    itmProjectViewForms.Command:=GetCommand(ecViewProjectForms);
-    itmProjectViewSource.Command:=GetCommand(ecViewProjectSource);
-    GetCmdAndBtn(ecProjectChangeBuildMode, xBtnItem);
+    itmProjectClose.Command:=GetIdeCmdRegToolBtn(ecCloseProject);
+    itmProjectSave.Command:=GetIdeCmdRegToolBtn(ecSaveProject);
+    itmProjectSaveAs.Command:=GetIdeCmdRegToolBtn(ecSaveProjectAs);
+    itmProjectResaveFormsWithI18n.Command:=GetIdeCmdRegToolBtn(ecProjectResaveFormsWithI18n);
+    itmProjectPublish.Command:=GetIdeCmdRegToolBtn(ecPublishProject);
+    itmProjectInspector.Command:=GetIdeCmdRegToolBtn(ecProjectInspector);
+    itmProjectOptions.Command:=GetIdeCmdRegToolBtn(ecProjectOptions);
+    itmProjectAddTo.Command:=GetIdeCmdRegToolBtn(ecAddCurUnitToProj);
+    itmProjectRemoveFrom.Command:=GetIdeCmdRegToolBtn(ecRemoveFromProj);
+    itmProjectViewUnits.Command:=GetIdeCmdRegToolBtn(ecViewProjectUnits);
+    itmProjectViewForms.Command:=GetIdeCmdRegToolBtn(ecViewProjectForms);
+    itmProjectViewSource.Command:=GetIdeCmdRegToolBtn(ecViewProjectSource);
+    GetIdeCmdAndToolBtn(ecProjectChangeBuildMode, xBtnItem);
     xBtnItem.Caption := lisChangeBuildMode;
     xBtnItem.ToolButtonClass:=TSetBuildModeToolButton;
     xBtnItem.ImageIndex := IDEImages.LoadImage('menu_compiler_options');
@@ -3099,55 +3072,56 @@ begin
     itmRunMenuStepOver.Command:=GetCommand(ecStepOver, @mnuStepOverProjectClicked);
     itmRunMenuStepOut.Command:=GetCommand(ecStepOut, @mnuStepOutProjectClicked);
     itmRunMenuRunToCursor.Command:=GetCommand(ecRunToCursor, @mnuRunToCursorProjectClicked);
+    itmRunMenuStepToCursor.Command:=GetCommand(ecStepToCursor, @mnuStepToCursorProjectClicked);
     itmRunMenuStop.Command:=GetCommand(ecStopProgram, @mnuStopProjectClicked);
     itmRunMenuAttach.Command:=GetCommand(ecAttach, @mnuAttachDebuggerClicked);
     itmRunMenuDetach.Command:=GetCommand(ecDetach, @mnuDetachDebuggerClicked);
-    itmRunMenuResetDebugger.Command:=GetCommand(ecResetDebugger);
+    itmRunMenuResetDebugger.Command:=GetIdeCmdRegToolBtn(ecResetDebugger);
     itmRunMenuRunParameters.Command:=GetCommand(ecRunParameters, @mnuRunParametersClicked);
     itmRunMenuBuildFile.Command:=GetCommand(ecBuildFile, @mnuBuildFileClicked);
     itmRunMenuRunFile.Command:=GetCommand(ecRunFile, @mnuRunFileClicked);
     itmRunMenuConfigBuildFile.Command:=GetCommand(ecConfigBuildFile, @mnuConfigBuildFileClicked);
 
     // package menu
-    itmPkgNewPackage.Command:=GetCommand(ecNewPackage);
-    itmPkgOpenLoadedPackage.Command:=GetCommand(ecOpenPackage);
+    itmPkgNewPackage.Command:=GetIdeCmdRegToolBtn(ecNewPackage);
+    itmPkgOpenLoadedPackage.Command:=GetIdeCmdRegToolBtn(ecOpenPackage);
     itmPkgOpenPackageFile.Command:=GetCommand_DropDown(ecOpenPackageFile, itmPkgOpenRecent);
-    itmPkgOpenPackageOfCurUnit.Command:=GetCommand(ecOpenPackageOfCurUnit);
+    itmPkgOpenPackageOfCurUnit.Command:=GetIdeCmdRegToolBtn(ecOpenPackageOfCurUnit);
     GetCommand_ButtonDrop(ecOpenRecentPackage, itmPkgOpenRecent);
-    itmPkgAddCurFileToPkg.Command:=GetCommand(ecAddCurFileToPkg);
-    itmPkgAddNewComponentToPkg.Command:=GetCommand(ecNewPkgComponent);
-    itmPkgPkgGraph.Command:=GetCommand(ecPackageGraph);
-    itmPkgPackageLinks.Command:=GetCommand(ecPackageLinks);
-    itmPkgEditInstallPkgs.Command:=GetCommand(ecEditInstallPkgs);
+    itmPkgAddCurFileToPkg.Command:=GetIdeCmdRegToolBtn(ecAddCurFileToPkg);
+    itmPkgAddNewComponentToPkg.Command:=GetIdeCmdRegToolBtn(ecNewPkgComponent);
+    itmPkgPkgGraph.Command:=GetIdeCmdRegToolBtn(ecPackageGraph);
+    itmPkgPackageLinks.Command:=GetIdeCmdRegToolBtn(ecPackageLinks);
+    itmPkgEditInstallPkgs.Command:=GetIdeCmdRegToolBtn(ecEditInstallPkgs);
 
     // tools menu
-    itmEnvGeneralOptions.Command:=GetCommand(ecEnvironmentOptions);
-    itmToolRescanFPCSrcDir.Command:=GetCommand(ecRescanFPCSrcDir);
-    itmEnvCodeTemplates.Command:=GetCommand(ecEditCodeTemplates);
-    itmEnvCodeToolsDefinesEditor.Command:=GetCommand(ecCodeToolsDefinesEd);
+    itmEnvGeneralOptions.Command:=GetIdeCmdRegToolBtn(ecEnvironmentOptions);
+    itmToolRescanFPCSrcDir.Command:=GetIdeCmdRegToolBtn(ecRescanFPCSrcDir);
+    itmEnvCodeTemplates.Command:=GetIdeCmdRegToolBtn(ecEditCodeTemplates);
+    itmEnvCodeToolsDefinesEditor.Command:=GetIdeCmdRegToolBtn(ecCodeToolsDefinesEd);
 
-    itmToolConfigure.Command:=GetCommand(ecExtToolSettings);
+    itmToolConfigure.Command:=GetIdeCmdRegToolBtn(ecExtToolSettings);
 
     itmToolManageDesktops.Command:=GetCommand(ecManageDesktops, nil, TShowDesktopsToolButton);
-    itmToolManageExamples.Command:=GetCommand(ecManageExamples);
-    itmToolDiff.Command:=GetCommand(ecDiff);
+    itmToolManageExamples.Command:=GetIdeCmdRegToolBtn(ecManageExamples);
+    itmToolDiff.Command:=GetIdeCmdRegToolBtn(ecDiff);
 
-    itmToolConvertDFMtoLFM.Command:=GetCommand(ecConvertDFM2LFM);
-    itmToolCheckLFM.Command:=GetCommand(ecCheckLFM);
-    itmToolConvertDelphiUnit.Command:=GetCommand(ecConvertDelphiUnit);
-    itmToolConvertDelphiProject.Command:=GetCommand(ecConvertDelphiProject);
-    itmToolConvertDelphiPackage.Command:=GetCommand(ecConvertDelphiPackage);
-    itmToolConvertEncoding.Command:=GetCommand(ecConvertEncoding);
-    itmToolBuildLazarus.Command:=GetCommand(ecBuildLazarus);
-    itmToolConfigureBuildLazarus.Command:=GetCommand(ecConfigBuildLazarus);
+    itmToolConvertDFMtoLFM.Command:=GetIdeCmdRegToolBtn(ecConvertDFM2LFM);
+    itmToolCheckLFM.Command:=GetIdeCmdRegToolBtn(ecCheckLFM);
+    itmToolConvertDelphiUnit.Command:=GetIdeCmdRegToolBtn(ecConvertDelphiUnit);
+    itmToolConvertDelphiProject.Command:=GetIdeCmdRegToolBtn(ecConvertDelphiProject);
+    itmToolConvertDelphiPackage.Command:=GetIdeCmdRegToolBtn(ecConvertDelphiPackage);
+    itmToolConvertEncoding.Command:=GetIdeCmdRegToolBtn(ecConvertEncoding);
+    itmToolBuildLazarus.Command:=GetIdeCmdRegToolBtn(ecBuildLazarus);
+    itmToolConfigureBuildLazarus.Command:=GetIdeCmdRegToolBtn(ecConfigBuildLazarus);
 
     // window menu
-    itmWindowManager.Command:=GetCommand(ecManageSourceEditors);
+    itmWindowManager.Command:=GetIdeCmdRegToolBtn(ecManageSourceEditors);
 
     // help menu
-    itmHelpAboutLazarus.Command:=GetCommand(ecAboutLazarus);
-    itmHelpOnlineHelp.Command:=GetCommand(ecOnlineHelp);
-    itmHelpReportingBug.Command:=GetCommand(ecReportingBug);
+    itmHelpAboutLazarus.Command:=GetIdeCmdRegToolBtn(ecAboutLazarus);
+    itmHelpOnlineHelp.Command:=GetIdeCmdRegToolBtn(ecOnlineHelp);
+    itmHelpReportingBug.Command:=GetIdeCmdRegToolBtn(ecReportingBug);
   end;
 
   SourceEditorManager.SetupShortCuts;
@@ -3807,19 +3781,30 @@ begin
     AnUnitInfo.LoadedDesigner:=true;
 end;
 
-procedure TMainIDE.InvalidateAllDesignerForms;
-// Calls 'Invalidate' in all designer forms.
+procedure TMainIDE.UpdateAndInvalidateDesigners;
+// Update some options in designer and 'Invalidate' all designer forms.
 var
   AnUnitInfo: TUnitInfo;
   CurDesignerForm: TCustomForm;
+  ADesigner: TDesigner;
 begin
   if Project1=nil then exit;
   AnUnitInfo:=Project1.FirstUnitWithComponent;
-  while AnUnitInfo<>nil do begin
-    if AnUnitInfo.Component<>nil then begin
+  while AnUnitInfo<>nil do
+  begin
+    if AnUnitInfo.Component<>nil then
+    begin
       CurDesignerForm:=FormEditor1.GetDesignerForm(AnUnitInfo.Component);
       if CurDesignerForm<>nil then
+      begin
+        ADesigner:=TDesigner(CurDesignerForm.Designer);
+        if ADesigner<>nil then
+        begin
+          ADesigner.ShowEditorHints:=EnvironmentOptions.ShowEditorHints;
+          ADesigner.ShowComponentCaptions:=EnvironmentOptions.ShowComponentCaptions;
+        end;
         CurDesignerForm.Invalidate;
+      end;
     end;
     AnUnitInfo:=AnUnitInfo.NextUnitWithComponent;
   end;
@@ -3911,6 +3896,7 @@ begin
         if rfSuccessOnTrigger in AFlags then
           exit(true);
       end;
+  else
   end;
   Result := ToolStatus = itNone;
 end;
@@ -3925,7 +3911,7 @@ end;
 
 procedure TMainIDE.mnuRestartClicked(Sender: TObject);
 begin
-  FRestartWanted := True;
+  Include(FIdleIdeActions, iiaRestartWanted);
 end;
 
 procedure TMainIDE.mnuQuitClicked(Sender: TObject);
@@ -4157,29 +4143,18 @@ begin
 
   // project change build mode
   ACmd := IDECommandList.FindIDECommand(ecProjectChangeBuildMode);
+  AHint := lisChangeBuildMode+' '+KeyValuesToCaptionStr(ACmd.ShortcutA,ACmd.ShortcutB,'(');
   if Assigned(Project1) then
-    AHint :=
-      Trim(lisChangeBuildMode + ' ' + KeyValuesToCaptionStr(ACmd.ShortcutA, ACmd.ShortcutB, '(')) + sLineBreak +
-      Format('[%s]', [Project1.ActiveBuildMode.GetCaption])
-  else
-    AHint :=
-      Trim(lisChangeBuildMode + ' ' + KeyValuesToCaptionStr(ACmd.ShortcutA, ACmd.ShortcutB, '('));
+    AHint := AHint + sLineBreak + Project1.ActiveBuildMode.GetCaption;
   ACmd.Hint := AHint;
   if ProjInspector<>nil then
-  begin
-    ProjInspector.OptionsBitBtn.Hint := AHint;
-    ProjInspector.UpdateTitle;
-  end;
+    ProjInspector.OptionsBitBtn.Hint := AHint;    //ProjInspector.UpdateTitle;
 
   // run
   ACmd := IDECommandList.FindIDECommand(ecRun);
+  AHint := lisRun+' '+KeyValuesToCaptionStr(ACmd.ShortcutA,ACmd.ShortcutB,'(');
   if Assigned(Project1) and Assigned(Project1.RunParameterOptions.GetActiveMode) then
-    AHint :=
-      Trim(lisRun + ' ' + KeyValuesToCaptionStr(ACmd.ShortcutA, ACmd.ShortcutB, '(')) + sLineBreak +
-      Format('[%s]', [Project1.RunParameterOptions.GetActiveMode.Name])
-  else
-    AHint :=
-      Trim(lisRun + ' ' + KeyValuesToCaptionStr(ACmd.ShortcutA, ACmd.ShortcutB, '('));
+    AHint := AHint + sLineBreak + Project1.RunParameterOptions.GetActiveMode.Name;
   ACmd.Hint := AHint;
 end;
 
@@ -4511,7 +4486,7 @@ begin
       AnUnitInfo:=AnUnitInfo.NextPartOfProject;
       if not FilenameIsAbsolute(CurFilename) then continue;
       if (AProject.MainFilename<>CurFilename)
-      and (not FilenameIsPascalUnit(CurFilename)) then
+      and (not FilenameHasPascalExt(CurFilename)) then
         continue;
       // check .lrj file
       LRJFilename:=ChangeFileExt(CurFilename,'.lrj');
@@ -4649,9 +4624,17 @@ begin
   DebugBoss.DoRunToCursor;
 end;
 
+procedure TMainIDE.mnuStepToCursorProjectClicked(Sender: TObject);
+begin
+  DebugBoss.DoStepToCursor;
+end;
+
 procedure TMainIDE.mnuStopProjectClicked(Sender: TObject);
 begin
-  DebugBoss.DoStopProject;
+  if (MainIDE.ToolStatus = itBuilder) then
+    mnuAbortBuildProjectClicked(Sender)
+  else
+    DebugBoss.DoStopProject;
 end;
 
 procedure TMainIDE.mnuAttachDebuggerClicked(Sender: TObject);
@@ -4957,7 +4940,7 @@ begin
   if (Index<0)
   or (Index>=ExternalUserTools.Count)
   then exit;
-  if ExternalTools.RunningCount=0 then
+  if ExternalToolsRef.RunningCount=0 then
     IDEMessagesWindow.Clear;
   DoRunExternalTool(Index,false);
 end;
@@ -5023,7 +5006,7 @@ begin
       IDEOptionsDialog.Caption := ACaption;
     if Length(AOptionsFilter) = 0 then
     begin
-      SetLength(OptionsFilter, 1);
+      SetLength(OptionsFilter{%H-}, 1);
       if AEditor <> nil then
         OptionsFilter[0] := AEditor.SupportedOptionsClass
       else
@@ -5091,45 +5074,6 @@ var
     MacroValueChanged:=true;
   end;
 
-  procedure UpdateDesigners;
-  var
-    AForm: TCustomForm;
-    AnUnitInfo: TUnitInfo;
-    ADesigner: TDesigner;
-  begin
-    if Project1=nil then exit;
-    AnUnitInfo := Project1.FirstUnitWithComponent;
-    while AnUnitInfo <> nil do
-    begin
-      if (AnUnitInfo.Component<>nil) then
-      begin
-        AForm := FormEditor1.GetDesignerForm(AnUnitInfo.Component);
-        if AForm <> nil then
-        begin
-          ADesigner := TDesigner(AForm.Designer);
-          if ADesigner <> nil then
-          begin
-            ADesigner.ShowEditorHints := EnvironmentOptions.ShowEditorHints;
-            ADesigner.ShowComponentCaptions := EnvironmentOptions.ShowComponentCaptions;
-          end;
-        end;
-      end;
-      AnUnitInfo := AnUnitInfo.NextUnitWithComponent;
-    end;
-    InvalidateAllDesignerForms;
-  end;
-
-  procedure UpdateObjectInspector;
-  begin
-    if ObjectInspector1<>nil then
-      EnvironmentOptions.ObjectInspectorOptions.AssignTo(ObjectInspector1);
-  end;
-
-  procedure UpdateMessagesView;
-  begin
-    MessagesView.ApplyIDEOptions;
-  end;
-
 begin
   if Restore then exit;
   // invalidate cached substituted macros
@@ -5151,15 +5095,21 @@ begin
   ChangeMacroValue('FPCSrcDir',EnvironmentOptions.GetParsedFPCSourceDirectory);
   MainBuildBoss.EnvOptsChanged;
 
-  if MacroValueChanged then CodeToolBoss.DefineTree.ClearCache;
+  if MacroValueChanged then
+    CodeToolBoss.DefineTree.ClearCache;
   //debugln(['TMainIDE.DoEnvironmentOptionsAfterWrite FPCCompilerChanged=',FPCCompilerChanged,' FPCSrcDirChanged=',FPCSrcDirChanged,' LazarusSrcDirChanged=',LazarusSrcDirChanged]);
   if FPCCompilerChanged or FPCSrcDirChanged then
     MainBuildBoss.SetBuildTargetProject1(false);
+  // Update DefineTemplates (maybe not really needed)
+  // Should we test MacroValueChanged or FPCCompilerChanged or FPCSrcDirChanged?
+  Project1.DefineTemplates.AllChanged(false);
+  Include(FIdleIdeActions, iiaUpdateDefineTemplates);
 
   // update environment
-  UpdateDesigners;
-  UpdateObjectInspector;
-  UpdateMessagesView;
+  UpdateAndInvalidateDesigners;
+  if ObjectInspector1<>nil then
+    EnvironmentOptions.ObjectInspectorOptions.AssignTo(ObjectInspector1);
+  MessagesView.ApplyIDEOptions;
   MainIDEBar.SetupHints;
   Application.ShowButtonGlyphs := EnvironmentOptions.ShowButtonGlyphs;
   Application.ShowMenuGlyphs := EnvironmentOptions.ShowMenuGlyphs;
@@ -5254,7 +5204,7 @@ begin
     UpdateCaption;
     if Assigned(ProjInspector) then
       ProjInspector.UpdateTitle;
-    Project1.DefineTemplates.AllChanged;
+    Project1.DefineTemplates.AllChanged(false);
     IncreaseCompilerParseStamp;
 
     if Project1.UseAsDefault then
@@ -5337,25 +5287,24 @@ end;
 
 procedure TMainIDE.SaveEnvironment(Immediately: boolean);
 begin
-  if not Immediately then
+  if Immediately then
   begin
-    if FIDEStarted then
-      fNeedSaveEnvironment:=true;
-    exit;
-  end;
-  fNeedSaveEnvironment:=false;
-  SaveDesktopSettings(EnvironmentOptions);
-  EnvironmentOptions.Save(false);
-  EditorMacroListViewer.SaveGlobalInfo;
-  //debugln('TMainIDE.SaveEnvironment A ',dbgsName(ObjectInspector1.Favorites));
-  if (ObjectInspector1<>nil) and (ObjectInspector1.Favorites<>nil) then
-    SaveOIFavoriteProperties(ObjectInspector1.Favorites);
+    Exclude(FIdleIdeActions, iiaSaveEnvironment);
+    SaveDesktopSettings(EnvironmentOptions);
+    EnvironmentOptions.Save(false);
+    EditorMacroListViewer.SaveGlobalInfo;
+    //debugln('TMainIDE.SaveEnvironment A ',dbgsName(ObjectInspector1.Favorites));
+    if (ObjectInspector1<>nil) and (ObjectInspector1.Favorites<>nil) then
+      SaveOIFavoriteProperties(ObjectInspector1.Favorites);
+  end
+  else if FIDEStarted then
+    Include(FIdleIdeActions, iiaSaveEnvironment);
 end;
 
 procedure TMainIDE.PackageTranslated(APackage: TLazPackage);
 begin
-  if APackage=PackageGraph.SynEditPackage then
-    EditorOpts.TranslateResourceStrings;
+  //if APackage=PackageGraph.SynEditPackage then
+  //  EditorOpts.TranslateResourceStrings;  // ToDo
 end;
 
 function TMainIDE.DoOpenComponent(const UnitFilename: string;
@@ -6130,6 +6079,7 @@ begin
       case DisplayState of
       dsSource: DisplayState:=dsInspector;
       dsForm: DisplayState:=dsInspector2;
+      else
       end;
     end;
   end;
@@ -6539,8 +6489,9 @@ begin
   if not DoResetToolStatus([rfInteractive, rfSuccessOnTrigger]) then exit;
 
   // save old project
-  if AskSaveProject(lisDoYouStillWantToOpenAnotherProject,
-                    lisDiscardChangesAndOpenProject)<>mrOk then exit;
+  if not (ofRevert in Flags)
+  and (AskSaveProject(lisDoYouStillWantToOpenAnotherProject, lisDiscardChangesAndOpenProject)<>mrOk) then
+    exit;
 
   Result:=DoCloseProject;
   if Result=mrAbort then exit;
@@ -7042,13 +6993,10 @@ begin
         end;
       end;
 
-      // leave if no further action is needed
-      if NoBuildNeeded then
-        exit;
-
       // create application bundle
       if Project1.UseAppBundle and (Project1.MainUnitID>=0)
-      and (MainBuildBoss.GetLCLWidgetType=LCLPlatformDirNames[lpCarbon])
+      and ((MainBuildBoss.GetLCLWidgetType=LCLPlatformDirNames[lpCarbon])
+          or (MainBuildBoss.GetLCLWidgetType=LCLPlatformDirNames[lpCocoa]))
       then begin
         Result:=CreateApplicationBundle(TargetExeName, Project1.GetTitleOrName);
         if not (Result in [mrOk,mrIgnore]) then begin
@@ -7061,6 +7009,11 @@ begin
           exit;
         end;
       end;
+
+
+      // leave if no further action is needed
+      if NoBuildNeeded then
+        exit;
 
       if (AReason in Project1.CompilerOptions.CompileReasons)
       and (not (pbfDoNotCompileProject in Flags)) then begin
@@ -7155,7 +7108,7 @@ var
   Filename, Ext: String;
 begin
   Dir:=AppendPathDelim(Dir);
-  Files:=TStringListUTF8.Create;
+  Files:=TStringList.Create;
   try
     CodeToolBoss.DirectoryCachePool.GetListing(Dir,Files,false);
     for i:=0 to Files.Count-1 do begin
@@ -7178,7 +7131,7 @@ end;
 function TMainIDE.DoAbortBuild(Interactive: boolean): TModalResult;
 begin
   Result:=mrOk;
-  if ExternalTools.RunningCount=0 then exit;
+  if ExternalToolsRef.RunningCount=0 then exit;
   // IDE code is currently running a build process
   // we cannot continue, while some IDE code is waiting for the processes
   // => exit this event (no matter if the processes are stopped or not)
@@ -7236,6 +7189,7 @@ var
   DebugClass: TDebuggerClass;
   ARunMode: TRunParamsOptionsMode;
   ReqOpts: TDebugCompilerRequirements;
+  Handled: Boolean;
 begin
   if ToolStatus <> itNone
   then begin
@@ -7249,6 +7203,13 @@ begin
   // Check if this project is runnable
   if Project1=nil then exit(mrCancel);
 
+  // call handler
+  Handled:=false;
+  Result := DoCallRunDebugInit(Handled);
+  if Handled or (Result<>mrOk) then
+    exit;
+
+  // check if project is runnable
   ARunMode := Project1.RunParameterOptions.GetActiveMode;
   if not ( ((Project1.CompilerOptions.ExecutableType=cetProgram) or
             ((ARunMode<>nil) and (ARunMode.HostApplicationFilename<>'')))
@@ -7366,14 +7327,12 @@ begin
     Result:=mrCancel;
     Handled:=false;
     Result := DoCallRunDebug(Handled);
-    if Handled then
+    if Handled or (Result<>mrOk) then
       exit;
   finally
     if Result<>mrOk then
       ToolStatus:=itNone;
   end;
-  if Result<>mrOk then
-    exit;
 
   Result := DebugBoss.StartDebugging;
 
@@ -7384,7 +7343,7 @@ function TMainIDE.DoRunProjectWithoutDebug: TModalResult;
 var
   Process: TProcessUTF8;
   RunCmdLine, RunWorkingDirectory, ExeFile: string;
-  Params: TStringListUTF8;
+  Params: TStringList;
   RunAppBundle, Handled: Boolean;
   ARunMode: TRunParamsOptionsMode;
 begin
@@ -7412,7 +7371,7 @@ begin
     Exit(mrNone);
   end;
 
-  Params:=TStringListUTF8.Create;
+  Params:=TStringList.Create;
   Process := TProcessUTF8.Create(nil);
   try
     RunAppBundle:={$IFDEF Darwin}true{$ELSE}false{$ENDIF};
@@ -7444,7 +7403,8 @@ begin
     Process.CurrentDirectory := RunWorkingDirectory;
 
     if RunAppBundle
-        and FileExistsUTF8(Process.Executable)
+        and (FileExistsUTF8(Process.Executable)
+        or DirectoryExistsUTF8(Process.Executable))
         and FileExistsUTF8('/usr/bin/open') then
     begin
       // run bundle via open
@@ -7452,6 +7412,7 @@ begin
       Process.Executable := '/usr/bin/open';
     end else if not FileIsExecutable(Process.Executable) then
     begin
+      MainBuildBoss.WriteDebug_RunCommandLine;
       if (ARunMode<>nil) and ARunMode.UseLaunchingApplication then
         IDEMessageDialog(lisLaunchingApplicationInvalid,
           Format(lisTheLaunchingApplicationDoesNotExistsOrIsNotExecuta,
@@ -7466,6 +7427,7 @@ begin
 
     if not DirectoryExists(Process.CurrentDirectory) then
     begin
+      MainBuildBoss.WriteDebug_RunCommandLine;
       IDEMessageDialog(lisUnableToRun,
         Format(lisTheWorkingDirectoryDoesNotExistPleaseCheckTheWorki,
                [Process.CurrentDirectory, LineEnding]),
@@ -7527,7 +7489,7 @@ const
       end;
       //DebugLn('Setting CommandLine');
       StartLazProcess.Executable:=ExeName;
-      StartLazProcess.Parameters.Add('--lazarus-pid='+IntToStr(GetProcessID));
+      StartLazProcess.Parameters.Add(StartLazarusPidOpt+IntToStr(GetProcessID));
       StartLazProcess.Parameters.AddStrings(Params);
 
       i:=StartLazProcess.Parameters.Count-1;
@@ -7596,9 +7558,9 @@ procedure TMainIDE.DoExecuteRemoteControl;
     AProjectFilename:='';
     for i:=Files.Count-1 downto 0 do begin
       AProjectFilename:=Files[0];
-      if (CompareFileExt(AProjectFilename,'.lpr',false)=0) then
+      if (CompareFileExt(AProjectFilename,'lpr',true)=0) then
         AProjectFilename:=ChangeFileExt(AProjectFilename,'.lpi');
-      if (CompareFileExt(AProjectFilename,'.lpi',false)=0) then begin
+      if (CompareFileExt(AProjectFilename,'lpi',true)=0) then begin
         // open a project
         Files.Delete(i); // remove from the list
         AProjectFilename:=CleanAndExpandFilename(AProjectFilename);
@@ -7627,7 +7589,7 @@ procedure TMainIDE.DoExecuteRemoteControl;
       for i:=0 to Files.Count-1 do begin
         AFilename:=CleanAndExpandFilename(Files.Strings[i]);
         DebugLn(['Hint: (lazarus) TMainIDE.DoExecuteRemoteControl.OpenFiles AFilename="',AFilename,'"']);
-        if CompareFileExt(AFilename,'.lpk',false)=0 then begin
+        if CompareFileExt(AFilename,'lpk',true)=0 then begin
           if PkgBoss.DoOpenPackageFile(AFilename,[pofAddToRecent],true)=mrAbort
           then
             break;
@@ -7645,7 +7607,7 @@ procedure TMainIDE.DoExecuteRemoteControl;
 
 var
   Filename: String;
-  List: TStringListUTF8;
+  List: TStringList;
   Files: TStrings;
   i: Integer;
   CmdShow: Boolean;
@@ -7654,7 +7616,7 @@ begin
   if FileExistsUTF8(Filename) and (FRemoteControlFileAge<>FileAgeUTF8(Filename))
   then begin
     // the control file exists and has changed
-    List:=TStringListUTF8.Create;
+    List:=TStringList.Create;
     Files:=nil;
     try
       // load and delete the file
@@ -7775,7 +7737,7 @@ begin
 
   if fBuilder=Nil then
     fBuilder:=TLazarusBuilder.Create;
-  if ExternalTools.RunningCount=0 then
+  if ExternalToolsRef.RunningCount=0 then
     IDEMessagesWindow.Clear;
   fBuilder.ProfileChanged:=false;
   OldToolStatus:=ToolStatus;
@@ -7961,7 +7923,7 @@ begin
       exit;
     end;
   end;
-  if ExternalTools.RunningCount=0 then
+  if ExternalToolsRef.RunningCount=0 then
     IDEMessagesWindow.Clear;
   DirectiveList:=TStringList.Create;
   OldToolStatus:=ToolStatus;
@@ -8388,7 +8350,7 @@ begin
   if MainBuildBoss.CompilerOnDiskChanged then
     MainBuildBoss.RescanCompilerDefines(false,false,false,false);
 
-  if (IDEMessagesWindow<>nil) and (ExternalTools.RunningCount=0) then
+  if (IDEMessagesWindow<>nil) and (ExternalToolsRef.RunningCount=0) then
     IDEMessagesWindow.Clear;
 end;
 
@@ -8547,10 +8509,10 @@ begin
   if Screen.GetCurrentModalForm<>nil then exit;
 
   if not Instantaneous then begin
-    FCheckFilesOnDiskNeeded:=true;
+    Include(FIdleIdeActions, iiaCheckFilesOnDisk);
     exit;
   end;
-  FCheckFilesOnDiskNeeded:=false;
+  Exclude(FIdleIdeActions, iiaCheckFilesOnDisk);
 
   CheckFilesOnDiskEnabled:=False;
   AnUnitList:=nil;
@@ -8565,11 +8527,10 @@ begin
         Format(lisTheProjectInformationFileHasChangedOnDisk,[Project1.ProjectInfoFile,LineEnding]),
         mtConfirmation, [mrYes, lisReopenProject,
                          mrIgnore], '') = mrYes
-      then begin
-        DoOpenProjectFile(Project1.ProjectInfoFile,[]);
-      end else begin
+      then
+        DoOpenProjectFile(Project1.ProjectInfoFile,[ofRevert])
+      else
         Project1.IgnoreProjectInfoFileOnDisk;
-      end;
       exit(mrOk);
     end;
 
@@ -8577,23 +8538,24 @@ begin
     PkgBoss.GetPackagesChangedOnDisk(APackageList, True);
     if (AnUnitList=nil) and (APackageList=nil) then exit;
     Result:=ShowDiskDiffsDialog(AnUnitList,APackageList,AIgnoreList);
-    if Result in [mrYes,mrYesToAll] then
-      Result:=mrOk;
 
     // reload units
     if AnUnitList<>nil then begin
       for i:=0 to AnUnitList.Count-1 do begin
         CurUnit:=TUnitInfo(AnUnitList[i]);
-        //DebugLn(['DoCheckFilesOnDisk revert ',CurUnit.Filename,' EditorIndex=',CurUnit.EditorIndex]);
         if (Result=mrOk)
         and (AIgnoreList.IndexOf(CurUnit)<0) then // ignore current
         begin
-          if CurUnit.OpenEditorInfoCount > 0 then begin
+          if CurUnit.OpenEditorInfoCount > 0 then
+          begin
             // Revert one Editor-View, the others follow
             Result:=OpenEditorFile(CurUnit.Filename, CurUnit.OpenEditorInfo[0].PageIndex,
-              CurUnit.OpenEditorInfo[0].WindowID, nil, [ofRevert], True);
-            //DebugLn(['DoCheckFilesOnDisk OpenEditorFile=',Result]);
-          end else if CurUnit.IsMainUnit then begin
+                      CurUnit.OpenEditorInfo[0].WindowID, nil, [ofRevert], True);
+            // Reload the form file in designer if there is one
+            if Assigned(CurUnit.Component) then
+              LoadLFM(CurUnit,[ofOnlyIfExists,ofRevert],[]);
+          end else if CurUnit.IsMainUnit then
+          begin
             Result:=RevertMainUnit;
             //DebugLn(['DoCheckFilesOnDisk RevertMainUnit=',Result]);
           end else
@@ -8635,7 +8597,7 @@ end;
 
 procedure TMainIDE.AbortBuild;
 begin
-  ExternalTools.TerminateAll;
+  ExternalToolList.TerminateAll;
 end;
 
 procedure TMainIDE.UpdateCaption;
@@ -8694,6 +8656,7 @@ begin
       else
         NewCaption := Format(lisRunning, [NewCaption]);
     end;
+  else
   end;
   MainIDEBar.Caption := NewCaption;
   Application.Title := NewTitle;
@@ -8932,7 +8895,7 @@ begin
 
   if (ActiveUnitInfo.Component=nil)
   and (ActiveUnitInfo.Source<>nil) then begin
-    if (CompareFileExt(ActiveUnitInfo.Filename,'.inc',false)=0) then begin
+    if (CompareFileExtQuick(ActiveUnitInfo.Filename,'inc')=0) then begin
       // include file => get unit
       UnitCodeBuf:=CodeToolBoss.GetMainCode(ActiveUnitInfo.Source);
       if (UnitCodeBuf<>nil) and (UnitCodeBuf<>ActiveUnitInfo.Source) then begin
@@ -8946,7 +8909,7 @@ begin
         end;
       end;
     end;
-    if (CompareFileExt(ActiveUnitInfo.Filename,'.lfm',false)=0) then begin
+    if (CompareFileExt(ActiveUnitInfo.Filename,'lfm',true)=0) then begin
       // lfm file => get unit
       aFilename:=GetUnitFileOfLFM(ActiveUnitInfo.Filename);
       if aFilename<>'' then begin
@@ -9233,6 +9196,8 @@ begin
           IDEWindowCreators.ShowForm(SearchResultsView,true);
           SourceEditorManager.ShowActiveWindowOnTop(True);
         end;
+        if IDETabMaster <> nil then
+          IDETabMaster.ShowCode(SrcEdit);
         try
           SrcEdit.BeginUpdate;
           SrcEdit.EditorComponent.LogicalCaretXY:=LogCaretXY;
@@ -9374,7 +9339,7 @@ begin
   NewClassName:=FindLFMClassName(TxtCompStream);
 
   // check if component class is registered
-  ARegComp:=IDEComponentPalette.FindComponent(NewClassName);
+  ARegComp:=IDEComponentPalette.FindRegComponent(NewClassName);
   if ARegComp=nil then begin
     IDEMessageDialog(lisClassNotFound,
       Format(lisClassIsNotARegisteredComponentClassUnableToPaste,[NewClassName,LineEnding]),
@@ -9439,51 +9404,8 @@ procedure TMainIDE.DesignerPersistentDeleted(Sender: TObject; APersistent: TPers
 // important: APersistent was freed, do not access its content, only the pointer
 begin
   if dfDestroyingForm in TDesigner(Sender).Flags then exit;
-  if APersistent=nil then ;
   if ObjectInspector1<>nil then
-    ObjectInspector1.FillComponentList;
-end;
-
-procedure TMainIDE.PropHookPersistentDeleting(APersistent: TPersistent);
-var
-  ActiveForm: TCustomForm;
-  ActiveUnitInfo: TUnitInfo;
-  ActiveSrcEdit: TSourceEditor;
-  OwnerClassName: string;
-  CurDesigner: TDesigner;
-begin
-  if not (APersistent is TComponent) then exit;
-  //DebugLn(['TMainIDE.OnPropHookPersistentDeleting ',dbgsName(APersistent)]);
-  CurDesigner:=TDesigner(FindRootDesigner(TComponent(APersistent)));
-  if CurDesigner=nil then exit;
-
-  if dfDestroyingForm in CurDesigner.Flags then exit;
-
-  ActiveSrcEdit:=nil;
-  if not BeginCodeTool(CurDesigner,ActiveSrcEdit,ActiveUnitInfo,
-                [ctfSwitchToFormSource]) then exit;
-  ActiveForm:=CurDesigner.Form;
-  if ActiveForm=nil then
-    RaiseGDBException('[TMainIDE.OnPropHookPersistentDeleting] Error: TDesigner without a form');
-  // find source for form
-  ActiveUnitInfo:=Project1.UnitWithComponent(CurDesigner.LookupRoot);
-  if ActiveUnitInfo=nil then begin
-    RaiseGDBException('[TMainIDE.OnPropHookPersistentDeleting] Error: form without source');
-  end;
-  if APersistent is TComponent then begin
-    // mark references modified
-    if APersistent is TComponent then
-      MarkUnitsModifiedUsingSubComponent(TComponent(APersistent));
-
-    // remember cursor position
-    SourceEditorManager.AddJumpPointClicked(Self);
-
-    // remove component definition from owner source
-    OwnerClassName:=CurDesigner.LookupRoot.ClassName;
-    //DebugLn(['TMainIDE.OnPropHookPersistentDeleting ',dbgsName(APersistent),' OwnerClassName=',OwnerClassName]);
-    CodeToolBoss.RemovePublishedVariable(ActiveUnitInfo.Source,OwnerClassName,
-                                         TComponent(APersistent).Name,false);
-  end;
+    ObjectInspector1.DeleteCompFromList(APersistent);
 end;
 
 procedure TMainIDE.DesignerModified(Sender: TObject);
@@ -9619,8 +9541,8 @@ begin
     @CodeToolBossGetVirtualDirectoryAlias;
   CodeToolBoss.DefineTree.OnGetVirtualDirectoryDefines:=
     @CodeToolBossGetVirtualDirectoryDefines;
-  CodeToolBoss.DefineTree.OnPrepareTree:=@CodeToolBossPrepareTree;
-  CodeToolBoss.IdentifierList.OnGatherUserIdentifiersToFilteredList := @CodeToolBossGatherUserIdentifiersToFilteredList;
+  CodeToolBoss.IdentifierList.OnGatherUserIdentifiersToFilteredList :=
+    @CodeToolBossGatherUserIdentifiersToFilteredList;
 
   CodeToolBoss.DefineTree.MacroFunctions.AddExtended(
     'PROJECT',nil,@CTMacroFunctionProject);
@@ -9641,8 +9563,6 @@ begin
 
   // the first template is the "use default" flag
   CreateUseDefaultsFlagTemplate;
-
-  MainBuildBoss.SetBuildTargetProject1(true);
 
   // load include file relationships
   AFilename:=AppendPathDelim(GetPrimaryConfigPath)+CodeToolsIncludeLinkFile;
@@ -9665,8 +9585,6 @@ begin
   end;
 
   CodeToolsOpts.AssignGlobalDefineTemplatesToTree(CodeToolBoss.DefineTree);
-
-  CompilerParseStampIncreased:=@CompilerParseStampIncHandler;
 
   {$IFDEF CheckNodeTool}
   // codetools consistency check
@@ -9851,22 +9769,6 @@ begin
   end;
 end;
 
-procedure TMainIDE.CodeToolBossPrepareTree(Sender: TObject);
-begin
-  if FIDECodeToolsDefines=ctdNeedUpdate then begin
-    FIDECodeToolsDefines:=ctdUpdating;
-    if Project1<>nil then
-      Project1.DefineTemplates.AllChanged;
-    PkgBoss.RebuildDefineTemplates;
-    FIDECodeToolsDefines:=ctdReady;
-    //DebugLn('TMainIDE.CodeToolBossPrepareTree CompilerGraphStamp=',dbgs(CompilerGraphStamp));
-    {$IFDEF VerboseAddProjPkg}
-    DebugLn(['TMainIDE.CodeToolBossPrepareTree 1 "',CodeToolBoss.GetUnitPathForDirectory('',true),'"']);
-    DebugLn(['TMainIDE.CodeToolBossPrepareTree 2 "',CodeToolBoss.GetUnitPathForDirectory('',false),'"']);
-    {$ENDIF}
-  end;
-end;
-
 procedure TMainIDE.CodeToolBossGetIndenterExamples(Sender: TObject;
   Code: TCodeBuffer; Step: integer; var CodeBuffers: TFPList;
   var ExpandedFilenames: TStrings);
@@ -9972,16 +9874,6 @@ begin
   if IsJITMethod(Method) then
     DebugLn(['TMainIDE.OnCodeToolBossGetMethodName ',Result,' ',IsJITMethod(Method)]);
   {$ENDIF}
-end;
-
-procedure TMainIDE.CompilerParseStampIncHandler;
-begin
-  if FIDECodeToolsDefines=ctdUpdating then exit;
-  {$IFDEF VerboseAddProjPkg}
-  DebugLn(['TMainIDE.OnCompilerParseStampIncreased ']);
-  {$ENDIF}
-  FIDECodeToolsDefines:=ctdNeedUpdate;
-  CodeToolBoss.DefineTree.ClearCache;
 end;
 
 procedure TMainIDE.CodeToolBossScannerInit(Self: TCodeToolManager; Scanner: TLinkScanner);
@@ -10987,38 +10879,39 @@ begin
 end;
 
 procedure TMainIDE.SrcNotebookEditorActived(Sender: TObject);
+// The editor tab was changed but it may not have focus.
+// It is also changed when a component is dropped on designer form.
 var
-  ActiveUnitInfo: TUnitInfo;
   ASrcEdit: TSourceEditor;
+  UnitInfo: TUnitInfo;
 begin
   ASrcEdit := SourceEditorManager.SenderToEditor(Sender);
   if ASrcEdit=nil then exit;
-
   {$IFDEF VerboseIDEDisplayState}
-  debugln(['TMainIDE.OnSrcNotebookEditorActived']);
+  debugln(['TMainIDE.SrcNotebookEditorActived']);
   {$ENDIF}
-  DisplayState:=dsSource;
-  Project1.UpdateVisibleUnit(ASrcEdit, ASrcEdit.SourceNotebook.WindowID);
-
-  ActiveUnitInfo := Project1.UnitWithEditorComponent(ASrcEdit);
-  if ActiveUnitInfo = nil then Exit;
-  ActiveUnitInfo.SetLastUsedEditor(ASrcEdit);
-
+  UnitInfo := Project1.GetAndUpdateVisibleUnit(ASrcEdit,
+                                               ASrcEdit.SourceNotebook.WindowID);
+  if UnitInfo = nil then Exit;
   UpdateSaveMenuItemsAndButtons(false);
-  MainIDEBar.itmViewToggleFormUnit.Enabled := Assigned(ActiveUnitInfo.Component)
-                                           or (ActiveUnitInfo.ComponentName<>'');
+  MainIDEBar.itmViewToggleFormUnit.Enabled := (UnitInfo.Component<>nil)
+                                           or (UnitInfo.ComponentName<>'');
 end;
 
 procedure TMainIDE.SrcNotebookEditorPlaceBookmark(Sender: TObject; var Mark: TSynEditMark);
+var
+  UnitInfo: TUnitInfo;
 begin
-  Project1.UnitWithEditorComponent(TSourceEditor(Sender)).AddBookmark
-    (Mark.Column, Mark.Line, Mark.BookmarkNumber);
+  UnitInfo := Project1.UnitWithEditorComponent(TSourceEditor(Sender));
+  UnitInfo.AddBookmark(Mark.Column, Mark.Line, Mark.BookmarkNumber);
 end;
 
 procedure TMainIDE.SrcNotebookEditorClearBookmark(Sender: TObject; var Mark: TSynEditMark);
+var
+  UnitInfo: TUnitInfo;
 begin
-  Project1.UnitWithEditorComponent(TSourceEditor(Sender)).DeleteBookmark
-    (Mark.BookmarkNumber);
+  UnitInfo := Project1.UnitWithEditorComponent(TSourceEditor(Sender));
+  UnitInfo.DeleteBookmark(Mark.BookmarkNumber);
 end;
 
 procedure TMainIDE.SrcNotebookEditorClearBookmarkId(Sender: TObject;
@@ -11389,34 +11282,42 @@ procedure TSrcNotebookHintCallback.AddDebuggerResult(Sender: TObject;
 var
   Opts: TDBGEvaluateFlags;
 begin
-  if not ASuccess then begin
-    FDebugResText := '???';
-  end
-  else begin
-    // deference a pointer - maybe it is a class
-    if ASuccess and Assigned(ResultDBGType) and (ResultDBGType.Kind in [skPointer]) and
-       not( StringCase(Lowercase(ResultDBGType.TypeName), ['char', 'character', 'ansistring']) in [0..2] )
-    then
-    begin
-      if ResultDBGType.Value.AsPointer <> nil then
+  try
+    if not ASuccess then begin
+      FDebugResText := '???';
+    end
+    else begin
+      // deference a pointer - maybe it is a class
+      if ASuccess and Assigned(ResultDBGType) and (ResultDBGType.Kind in [skPointer]) and
+         not( StringCase(Lowercase(ResultDBGType.TypeName), ['char', 'character', 'ansistring']) in [0..2] )
+      then
       begin
-        Opts := [];
-        if EditorOpts.DbgHintAutoTypeCastClass
-        then Opts := [defClassAutoCast];
+        if ResultDBGType.Value.AsPointer <> nil then
+        begin
+          Opts := [];
+          if EditorOpts.DbgHintAutoTypeCastClass
+          then Opts := [defClassAutoCast];
 
-        FDebugResText := ResultText;
+          FDebugResText := ResultText;
 
-        if DebugBoss.Evaluate('('+FExpression + ')^', @AddDebuggerResultDeref, Opts) then begin
-          FreeAndNil(ResultDBGType);
-          exit;
+          if DebugBoss.Evaluate('('+FExpression + ')^', @AddDebuggerResultDeref, Opts) then begin
+            FreeAndNil(ResultDBGType);
+            exit;
+          end;
         end;
-      end;
-    end else
-      FDebugResText := DebugBoss.FormatValue(ResultDBGType, ResultText);
+      end else
+        FDebugResText := DebugBoss.FormatValue(ResultDBGType, ResultText);
 
-    FreeAndNil(ResultDBGType);
+      FreeAndNil(ResultDBGType);
+    end;
+    ShowHint;
+  except
+    on E: Exception do
+    try
+      IDEMessageDialog('Error',E.Message,mtError,[mbCancel]);
+    except
+    end;
   end;
-  ShowHint;
 end;
 
 procedure TSrcNotebookHintCallback.AddDebuggerResultDeref(Sender: TObject;
@@ -11468,7 +11369,7 @@ var
   AtomRect: TRect;
   DebugHint: TSrcNotebookHintCallback;
 begin
-  //DebugLn(['TMainIDE.OnSrcNotebookShowHintForSource START']);
+  //DebugLn(['TMainIDE.SrcNotebookShowHintForSource START']);
   if (SrcEdit=nil) then exit;
 
   if not BeginCodeTool(SrcEdit, ActiveUnitInfo,
@@ -11478,18 +11379,18 @@ begin
   SmartHintStr := '';
   {$IFDEF IDE_DEBUG}
   debugln('');
-  debugln('[TMainIDE.OnSrcNotebookShowHintForSource] ************ ',ActiveUnitInfo.Source.Filename,' X=',CaretPos.X,' Y=',CaretPos.Y);
+  debugln('[TMainIDE.SrcNotebookShowHintForSource] ************ ',ActiveUnitInfo.Source.Filename,' X=',CaretPos.X,' Y=',CaretPos.Y);
   {$ENDIF}
   HasHint:=false;
   if EditorOpts.AutoToolTipSymbTools then
   begin
-    {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('TMainIDE.OnSrcNotebookShowHintForSource A');{$ENDIF}
+    {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('TMainIDE.SrcNotebookShowHintForSource A');{$ENDIF}
     if TIDEHelpManager(HelpBoss).GetHintForSourcePosition(ActiveUnitInfo.Filename,
                              CaretPos,BaseURL,SmartHintStr,
                              [{$IFDEF EnableFocusHint}ihmchAddFocusHint{$ENDIF}])=shrSuccess
     then
       HasHint:=true;
-    {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('TMainIDE.OnSrcNotebookShowHintForSource B');{$ENDIF}
+    {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('TMainIDE.SrcNotebookShowHintForSource B');{$ENDIF}
   end;
   if (ToolStatus = itDebugger) and EditorOpts.AutoToolTipExprEval then
   begin
@@ -11501,7 +11402,7 @@ begin
     end
     else
       Expression := SrcEdit.GetOperandFromCaret(CaretPos);
-    //DebugLn(['TMainIDE.OnSrcNotebookShowHintForSource Expression="',Expression,'"']);
+    //DebugLn(['TMainIDE.SrcNotebookShowHintForSource Expression="',Expression,'"']);
 
     if Expression <> '' then begin
       Opts := [];
@@ -11532,7 +11433,7 @@ end;
 procedure TMainIDE.SrcNoteBookActivated(Sender: TObject);
 begin
   {$IFDEF VerboseIDEDisplayState}
-  debugln(['TMainIDE.OnSrcNoteBookActivated']);
+  debugln(['TMainIDE.SrcNoteBookActivated']);
   {$ENDIF}
   DisplayState:=dsSource;
 end;
@@ -11542,7 +11443,7 @@ begin
   {$IFDEF VerboseIDEDisplayState}
   if DisplayState<>dsForm then begin
     debugln(['TMainIDE.DesignerActivated ']);
-    DumpStack;
+    //DumpStack;
   end;
   {$ENDIF}
   DisplayState:= dsForm;
@@ -11551,11 +11452,11 @@ begin
   and (TheControlSelection.SelectionForm <> LastFormActivated) then
     TheControlSelection.AssignPersistent(LastFormActivated);
   {$IFDEF VerboseComponentPalette}
-  DebugLn('***');
   DebugLn(['** TMainIDE.DesignerActivated: Calling UpdateIDEComponentPalette(true)',
            ', IDEStarted=', FIDEStarted, ' **']);
   {$ENDIF}
-  MainIDEBar.UpdateIDEComponentPalette(true);
+  if FIDEStarted then
+    MainIDEBar.UpdateIDEComponentPalette(true);
 end;
 
 procedure TMainIDE.DesignerCloseQuery(Sender: TObject);
@@ -11649,7 +11550,7 @@ var
       raise Exception.Create(Format(lisComponentNameIsKeyword, [AName]));
 
     // check if registered component class
-    RegComp:=IDEComponentPalette.FindComponent(AName);
+    RegComp:=IDEComponentPalette.FindRegComponent(AName);
     if RegComp<>nil then begin
       s:=Format(lisThereIsAlreadyAComponentClassWithTheName, [RegComp.
         ComponentClass.ClassName]);
@@ -11964,9 +11865,8 @@ begin
       XMLConfig.Free;
     end;
   except
-    on E: Exception do begin
+    on E: Exception do
       IDEMessageDialog('Error',E.Message,mtError,[mbCancel]);
-    end;
   end;
 end;
 
@@ -12001,7 +11901,7 @@ var
 begin
   {$IFDEF VerboseJumpHistory}
   debugln('');
-  debugln('[TMainIDE.OnSrcNoteBookAddJumpPoint] A Line=',ACaretXY.Y,' Col=',ACaretXY.X,' DeleteForwardHistory=',DeleteForwardHistory,' Count=',Project1.JumpHistory.Count,',HistoryIndex=',Project1.JumpHistory.HistoryIndex);
+  debugln('[TMainIDE.SrcNoteBookAddJumpPoint] A Line=',ACaretXY.Y,' Col=',ACaretXY.X,' DeleteForwardHistory=',DeleteForwardHistory,' Count=',Project1.JumpHistory.Count,',HistoryIndex=',Project1.JumpHistory.HistoryIndex);
   {$ENDIF}
   ActiveUnitInfo:=Project1.UnitWithEditorComponent(AEditor);
   if (ActiveUnitInfo=nil) then exit;
@@ -12010,15 +11910,14 @@ begin
   {$IFDEF VerboseJumpHistory}
   //Project1.JumpHistory.WriteDebugReport;
   {$ENDIF}
-  Project1.JumpHistory.InsertSmart(Project1.JumpHistory.HistoryIndex+1,
-                                   NewJumpPoint);
+  Project1.JumpHistory.InsertSmart(Project1.JumpHistory.HistoryIndex+1, NewJumpPoint);
   {$IFDEF VerboseJumpHistory}
-  debugln('[TMainIDE.OnSrcNoteBookAddJumpPoint] B INSERTED');
+  debugln('[TMainIDE.SrcNoteBookAddJumpPoint] B INSERTED');
   Project1.JumpHistory.WriteDebugReport;
   {$ENDIF}
   if DeleteForwardHistory then Project1.JumpHistory.DeleteForwardHistory;
   {$IFDEF VerboseJumpHistory}
-  debugln('[TMainIDE.OnSrcNoteBookAddJumpPoint] END Line=',ACaretXY.Y,',DeleteForwardHistory=',DeleteForwardHistory,' Count=',Project1.JumpHistory.Count,',HistoryIndex=',Project1.JumpHistory.HistoryIndex);
+  debugln('[TMainIDE.SrcNoteBookAddJumpPoint] END Line=',ACaretXY.Y,',DeleteForwardHistory=',DeleteForwardHistory,' Count=',Project1.JumpHistory.Count,',HistoryIndex=',Project1.JumpHistory.HistoryIndex);
   Project1.JumpHistory.WriteDebugReport;
   {$ENDIF}
 end;
@@ -12063,7 +11962,7 @@ begin
 
   {$IFDEF VerboseJumpHistory}
   debugln('');
-  debugln('[TMainIDE.OnSrcNotebookJumpToHistoryPoint] A Back=',JumpAction=jhaBack);
+  debugln('[TMainIDE.SrcNotebookJumpToHistoryPoint] A Back=',JumpAction=jhaBack);
   JumpHistory.WriteDebugReport;
   {$ENDIF}
 
@@ -12105,6 +12004,7 @@ begin
 //    jhaBack : if (CursorPoint<>nil) and (JumpHistory[DestIndex].IsSimilar(CursorPoint))
 //        then dec(DestIndex);
     jhaViewWindow : DestIndex := JumpHistoryViewWin.SelectedIndex;
+  else
   end;
 
   while (DestIndex>=0) and (DestIndex<JumpHistory.Count) do begin
@@ -12123,7 +12023,7 @@ begin
       if AnEditorInfo <> nil then
         DestEditor:=TSourceEditor(AnEditorInfo.EditorComponent);
       {$IFDEF VerboseJumpHistory}
-      debugln('[TMainIDE.OnSrcNotebookJumpToHistoryPoint] Result Line=',NewCaretXY.Y,' Col=',NewCaretXY.X);
+      debugln('[TMainIDE.SrcNotebookJumpToHistoryPoint] Result Line=',NewCaretXY.Y,' Col=',NewCaretXY.X);
       {$ENDIF}
       break;
     end;
@@ -12137,7 +12037,7 @@ begin
   CursorPoint.Free;
 
   {$IFDEF VerboseJumpHistory}
-  debugln('[TMainIDE.OnSrcNotebookJumpToHistoryPoint] END Count=',JumpHistory.Count,',HistoryIndex=',JumpHistory.HistoryIndex);
+  debugln('[TMainIDE.SrcNotebookJumpToHistoryPoint] END Count=',JumpHistory.Count,',HistoryIndex=',JumpHistory.HistoryIndex);
   JumpHistory.WriteDebugReport;
   debugln('');
   {$ENDIF}
@@ -12154,13 +12054,13 @@ begin
   SrcEdit:=SourceEditorManager.SenderToEditor(Sender);
   if SrcEdit=nil then begin
     {$IFDEF VerboseFindDeclarationFail}
-    debugln(['TMainIDE.OnSrcNoteBookMouseLink SrcEdit=nil']);
+    debugln(['TMainIDE.SrcNoteBookMouseLink SrcEdit=nil']);
     {$ENDIF}
     exit;
   end;
   if not BeginCodeTool(SrcEdit,ActiveUnitInfo,[]) then begin
     {$IFDEF VerboseFindDeclarationFail}
-    debugln(['TMainIDE.OnSrcNoteBookMouseLink BeginCodeTool failed ',SrcEdit.FileName,' X=',X,' Y=',Y]);
+    debugln(['TMainIDE.SrcNoteBookMouseLink BeginCodeTool failed ',SrcEdit.FileName,' X=',X,' Y=',Y]);
     {$ENDIF}
     exit;
   end;
@@ -12276,7 +12176,7 @@ end;
 
 procedure TMainIDE.HandleApplicationUserInput(Sender: TObject; Msg: Cardinal);
 begin
-  fUserInputSinceLastIdle:=true;
+  Include(FIdleIdeActions, iiaUserInputSinceLastIdle);
   if ToolStatus=itCodeTools then
     // abort codetools
     ToolStatus:=itCodeToolAborting;
@@ -12285,22 +12185,28 @@ end;
 procedure TMainIDE.HandleApplicationIdle(Sender: TObject; var Done: Boolean);
 var
   SrcEdit: TSourceEditor;
+  Ancestor: TComponent;
   AnUnitInfo: TUnitInfo;
   AnIDesigner: TIDesigner;
   HasResources: Boolean;
   FileItem: PStringToStringItem;
 begin
-  if FNeedUpdateHighlighters then begin
-    {$IFDEF VerboseIdle}
-    debugln(['TMainIDE.OnApplicationIdle FNeedUpdateHighlighters']);
-    {$ENDIF}
-    UpdateHighlighters(true);
-  end;
-  if fNeedSaveEnvironment then
-    SaveEnvironment(true);
-
   GetDefaultProcessList.FreeStoppedProcesses;
   if (SplashForm<>nil) then FreeThenNil(SplashForm);
+
+  if Assigned(FComponentAddedDesigner) then
+  begin
+    {$IFDEF VerboseIdle}
+    DebugLn(['TMainIDE.HandleApplicationIdle FComponentAddedDesigner']);
+    {$ENDIF}
+    // Remember cursor position
+    SourceEditorManager.AddJumpPointClicked(Self);
+    // Add component definitions to form's source code
+    Ancestor:=GetAncestorLookupRoot(FComponentAddedUnit);
+    CodeToolBoss.CompleteComponent(FComponentAddedUnit.Source,
+                                   FComponentAddedDesigner.LookupRoot, Ancestor);
+    FComponentAddedDesigner:=nil;
+  end;
 
   if Assigned(FDesignerToBeFreed) then begin
     for FileItem in FDesignerToBeFreed do begin
@@ -12312,12 +12218,38 @@ begin
     end;
     FreeAndNil(FDesignerToBeFreed);
   end;
-  if FUserInputSinceLastIdle then
+
+  if (FRemoteControlTimer=nil) and EnableRemoteControl then begin
+    {$IFDEF VerboseIdle}
+    debugln(['TMainIDE.HandleApplicationIdle EnableRemoteControl']);
+    {$ENDIF}
+    SetupRemoteControl;
+  end;
+
+  if Screen.GetCurrentModalForm=nil then begin
+    {$IFDEF VerboseIdle}
+    debugln(['TMainIDE.HandleApplicationIdle Screen.GetCurrentModalForm']);
+    {$ENDIF}
+    PkgBoss.OpenHiddenModifiedPackages;
+  end;
+
+  // FIdleIdeActions flags
+
+  if iiaUpdateHighlighters in FIdleIdeActions then begin
+    {$IFDEF VerboseIdle}
+    debugln(['TMainIDE.HandleApplicationIdle UpdateHighlighters']);
+    {$ENDIF}
+    UpdateHighlighters(true);
+  end;
+
+  if iiaSaveEnvironment in FIdleIdeActions then
+    SaveEnvironment(true);
+
+  if iiaUserInputSinceLastIdle in FIdleIdeActions then
   begin
     {$IFDEF VerboseIdle}
-    debugln(['TMainIDE.OnApplicationIdle FUserInputSinceLastIdle']);
+    debugln(['TMainIDE.HandleApplicationIdle UserInputSinceLastIdle']);
     {$ENDIF}
-    FUserInputSinceLastIdle:=false;
     FormEditor1.CheckDesignerPositions;
     FormEditor1.PaintAllDesignerItems;
     GetCurrentUnit(SrcEdit,AnUnitInfo);
@@ -12346,28 +12278,26 @@ begin
       DebugBoss.UpdateButtonsAndMenuItems;
     end;
   end;
-  if FCheckFilesOnDiskNeeded then begin
+
+  if iiaCheckFilesOnDisk in FIdleIdeActions then begin
     {$IFDEF VerboseIdle}
-    debugln(['TMainIDE.OnApplicationIdle FCheckFilesOnDiskNeeded']);
+    debugln(['TMainIDE.HandleApplicationIdle CheckFilesOnDisk']);
     {$ENDIF}
     DoCheckFilesOnDisk(true);
   end;
-  if (FRemoteControlTimer=nil) and EnableRemoteControl then begin
+
+  if iiaUpdateDefineTemplates in FIdleIdeActions then begin
     {$IFDEF VerboseIdle}
-    debugln(['TMainIDE.OnApplicationIdle EnableRemoteControl']);
+    debugln(['TMainIDE.HandleApplicationIdle UpdateDefineTemplates']);
     {$ENDIF}
-    SetupRemoteControl;
+    PackageGraph.RebuildDefineTemplates;
   end;
-  if Screen.GetCurrentModalForm=nil then begin
-    {$IFDEF VerboseIdle}
-    debugln(['TMainIDE.OnApplicationIdle Screen.GetCurrentModalForm']);
-    {$ENDIF}
-    PkgBoss.OpenHiddenModifiedPackages;
-  end;
-  if FRestartWanted then begin
-    FRestartWanted := False; { Avoid loop if restart cancelled }
+
+  if iiaRestartWanted in FIdleIdeActions then begin
+    Exclude(FIdleIdeActions, iiaRestartWanted); // Avoid loop if restart cancelled
     DoRestart;
   end;
+  FIdleIdeActions := [];
 end;
 
 procedure TMainIDE.HandleApplicationDeActivate(Sender: TObject);
@@ -12401,9 +12331,9 @@ var
   aForm: TCustomForm;
   aControl: TControl;
 begin
-  //DebugLn('TMainIDE.OnApplicationKeyDown ',dbgs(Key),' ',dbgs(Shift));
+  //DebugLn('TMainIDE.HandleApplicationKeyDown ',dbgs(Key),' ',dbgs(Shift));
   Command := EditorOpts.KeyMap.TranslateKey(Key,Shift,nil);
-  //debugln(['TMainIDE.OnApplicationKeyDown ',dbgs(Command),' ',DbgSName(Screen.GetCurrentModalForm)]);
+  //debugln(['TMainIDE.HandleApplicationKeyDown ',dbgs(Command),' ',DbgSName(Screen.GetCurrentModalForm)]);
   if Command=ecEditContextHelp then begin
     // show context help editor
     Key:=VK_UNKNOWN;
@@ -12466,10 +12396,11 @@ begin
     Exit;
   LOwner := LastControl.Owner;
   if LOwner is TOICustomPropertyGrid then
-  case DisplayState of
+    case DisplayState of
     dsSource: DisplayState:=dsInspector;
     dsForm: DisplayState:=dsInspector2;
-  end;
+    else
+    end;
 end;
 
 procedure TMainIDE.HandleScreenRemoveForm(Sender: TObject; AForm: TCustomForm);
@@ -12516,6 +12447,7 @@ begin
   case DisplayState of
     dsSource: DisplayState := dsInspector;
     dsForm: DisplayState := dsInspector2;
+  else
   end;
 end;
 
@@ -12616,7 +12548,7 @@ begin
   ActiveSourceEditor:=nil;
   BeginCodeTool(ActiveSourceEditor,ActiveUnitInfo,[]);
   OkToAdd:=True;
-  if FilenameIsPascalUnit(AnUnitInfo.Filename) then begin
+  if FilenameHasPascalExt(AnUnitInfo.Filename) then begin
     OkToAdd:=CheckDirIsInSearchPath(AnUnitInfo,False);
     if (pfMainUnitHasUsesSectionForAllUnits in Project1.Flags) then begin
       AnUnitInfo.ReadUnitNameFromSource(false);
@@ -12633,7 +12565,7 @@ begin
       end;
     end;
   end
-  else if CompareFileExt(AnUnitInfo.Filename,'inc',false)=0 then
+  else if CompareFileExtQuick(AnUnitInfo.Filename,'inc')=0 then
     OkToAdd:=CheckDirIsInSearchPath(AnUnitInfo,True);
   if OkToAdd then
     ;
@@ -12667,11 +12599,11 @@ end;
 procedure TMainIDE.FPCMsgFilePoolLoadFile(aFilename: string; out s: string);
 // Note: called by any thread
 var
-  fs: TFileStreamUTF8;
+  fs: TFileStream;
   Encoding: String;
 begin
   s:='';
-  fs := TFileStreamUTF8.Create(aFilename, fmOpenRead or fmShareDenyNone);
+  fs := TFileStream.Create(aFilename, fmOpenRead or fmShareDenyNone);
   try
     SetLength(s,fs.Size);
     if s<>'' then
@@ -12783,7 +12715,7 @@ begin
     Result:=FormEditor1.GetDesignerForm(AnUnitInfo.Component);
   if ((Result=nil) or (Result.Designer=nil)) and LoadForm
   and FilenameIsPascalSource(AnUnitInfo.Filename) then begin
-    //DebugLn(['TMainIDE.GetFormOfSource ',AnUnitInfo.Filename,' ',dbgsName(AnUnitInfo.Component)]);
+    //DebugLn(['TMainIDE.GetDesignerFormOfSource ',AnUnitInfo.Filename,' ',dbgsName(AnUnitInfo.Component)]);
     LoadLFM(AnUnitInfo,[],[]);
   end;
   if (Result=nil) and (AnUnitInfo.Component<>nil) then
@@ -12819,8 +12751,7 @@ begin
   Result:='';
 end;
 
-function TMainIDE.GetProjectFileWithRootComponent(AComponent: TComponent
-  ): TLazProjectFile;
+function TMainIDE.GetProjectFileWithRootComponent(AComponent: TComponent): TLazProjectFile;
 var
   AnUnitInfo: TUnitInfo;
 begin
@@ -12861,7 +12792,7 @@ begin
   if not BeginCodeTool(ActiveSrcEdit,ActiveUnitInfo,[ctfSwitchToFormSource]) then
     Exit(False);
   {$IFDEF VerboseMethodPropEdit}
-  debugln(['TMainIDE.PropHookGetCompatibleMethods ',ExtractFilename(ActiveUnitInfo.Filename),' Component=',ActiveUnitInfo.Component.ClassName,' MethodName="',AMethodName,'"']);
+  debugln(['TMainIDE.PropHookMethodExists ',ExtractFilename(ActiveUnitInfo.Filename),' Component=',ActiveUnitInfo.Component.ClassName,' MethodName="',AMethodName,'"']);
   {$ENDIF}
   Result := CodeToolBoss.PublishedMethodExists(ActiveUnitInfo.Source,
                         ActiveUnitInfo.Component.ClassName, AMethodName, TypeData,
@@ -13006,12 +12937,12 @@ begin
     exit;
   {$IFDEF VerboseOnPropHookCreateMethod}
   debugln('');
-  debugln('[TMainIDE.OnPropHookCreateMethod] ************ ',AMethodName);
+  debugln('[TMainIDE.PropHookCreateMethod] ************ ',AMethodName);
   DebugLn(['  Persistent=',dbgsName(APersistent),' Unit=',GetClassUnitName(APersistent.ClassType),' Path=',APropertyPath]);
   {$ENDIF}
   if ActiveUnitInfo.Component=nil then begin
     {$IFDEF VerboseOnPropHookCreateMethod}
-    debugln(['TMainIDE.OnPropHookCreateMethod failed ActiveUnitInfo.Component=nil']);
+    debugln(['TMainIDE.PropHookCreateMethod failed ActiveUnitInfo.Component=nil']);
     {$ENDIF}
   end;
 
@@ -13038,14 +12969,14 @@ begin
   try
     // create published method in active unit
     {$IFDEF VerboseOnPropHookCreateMethod}
-    debugln(['TMainIDE.OnPropHookCreateMethod CreatePublishedMethod ',ActiveUnitInfo.Source.Filename,' LookupRoot=',ActiveUnitInfo.Component.ClassName,' ShortMethodName="',ShortMethodName,'" PropertyUnit=',GetClassUnitName(APersistent.ClassType),' APropertyPath="',APropertyPath,'" CallInherited=',InheritedMethodPath,' AddOverride=',AddOverride]);
+    debugln(['TMainIDE.PropHookCreateMethod CreatePublishedMethod ',ActiveUnitInfo.Source.Filename,' LookupRoot=',ActiveUnitInfo.Component.ClassName,' ShortMethodName="',ShortMethodName,'" PropertyUnit=',GetClassUnitName(APersistent.ClassType),' APropertyPath="',APropertyPath,'" CallInherited=',InheritedMethodPath,' AddOverride=',AddOverride]);
     {$ENDIF}
     r:=CodeToolBoss.CreatePublishedMethod(ActiveUnitInfo.Source,
         ActiveUnitInfo.Component.ClassName,ShortMethodName,
         ATypeInfo,UseRTTIForMethods,GetClassUnitName(APersistent.ClassType),
         APropertyPath,InheritedMethodPath,AddOverride);
     {$IFDEF VerboseOnPropHookCreateMethod}
-    debugln(['[TMainIDE.OnPropHookCreateMethod] ************ ',dbgs(r),' ShortMethodName="',ShortMethodName,'"']);
+    debugln(['[TMainIDE.PropHookCreateMethod] ************ ',dbgs(r),' ShortMethodName="',ShortMethodName,'"']);
     {$ENDIF}
     ApplyCodeToolChanges;
     if r then begin
@@ -13061,14 +12992,14 @@ begin
         except
           on E: Exception do begin
             {$IFDEF VerboseOnPropHookCreateMethod}
-            debugln(['[TMainIDE.OnPropHookCreateMethod] syntax error: searched for ',ActiveUnitInfo.Component.ClassName+'.'+ShortMethodName,' Error="',E.Message,'"']);
+            debugln(['[TMainIDE.PropHookCreateMethod] syntax error: searched for ',ActiveUnitInfo.Component.ClassName+'.'+ShortMethodName,' Error="',E.Message,'"']);
             {$ENDIF}
             CodeToolBoss.HandleException(E);
           end;
         end;
         if (Ctx.Node=nil) or (Ctx.Node.Desc<>ctnProcedure) then begin
           {$IFDEF VerboseOnPropHookCreateMethod}
-          debugln(['[TMainIDE.OnPropHookCreateMethod] damn, I lost the method: ',ActiveUnitInfo.Component.ClassName+'.'+ShortMethodName,' Ctx=',FindContextToString(Ctx)]);
+          debugln(['[TMainIDE.PropHookCreateMethod] damn, I lost the method: ',ActiveUnitInfo.Component.ClassName+'.'+ShortMethodName,' Ctx=',FindContextToString(Ctx)]);
           {$ENDIF}
           DoJumpToCodeToolBossError;
           raise Exception.Create('source method not found: '+ActiveUnitInfo.Component.ClassName+'.'+ShortMethodName);
@@ -13078,14 +13009,14 @@ begin
           Ctx.Node:=Ctx.Node.Parent;
         MethodClassName:=Ctx.Tool.ExtractClassName(Ctx.Node,false,false);
         {$IFDEF VerboseOnPropHookCreateMethod}
-        debugln(['[TMainIDE.OnPropHookCreateMethod] found method source in class MethodClassName, searching JITcomponent ...']);
+        debugln(['[TMainIDE.PropHookCreateMethod] found method source in class MethodClassName, searching JITcomponent ...']);
         {$ENDIF}
         // find nearest JIT component
         while CompareText(MethodComponent.ClassName,MethodClassName)<>0 do begin
           if not MethodComponent.ClassParent.InheritsFrom(TComponent) then break;
           AncestorComponent:=FormEditor1.FindJITComponentByClass(TComponentClass(MethodComponent.ClassParent));
           {$IFDEF VerboseOnPropHookCreateMethod}
-          debugln(['[TMainIDE.OnPropHookCreateMethod] MethodComponent.ClassParent=',MethodComponent.ClassParent.ClassName,' JITcomponent=',DbgSName(AncestorComponent)]);
+          debugln(['[TMainIDE.PropHookCreateMethod] MethodComponent.ClassParent=',MethodComponent.ClassParent.ClassName,' JITcomponent=',DbgSName(AncestorComponent)]);
           {$ENDIF}
           if AncestorComponent=nil then break;
           MethodComponent:=AncestorComponent;
@@ -13097,7 +13028,7 @@ begin
       debugln(['TMainIDE.PropHookCreateMethod JITClass=',TJITMethod(Result.Data).TheClass.ClassName]);
       {$ENDIF}
     end else begin
-      DebugLn(['Error: (lazarus) TMainIDE.OnPropHookCreateMethod failed adding method "'+ShortMethodName+'" to source']);
+      DebugLn(['Error: (lazarus) TMainIDE.PropHookCreateMethod failed adding method "'+ShortMethodName+'" to source']);
       DoJumpToCodeToolBossError;
       raise Exception.Create(lisUnableToCreateNewMethod+' '+lisPleaseFixTheErrorInTheMessageWindow);
     end;
@@ -13139,7 +13070,7 @@ begin
     CurMethodName:=AMethodName;
   end;
   {$IFDEF VerboseMethodPropEdit}
-  DebugLn('[TMainIDE.OnPropHookShowMethod] MethodName=',AMethodName,', ClassName=',AClassName,
+  DebugLn('[TMainIDE.PropHookShowMethod] MethodName=',AMethodName,', ClassName=',AClassName,
           ', CurMethodName=',CurMethodName,', ActiveUnit=',ExtractFilename(ActiveUnitInfo.Filename));
   {$ENDIF}
   if CodeToolBoss.JumpToPublishedMethodBody(ActiveUnitInfo.Source,
@@ -13148,7 +13079,7 @@ begin
     DoJumpToCodePosition(ActiveSrcEdit, ActiveUnitInfo,
       NewSource, NewX, NewY, NewTopLine, BlockTopLine, BlockBottomLine, [jfAddJumpPoint, jfFocusEditor]);
   end else begin
-    DebugLn(['Error: (lazarus) TMainIDE.OnPropHookShowMethod failed finding the method in code']);
+    DebugLn(['Error: (lazarus) TMainIDE.PropHookShowMethod failed finding the method in code']);
     DoJumpToCodeToolBossError;
     raise Exception.Create(lisUnableToShowMethod+' '+lisPleaseFixTheErrorInTheMessageWindow);
   end;
@@ -13206,7 +13137,7 @@ begin
   if not BeginCodeTool(ActiveSrcEdit,ActiveUnitInfo,[ctfSwitchToFormSource])
   then exit;
   {$IFDEF VerboseMethodPropEdit}
-  debugln(['TMainIDE.PropHookShowMethod CurName="',CurName,'" NewName="',NewName,'"']);
+  debugln(['TMainIDE.PropHookRenameMethod CurName="',CurName,'" NewName="',NewName,'"']);
   {$ENDIF}
   OldChange:=OpenEditorsOnCodeToolChange;
   OpenEditorsOnCodeToolChange:=true;
@@ -13215,7 +13146,7 @@ begin
     BossResult:=CodeToolBoss.RenamePublishedMethod(ActiveUnitInfo.Source,
                             ActiveUnitInfo.Component.ClassName,CurName,NewName);
     {$IFDEF VerboseMethodPropEdit}
-    debugln(['TMainIDE.PropHookShowMethod CurName="',CurName,'" NewName="',NewName,'" Result=',BossResult]);
+    debugln(['TMainIDE.PropHookRenameMethod CurName="',CurName,'" NewName="',NewName,'" Result=',BossResult]);
     {$ENDIF}
     ApplyCodeToolChanges;
     if BossResult then begin
@@ -13258,7 +13189,7 @@ begin
       mtError,[mbCancel]);
     {$IFDEF VerboseComponentPalette}
     DebugLn('***');
-    DebugLn('** TMainIDE.OnPropHookBeforeAddPersistent: Calling UpdateIDEComponentPalette(false) **');
+    DebugLn('** TMainIDE.PropHookBeforeAddPersistent: Calling UpdateIDEComponentPalette(false) **');
     {$ENDIF}
     // make sure the component palette shows only the available components
     MainIDEBar.UpdateIDEComponentPalette(false);
@@ -13291,100 +13222,106 @@ procedure TMainIDE.PropHookModified(Sender: TObject; PropName: ShortString);
 begin
   // ToDo: Should designer be marked as modified with PropName?
   if ObjectInspector1=Nil then Exit;
-  if PropName='' then
-    // Item may be added or deleted or whatever.
-    ObjectInspector1.FillComponentList
+  if PropName='' then begin
+    DebugLn('TMainIDE.PropHookModified: Component tree refilled.');
+    // Something changed in component structure. Must rebuild the tree.
+    ObjectInspector1.FillComponentList(True);
+  end
   else
     // Any change of property can cause a change in display name.
     ObjectInspector1.UpdateComponentValues;
   ObjectInspector1.RefreshPropertyValues;
 end;
 
-{-------------------------------------------------------------------------------
-  procedure TMainIDE.PropHookPersistentAdded(APersistent: TPersistent;
-    Select: boolean);
-
-  This handler is called whenever a new component was added to a designed form
-  and should be added to form source
--------------------------------------------------------------------------------}
 procedure TMainIDE.PropHookPersistentAdded(APersistent: TPersistent; Select: boolean);
+// This handler is called whenever a new component was added to a designed form
+// and should be added to form source
 var
-  RegComp: TRegisteredComponent;
-  ADesigner: TDesigner;
   AComponent: TComponent;
   ActiveSrcEdit: TSourceEditor;
-  ActiveUnitInfo: TUnitInfo;
-  Ancestor: TComponent;
-  ComponentClassNames: TStringList;
-  ClassUnitInfo: TUnitInfo;
-  i: Integer;
+  ComponentClasses: TClassList;
 begin
-  if ConsoleVerbosity>0 then
-    DebugLn('Hint: (lazarus) TMainIDE.OnPropHookPersistentAdded A ',dbgsName(APersistent));
-  ADesigner:=nil;
+  //DebugLn('Hint: (lazarus) TMainIDE.PropHookPersistentAdded A ',dbgsName(APersistent));
   if APersistent is TComponent then
-    AComponent:=TComponent(APersistent)
-  else
-    AComponent:=nil;
-  RegComp:=IDEComponentPalette.FindComponent(APersistent.ClassName);
-  if (RegComp=nil) and (AComponent<>nil) then begin
-    ClassUnitInfo:=Project1.UnitWithComponentClass(TComponentClass(APersistent.ClassType));
-    if ClassUnitInfo=nil then begin
-      DebugLn('Error: (lazarus) TMainIDE.OnPropHookPersistentAdded ',APersistent.ClassName,
-              ' not registered');
+  begin
+    AComponent:=TComponent(APersistent);
+    if (IDEComponentPalette.FindRegComponent(AComponent.ClassType)=nil)
+    and (Project1.UnitWithComponentClass(TComponentClass(AComponent.ClassType))=nil) then
+    begin
+      DebugLn('Error: (lazarus) TMainIDE.PropHookPersistentAdded ',
+              AComponent.ClassName, ' not registered');
       exit;
     end;
-  end;
-  if AComponent<>nil then begin
-    // create unique name
-    if AComponent.Name='' then
-      AComponent.Name:=FormEditor1.CreateUniqueComponentName(AComponent);
-    //debugln('TMainIDE.OnPropHookPersistentAdded B ',AComponent.Name,':',AComponent.ClassName);
+    //debugln('TMainIDE.PropHookPersistentAdded B ',AComponent.Name,':',AComponent.ClassName);
     // set component into design mode
     SetDesigning(AComponent,true);
-    //debugln('TMainIDE.OnPropHookPersistentAdded C ',AComponent.Name,':',AComponent.ClassName);
+    //debugln('TMainIDE.PropHookPersistentAdded C ',AComponent.Name,':',AComponent.ClassName);
     // add to source
-    ADesigner:=FindRootDesigner(AComponent) as TDesigner;
-  end;
-
-  if (ADesigner<>nil) and ((RegComp<>nil) or (ClassUnitInfo<>nil)) then begin
-    ActiveSrcEdit:=nil;
-    if not BeginCodeTool(ADesigner,ActiveSrcEdit,ActiveUnitInfo,[ctfSwitchToFormSource])
-    then exit;
-
-    // remember cursor position
-    SourceEditorManager.AddJumpPointClicked(Self);
-
-    // add needed package to required packages
-    if ADesigner.LookupRoot.ComponentCount>0 then
+    FComponentAddedDesigner:=FindRootDesigner(AComponent) as TDesigner;
+    if FComponentAddedDesigner<>nil then
     begin
-      ComponentClassNames:=TStringList.Create;
-      try
-        for i:=0 to ADesigner.LookupRoot.ComponentCount-1 do
-          ComponentClassNames.Add(ADesigner.LookupRoot.Components[i].ClassName);
-        //DebugLn(['TMainIDE.OnPropHookPersistentAdded ComponentClassNames=',ComponentClassNames.Text]);
-        PkgBoss.AddUnitDependenciesForComponentClasses(ActiveUnitInfo.Filename,
-          ComponentClassNames,true);
-      finally
-        ComponentClassNames.Free;
-      end;
+      ActiveSrcEdit:=nil;
+      if BeginCodeTool(FComponentAddedDesigner,ActiveSrcEdit,FComponentAddedUnit,
+                       [ctfSwitchToFormSource]) then
+      begin
+        // add needed package to required packages
+        if AComponent<>nil then
+        begin
+          ComponentClasses:=TClassList.Create;
+          try
+            ComponentClasses.Add(AComponent.ClassType);
+            PkgBoss.AddUnitDepsForCompClasses(FComponentAddedUnit.Filename,ComponentClasses,true);
+          finally
+            ComponentClasses.Free;
+          end;
+        end;
+        // Note: Source editor will be updated with added components later on Idle
+        //       using FComponentAddedDesigner and FComponentAddedUnit.
+      end
+      else
+        FComponentAddedDesigner:=Nil;
     end;
-
-    // add component definitions to form source
-    Ancestor:=GetAncestorLookupRoot(ActiveUnitInfo);
-    CodeToolBoss.CompleteComponent(ActiveUnitInfo.Source,ADesigner.LookupRoot,Ancestor);
   end;
-
-  //debugln('TMainIDE.OnPropHookPersistentAdded D ',AComponent.Name,':',AComponent.ClassName,' ',Select);
-  // select component
+  // select persistent
   if Select then
     TheControlSelection.AssignPersistent(APersistent);
+  // Update Object Inspector
+  if ObjectInspector1<>nil then   // Moving this to Idle handler somehow removes
+    ObjectInspector1.FillComponentList(False); // selection of pasted components!
+  //debugln('TMainIDE.PropHookPersistentAdded END ',dbgsName(APersistent),' Select=',Select);
+end;
 
-  if ObjectInspector1<>nil then
-    ObjectInspector1.FillComponentList;
-  {$IFDEF IDE_DEBUG}
-  debugln('TMainIDE.OnPropHookPersistentAdded END ',dbgsName(APersistent),' Select=',Select);
-  {$ENDIF}
+procedure TMainIDE.PropHookPersistentDeleting(APersistent: TPersistent);
+var
+  Comp: TComponent;
+  UnitInfo: TUnitInfo;
+  SrcEdit: TSourceEditor;
+  OwnerClassName: string;
+  CurDesigner: TDesigner;
+begin
+  if not (APersistent is TComponent) then exit;
+  Comp := TComponent(APersistent);
+  //DebugLn(['TMainIDE.OnPropHookPersistentDeleting ',dbgsName(APersistent)]);
+  CurDesigner:=TDesigner(FindRootDesigner(Comp));
+  if CurDesigner=nil then exit;
+  if dfDestroyingForm in CurDesigner.Flags then exit;
+  SrcEdit:=nil;
+  if not BeginCodeTool(CurDesigner,SrcEdit,UnitInfo,[ctfSwitchToFormSource]) then
+    exit;
+  if CurDesigner.Form=nil then
+    RaiseGDBException('[TMainIDE.OnPropHookPersistentDeleting] Error: TDesigner without a form');
+  // find source for form
+  Assert(UnitInfo=Project1.UnitWithComponent(CurDesigner.LookupRoot), 'TMainIDE.PropHookPersistentDeleting check fail.');
+  if UnitInfo=nil then
+    RaiseGDBException('[TMainIDE.OnPropHookPersistentDeleting] Error: form without source');
+  // mark references modified
+  MarkUnitsModifiedUsingSubComponent(Comp);
+  // remember cursor position
+  SourceEditorManager.AddJumpPointClicked(Self);
+  // remove component definition from owner source
+  OwnerClassName:=CurDesigner.LookupRoot.ClassName;
+  //DebugLn(['TMainIDE.OnPropHookPersistentDeleting ',dbgsName(APersistent),' OwnerClassName=',OwnerClassName]);
+  CodeToolBoss.RemovePublishedVariable(UnitInfo.Source,OwnerClassName,Comp.Name,false);
 end;
 
 procedure TMainIDE.PropHookDeletePersistent(var APersistent: TPersistent);
@@ -13412,7 +13349,7 @@ begin
   // find the current unit
   AnUnitInfo:=Project1.UnitWithComponent(TComponent(GlobalDesignHook.LookupRoot));
   if AnUnitInfo=nil then begin
-    DebugLn(['Error: (lazarus) TMainIDE.OnPropHookObjectPropertyChanged LookupRoot not found']);
+    DebugLn(['Error: (lazarus) TMainIDE.PropHookObjectPropertyChanged LookupRoot not found']);
     exit;
   end;
   // find the reference unit
@@ -13422,7 +13359,7 @@ begin
     if ReferenceDesigner=nil then exit;
     ReferenceUnitInfo:=Project1.UnitWithComponent(ReferenceDesigner.LookupRoot);
     if ReferenceUnitInfo=nil then begin
-      DebugLn(['Error: (lazarus) TMainIDE.OnPropHookObjectPropertyChanged reference LookupRoot not found']);
+      DebugLn(['Error: (lazarus) TMainIDE.PropHookObjectPropertyChanged reference LookupRoot not found']);
       exit;
     end;
     if ReferenceUnitInfo<>AnUnitInfo then begin
@@ -13448,20 +13385,20 @@ begin
     if (AnUnitName<>'')
     and (SysUtils.CompareText(AnUnitName,RequiredUnitName)<>0) then
       raise Exception.Create(
-        'TMainIDE.OnPropHookAddDependency unitname and class do not fit:'
+        'TMainIDE.PropHookAddDependency unitname and class do not fit:'
         +'unitname='+AnUnitName
         +' class='+dbgs(AClass)+' class.unitname='+RequiredUnitName);
   end else begin
     RequiredUnitName:=AnUnitName;
   end;
   if RequiredUnitName='' then
-    raise Exception.Create('TMainIDE.OnPropHookAddDependency no unitname');
+    raise Exception.Create('TMainIDE.PropHookAddDependency no unitname');
 
   // find current designer and unit
   if not (GlobalDesignHook.LookupRoot is TComponent) then exit;
   AnUnitInfo:=Project1.UnitWithComponent(TComponent(GlobalDesignHook.LookupRoot));
   if AnUnitInfo=nil then begin
-    DebugLn(['Error: (lazarus) TMainIDE.OnPropHookAddDependency LookupRoot not found']);
+    DebugLn(['Error: (lazarus) TMainIDE.PropHookAddDependency LookupRoot not found']);
     exit;
   end;
 
@@ -13823,6 +13760,7 @@ begin
           // ToDo: call designer
         end;
       end;
+  else
   end;
 end;
 

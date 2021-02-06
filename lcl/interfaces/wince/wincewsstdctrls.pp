@@ -28,7 +28,7 @@ uses
   {$ifdef Win32}win32compat,{$endif}
   // RTL, FCL, LCL
   SysUtils, LCLType, Classes, StdCtrls, Controls, Graphics, Forms, LCLProc,
-  InterfaceBase, LMessages, LCLMessageGlue, LazUTF8, LazUtf8Classes,
+  InterfaceBase, LMessages, LCLMessageGlue, LazUTF8,
   // Widgetset
   WSControls, WSStdCtrls, WSLCLClasses, WinCEInt, WinCEWSControls, WinCEExtra,
   WSProc, WinCEProc;
@@ -113,7 +113,10 @@ type
     class function GetStrings(const ACustomListBox: TCustomListBox): TStrings; override;
     class function GetTopIndex(const ACustomListBox: TCustomListBox): integer; override;
 
-    class procedure SelectItem(const ACustomListBox: TCustomListBox; AIndex: integer; ASelected: boolean); override;
+    class procedure SelectItem(const ACustomListBox: TCustomListBox;
+      AIndex: integer; ASelected: boolean); override;
+    class procedure SelectRange(const ACustomListBox: TCustomListBox;
+      ALow, AHigh: integer; ASelected: boolean); override;
     class procedure SetBorder(const ACustomListBox: TCustomListBox); override;
     class procedure SetColumnCount(const ACustomListBox: TCustomListBox; ACount: Integer); override;
     class procedure SetItemIndex(const ACustomListBox: TCustomListBox; const AIndex: integer); override;
@@ -556,6 +559,23 @@ begin
     SetItemIndex(ACustomListBox, AIndex)
   else
     SetItemIndex(ACustomListBox, -1);
+end;
+
+class procedure TWinCEWSCustomListBox.SelectRange(const ACustomListBox: TCustomListBox;
+  ALow, AHigh: integer; ASelected: boolean);
+var
+  AHandle: HWND;
+  ARange: LONG;
+begin
+  //https://docs.microsoft.com/en-us/windows/win32/controls/lb-selitemrange
+  if (AHigh > $FFFF) then
+    inherited SelectRange(ACustomListBox, ALow, AHigh, ASelected)
+  else
+  begin
+    AHandle := ACustomListBox.Handle;
+    ARange := Windows.MakeLong(ALow, AHigh);
+    Windows.SendMessage(AHandle, LB_SELITEMRANGE, Windows.WParam(ASelected), Windows.LParam(ARange));
+  end;
 end;
 
 class procedure TWinCEWSCustomListBox.SetBorder(const ACustomListBox: TCustomListBox);

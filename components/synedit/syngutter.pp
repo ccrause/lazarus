@@ -29,6 +29,7 @@ type
     function CreatePartList: TSynGutterPartListBase; override;
     procedure CreateDefaultGutterParts; virtual;
     function CreateMouseActions: TSynEditMouseInternalActions; override;
+    property GutterArea;
   public
     constructor Create(AOwner : TSynEditBase; ASide: TSynGutterSide;
                       ATextDrawer: TheTextDrawer);
@@ -99,31 +100,37 @@ type
 
   { TLazSynGutterArea }
 
-  TLazSynGutterArea = class(TLazSynSurface)
+  TLazSynGutterArea = class(TLazSynSurfaceWithText)
   private
     FGutter: TSynGutter;
-    FTextArea: TLazSynTextArea;
     function GetTextBounds: TRect;
+    procedure SetGutter(AValue: TSynGutter);
   protected
     procedure DoPaint(ACanvas: TCanvas; AClip: TRect); override;
-    procedure SetTextArea(const ATextArea: TLazSynTextArea); virtual;
   public
     procedure InvalidateLines(FirstTextLine, LastTextLine: TLineIdx); override;
     procedure Assign(Src: TLazSynSurface); override;
-    property TextArea: TLazSynTextArea read FTextArea write SetTextArea;
-    property Gutter: TSynGutter read FGutter write FGutter;
+    property Gutter: TSynGutter read FGutter write SetGutter;
     property TextBounds: TRect read GetTextBounds;
   end;
 
 implementation
-uses
-  SynEdit;
 
 { TLazSynGutterArea }
 
 function TLazSynGutterArea.GetTextBounds: TRect;
 begin
   Result := TextArea.TextBounds;
+end;
+
+procedure TLazSynGutterArea.SetGutter(AValue: TSynGutter);
+begin
+  if FGutter = AValue then Exit;
+  if FGutter <> nil then
+    FGutter.GutterArea := nil;
+  FGutter := AValue;
+  if FGutter <> nil then
+    FGutter.GutterArea := Self;
 end;
 
 procedure TLazSynGutterArea.DoPaint(ACanvas: TCanvas; AClip: TRect);
@@ -160,15 +167,9 @@ begin
     InvalidateRect(Handle, @rcInval, FALSE);
 end;
 
-procedure TLazSynGutterArea.SetTextArea(const ATextArea: TLazSynTextArea);
-begin
-  FTextArea := ATextArea;
-end;
-
 procedure TLazSynGutterArea.Assign(Src: TLazSynSurface);
 begin
   inherited Assign(Src);
-  FTextArea := TLazSynGutterArea(Src).FTextArea;
   FGutter := TLazSynGutterArea(Src).FGutter;
 end;
 
@@ -266,14 +267,14 @@ begin
   // Clear all
   TextDrawer.BeginDrawing(dc);
   TextDrawer.SetBackColor(Color);
-  TextDrawer.SetForeColor(TCustomSynEdit(SynEdit).Font.Color);
+  TextDrawer.SetForeColor(SynEdit.Font.Color);
   TextDrawer.SetFrameColor(clNone);
    with AClip do
      TextDrawer.ExtTextOut(Left, Top, ETO_OPAQUE, AClip, nil, 0);
   TextDrawer.EndDrawing;
 
   AClip.Left := Surface.Left + LeftOffset;
-  AClip.Top  := Surface.TextBounds.Top + FirstLine * TCustomSynEdit(SynEdit).LineHeight;
+  AClip.Top  := Surface.TextBounds.Top + FirstLine * SynEdit.LineHeight;
 
   rcLine := AClip;
   rcLine.Right := rcLine.Left;

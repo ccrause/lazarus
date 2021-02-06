@@ -29,10 +29,15 @@ unit opkman_intf;
 interface
 
 uses
-  Classes, SysUtils, Forms, Dialogs, Controls, contnrs, fpjson, ExtCtrls,
-  dateutils,
+  Classes, SysUtils, Contnrs, fpjson, dateutils,
+  // LCL
+  Forms, Dialogs, Controls, ExtCtrls,
+  // LazUtils
+  LazMethodList,
+  // BuildIntf
+  PackageIntf, PackageLinkIntf, PackageDependencyIntf,
   // IdeIntf
-  LazIDEIntf, PackageIntf, PackageLinkIntf, PackageDependencyIntf, IDECommands,
+  LazIDEIntf, IDECommands,
   // OPM
   opkman_downloader, opkman_serializablepackages, opkman_installer, opkman_mainfrm;
 
@@ -46,6 +51,7 @@ type
     FPackagesToInstall: TObjectList;
     FPackageDependecies: TObjectList;
     FPackageLinks: TObjectList;
+    FPackageListNotifications: TMethodList;
     FTimer: TTimer;
     FNeedToInit: Boolean;
     procedure DoOnTimer(Sender: TObject);
@@ -66,9 +72,13 @@ type
     destructor Destroy; override;
   public
     function DownloadPackages(APkgLinks: TList): TModalResult; override;
-    function InstallPackages(APkgLinks: TList; var ANeedToRebuild: Boolean): TModalResult; override;
+    function InstallPackages(APkgLinks: TList): TModalResult; override;
     function IsPackageAvailable(APkgLink: TPackageLink; AType: Integer): Boolean; override;
     function FindOnlineLink(const AName: String): TPackageLink; override;
+    procedure AddPackageListNotification(ANotification: TNotifyEvent); override;
+    procedure RemovePackageListNotification(ANotification: TNotifyEvent); override;
+    function IsPackageListLoaded: Boolean; override;
+    procedure GetPackageList; override;
   end;
 
 implementation
@@ -86,6 +96,7 @@ begin
   FPackagesToDownload := TObjectList.Create(False);
   FPackagesToInstall := TObjectList.Create(False);
   FPackageDependecies := TObjectList.Create(False);
+  FPackageListNotifications := TMethodList.Create;
   FNeedToInit := True;
   FTimer := TTimer.Create(nil);
   FTimer.Interval := 50;
@@ -96,6 +107,7 @@ end;
 destructor TOPMInterfaceEx.Destroy;
 begin
   FTimer.Free;
+  FPackageListNotifications.Free;
   FPackageLinks.Clear;
   FPackageLinks.Free;
   FPackagesToDownload.Clear;
@@ -119,7 +131,6 @@ begin
       PackageDownloader.Cancel;
 end;
 
-
 procedure TOPMInterfaceEx.DoOnTimer(Sender: TObject);
 begin
   if Assigned(LazarusIDE) and Assigned(PackageEditingInterface) and (not LazarusIDE.IDEIsClosing) then
@@ -138,10 +149,7 @@ begin
       if (not LazarusIDE.IDEIsClosing) then
       begin
         if (Options.CheckForUpdates <> 5) and (not Assigned(MainFrm)) then
-        begin
-          PackageDownloader.DownloadJSON(Options.ConTimeOut*1000, True);
-          LazarusIDE.AddHandlerOnIDEClose(@DoOnIDEClose);
-        end;
+          GetPackageList;
       end;
     end;
   end;
@@ -155,6 +163,7 @@ begin
   SerializablePackages.OnUpdatePackageLinks := @DoUpdatePackageLinks;
   PackageDownloader := TPackageDownloader.Create(Options.RemoteRepository[Options.ActiveRepositoryIndex]);
   InstallPackageList := TObjectList.Create(True);
+  LazarusIDE.AddHandlerOnIDEClose(@DoOnIDEClose);
 end;
 
 procedure TOPMInterfaceEx.DoUpdatePackageLinks(Sender: TObject);
@@ -171,12 +180,32 @@ begin
   for I := 0 to FPackageLinks.Count - 1 do
   begin
     PackageLink := TPackageLink(FPackageLinks.Items[I]);
-    if UpperCase(PackageLink.Name) = UpperCase(AName) then
+    if CompareText(PackageLink.Name, AName) = 0 then
     begin
       Result := PackageLink;
       Break;
     end;
   end;
+end;
+
+procedure TOPMInterfaceEx.AddPackageListNotification(ANotification: TNotifyEvent);
+begin
+  FPackageListNotifications.Add(TMethod(ANotification));
+end;
+
+procedure TOPMInterfaceEx.RemovePackageListNotification(ANotification: TNotifyEvent);
+begin
+  FPackageListNotifications.Remove(TMethod(ANotification));
+end;
+
+function TOPMInterfaceEx.IsPackageListLoaded: Boolean;
+begin
+  Result := Assigned(SerializablePackages) and (SerializablePackages.Count > 0);
+end;
+
+procedure TOPMInterfaceEx.GetPackageList;
+begin
+  PackageDownloader.DownloadJSON(Options.ConTimeOut*1000, True);
 end;
 
 procedure TOPMInterfaceEx.SynchronizePackages;
@@ -215,8 +244,7 @@ begin
       end;
     end;
   end;
-  if (Assigned(OnPackageListAvailable)) then
-     OnPackageListAvailable(Self);
+  FPackageListNotifications.CallNotifyEvents(Self);
 end;
 
 procedure TOPMInterfaceEx.AddToDownloadList(const AName: String);
@@ -231,7 +259,7 @@ begin
     for J := 0 to MetaPackage.LazarusPackages.Count - 1 do
     begin
       LazPackage := TLazarusPackage(MetaPackage.LazarusPackages.Items[J]);
-      if UpperCase(LazPackage.Name) = UpperCase(AName) then
+      if CompareText(LazPackage.Name, AName) = 0 then
       begin
         LazPackage.Checked := True;
         MetaPackage.Checked := True;
@@ -254,7 +282,7 @@ begin
     for J := 0 to MetaPackage.LazarusPackages.Count - 1 do
     begin
       LazPackage := TLazarusPackage(MetaPackage.LazarusPackages.Items[J]);
-      if UpperCase(LazPackage.Name) = UpperCase(AName) then
+      if CompareText(LazPackage.Name, AName) = 0 then
       begin
         FPackagesToInstall.Add(LazPackage);
         Break;
@@ -267,32 +295,35 @@ function TOPMInterfaceEx.ResolveDependencies: TModalResult;
 var
   I, J: Integer;
   PackageList: TObjectList;
-  PkgFileName: String;
+  Msg, LazPkgName, PkgFileName: String;
   DependencyPkg: TLazarusPackage;
   MetaPkg: TMetaPackage;
-  Msg: String;
 begin
   Result := mrNone;
   FPackageDependecies.Clear;
   for I := 0 to FPackagesToInstall.Count - 1 do
   begin
+    LazPkgName := TLazarusPackage(FPackagesToInstall.Items[I]).Name;
     PackageList := TObjectList.Create(True);
     try
-      SerializablePackages.GetPackageDependencies(TLazarusPackage(FPackagesToInstall.Items[I]).Name, PackageList, True, True);
+      SerializablePackages.GetPackageDependencies(LazPkgName, PackageList, True, True);
       for J := 0 to PackageList.Count - 1 do
       begin
         PkgFileName := TPackageDependency(PackageList.Items[J]).PkgFileName + '.lpk';
         DependencyPkg := SerializablePackages.FindLazarusPackage(PkgFileName);
         if DependencyPkg <> nil then
         begin
-          if (not DependencyPkg.Checked) and
-              (UpperCase(TLazarusPackage(FPackagesToInstall.Items[I]).Name) <> UpperCase(PkgFileName)) and
-               ((SerializablePackages.IsDependencyOk(TPackageDependency(PackageList.Items[J]), DependencyPkg)) and
-                ((not (DependencyPkg.PackageState = psInstalled)) or ((DependencyPkg.PackageState = psInstalled) and (not (SerializablePackages.IsInstalledVersionOk(TPackageDependency(PackageList.Items[J]), DependencyPkg.InstalledFileVersion)))))) then
+          if (not DependencyPkg.Checked) and (CompareText(LazPkgName, PkgFileName) <> 0)
+          and ((SerializablePackages.IsDependencyOk(TPackageDependency(PackageList.Items[J]), DependencyPkg))
+          and
+            ((not (DependencyPkg.PackageState = psInstalled))
+              or ((DependencyPkg.PackageState = psInstalled)
+                and (not (SerializablePackages.IsInstalledVersionOk(
+                  TPackageDependency(PackageList.Items[J]), DependencyPkg.InstalledFileVersion)))))) then
           begin
             if (Result = mrNone) or (Result = mrYes) then
               begin
-                Msg := Format(rsMainFrm_rsPackageDependency0, [TLazarusPackage(FPackagesToInstall.Items[I]).Name, DependencyPkg.Name]);
+                Msg := Format(rsMainFrm_rsPackageDependency0, [LazPkgName, DependencyPkg.Name]);
                 Result := MessageDlgEx(Msg, mtConfirmation, [mbYes, mbYesToAll, mbNo, mbNoToAll, mbCancel], nil);
                 if Result in [mrNo, mrNoToAll] then
                   if MessageDlgEx(rsMainFrm_rsPackageDependency1, mtInformation, [mbYes, mbNo], nil) <> mrYes then
@@ -412,11 +443,12 @@ begin
 end;
 
 
-function TOPMInterfaceEx.InstallPackages(APkgLinks: TList;
-  var ANeedToRebuild: Boolean): TModalResult;
+function TOPMInterfaceEx.InstallPackages(APkgLinks: TList): TModalResult;
+// Result can be mrOk, mrCancel, or mrRetry which means the IDE should be rebuilt.
 var
   I: Integer;
   InstallStatus: TInstallStatus;
+  ANeedToRebuild: Boolean;
 begin
   FPackagesToInstall.Clear;
   for I := 0 to APkgLinks.Count - 1 do
@@ -431,7 +463,6 @@ begin
      Exit;
   for I := 0 to FPackageDependecies.Count - 1 do
     FPackagesToInstall.Insert(0, FPackageDependecies.Items[I]);
-
 
   PackageAction := paInstall;
   if SerializablePackages.DownloadCount > 0 then
@@ -461,8 +492,11 @@ begin
         begin
           SerializablePackages.MarkRuntimePackages;
           SerializablePackages.GetPackageStates;
-          if (ANeedToRebuild) and ((InstallStatus = isSuccess) or (InstallStatus = isPartiallyFailed)) then
-            ANeedToRebuild :=  MessageDlgEx(rsOPMInterfaceRebuildConf, mtConfirmation, [mbYes, mbNo], nil) = mrYes;
+          if ANeedToRebuild
+          and ((InstallStatus = isSuccess) or (InstallStatus = isPartiallyFailed))
+          and (MessageDlgEx(rsOPMInterfaceRebuildConf,mtConfirmation,[mbYes,mbNo], nil) = mrYes)
+          then
+            Result := mrRetry;
         end;
       end;
     end;

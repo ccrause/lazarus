@@ -54,13 +54,14 @@ const
   cOpenSSLURL = 'http://packages.lazarus-ide.org/openssl-1.0.2j-i386-win32.zip';
   {$endif}
   cExtractDir = 'ExtractDir';
-  cSubmitURL_Zip =  'aHR0cDovL2xhemFydXNvcG0uMDAwd2ViaG9zdGFwcC5jb20vemlwLnBocA==';
-  cSubmitURL_JSON = 'aHR0cDovL2xhemFydXNvcG0uMDAwd2ViaG9zdGFwcC5jb20vanNvbi5waHA=';
+  cSubmitURL_Zip =  'aHR0cDovL2xhemFydXNvcG0ub3JnL3ppcC5waHA=';
+  cSubmitURL_JSON = 'aHR0cDovL2xhemFydXNvcG0ub3JnL2pzb24ucGhw';
   cSep = '#@$%^';
 
 resourcestring
   //package manager
   rsLazarusPackageManager = 'Online Package Manager';
+  rsMenuLazarusPackageManager = 'Online Package Manager ...';
 
   //main form
   rsPackagesFound = '(%s repository packages found, containing %s lpk files, total size %s)';
@@ -88,6 +89,9 @@ resourcestring
   rsMainFrm_VSTText_PackageInfo = 'Package info';
   rsMainFrm_VSTText_Category = 'Category';
   rsMainFrm_VSTText_CommunityDescription = 'Community description';
+  rsMainFrm_VSTText_ExternalDeps = 'External dependencies';
+  rsMainFrm_VSTText_OrphanedPackage1 = 'Orphaned package';
+  rsMainFrm_VSTText_OrphanedPackage2 = 'currently has no active maintainer';
   rsMainFrm_VSTText_RepositoryFilename = 'Repository filename';
   rsMainFrm_VSTText_RepositoryFileSize = 'Repository filesize';
   rsMainFrm_VSTText_RepositoryFileHash = 'Repository filehash';
@@ -139,7 +143,11 @@ resourcestring
   rsMainFrm_VSTText_PackageCategory27 = 'Games and Game Engines';
   rsMainFrm_VSTText_Desc = 'Description for package';
   rsMainFrm_VSTText_Lic = 'License info for package';
+  rsMainFrm_VSTText_Open = 'Open';
+  rsMainFrm_VSTText_Open_Notfound = 'Package file not found.';
+  rsMainFrm_VSTText_Open_Error = 'Cannot open package file.';
   rsMainFrm_VSTText_ComDesc = 'Community description for metapackage';
+  rsMainFrm_VSTText_ExternalMetaPackageDeps = 'External dependencies for metapackage';
   rsMainFrm_cbAll_Caption = 'All/None';
   rsMainFrm_cbAll_Hint = 'Check/Uncheck packages';
   rsMainFrm_lbFilter_Caption = 'Filter by:';

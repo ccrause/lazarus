@@ -33,7 +33,7 @@ uses
   // LCL
   Dialogs, Forms, Controls,
   // LazUtils
-  LazFileUtils,
+  LazFileUtils, LazLoggerBase,
   // IdeIntf
   LazIDEIntf, PackageIntf,
   // OpkMan
@@ -111,19 +111,19 @@ const
     'Other',
     'Games and Game Engines');
 
-  MaxLazVersions = 9;
+  MaxLazVersions = 11;
   LazVersions: array [0..MaxLazVersions - 1] of String = (
     '1.8.0', '1.8.2', '1.8.4', '1.8.5',
-    '2.0.0', '2.0.2', '2.0.4', '2.0.6',
+    '2.0.0', '2.0.2', '2.0.4', '2.0.6', '2.0.8', '2.0.10',
     'Trunk');
-  LazDefVersions = '2.0.0, 2.0.2, 2.0.4, 2.0.6';
+  LazDefVersions = '2.0.0, 2.0.2, 2.0.4, 2.0.6, 2.0.8, 2.0.10';
   LazTrunk = '2.1.0';
 
   MaxFPCVersions = 5;
   FPCVersions: array [0..MaxFPCVersions - 1] of String = (
     '3.0.0', '3.0.2', '3.0.4', '3.2.0',
     'Trunk');
-  FPCDefVersion = '3.0.0, 3.0.2, 3.0.4';
+  FPCDefVersion = '3.0.0, 3.0.2, 3.0.4, 3.2.0';
   FPCTrunk = '3.3.1';
 
   DefWidgetSets = 'gtk2, win32/win64';
@@ -298,11 +298,11 @@ var
     Result := True;
     for I := 0 to SLExcludedFolders.Count - 1 do
     begin
-      if UpperCase(SLExcludedFolders.Strings[I]) = UpperCase(AName) then
-        begin
-          Result := False;
-          Break;
-        end;
+      if CompareText(SLExcludedFolders.Strings[I], AName) = 0 then
+      begin
+        Result := False;
+        Break;
+      end;
     end;
   end;
 
@@ -317,7 +317,7 @@ var
     begin
       try
         repeat
-          if (UpperCase(ExtractFileExt(SR.Name)) = UpperCase('.lpk')) then
+          if CompareFileExtQuick(SR.Name, 'lpk') = 0 then
           begin
             PackageData := TPackageData.Create;
             PackageData.FName := SR.Name;
@@ -384,7 +384,8 @@ var
     begin
       for I := 0 to SLExcludedFiles.Count - 1 do
       begin
-        if UpperCase(SLExcludedFiles.Strings[I]) = UpperCase(ExtractFileExt(AName)) then
+        DebugLn(['OPM IsAllowed: ExcFile=', SLExcludedFiles.Strings[I], ', AName=', AName]);
+        if CompareFileExt(AName, SLExcludedFiles.Strings[I], False) = 0 then
         begin
           Result := False;
           Break;
@@ -394,11 +395,14 @@ var
     else
     begin
       for I := 0 to SLExcludedFolders.Count - 1 do
-        if UpperCase(SLExcludedFolders.Strings[I]) = UpperCase(AName) then
+      begin
+        DebugLn(['OPM IsAllowed: ExcFolder=', SLExcludedFolders.Strings[I], ', AName=', AName]);
+        if CompareText(SLExcludedFolders.Strings[I], AName) = 0 then
         begin
           Result := False;
           Break;
         end;
+      end;
     end;
   end;
 

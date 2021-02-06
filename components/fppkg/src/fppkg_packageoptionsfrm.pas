@@ -14,10 +14,12 @@ uses
   ExtCtrls,
   Dialogs,
   ActnList, ComboEx,
+  LazUTF8,
   PackageIntf,
   IDEOptEditorIntf,
   IDEOptionsIntf, SynEdit,
-  fppkg_packagevariant;
+  fppkg_packagevariant,
+  fppkg_const;
 
 type
 
@@ -104,14 +106,6 @@ var
 
 
 {$R *.lfm}
-
-resourcestring
-  lisFppkgPckOptsTitle = 'Fppkg';
-  lisFppkgPckOptsBuildMethod = 'Supported build methods';
-  lisFppkgBuildMethodFPMake = 'FPMake';
-  lisFppkgBuildMethodLazarus = 'Lazbuild';
-  lisFppkgBuildMethodBoth = 'Both';
-
 
 { TFppkgPackageOptionsFrm }
 
@@ -436,7 +430,7 @@ constructor TFppkgPackageOptionsFrm.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   FPackageVariantList := TFppkgPackageVariantList.Create(True);
-  FPackageList := TStringList.Create;
+  FPackageList := TStringListUTF8Fast.Create;
   TStringList(FPackageList).Sorted := True;
   TStringList(FPackageList).Duplicates := dupIgnore;
 end;

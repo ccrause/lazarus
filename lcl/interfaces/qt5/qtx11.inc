@@ -247,22 +247,30 @@ begin
             XFree(Data);
             Data := nil;
           end;
-          if WMWindow = 0 then
-            exit;
-          WMAtom := XInternAtom(Display,'UTF8_STRING', False);
-          if XGetWindowProperty(Display, WMWindow,
-            XInternAtom(Display,'_NET_WM_NAME', False), 0, 1024, False,
-            WMAtom, @typeReturned, @formatReturned, @nitemsReturned,
-            @unused, @data) = Success then
+          if WMWindow > 0 then
           begin
-            if (typeReturned = WMAtom) and (formatReturned = 8) then
-              Result := StrPas(Data);
-            if Data <> nil then
-              XFree(Data);
-            Data := nil;
+            WMAtom := XInternAtom(Display,'UTF8_STRING', False);
+            if XGetWindowProperty(Display, WMWindow,
+              XInternAtom(Display,'_NET_WM_NAME', False), 0, 1024, False,
+              WMAtom, @typeReturned, @formatReturned, @nitemsReturned,
+              @unused, @data) = Success then
+            begin
+              if (typeReturned = WMAtom) and (formatReturned = 8) then
+                Result := StrPas(Data);
+              if Data <> nil then
+                XFree(Data);
+              Data := nil;
+            end;
           end;
        end;
     end;
+  end;
+  if Result = '' then
+  begin
+    // usually older window managers does not support _NET_SUPPORTING_WM_CHECK
+    Result := GetEnvironmentVariableUTF8('XDG_SESSION_DESKTOP');
+    if Result = '' then
+      Result := GetEnvironmentVariableUTF8('DESKTOP_SESSION');
   end;
 end;
 
@@ -296,7 +304,6 @@ var
    ScreenNum: Integer;
    XClient: TXClientMessageEvent;
    WMAtom: TAtom;
-   APlatform: WideString;
 begin
   if IsWayland then
     exit;
@@ -415,7 +422,7 @@ begin
   XMapWindow(QX11Info_display(), TWindow(AWinID));
 end;
 
-{$IFDEF QtUseAccurateFrame}
+{$IFDEF QtUseX11Extras}
 
 function GetX11WindowRealized(AWinID: PtrUInt): boolean;
 var
@@ -602,11 +609,6 @@ begin
     exit;
   Result := XGetGeometry(d, X11Window, @ARootWin, @ARect.Left, @ARect.Top, @ARect.Right, @ARect.Bottom, @ABorder, @ADepth) = 1;
 end;
-
-{$IF FPC_FULLVERSION <= 20602}
-type
-  PUint32 = PDWord;
-{$ENDIF}
 
 function GetX11RectForAtom(AWinID: PtrUInt; const AAtomName: string; out ARect: TRect): boolean;
 var

@@ -61,6 +61,7 @@ type
     txtRepCount: TEdit;
     procedure btnHelpClick(Sender: TObject);
     procedure btnOKClick(Sender: TObject);
+    procedure txtExpressionChange(Sender: TObject);
   private
     FWatch: TIdeWatch;
   public
@@ -82,25 +83,37 @@ const
      wdfStructure, wdfDefault, wdfMemDump, wdfBinary
     );
 begin
-  if FWatch = nil
-  then begin
-    FWatch := DebugBoss.Watches.CurrentWatches.Add(txtExpression.Text);
-  end
-  else begin
-    FWatch.Expression := txtExpression.Text;
+  if txtExpression.Text = '' then
+    exit;
+  DebugBoss.Watches.CurrentWatches.BeginUpdate;
+  try
+    if FWatch = nil
+    then begin
+      FWatch := DebugBoss.Watches.CurrentWatches.Add(txtExpression.Text);
+    end
+    else begin
+      FWatch.Expression := txtExpression.Text;
+    end;
+
+    if (rgStyle.ItemIndex >= low(StyleToDispFormat))
+    and (rgStyle.ItemIndex <= High(StyleToDispFormat))
+    then FWatch.DisplayFormat := StyleToDispFormat[rgStyle.ItemIndex]
+    else FWatch.DisplayFormat := wdfDefault;
+
+    if chkUseInstanceClass.Checked
+    then FWatch.EvaluateFlags := [defClassAutoCast]
+    else FWatch.EvaluateFlags := [];
+    FWatch.RepeatCount := StrToIntDef(txtRepCount.Text, 0);
+
+    FWatch.Enabled := chkEnabled.Checked;
+  finally
+    DebugBoss.Watches.CurrentWatches.EndUpdate;
   end;
+end;
 
-  if (rgStyle.ItemIndex >= low(StyleToDispFormat))
-  and (rgStyle.ItemIndex <= High(StyleToDispFormat))
-  then FWatch.DisplayFormat := StyleToDispFormat[rgStyle.ItemIndex]
-  else FWatch.DisplayFormat := wdfDefault;
-
-  if chkUseInstanceClass.Checked
-  then FWatch.EvaluateFlags := [defClassAutoCast]
-  else FWatch.EvaluateFlags := [];
-  FWatch.RepeatCount := StrToIntDef(txtRepCount.Text, 0);
-
-  FWatch.Enabled := chkEnabled.Checked;
+procedure TWatchPropertyDlg.txtExpressionChange(Sender: TObject);
+begin
+  ButtonPanel.OKButton.Enabled := txtExpression.Text <> '';
 end;
 
 procedure TWatchPropertyDlg.btnHelpClick(Sender: TObject);
@@ -137,6 +150,7 @@ begin
     chkUseInstanceClass.Checked := defClassAutoCast in FWatch.EvaluateFlags;
     txtRepCount.Text := IntToStr(FWatch.RepeatCount);
   end;
+  txtExpressionChange(nil);
 
   lblDigits.Enabled := False;
   txtDigits.Enabled := False;

@@ -291,7 +291,11 @@ begin
     Result:=0;
     Node1.TreeView.OnCompare(Node1.TreeView,Node1, Node2, Result);
   end else
+    {$IFDEF UNIX}
+    Result := CompareStr(Node1.Text, Node2.Text);
+    {$ELSE}
     Result := AnsiCompareStr(Node1.Text,Node2.Text);
+    {$ENDIF}
 end;
 
 constructor TTreeNode.Create(AnOwner: TTreeNodes);
@@ -384,7 +388,7 @@ end;
 
 function TTreeNode.GetTreeNodes: TTreeNodes;
 begin
-  if (Owner<>nil) and (Owner is TTreeNodes) then
+  if Owner is TTreeNodes then
     Result:=TTreeNodes(Owner)
   else
     Result:=nil;
@@ -694,7 +698,6 @@ end;
 
 procedure TTreeNode.ExpandItem(ExpandIt: Boolean; Recurse: Boolean);
 var
-  //Flag: Integer;
   ANode: TTreeNode;
 begin
   if Recurse then begin
@@ -1033,6 +1036,17 @@ begin
     Result:=nil;
 end;
 
+function TTreeNode.GetFirstSibling: TTreeNode;
+begin
+  if Parent<>nil then
+    Result:=Parent.GetFirstChild
+  else begin
+    Result:=Self;
+    while Result.FPrevBrother<>nil do
+      Result:=Result.FPrevBrother;
+  end;
+end;
+
 function TTreeNode.GetFirstVisibleChild: TTreeNode;
 begin
   Result := GetFirstChild;
@@ -1272,7 +1286,8 @@ end;
 
 procedure TTreeNode.Unbind;
 // unbind from parent and neighbor siblings, but not from owner
-var OldIndex, i: integer;
+var
+  OldIndex, i: integer;
   HigherNode: TTreeNode;
   TheTreeView: TCustomTreeView;
 begin
@@ -1285,6 +1300,7 @@ begin
 
   // remove single select
   Selected:=false;
+  TheTreeView:=Nil;
   // invalidate caches of TreeView and if root item, remove from TreeView.Items
   if Owner<>nil then begin
     Owner.ClearCache;
@@ -1332,8 +1348,14 @@ begin
       ReAllocMem(FParent.FItems,SizeOf(Pointer)*FParent.FCapacity);
     end;
     if FParent.Count=0 then begin
-      FParent.Expanded:=false;
-      FParent.HasChildren:=false;
+      Assert(Assigned(TheTreeView), 'TTreeNode.Unbind: TheTreeView=Nil.');
+      TheTreeView.BeginUpdate;
+      try
+        FParent.Expanded:=false;
+        FParent.HasChildren:=false;
+      finally
+        TheTreeView.EndUpdate;
+      end;
     end;
     FParent:=nil;
   end;
@@ -2576,10 +2598,12 @@ begin
   //SendMessage(Handle, WM_SETREDRAW, Ord(not Updating), 0);
   if Updating then
     Include(Owner.FStates,tvsUpdating)
-  else
+  else begin
     Exclude(Owner.FStates,tvsUpdating);
-  if not Updating then
+    Include(Owner.FStates,tvsScrollbarChanged);
+    Owner.UpdateScrollbars;
     Owner.Invalidate;
+  end;
 end;
 
 procedure TTreeNodes.EndUpdate;
@@ -2793,7 +2817,7 @@ begin
     end;
 
     //select again
-    bGoNext := (FirstNode.Index <= Node.Index);
+    bGoNext := (FirstNode.AbsoluteIndex <= Node.AbsoluteIndex);
     I := FirstNode;
     I.MultiSelected:=True;
     while (I<>Node) do
@@ -3309,6 +3333,30 @@ begin
   FSBHorzShowing:=-1;
   FSBVertShowing:=-1;
   inherited CreateWnd;
+end;
+
+procedure TCustomTreeView.Click;
+begin
+  if not FMouseDownOnFoldingSign then
+    inherited;
+end;
+
+procedure TCustomTreeView.DblClick;
+begin
+  if not FMouseDownOnFoldingSign then
+    inherited;
+end;
+
+procedure TCustomTreeView.TripleClick;
+begin
+  if not FMouseDownOnFoldingSign then
+    inherited;
+end;
+
+procedure TCustomTreeView.QuadClick;
+begin
+  if not FMouseDownOnFoldingSign then
+    inherited;
 end;
 
 procedure TCustomTreeView.InitializeWnd;
@@ -3833,6 +3881,7 @@ procedure TCustomTreeView.SetMultiSelect(const AValue: Boolean);
 begin
   if MultiSelect <> AValue then
   begin
+    ClearSelection;
     if AValue then
       Include(FOptions,tvoAllowMultiselect)
     else
@@ -3945,16 +3994,35 @@ begin
 end;
 
 function TCustomTreeView.GetNodeAt(X, Y: Integer): TTreeNode;
+var
+  b: Boolean;
 begin
-  if (X >= BorderWidth) and (X < ClientWidth - BorderWidth) then
-    Result := GetNodeAtY(Y)
+  Result := GetNodeAtY(Y);
+  if Result = nil then Exit;
+  if tvoRowSelect in Options then       // row select
+    b := (X < BorderWidth) or (X >= ClientWidth - BorderWidth)
   else
+    b := (X < Result.DisplayStateIconLeft) or (X >= Result.DisplayTextRight);
+  if b then
+    Result := nil;
+end;
+
+function TCustomTreeView.GetNodeWithExpandSignAt(X, Y: Integer): TTreeNode;
+var
+  b: Boolean;
+begin
+  Result := GetNodeAtY(Y);
+  if Result = nil then Exit;
+  if tvoRowSelect in Options then       // row select
+    b := (X < BorderWidth) or (X >= ClientWidth - BorderWidth)
+  else                                  // need to include DisplayExpandSignLeft
+    b := (X < Result.DisplayExpandSignLeft) or (X >= Result.DisplayTextRight);
+  if b then
     Result := nil;
 end;
 
 procedure TCustomTreeView.GetInsertMarkAt(X, Y: Integer;
-  out AnInsertMarkNode: TTreeNode; out AnInsertMarkType: TTreeViewInsertMarkType
-  );
+  out AnInsertMarkNode: TTreeNode; out AnInsertMarkType: TTreeViewInsertMarkType);
 var
   ANode: TTreeNode;
   NodeRect: TRect;
@@ -4356,6 +4424,8 @@ begin
       if (fScrollBars in [ssAutoBoth, ssAutoVertical])
       and (ScrollInfo.nPage>=cardinal(ScrollInfo.nMax)) then begin
         //DebugLn(['TCustomTreeView.UpdateScrollbars Hide Vertical.']);
+        ScrollInfo.nPos:=0;
+        SetScrollInfo(Handle, SB_VERT, ScrollInfo, false);
         FLastVertScrollInfo.cbSize:=0;
         SetShowScrollBar(SB_VERT, false);
       end else begin
@@ -5411,7 +5481,8 @@ end;
 
 procedure TCustomTreeView.GetImageIndex(Node: TTreeNode);
 begin
-  if Assigned(FOnGetImageIndex) then FOnGetImageIndex(Self, Node);
+  if Assigned(FOnGetImageIndex) then
+    FOnGetImageIndex(Self, Node);
 end;
 
 procedure TCustomTreeView.GetSelectedIndex(Node: TTreeNode);
@@ -5422,7 +5493,8 @@ end;
 function TCustomTreeView.CanChange(Node: TTreeNode): Boolean;
 begin
   Result := True;
-  if Assigned(Node) and Assigned(FOnChanging) then FOnChanging(Self, Node, Result);
+  if Assigned(Node) and Assigned(FOnChanging) then
+    FOnChanging(Self, Node, Result);
 end;
 
 procedure TCustomTreeView.Change(Node: TTreeNode);
@@ -5436,39 +5508,44 @@ begin
   if Assigned(FOnDeletion) then FOnDeletion(Self, Node);
 end;
 
-procedure TCustomTreeView.Expand(Node: TTreeNode);
-begin
-  UpdateScrollbars;
-  if Assigned(FOnExpanded) then FOnExpanded(Self, Node);
-end;
-
 function TCustomTreeView.ExpandSignSizeIsStored: Boolean;
 begin
   Result := FExpandSignSize >= 0;
 end;
 
+procedure TCustomTreeView.Expand(Node: TTreeNode);
+begin
+  UpdateScrollbars;
+  if Assigned(FOnExpanded) and not (tvsUpdating in FStates) then
+    FOnExpanded(Self, Node);
+end;
+
 function TCustomTreeView.CanExpand(Node: TTreeNode): Boolean;
 begin
   Result := True;
-  if Assigned(FOnExpanding) then FOnExpanding(Self, Node, Result);
+  if Assigned(FOnExpanding) and not (tvsUpdating in FStates) then
+    FOnExpanding(Self, Node, Result);
 end;
 
 procedure TCustomTreeView.Collapse(Node: TTreeNode);
 begin
   UpdateScrollbars;
-  if Assigned(FOnCollapsed) then FOnCollapsed(Self, Node);
+  if Assigned(FOnCollapsed) and not (tvsUpdating in FStates) then
+    FOnCollapsed(Self, Node);
 end;
 
 function TCustomTreeView.CanCollapse(Node: TTreeNode): Boolean;
 begin
   Result := True;
-  if Assigned(FOnCollapsing) then FOnCollapsing(Self, Node, Result);
+  if Assigned(FOnCollapsing) and not (tvsUpdating in FStates) then
+    FOnCollapsing(Self, Node, Result);
 end;
 
 function TCustomTreeView.CanEdit(Node: TTreeNode): Boolean;
 begin
   Result := True;
-  if Assigned(FOnEditing) then FOnEditing(Self, Node, Result);
+  if Assigned(FOnEditing) then
+    FOnEditing(Self, Node, Result);
 end;
 
 procedure TCustomTreeView.EndEditing(Cancel: boolean);
@@ -5544,39 +5621,52 @@ begin
   Result := FIndent >= 0;
 end;
 
+function TCustomTreeView.NodeIsSelected(aNode: TTreeNode): Boolean;
+begin
+  Result := Assigned(aNode) and
+    (aNode.Selected or ((tvoAllowMultiselect in Options) and aNode.MultiSelected));
+end;
+
 procedure TCustomTreeView.MouseDown(Button: TMouseButton; Shift: TShiftState;
   X, Y: Integer);
 var
   CursorNode: TTreeNode;
+  CursorNdSelected: Boolean;
   LogicalX: Integer;
-  CursorNodeSelected: Boolean;
 begin
   {$IFDEF VerboseDrag}
   DebugLn('TCustomTreeView.MouseDown A ',DbgSName(Self),' ');
   {$ENDIF}
-  fMouseDownPos := Point(X,Y);
+  FMouseDownPos := Point(X,Y);
   FStates:=FStates-[tvsEditOnMouseUp,tvsSingleSelectOnMouseUp];
 
   CursorNode := GetNodeAt(X, Y);
-  CursorNodeSelected := (CursorNode<>nil)
-    and (CursorNode.Selected
-      or ((tvoAllowMultiselect in Options) and CursorNode.MultiSelected));
+  CursorNdSelected := NodeIsSelected(CursorNode);
   LogicalX:=X;
 
   //change selection on right click
-  if (Button = mbRight) and RightClickSelect and//right click
-     (([ssDouble, ssTriple, ssQuad] * Shift) = []) and//single or first of a multi click
-     not AllowMultiSelectWithCtrl(Shift) and//only when CTRL is not pressed
-     (CursorNode <> nil) and
-     (LogicalX >= CursorNode.DisplayStateIconLeft)//only after expand sign
+  if (Button = mbRight) and RightClickSelect and //right click
+     (([ssDouble, ssTriple, ssQuad] * Shift) = []) and //single or first of a multi click
+     not AllowMultiSelectWithCtrl(Shift) and //only when CTRL is not pressed
+     (CursorNode <> nil)
   then
   begin
+    if not (tvoRowSelect in Options) and
+       (tvoEmptySpaceUnselect in Options) and
+       (LogicalX >= CursorNode.DisplayStateIconLeft) and
+       (LogicalX > CursorNode.DisplayTextRight) then
+      ClearSelection
+    else
     if not (tvoAllowMultiselect in Options) then
       Selected := CursorNode
     else
-    if not CursorNodeSelected then
+    if not CursorNdSelected then
       Items.SelectOnlyThis(CursorNode);
-  end;
+  end
+  else // empty space below last node
+  if (Button = mbRight) and RightClickSelect and (CursorNode = nil) and
+     (tvoEmptySpaceUnselect in Options) then
+    ClearSelection;
 
   if not Focused and CanFocus then
     SetFocus;
@@ -5584,27 +5674,26 @@ begin
   inherited MouseDown(Button, Shift, X, Y);
 
   //CursorNode must be reassigned again - e.g. in OnMouseDown the node can be deleted or moved.
-  CursorNode := GetNodeAt(X, Y);
-  CursorNodeSelected := (CursorNode<>nil)
-    and (CursorNode.Selected
-      or ((tvoAllowMultiselect in Options) and CursorNode.MultiSelected));
+  CursorNode := GetNodeWithExpandSignAt(LogicalX, Y);
+  CursorNdSelected := NodeIsSelected(CursorNode);
+
+  //Flag is used for DblClick/TripleClick/QuadClick, so set it before testing ShiftState
+  FMouseDownOnFoldingSign :=
+    Assigned(CursorNode) and CursorNode.HasChildren and ShowButtons and
+    (LogicalX >= CursorNode.DisplayExpandSignLeft) and
+    (LogicalX < CursorNode.DisplayExpandSignRight);
 
   //change selection on left click
-  if (Button = mbLeft) and//left click
-     (([ssDouble, ssTriple, ssQuad] * Shift) = []) and//single or first of a multi click
+  if (Button = mbLeft) and //left click
+     (([ssDouble, ssTriple, ssQuad] * Shift) = []) and //single or first of a multi click
      (CursorNode <> nil) then
   begin
-    if CursorNode.HasChildren and ShowButtons and
-       (LogicalX >= CursorNode.DisplayExpandSignLeft) and
-       (LogicalX < CursorNode.DisplayExpandSignRight) then
-    begin
+    if FMouseDownOnFoldingSign then
       // mousedown occured on expand sign -> expand/collapse
-      CursorNode.Expanded := not CursorNode.Expanded;
-    end
-    else if LogicalX >= CursorNode.DisplayStateIconLeft then
+      CursorNode.Expanded := not CursorNode.Expanded
+    else if (LogicalX >= CursorNode.DisplayStateIconLeft) or (tvoRowSelect in Options) then
     begin
-      // mousedown occured in text or icon
-      // -> select node and begin drag operation
+      // mousedown occured in text or icon -> select node and begin drag operation
       {$IFDEF VerboseDrag}
       DebugLn(['TCustomTreeView.MouseDown In Text ',DbgSName(Self),' MouseCapture=',MouseCapture]);
       {$ENDIF}
@@ -5633,18 +5722,24 @@ begin
         end
         else
         begin
-          if not CursorNodeSelected then
+          if not CursorNdSelected then
             Items.SelectOnlyThis(CursorNode)
           else
             Include(FStates, tvsSingleSelectOnMouseUp);
         end;
       end;
-    end;
+    end
+    else if tvoEmptySpaceUnselect in Options then
+      ClearSelection;
   end
   else// multi click
   if not (tvoNoDoubleClickExpand in Options) and (ssDouble in Shift)
   and (Button = mbLeft) and (CursorNode<>nil) then
-    CursorNode.Expanded := not CursorNode.Expanded;
+    CursorNode.Expanded := not CursorNode.Expanded
+  else  // empty space below last node
+  if (Button = mbLeft) and (CursorNode = nil) and (tvoEmptySpaceUnselect in Options) and
+     not AllowMultiSelectWithShift(Shift) and not AllowMultiSelectWithCtrl(Shift) then
+    ClearSelection;
 end;
 
 procedure TCustomTreeView.MouseMove(Shift: TShiftState; X, Y: Integer);
@@ -5674,27 +5769,29 @@ procedure TCustomTreeView.MouseUp(Button: TMouseButton; Shift: TShiftState;
 var
   aMouseDownNode, aMouseUpNode: TTreeNode;
 begin
-  if (FHintWnd<>nil) and FHintWnd.Visible then // must hide hint window in mouse up to receive redirected mouse up messages
+  // must hide hint window in mouse up to receive redirected mouse up messages
+  if (FHintWnd<>nil) and FHintWnd.Visible then
     FHintWnd.Hide;
   inherited MouseUp(Button, Shift, X, Y);
   if (Button = mbRight) and (Shift = [ssRight]) and Assigned(PopupMenu) then
     exit;
   if Button=mbLeft then
+  begin
     MouseCapture := False;
-  if (Button=mbLeft)
-  and (FStates * [tvsDblClicked, tvsTripleClicked, tvsQuadClicked] = [])
-  then begin
-    //AquirePrimarySelection;
-    aMouseDownNode:=GetNodeAt(fMouseDownPos.X,fMouseDownPos.Y);
-    aMouseUpNode:=GetNodeAt(X,Y);
-    if (abs(fMouseDownPos.X-X)+abs(fMouseDownPos.Y-Y)<10)
-    and (aMouseDownNode=aMouseUpNode) then
+    if FStates * [tvsDblClicked, tvsTripleClicked, tvsQuadClicked] = [] then
     begin
-      // mouse up on mouse-down node
-      if (tvsEditOnMouseUp in FStates) and (not ReadOnly) then
-        BeginEditing(Selected)
-      else if (tvsSingleSelectOnMouseUp in FStates) then
-        Items.SelectOnlyThis(aMouseUpNode);
+      //AquirePrimarySelection;
+      aMouseDownNode:=GetNodeAt(FMouseDownPos.X,FMouseDownPos.Y);
+      aMouseUpNode:=GetNodeAt(X,Y);
+      if (abs(FMouseDownPos.X-X)+abs(FMouseDownPos.Y-Y)<10)
+      and (aMouseDownNode=aMouseUpNode) then
+      begin
+        // mouse up on mouse-down node
+        if (tvsEditOnMouseUp in FStates) and (not ReadOnly) then
+          BeginEditing(Selected)
+        else if (tvsSingleSelectOnMouseUp in FStates) then
+          Items.SelectOnlyThis(aMouseUpNode);
+      end;
     end;
   end;
   FStates:=FStates-[tvsDblClicked,tvsTripleClicked,tvsQuadClicked,
@@ -5904,7 +6001,7 @@ procedure TCustomTreeView.LoadFromFile(const FileName: string);
 var
   Stream: TStream;
 begin
-  Stream := TFileStreamUTF8.Create(FileName, fmOpenRead or fmShareDenyWrite);
+  Stream := TFileStream.Create(FileName, fmOpenRead or fmShareDenyWrite);
   try
     LoadFromStream(Stream);
   finally
@@ -5926,7 +6023,7 @@ procedure TCustomTreeView.SaveToFile(const FileName: string);
 var
   Stream: TStream;
 begin
-  Stream := TFileStreamUTF8.Create(FileName, fmCreate);
+  Stream := TFileStream.Create(FileName, fmCreate);
   try
     SaveToStream(Stream);
   finally

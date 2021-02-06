@@ -309,6 +309,8 @@ type
     property OnDeletion;
     property OnDragDrop;
     property OnDragOver;
+    property OnEdited;
+    property OnEditing;
     property OnEndDrag;
     property OnKeyDown;
     property OnKeyPress;
@@ -662,6 +664,7 @@ var
   MaskList: TMaskList;
   Files: TList;
   FileItem: TFileItem;
+  MaskOptions: TMaskOptions;
   {$if defined(windows) and not defined(wince)}
   ErrMode : LongWord;
   {$endif}
@@ -689,16 +692,19 @@ begin
                    ;
     if UseMaskList then
     begin
-      //"Escape" occurrences of '[', since TMaskList treats those as start of a set,
+      //Disable the use of sets in the masklist.
       //this behaviour would be incompatible with the situation if no MaskList was used
       //and it would break backwards compatibilty and could raise unexpected EConvertError where it did not in the past.
       //If you need sets in the MaskList, use the OnAddItem event for that. (BB)
-      MaskStr := StringReplace(MaskStr, '[', '[[]', [rfReplaceAll]);
+      MaskOptions := [moDisableSets];
       {$ifdef NotLiteralFilenames}
-      MaskList := TMaskList.Create(MaskStr, ';', (ACaseSensitivity = mcsCaseSensitive));  //False by default
+      if (ACaseSensitivity = mcsCaseSensitive) then
+        MaskOptions := [moDisableSets, moCaseSensitive];
       {$else}
-      MaskList := TMaskList.Create(MaskStr, ';', (ACaseSensitivity <> mcsCaseInsensitive)); //True by default
+      if (ACaseSensitivity <> mcsCaseInsensitive) then
+        MaskOptions := [moDisableSets, moCaseSensitive];
       {$endif}
+      MaskList := TMaskList.Create(MaskStr, ';', MaskOptions);  //False by default
     end;
 
     try
@@ -867,7 +873,7 @@ begin
       with TFileItem(Files.Objects[i]) do DoAddItem(FBasePath, FileInfo, CanAdd);
       if CanAdd then
       begin
-        NewNode := Items.AddChildObject(ANode, Files.Strings[i], nil);
+        NewNode := Items.AddChildObject(ANode, Files[i], nil);
         TShellTreeNode(NewNode).FFileInfo := TFileItem(Files.Objects[i]).FileInfo;
         TShellTreeNode(NewNode).SetBasePath(TFileItem(Files.Objects[i]).FBasePath);
 

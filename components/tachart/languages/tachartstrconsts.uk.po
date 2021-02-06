@@ -1,17 +1,17 @@
 # Olexandr Pylypchuk <pilipchukap@rambler.ru>, 2017.
-# admin <lxlalexlxl@ukr.net>, 2017, 2018, 2019.
+# admin <lxlalexlxl@ukr.net>, 2017, 2018, 2019, 2020.
 msgid ""
 msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Project-Id-Version: \n"
 "POT-Creation-Date: \n"
-"PO-Revision-Date: 2019-09-20 20:43+0200\n"
-"Last-Translator: Olexandr Pylypchuk <lxlalexlxl@ukr.net>\n"
+"PO-Revision-Date: 2020-12-24 22:50+0200\n"
+"Last-Translator: lxlalexlxl <lxlalexlxl@ukr.net>\n"
 "Language-Team: Ukrainian <kde-i18n-doc@kde.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Language: ru\n"
-"X-Generator: Lokalize 2.0\n"
+"X-Generator: Lokalize 19.12.3\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
 #: tachartstrconsts.descolor
@@ -216,6 +216,10 @@ msgstr "Число параметрів апроксимації не може �
 msgid "Expression result type must be integer or float. Got \"%s\"."
 msgstr "Тип значення виразу повинен бути цілим або дійсним. Отримано \"%s\"."
 
+#: tachartstrconsts.rserrnumericaloverflow
+msgid "Numerical overflow."
+msgstr "Числове переповнення."
+
 #: tachartstrconsts.rsexpressioncolormapseries
 msgid "Math expression color map series"
 msgstr "Колірна карта"
@@ -275,6 +279,10 @@ msgstr "Остаточна стандартна похибка"
 #: tachartstrconsts.rsfittotalsumofsquares
 msgid "Total sum of squares (SST)"
 msgstr "Загальна сума квадратів (SSE)"
+
+#: tachartstrconsts.rsfittvalue
+msgid "t value"
+msgstr "Значення t"
 
 #: tachartstrconsts.rsfitvarianceratio
 msgid "Variance ratio F"
@@ -414,6 +422,10 @@ msgstr "Точка"
 #: tachartstrconsts.rspolarseries
 msgid "Polar series"
 msgstr "Пелюсткова діаграма"
+
+#: tachartstrconsts.rspolygonseries
+msgid "Polygon series"
+msgstr "Багатокутна діаграма"
 
 #: tachartstrconsts.rspsclear
 msgctxt "tachartstrconsts.rspsclear"

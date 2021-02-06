@@ -7,7 +7,7 @@
 }
 unit TestPascalParser;
 
-{$mode objfpc}{$H+}
+{$i runtestscodetools.inc}
 
 interface
 
@@ -30,7 +30,7 @@ type
     procedure Add(const s: string);
     procedure Add(Args: array of const);
     procedure StartUnit;
-    procedure StartProgram;
+    function StartProgram: boolean; virtual;
     procedure ParseModule;
     procedure CheckParseError(const CursorPos: TCodeXYPosition; Msg: string);
     procedure WriteSource(CleanPos: integer; Tool: TCodeTool);
@@ -54,6 +54,7 @@ type
     procedure TestParseIFOpt;
     procedure TestParseProcAnoAssign;
     procedure TestParseProcAnoArg;
+    procedure TestParseThreadVar;
   end;
 
 implementation
@@ -110,8 +111,9 @@ begin
   Add('');
 end;
 
-procedure TCustomTestPascalParser.StartProgram;
+function TCustomTestPascalParser.StartProgram: boolean;
 begin
+  Result:=true;
   Add('program test1;');
   Add('');
   Add('{$mode objfpc}{$H+}');
@@ -559,6 +561,21 @@ begin
   'begin',
   '  DoIt(procedure begin end);',
   '  DoIt(procedure begin p:=procedure(w:word) begin end; end);',
+  '']);
+  ParseModule;
+end;
+
+procedure TTestPascalParser.TestParseThreadVar;
+begin
+  Add([
+  'program test1;',
+  'type',
+  '  TTestClass = class',
+  '    private class threadvar',
+  '      foo:Boolean;',
+  '  end;',
+  '',
+  'begin',
   '']);
   ParseModule;
 end;

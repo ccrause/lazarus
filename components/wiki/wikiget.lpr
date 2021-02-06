@@ -29,8 +29,13 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes, SysUtils, LazFileUtils, laz2_XMLRead, laz2_DOM, laz2_XMLWrite,
-  LazLogger, LazUTF8, CodeToolsStructs, CustApp, Laz_AVL_Tree, avglvltree, strutils,
+  Classes, SysUtils, CustApp, strutils, Laz_AVL_Tree,
+  // LazUtils
+  LazFileUtils, laz2_XMLRead, laz2_DOM, laz2_XMLWrite, LazLogger, avglvltree,
+  LazUTF8, LazStringUtils,
+  // CodeTools
+  CodeToolsStructs,
+  // Wiki
   {$IF FPC_FULLVERSION<20701}
   myfphttpclient,
   {$ELSE}
@@ -168,7 +173,7 @@ begin
     E('output directory not found "'+OutputDir+'"');
   if not DirectoryExistsUTF8(ImagesDir) then
     E('images directory not found "'+ImagesDir+'"');
-  if copy(BaseURL,1,7)<>'http://' then
+  if copy(BaseURL,1,8)<>'https://' then
     E('invalid baseurl "'+BaseURL+'"');
 
   if HasOption('ignore-recent') then begin
@@ -745,7 +750,7 @@ begin
   StopOnException:=True;
   fOutputDir:='wikixml';
   FImagesDir:='images';
-  FBaseURL:='http://wiki.lazarus.freepascal.org/';
+  FBaseURL:='https://wiki.lazarus.freepascal.org/';
   fFirstPage:='Lazarus_Documentation';
   FAllPages:=TStringToPointerTree.Create(true);
   FNeededPages:=TStringToPointerTree.Create(true);

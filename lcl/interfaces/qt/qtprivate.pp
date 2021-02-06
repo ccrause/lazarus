@@ -33,7 +33,7 @@ uses
   // Free Pascal
   Classes, SysUtils,
   // LCL
-  Forms, Controls, LCLType, LazUTF8, ExtCtrls, StdCtrls, LazUtf8Classes,
+  Forms, Controls, LCLType, LazUTF8, ExtCtrls, StdCtrls,
   //Widgetset
   QtWidgets, qtproc;
 
@@ -444,9 +444,9 @@ end;
 
 procedure TQtMemoStrings.LoadFromFile(const FileName: string);
 var
-  TheStream: TFileStreamUTF8;
+  TheStream: TFileStream;
 begin
-  TheStream:=TFileStreamUtf8.Create(FileName,fmOpenRead or fmShareDenyWrite);
+  TheStream:=TFileStream.Create(FileName,fmOpenRead or fmShareDenyWrite);
   try
     LoadFromStream(TheStream);
   finally
@@ -456,9 +456,9 @@ end;
 
 procedure TQtMemoStrings.SaveToFile(const FileName: string);
 var
-  TheStream: TFileStreamUTF8;
+  TheStream: TFileStream;
 begin
-  TheStream:=TFileStreamUtf8.Create(FileName,fmCreate);
+  TheStream:=TFileStream.Create(FileName,fmCreate);
   try
     SaveToStream(TheStream);
   finally
@@ -469,21 +469,11 @@ end;
 { TQtComboStrings }
 
 procedure TQtComboStrings.SetSorted(AValue: Boolean);
-var
-  i: Integer;
 begin
   if FSorted=AValue then Exit;
   FSorted:=AValue;
-  if not FSorted then Exit;
-
-  for i := 0 to Count - 2 do
-  begin
-    if UTF8CompareText(Strings[i], Strings[i + 1]) < 0 then
-    begin
-      Sort;
-      Break;
-    end;
-  end;
+  if FSorted then
+    Sort;
 end;
 
 procedure TQtComboStrings.Put(Index: Integer; const S: string);
@@ -621,7 +611,7 @@ begin
   while (L <= R) do
   begin
     I := L + (R - L) div 2;
-    CompareRes := UTF8CompareText(S, Strings[I]);
+    CompareRes := AnsiCompareText(S, Strings[I]);
     if (CompareRes > 0) then
       L := I + 1
     else

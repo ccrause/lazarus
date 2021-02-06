@@ -511,8 +511,7 @@ type
           out CodeContexts: TCodeContextInfo): boolean;
     function ExtractProcedureHeader(Code: TCodeBuffer; X,Y: integer;
           Attributes: TProcHeadAttributes; out ProcHead: string): boolean;
-    function HasInterfaceRegisterProc(Code: TCodeBuffer;
-          out HasRegisterProc: boolean): boolean;
+    function HasInterfaceRegisterProc(Code: TCodeBuffer): boolean;
 
     // gather identifiers (i.e. all visible)
     function GatherUnitNames(Code: TCodeBuffer): Boolean;
@@ -708,13 +707,22 @@ type
           UnitNamePairs: TStringToStringTree): boolean;
     function AddUnitToMainUsesSection(Code: TCodeBuffer;
           const NewUnitName, NewUnitInFile: string;
-          AsLast: boolean = false; CheckSpecialUnits: boolean = true): boolean;
+          const Flags: TAddUsesFlags = []): boolean; overload;
+    function AddUnitToMainUsesSection(Code: TCodeBuffer;
+          const NewUnitName, NewUnitInFile: string;
+          AsLast: boolean; CheckSpecialUnits: boolean = true): boolean; overload; deprecated;
     function AddUnitToMainUsesSectionIfNeeded(Code: TCodeBuffer;
           const NewUnitName, NewUnitInFile: string;
-          AsLast: boolean = false; CheckSpecialUnits: boolean = true): boolean;
+          const Flags: TAddUsesFlags = []): boolean;
+    function AddUnitToMainUsesSectionIfNeeded(Code: TCodeBuffer;
+          const NewUnitName, NewUnitInFile: string;
+          AsLast: boolean; CheckSpecialUnits: boolean = true): boolean; overload; deprecated;
     function AddUnitToImplementationUsesSection(Code: TCodeBuffer;
           const NewUnitName, NewUnitInFile: string;
-          AsLast: boolean = false; CheckSpecialUnits: boolean = true): boolean;
+          const Flags: TAddUsesFlags = []): boolean;
+    function AddUnitToImplementationUsesSection(Code: TCodeBuffer;
+          const NewUnitName, NewUnitInFile: string;
+          AsLast: boolean; CheckSpecialUnits: boolean = true): boolean; overload; deprecated;
     function RemoveUnitFromAllUsesSections(Code: TCodeBuffer;
           const AnUnitName: string): boolean;
     function FindUsedUnitFiles(Code: TCodeBuffer; var MainUsesSection: TStrings
@@ -2426,17 +2434,15 @@ begin
   {$ENDIF}
 end;
 
-function TCodeToolManager.HasInterfaceRegisterProc(Code: TCodeBuffer;
-  out HasRegisterProc: boolean): boolean;
+function TCodeToolManager.HasInterfaceRegisterProc(Code: TCodeBuffer): boolean;
 begin
   Result:=false;
-  HasRegisterProc:=false;
   {$IFDEF CTDEBUG}
   DebugLn('TCodeToolManager.HasInterfaceRegisterProc A ',Code.Filename);
   {$ENDIF}
   if not InitCurCodeTool(Code) then exit;
   try
-    Result:=FCurCodeTool.HasInterfaceRegisterProc(HasRegisterProc);
+    Result:=FCurCodeTool.HasInterfaceRegisterProc;
   except
     on e: Exception do Result:=HandleException(e);
   end;
@@ -5056,8 +5062,8 @@ begin
 end;
 
 function TCodeToolManager.AddUnitToMainUsesSection(Code: TCodeBuffer;
-  const NewUnitName, NewUnitInFile: string; AsLast: boolean;
-  CheckSpecialUnits: boolean = true): boolean;
+  const NewUnitName, NewUnitInFile: string; const Flags: TAddUsesFlags
+  ): boolean;
 begin
   Result:=false;
   {$IFDEF CTDEBUG}
@@ -5066,15 +5072,27 @@ begin
   if not InitCurCodeTool(Code) then exit;
   try
     Result:=FCurCodeTool.AddUnitToMainUsesSection(NewUnitName, NewUnitInFile,
-                                    SourceChangeCache,AsLast,CheckSpecialUnits);
+                                    SourceChangeCache,Flags);
   except
     on e: Exception do Result:=HandleException(e);
   end;
 end;
 
-function TCodeToolManager.AddUnitToMainUsesSectionIfNeeded(Code: TCodeBuffer;
+function TCodeToolManager.AddUnitToMainUsesSection(Code: TCodeBuffer;
   const NewUnitName, NewUnitInFile: string; AsLast: boolean;
-  CheckSpecialUnits: boolean): boolean;
+  CheckSpecialUnits: boolean = true): boolean;
+var
+  Flags: TAddUsesFlags;
+begin
+  Flags:=[];
+  if AsLast then Include(Flags,aufLast);
+  if not CheckSpecialUnits then Include(Flags,aufNotCheckSpecialUnit);
+  Result:=AddUnitToMainUsesSection(Code,NewUnitName,NewUnitInFile,Flags);
+end;
+
+function TCodeToolManager.AddUnitToMainUsesSectionIfNeeded(Code: TCodeBuffer;
+  const NewUnitName, NewUnitInFile: string; const Flags: TAddUsesFlags
+  ): boolean;
 var
   NamePos, InPos: TAtomPosition;
 begin
@@ -5086,15 +5104,27 @@ begin
   try
     if not FCurCodeTool.FindUnitInAllUsesSections(NewUnitName,NamePos,InPos) then
       Result:=FCurCodeTool.AddUnitToMainUsesSection(NewUnitName, NewUnitInFile,
-                                      SourceChangeCache,AsLast,CheckSpecialUnits);
+                                      SourceChangeCache,Flags);
   except
     on e: Exception do Result:=HandleException(e);
   end;
 end;
 
-function TCodeToolManager.AddUnitToImplementationUsesSection(Code: TCodeBuffer;
+function TCodeToolManager.AddUnitToMainUsesSectionIfNeeded(Code: TCodeBuffer;
   const NewUnitName, NewUnitInFile: string; AsLast: boolean;
   CheckSpecialUnits: boolean): boolean;
+var
+  Flags: TAddUsesFlags;
+begin
+  Flags:=[];
+  if AsLast then Include(Flags,aufLast);
+  if not CheckSpecialUnits then Include(Flags,aufNotCheckSpecialUnit);
+  Result:=AddUnitToMainUsesSectionIfNeeded(Code,NewUnitName,NewUnitInFile,Flags);
+end;
+
+function TCodeToolManager.AddUnitToImplementationUsesSection(Code: TCodeBuffer;
+  const NewUnitName, NewUnitInFile: string; const Flags: TAddUsesFlags
+  ): boolean;
 begin
   Result:=false;
   {$IFDEF CTDEBUG}
@@ -5104,10 +5134,22 @@ begin
   try
     Result:=FCurCodeTool.AddUnitToImplementationUsesSection(
                                     NewUnitName, NewUnitInFile,
-                                    SourceChangeCache,AsLast,CheckSpecialUnits);
+                                    SourceChangeCache,Flags);
   except
     on e: Exception do Result:=HandleException(e);
   end;
+end;
+
+function TCodeToolManager.AddUnitToImplementationUsesSection(Code: TCodeBuffer;
+  const NewUnitName, NewUnitInFile: string; AsLast: boolean;
+  CheckSpecialUnits: boolean): boolean;
+var
+  Flags: TAddUsesFlags;
+begin
+  Flags:=[];
+  if AsLast then Include(Flags,aufLast);
+  if not CheckSpecialUnits then Include(Flags,aufNotCheckSpecialUnit);
+  Result:=AddUnitToImplementationUsesSection(Code,NewUnitName,NewUnitInFile,Flags);
 end;
 
 function TCodeToolManager.RemoveUnitFromAllUsesSections(Code: TCodeBuffer;
@@ -5822,8 +5864,7 @@ begin
 end;
 
 procedure TCodeToolManager.DoOnGatherUserIdentifiers(
-  Sender: TIdentCompletionTool; const ContextFlags: TIdentifierListContextFlags
-  );
+  Sender: TIdentCompletionTool; const ContextFlags: TIdentifierListContextFlags);
 begin
   if Assigned(FOnGatherUserIdentifiers) then
     FOnGatherUserIdentifiers(Sender, ContextFlags);
@@ -5832,9 +5873,9 @@ end;
 function TCodeToolManager.DoOnGetSrcPathForCompiledUnit(Sender: TObject;
   const AFilename: string): string;
 begin
-  if CompareFileExt(AFilename,'.ppu',false)=0 then
+  if CompareFileExt(AFilename,'ppu',true)=0 then
     Result:=GetPPUSrcPathForDirectory(ExtractFilePath(AFilename))
-  else if CompareFileExt(AFilename,'.dcu',false)=0 then
+  else if CompareFileExt(AFilename,'dcu')=0 then
     Result:=GetDCUSrcPathForDirectory(ExtractFilePath(AFilename))
   else
     Result:='';

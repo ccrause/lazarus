@@ -176,7 +176,8 @@ type
     procedure ReadGenericParamList(Must, AllowConstraints: boolean);
     procedure ReadAttribute;
     procedure FixLastAttributes;
-    procedure ReadTypeReference(CreateNodes: boolean);
+    procedure ReadTypeReference(CreateNodes: boolean; Extract: boolean = false;
+      Copying: boolean = false; const Attr: TProcHeadAttributes = []);
     procedure ReadClassInterfaceContent;
     function KeyWordFuncTypeClass: boolean;
     function KeyWordFuncTypeClassInterface(IntfDesc: TCodeTreeNodeDesc): boolean;
@@ -249,7 +250,8 @@ type
       Copying: boolean = false; const Attr: TProcHeadAttributes = []);
     procedure ReadSpecializeParams(CreateChildNodes: boolean; Extract: boolean = false;
       Copying: boolean = false; const Attr: TProcHeadAttributes = []);
-    procedure ReadAnsiStringParams;
+    procedure ReadAnsiStringParams(Extract: boolean = false;
+      Copying: boolean = false; const Attr: TProcHeadAttributes = []);
     function ReadClosure(ExceptionOnError, CreateNodes: boolean): boolean;
     function SkipTypeReference(ExceptionOnError: boolean): boolean;
     function SkipSpecializeParams(ExceptionOnError: boolean): boolean;
@@ -1254,6 +1256,7 @@ function TPascalParserTool.KeyWordFuncClassVarSection: boolean;
 {
   var
   class var
+  class threadvar
 }
 begin
   if CurNode.Desc in AllClassSubSections then begin
@@ -1281,6 +1284,7 @@ function TPascalParserTool.KeyWordFuncClassClass: boolean;
     class destructor
     class operator
     class var
+    class threadvar
 }
 begin
   Result:=false;
@@ -1292,7 +1296,7 @@ begin
   end else if UpAtomIs('PROPERTY') then begin
     UndoReadNextAtom;
     Result:=KeyWordFuncClassProperty;
-  end else if UpAtomIs('VAR') then begin
+  end else if UpAtomIs('VAR') or UpAtomIs('THREADVAR') then begin
     UndoReadNextAtom;
     Result:=KeyWordFuncClassVarSection;
   end else
@@ -1809,6 +1813,7 @@ function TPascalParserTool.ReadTilProcedureHeadEnd(
 
 var IsSpecifier: boolean;
   Attr: TProcHeadAttributes;
+  Specifiers: TKeyWordFunctionList;
 begin
   //DebugLn('[TPascalParserTool.ReadTilProcedureHeadEnd] ',
   //'Method=',IsMethod,', Function=',IsFunction,', Type=',IsType);
@@ -1874,14 +1879,15 @@ begin
     ReadNextAtom;
   if (CurPos.StartPos>SrcLen) then
     SaveRaiseException(20170421195010,ctsSemicolonNotFound);
+  if [pphIsMethodDecl,pphIsMethodBody]*ParseAttr<>[] then
+    Specifiers:=IsKeyWordMethodSpecifier
+  else if pphIsType in ParseAttr then
+    Specifiers:=IsKeyWordProcedureTypeSpecifier
+  else
+    Specifiers:=IsKeyWordProcedureSpecifier;
   repeat
     if CurPos.StartPos<=SrcLen then begin
-      if [pphIsMethodDecl,pphIsMethodBody]*ParseAttr<>[] then
-        IsSpecifier:=IsKeyWordMethodSpecifier.DoIdentifier(@Src[CurPos.StartPos])
-      else if pphIsType in ParseAttr then
-        IsSpecifier:=IsKeyWordProcedureTypeSpecifier.DoIdentifier(@Src[CurPos.StartPos])
-      else
-        IsSpecifier:=IsKeyWordProcedureSpecifier.DoItCaseInsensitive(
+      IsSpecifier:=Specifiers.DoItCaseInsensitive(
                              Src,CurPos.StartPos,CurPos.EndPos-CurPos.StartPos);
     end else
       IsSpecifier:=false;
@@ -4388,7 +4394,8 @@ begin
   until Attr=nil;
 end;
 
-procedure TPascalParserTool.ReadTypeReference(CreateNodes: boolean);
+procedure TPascalParserTool.ReadTypeReference(CreateNodes: boolean; Extract: boolean;
+  Copying: boolean; const Attr: TProcHeadAttributes);
 { After reading CurPos is on atom behind the identifier
 
   Examples:
@@ -4399,23 +4406,32 @@ procedure TPascalParserTool.ReadTypeReference(CreateNodes: boolean);
     specialize TGenericClass<TypeRef,TypeRef>
     atype<char>.subtype
 }
+
+  procedure Next; inline;
+  begin
+    if not Extract then
+      ReadNextAtom
+    else
+      ExtractNextAtom(Copying,Attr);
+  end;
+
 var
   Cnt: Integer;
 begin
   if (Scanner.CompilerMode=cmOBJFPC) and UpAtomIs('SPECIALIZE') then begin
-    ReadSpecialize(CreateNodes);
+    ReadSpecialize(CreateNodes,Extract,Copying,Attr);
     exit;
   end;
   if CreateNodes then begin
     CreateChildNode;
     CurNode.Desc:=ctnIdentifier;
   end;
-  ReadNextAtom;
+  Next;
   Cnt:=1;
   while CurPos.Flag=cafPoint do begin
-    ReadNextAtom;
+    Next;
     AtomIsIdentifierSaveE(20180411194207);
-    ReadNextAtom;
+    Next;
     inc(Cnt,2);
   end;
   if AtomIsChar('<') then begin
@@ -4423,8 +4439,8 @@ begin
     or ((Cnt=3) and LastUpAtomIs(3,'SYSTEM') and LastUpAtomIs(1,'STRING'))
     then begin
       // e.g. string<codepage>
-      ReadAnsiStringParams;
-      ReadNextAtom;
+      ReadAnsiStringParams(Extract,Copying,Attr);
+      Next;
     end
     else if (Scanner.CompilerMode in [cmDELPHI,cmDELPHIUNICODE]) then begin
       // e.g. atype<params>
@@ -4436,13 +4452,13 @@ begin
         CurNode.EndPos:=CurPos.StartPos;
         EndChildNode;
       end;
-      ReadSpecializeParams(CreateNodes);
-      ReadNextAtom;
+      ReadSpecializeParams(CreateNodes,Extract,Copying,Attr);
+      Next;
       while CurPos.Flag=cafPoint do begin
         // e.g. atype<params>.subtype
-        ReadNextAtom;
+        Next;
         AtomIsIdentifierSaveE(20180411194209);
-        ReadNextAtom;
+        Next;
       end;
     end;
   end;
@@ -6068,7 +6084,7 @@ begin
   repeat
     // read identifier (a parameter of the generic type)
     Next;
-    ReadTypeReference( CreateChildNodes ); // May be a nested specialize structure
+    ReadTypeReference(CreateChildNodes,Extract,Copying,Attr);
     if AtomIsChar('>') then
       break
     else if CurPos.Flag=cafComma then begin
@@ -6083,11 +6099,14 @@ begin
   end;
 end;
 
-procedure TPascalParserTool.ReadAnsiStringParams;
+procedure TPascalParserTool.ReadAnsiStringParams(Extract: boolean; Copying: boolean; const Attr: TProcHeadAttributes);
 begin
   // string<codepage>
   repeat
-    ReadNextAtom;
+    if not Extract then
+      ReadNextAtom
+    else
+      ExtractNextAtom(Copying,Attr);
     if AtomIsChar('>') then break;
     case CurPos.Flag of
     cafRoundBracketOpen,cafEdgedBracketOpen: ReadTilBracketClose(true);

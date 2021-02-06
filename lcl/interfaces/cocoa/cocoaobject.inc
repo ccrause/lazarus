@@ -38,7 +38,7 @@ begin
   ScreenInfo.PixelsPerInchY := CocoaBasePPI;
 
   { Creates the application NSApp object }
-  FNSApp := TCocoaApplication(TCocoaApplication.sharedApplication);
+  FNSApp := InitApplication;
   FNSApp_Delegate := TAppDelegate.alloc.init;
   FNSApp.setDelegate(FNSApp_Delegate);
   {$ifdef COCOALOOPOVERRIDE}
@@ -52,7 +52,7 @@ end;
 
 procedure TCocoaWidgetSet.SendCheckSynchronizeMessage;
 begin
-  TCocoaApplication.sharedApplication
+  InitApplication
     .performSelectorOnMainThread_withObject_waitUntilDone(
        ObjCSelector('lclSyncCheck:'), nil, false);
 end;
@@ -295,6 +295,13 @@ begin
     lcTransparentWindow,
     lcCanDrawHidden:
       Result := LCL_CAPABILITY_YES;
+    lcAccelleratorKeys:
+      Result := LCL_CAPABILITY_NO;
+    lcTextHint:
+      if NSAppKitVersionNumber >= NSAppKitVersionNumber10_10 then
+        Result := LCL_CAPABILITY_YES
+      else
+        Result := LCL_CAPABILITY_NO;
   else
     Result := inherited;
   end;
@@ -525,13 +532,16 @@ end;
 
 procedure TAppDelegate.applicationWillBecomeActive(notification: NSNotification
   );
+{$ifdef COCOA_ACTIVATION_REORDER}
 var
   app : NSApplication;
   i: integer;
   vis: Boolean;
   info: PWinLevelOrder;
   ord: NSArray;
+{$endif}
 begin
+  {$ifdef COCOA_ACTIVATION_REORDER}
   app := NSApplication(NSApp);
   ord := app.orderedWindows;
   orderArrayCount := ord.count;
@@ -544,12 +554,14 @@ begin
     info^.ord := info^.win.orderedIndex;
     info^.vis := info^.win.isVisible;
   end;
+  {$endif}
 end;
 
 procedure TAppDelegate.applicationDidBecomeActive(notification: NSNotification);
 var
   i : integer;
 begin
+  {$ifdef COCOA_ACTIVATION_REORDER}
   // Cocoa changes level and order of windows to it's liking
   // (it happens between Will- and DidBecomeActive)
   // for example Model windows becoming level 8,
@@ -569,6 +581,7 @@ begin
     Freemem(orderArray);
     orderArray := nil;
   end;
+  {$endif}
 
   Application.IntfAppActivate;
 end;

@@ -119,8 +119,7 @@ begin
   inherited Create(AOwner);
   CaptureExceptions:=true;
 
-  FOldExitProc:=ExitProc;
-  ExitProc:=@BeforeFinalization;
+  AddExitProc(@BeforeFinalization);
   
   OnGetApplicationName := @GetApplicationName;
 end;
@@ -134,8 +133,6 @@ begin
   Include(FFlags,AppDestroying);
 
   if Assigned(FOnDestroy) then FOnDestroy(Self);
-
-  ExitProc:=FOldExitProc;
 
   ProcessAsyncCallQueue;
 
@@ -205,7 +202,7 @@ begin
           if (FHintTimerType = ahttNone) or (FHintWindow = nil) or not FHintWindow.Visible then
             StartHintTimer(HintPause, ahttShowHint);
         end;
-      ahttShowHint:
+      ahttShowHint, ahttReshowHint:
         StartHintTimer(HintPause, ahttShowHint);
     end;
   end
@@ -260,6 +257,8 @@ end;
 ------------------------------------------------------------------------------}
 procedure TApplication.Notification(AComponent : TComponent;
   Operation : TOperation);
+var
+  l: TFPList;
 begin
   if Operation = opRemove then begin
     FLastMouseControlValid:=false;
@@ -273,8 +272,16 @@ begin
       FHintTimer:=nil;
     if FComponentsToRelease<>nil then
       FComponentsToRelease.Remove(AComponent);
+    if FComponentsToReleaseSavedByModal<>nil then
+      for Pointer(l) in FComponentsToReleaseSavedByModal do
+        if l <> nil then
+          l.Remove(AComponent);
     if FComponentsReleasing<>nil then
       FComponentsReleasing.Remove(AComponent);
+    if FComponentsReleasingSavedByModal<>nil then
+      for Pointer(l) in FComponentsReleasingSavedByModal do
+        if l <> nil then
+          l.Remove(AComponent);
     if AComponent = MainForm then begin
       FMainForm:= nil;
       Terminate;
@@ -320,6 +327,15 @@ end;
 procedure TApplication.ModalStarted;
 begin
   inc(FModalLevel);
+  if FComponentsToReleaseSavedByModal = nil then
+    FComponentsToReleaseSavedByModal := TFPList.Create;
+  FComponentsToReleaseSavedByModal.Add(FComponentsToRelease);
+  FComponentsToRelease := nil;
+  (* If a component calls ShowModal while being destroyed by ReleaseComponents then FComponentsReleasing may be <> nil *)
+  if FComponentsReleasingSavedByModal = nil then
+    FComponentsReleasingSavedByModal := TFPList.Create;
+  FComponentsReleasingSavedByModal.Add(FComponentsReleasing);
+  FComponentsReleasing := nil;
   if (FModalLevel = 1) then
   begin
     if Assigned(FOnModalBegin) then
@@ -330,6 +346,9 @@ begin
 end;
 
 procedure TApplication.ModalFinished;
+var
+  l: TFPList;
+  c: Pointer;
 begin
   dec(FModalLevel);
   RestoreStayOnTop(True);
@@ -338,6 +357,40 @@ begin
     if Assigned(FOnModalEnd) then
       FOnModalEnd(Self);
     FApplicationHandlers[ahtModalEnd].CallNotifyEvents(Self);
+  end;
+  // Cannot leave modal, while in ReleaseComponents
+  assert(FComponentsReleasing = nil, 'TApplication.ModalFinished: FComponentsReleasing = nil');
+  assert(FComponentsToReleaseSavedByModal.Count > 0, 'TApplication.ModalFinished: FComponentsToReleaseSavedByModal.Count > 0');
+  if FComponentsToReleaseSavedByModal.Count > 0 then begin
+    l := TFPList(FComponentsToReleaseSavedByModal[FComponentsToReleaseSavedByModal.Count - 1]);
+    FComponentsToReleaseSavedByModal.Delete(FComponentsToReleaseSavedByModal.Count - 1);
+    if l <> nil then begin
+      if FComponentsToRelease <> nil then begin
+        for c in FComponentsToRelease do
+          l.Add(c);
+        FComponentsToRelease.Free;
+      end;
+      FComponentsToRelease := l;
+    end;
+    if FComponentsToRelease <> nil then
+      QueueAsyncCall(@FreeComponent, 0);
+
+    l := TFPList(FComponentsReleasingSavedByModal[FComponentsReleasingSavedByModal.Count - 1]);
+    FComponentsReleasingSavedByModal.Delete(FComponentsReleasingSavedByModal.Count - 1);
+    if l <> nil then begin
+      if FComponentsReleasing <> nil then begin
+        for c in FComponentsReleasing do
+          l.Add(c);
+        FComponentsReleasing.Free;
+      end;
+      FComponentsReleasing := l;
+    end;
+  end;
+  if (FModalLevel = 0) then
+  begin
+    assert(FComponentsToReleaseSavedByModal.Count = 0, 'TApplication.ModalFinished: FComponentsToReleaseSavedByModal.Count = 0');
+    FreeAndNil(FComponentsToReleaseSavedByModal);
+    FreeAndNil(FComponentsReleasingSavedByModal);
   end;
 end;
 
@@ -713,10 +766,8 @@ procedure TApplication.DoOnMouseMove;
 var
   CursorPos: TPoint;
 begin
-  if not GetCursorPos(CursorPos) then
-    Exit;
-
-  ActivateHint(CursorPos, True);
+  if GetCursorPos(CursorPos) then
+    ActivateHint(CursorPos, True);
 end;
 
 procedure TApplication.ShowHintWindow(const Info: THintInfoAtMouse);

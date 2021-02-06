@@ -4602,8 +4602,9 @@ msgid "About Lazarus"
 msgstr "O Lazarusu"
 
 #: lazarusidestrconsts.lisaboutlazarusmsg
-#, object-pascal-format
-msgid "License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.%sLazarus is an IDE to create graphical and console applications with Free Pascal. Free Pascal is Pascal and Object Pascal compiler that runs on Windows, Linux, Mac OS X, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing we need more developers."
+#, object-pascal-format, fuzzy
+#| msgid "License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.%sLazarus is an IDE to create graphical and console applications with Free Pascal. Free Pascal is Pascal and Object Pascal compiler that runs on Windows, Linux, Mac OS X, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing we need more developers."
+msgid "License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.%sLazarus is an IDE to create graphical and console applications with Free Pascal. Free Pascal is a Pascal and Object Pascal compiler that runs on Windows, Linux, macOS, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi-like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing, we need more developers."
 msgstr "Licence: GPL/LGPL%sLazarus je IDE pro tvorbu (grafických a konzolových) aplikací s Free Pascalem. Free Pascal je (L)GPL Pascal a Object Pascal překladač, který běží ve Windows, Linuxu, Mac OS X, FreeBSD a jiných.%sLazarus je chybějící částí skládačky, která umožní vytvářet programy pro všechny výše uvedené platformy v prostředí podobném Delphi. IDE je RAD nástroj, který zahrnuje návrháře formulářů.%sVzhledem k tomu, že Lazarus roste, potřebujeme více vývojářů."
 
 #: lazarusidestrconsts.lisaboutnocontributors
@@ -5058,10 +5059,6 @@ msgstr "Ukázat celou paletu komponent"
 msgid "If component palette spans over more lines, show them all and not only one."
 msgstr "Pokud je paleta komponent roztažena přes více řádek, zobrazit je všechny a ne pouze jednu."
 
-#: lazarusidestrconsts.lisautocheckmodifiedfiles
-msgid "Automatically check (select) modified files"
-msgstr "Automaticky zaškrtni (vyber) změněné soubory"
-
 #: lazarusidestrconsts.lisautocompletionoff
 msgid "Auto completion: off"
 msgstr "Automatické dokončení: vypnuto"
@@ -5098,6 +5095,22 @@ msgstr "nedokončovat výběr"
 #: lazarusidestrconsts.lisautomaticallyinvokeafterpoint
 msgid "Automatically invoke after point"
 msgstr "Automaticky vyvolat po bodu"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontype
+msgid "Automatically invoke on typing"
+msgstr ""
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeminlength
+msgid "Only complete if word is longer or equal"
+msgstr ""
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeonlywordend
+msgid "Only complete when at end of word"
+msgstr ""
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeusetimer
+msgid "Use completion box delay"
+msgstr ""
 
 #: lazarusidestrconsts.lisautomaticallyonlinebreak
 msgid "line break"
@@ -8509,6 +8522,10 @@ msgstr "Obnovit jako obsloužené"
 msgid "Resume Unhandled"
 msgstr "Obnovit jako neobsloužené"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmshowexitcodeonstop
+msgid "Show message on stop with Error (Exit-code <> 0)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmshowmessageonstop
 msgid "Show message on stop"
 msgstr "Zobrazit hlášení při zastavení"
@@ -8899,6 +8916,10 @@ msgstr "Znovu načíst ozančené soubory z disku"
 msgid "Some files have changed on disk:"
 msgstr "Některé soubory se na disku změnily:"
 
+#: lazarusidestrconsts.lisdiskdiffsomefileshavelocalchanges
+msgid "Some files have local changes. Either local or external changes will be overwritten."
+msgstr ""
+
 #: lazarusidestrconsts.lisdistinguishbigandsmalllettersegaanda
 msgid "Distinguish big and small letters e.g. A and a"
 msgstr "Rozlišovat velká a malá písmena např. A a a"
@@ -9132,6 +9153,34 @@ msgstr "Duplicitní Jednotka"
 #, object-pascal-format
 msgid "Duplicate unit \"%s\" in \"%s\""
 msgstr "Zdvojit jednotku \"%s\" v \"%s\""
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollin
+msgid "Amount to scroll in"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollin2
+msgid "Amount to scroll in (%)"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollinmax
+msgid "Amount to scroll in (Max)"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgautoscrollondeletepa
+msgid "Auto Scroll on delete past left border"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgautoscrollontypepast
+msgid "Auto Scroll on type past right border"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgtriggeronmincharsofw
+msgid "Trigger on min chars (% of width)"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgtriggeronmincharsvis
+msgid "Trigger on min chars visible"
+msgstr ""
 
 #: lazarusidestrconsts.lisedit
 msgctxt "lazarusidestrconsts.lisedit"
@@ -9629,6 +9678,10 @@ msgstr "Vyhodnotit výraz"
 msgid "E&valuate"
 msgstr "&Vyhodnocení"
 
+#: lazarusidestrconsts.lisevaluateall
+msgid "Evaluate all"
+msgstr ""
+
 #: lazarusidestrconsts.lisevaluatemodify
 msgid "&Evaluate/Modify"
 msgstr "Vyhodnotit/Změnit"
@@ -9704,6 +9757,11 @@ msgstr "Vykonávání příkazu před"
 #: lazarusidestrconsts.lisexecutionstopped
 msgid "Execution stopped"
 msgstr "Vykonání zastaveno"
+
+#: lazarusidestrconsts.lisexecutionstoppedexitcode
+#, object-pascal-format
+msgid "Execution stopped with exit-code %1:d ($%2:s)"
+msgstr ""
 
 #: lazarusidestrconsts.lisexit
 msgctxt "lazarusidestrconsts.lisexit"
@@ -13840,7 +13898,10 @@ msgid "Run &Parameters ..."
 msgstr "Spustit s parametry ..."
 
 #: lazarusidestrconsts.lismenuruntocursor
-msgid "Step over to &Cursor"
+#, fuzzy
+#| msgid "Step over to &Cursor"
+msgctxt "lazarusidestrconsts.lismenuruntocursor"
+msgid "Run to Cursor"
 msgstr "Spustit po ukazatel"
 
 #: lazarusidestrconsts.lismenurunwithoutdebugging
@@ -13957,6 +14018,11 @@ msgstr "Krok přes instrukci"
 msgctxt "lazarusidestrconsts.lismenustepoverinstrhint"
 msgid "Step Over Instruction"
 msgstr "Krok přes instrukci"
+
+#: lazarusidestrconsts.lismenusteptocursor
+msgctxt "lazarusidestrconsts.lismenusteptocursor"
+msgid "Step over to &Cursor"
+msgstr ""
 
 #: lazarusidestrconsts.lismenuswapcaseselection
 msgid "Swap Case in Selection"
@@ -15506,6 +15572,10 @@ msgstr "(dostupné online)"
 msgid "Call %sRegister%s procedure of selected unit"
 msgstr "Volání %sRegister%s procedura vybrané jednotky"
 
+#: lazarusidestrconsts.lispckeditcheckavailabilityonline
+msgid "Check availability online"
+msgstr ""
+
 #: lazarusidestrconsts.lispckeditcleanupdependencies
 msgid "Clean up dependencies ..."
 msgstr "Vyčistit závislosti ..."
@@ -16924,10 +16994,6 @@ msgstr "Přidat editované soubory"
 msgid "Invalid Min-Max version"
 msgstr "Neplatná verze Min-Max"
 
-#: lazarusidestrconsts.lisprojaddinvalidpascalunitname
-msgid "Invalid Pascal unit name"
-msgstr "Neplatné jméno pascalovské jednotky"
-
 #: lazarusidestrconsts.lisprojaddinvalidversion
 msgid "Invalid version"
 msgstr "Neplatná verze"
@@ -17006,11 +17072,6 @@ msgstr "Jméno jednotky \"%s\" už v projektu%sexistuje se souborem: \"%s\"."
 #, object-pascal-format
 msgid "The unit name \"%s\" already exists in the selection%swith file: \"%s\"."
 msgstr "Jméno jednotky \"%s\" už existuje ve výběru%sse souborem: \"%s\"."
-
-#: lazarusidestrconsts.lisprojaddtheunitnameisnotavalidpascalidentifier
-#, object-pascal-format
-msgid "The unit name \"%s\" is not a valid Pascal identifier."
-msgstr "Jméno jednotky \"%s\" není platný pascalovský identifikátor."
 
 #: lazarusidestrconsts.lisprojaddunitnamealreadyexists
 msgid "Unit name already exists"
@@ -20157,6 +20218,11 @@ msgstr "Identifikátor jednotky již existuje"
 msgid "%s unit %s in package %s"
 msgstr "%s jednotka %s v balíčku %s"
 
+#: lazarusidestrconsts.lisunitmustsavebeforeinherit
+#, object-pascal-format
+msgid "Unit \"%s\" must be saved before it can be inherited from. Save now?"
+msgstr ""
+
 #: lazarusidestrconsts.lisunitnamealreadyexistscap
 msgid "Unitname already in project"
 msgstr "Jméno jednotky je už v projektu"
@@ -21109,6 +21175,10 @@ msgstr "&Hlavní verze:"
 msgid "Mi&nor version:"
 msgstr "Ve&dlejší verze:"
 
+#: lazarusidestrconsts.rsnewsearchwithsamecriteria
+msgid "New search with same criteria"
+msgstr ""
+
 #: lazarusidestrconsts.rsotherinfo
 msgid "Other info"
 msgstr "Jiné informace"
@@ -21116,6 +21186,10 @@ msgstr "Jiné informace"
 #: lazarusidestrconsts.rspooutputdirectory
 msgid "PO Output Directory:"
 msgstr "Výstupní adresář pro PO:"
+
+#: lazarusidestrconsts.rsrefreshthesearch
+msgid "Refresh the search"
+msgstr ""
 
 #: lazarusidestrconsts.rsresource
 msgid "Resource"
@@ -21141,10 +21215,6 @@ msgstr "&Revize:"
 #: lazarusidestrconsts.rsselectaninheritedentry
 msgid "Select an inherited entry"
 msgstr "Vybrat zděděnou položku"
-
-#: lazarusidestrconsts.rsstartanewsearch
-msgid "Start a new search"
-msgstr "Začít nové hledání"
 
 #: lazarusidestrconsts.rsversionnumbering
 msgid "Version numbering"
@@ -21953,6 +22023,10 @@ msgstr "Přesunout ukazatel o jednu stránku výše"
 msgctxt "lazarusidestrconsts.srkmecpaste"
 msgid "Paste"
 msgstr "Vložit"
+
+#: lazarusidestrconsts.srkmecpasteascolumns
+msgid "Paste (as Columns)"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecpause
 msgid "pause program"

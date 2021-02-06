@@ -37,7 +37,7 @@ uses
   // LazUtils
   LazFileUtils, LazLoggerBase, UITypes,
   // IdeIntf
-  IDEDialogs, CompOptsIntf, IDEOptionsIntf, LazIDEIntf,
+  IDEDialogs, CompOptsIntf, IDEOptionsIntf, LazIDEIntf, IDEImagesIntf,
   // IDE
   MainBase, BasePkgManager, PackageDefs, Project, CompilerOptions, EnvironmentOpts,
   TransferMacros, BaseBuildManager, Compiler_ModeMatrix, BuildModeDiffDlg,
@@ -51,7 +51,6 @@ type
     btnCreateDefaultModes: TButton;
     BuildModesStringGrid: TStringGrid;
     RenameButton: TButton;
-    ImageList1: TImageList;
     BuildModesPopupMenu: TPopupMenu;
     ButtonPanel1: TButtonPanel;
     NoteLabel: TLabel;
@@ -112,6 +111,7 @@ type
     FListForm: TGenericCheckListForm;
     function IsSelected(AIndex: Integer): Boolean;
     procedure SaveManyModesSelection;
+    procedure SelectAll;
     procedure SelectFirst;
     function Show: Boolean;
   public
@@ -228,7 +228,10 @@ begin
   BMList:=TBuildModesCheckList.Create(DlgCapt);
   try
     if Project1.BuildModes.Count > 1 then
-      Ok:=BMList.Show
+    begin
+      BMList.SelectAll;
+      Ok:=BMList.Show;
+    end
     else begin
       Ok:=IDEMessageDialog(DlgCapt, Format(DlgMsg,[LineEnding,aDir]),
                            mtConfirmation,[mbYes,mbNo]) = mrYes;
@@ -429,16 +432,12 @@ begin
   FillBuildModesGrid;
   UpdateBuildModeButtons;
 
-  ImageList1.AddResourceName(HInstance, 'laz_add');
-  ImageList1.AddResourceName(HInstance, 'laz_delete');
-  ImageList1.AddResourceName(HInstance, 'arrow_up');
-  ImageList1.AddResourceName(HInstance, 'arrow_down');
-  ImageList1.AddResourceName(HInstance, 'menu_tool_diff');
-  ToolButtonAdd.ImageIndex:=0;
-  ToolButtonDelete.ImageIndex:=1;
-  ToolButtonMoveUp.ImageIndex:=2;
-  ToolButtonMoveDown.ImageIndex:=3;
-  ToolButtonDiff.ImageIndex:=4;
+  Toolbar1.Images := IDEImages.Images_16;
+  ToolButtonAdd.ImageIndex := IDEImages.LoadImage('laz_add', 16);
+  ToolButtonDelete.ImageIndex := IDEImages.LoadImage('laz_delete', 16);
+  ToolButtonMoveUp.ImageIndex := IDEImages.LoadImage('arrow_up', 16);
+  ToolButtonMoveDown.ImageIndex := IDEImages.LoadImage('arrow_down', 16);
+  ToolButtonDiff.ImageIndex := IDEImages.LoadImage('menu_tool_diff', 16);
   RenameButton.Caption:=lisBtnRename;
 end;
 
@@ -884,6 +883,14 @@ begin
     if FListForm.CheckListBox1.Checked[i] then
       Project1.BuildModes.ManyBuildModes.Add(FListForm.CheckListBox1.Items[i]);
   Project1.Modified:=True;
+end;
+
+procedure TBuildModesCheckList.SelectAll;
+var
+  i: Integer;
+begin
+  for i := 0 to FListForm.CheckListBox1.Count-1 do
+    FListForm.CheckListBox1.Checked[i] := True;
 end;
 
 procedure TBuildModesCheckList.SelectFirst;

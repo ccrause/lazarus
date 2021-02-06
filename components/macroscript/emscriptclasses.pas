@@ -72,6 +72,8 @@ const
   //PropReadId_TextBetweenPointsEx =    15x;
   //PropWriteId_TextBetweenPointsEx =   15x;
   FunctionId_SetTextBetweenPoints =   157;
+  PropReadId_LinesCount =             158;
+  PropWriteId_LinesCount =            159;
 
   FunctionId_CopyToClipboard =        160;
   FunctionId_CutToClipboard =         161;
@@ -566,14 +568,14 @@ begin
         Obj.LogicalCaretXY := Point(Stack.GetInt(-2), Obj.CaretY);
       end;
     FunctionId_MoveCaretIgnoreEOL: begin  // procedure MoveCaretIgnoreEOL(NewCaret: TPoint);
-        CheckMinParamCount(3, 'TSynEdit.MoveCaretIgnoreEOL');
+        CheckMinParamCount(2, 'TSynEdit.MoveCaretIgnoreEOL');
         Result := GetSynEditFromStack(-1, Obj);
         if not Result then
           exit;
         Obj.MoveCaretIgnoreEOL(GetVarPointFromStack(Stack, -2)^);
       end;
     FunctionId_MoveLogicalCaretIgnoreEOL: begin  // procedure MoveLogicalCaretIgnoreEOL(NewLogCaret: TPoint);
-        CheckMinParamCount(3, 'TSynEdit.MoveLogicalCaretIgnoreEOL');
+        CheckMinParamCount(2, 'TSynEdit.MoveLogicalCaretIgnoreEOL');
         Result := GetSynEditFromStack(-1, Obj);
         if not Result then
           exit;
@@ -721,6 +723,16 @@ begin
     PropWriteId_Lines: begin  //
         assert(false, 'read only');
       end;
+    PropReadId_LinesCount: begin  //
+        CheckMinParamCount(1, 'TSynEdit.LinesCount (r)');
+        Result := GetSynEditFromStack(-2, Obj);
+        if not Result then
+          exit;
+        Stack.SetInt(-1, Obj.Lines.Count);
+      end;
+    PropWriteId_LinesCount: begin  //
+        assert(false, 'read only');
+      end;
     PropReadId_LineAtCaret: begin  //
         CheckMinParamCount(1, 'TSynEdit.LineAtCaret (r)');
         Result := GetSynEditFromStack(-2, Obj);
@@ -765,7 +777,7 @@ begin
         if not Result then
           exit;
         Obj.SetTextBetweenPoints(GetVarPointFromStack(Stack, -2)^, GetVarPointFromStack(Stack, -3)^,
-          Stack.GetAnsiString(-4), TSynEditTextFlags(Stack.GetUInt(-5)),
+          Stack.GetAnsiString(-4), TSynEditTextFlags(GetSetFromStack(Stack, -5)),
           TSynCaretAdjustMode(Stack.GetUInt(-6)), TSynMarksAdjustMode(Stack.GetUInt(-7)),
           TSynSelectionMode(Stack.GetUInt(-8))
         );
@@ -917,6 +929,7 @@ procedure TSynEdit_SelMode_R(Self: TSynEdit; var M: TSynSelectionMode); begin   
 
     // Text
 procedure TSynEdit_Lines_R(Self: TSynEdit; var S: string; I: Longint);  begin   S := Self.Lines[I];   end;
+procedure TSynEdit_LinesCount_R(Self: TSynEdit; var C: integer);  begin   C := Self.Lines.Count;   end;
 procedure TSynEdit_LineAtCaret_R(Self: TSynEdit; var S: string);        begin   S := Self.Lines[Self.CaretY-1];   end;
 
 procedure TSynEdit_TextBetweenPoints_W(Self: TSynEdit; M: String; P1, P2: TPoint);
@@ -1103,6 +1116,7 @@ begin
 
     // Text
     RegisterProperty('Lines', 'String Integer', iptR);
+    RegisterProperty('LinesCount', 'Integer', iptR);
     RegisterProperty('LineAtCaret', 'String', iptR); // LineText
     RegisterMethod('procedure InsertTextAtCaret(aText: String; aCaretMode : TSynCaretAdjustMode);'); //  = scamEnd
     RegisterProperty('TextBetweenPoints', 'String TPoint TPoint', iptRW);
@@ -1135,10 +1149,10 @@ begin
   begin
     {$IFnDEF PasMacroNativeCalls}
     RegisterPropertyNameHelper('CARETXY', @ExecBasicHandler, Pointer(PropReadId_CaretXY), nil, Pointer(PropWriteId_CaretXY), nil);
-    RegisterPropertyNameHelper('CARETX', @ExecBasicHandler, Pointer(PropReadId_CaretX), nil, Pointer(PropWriteId_CaretY), nil);
+    RegisterPropertyNameHelper('CARETX', @ExecBasicHandler, Pointer(PropReadId_CaretX), nil, Pointer(PropWriteId_CaretX), nil);
     RegisterPropertyNameHelper('CARETY', @ExecBasicHandler, Pointer(PropReadId_CaretY), nil, Pointer(PropWriteId_CaretY), nil);
-    RegisterPropertyNameHelper('LOGICALCARETXY', @ExecBasicHandler, Pointer(PropWriteId_LogicalCaretXY), nil, Pointer(PropWriteId_LogicalCaretXY), nil);
-    RegisterPropertyNameHelper('LOGICALCARETX', @ExecBasicHandler, Pointer(PropWriteId_LogicalCaretX), nil, Pointer(PropWriteId_LogicalCaretX), nil);
+    RegisterPropertyNameHelper('LOGICALCARETXY', @ExecBasicHandler, Pointer(PropReadId_LogicalCaretXY), nil, Pointer(PropWriteId_LogicalCaretXY), nil);
+    RegisterPropertyNameHelper('LOGICALCARETX', @ExecBasicHandler, Pointer(PropReadId_LogicalCaretX), nil, Pointer(PropWriteId_LogicalCaretX), nil);
     RegisterMethodName('MOVECARETIGNOREEOL', @ExecBasicHandler, Pointer(FunctionId_MoveCaretIgnoreEOL), nil);
     RegisterMethodName('MOVELOGICALCARETIGNOREEOL', @ExecBasicHandler, Pointer(FunctionId_MoveLogicalCaretIgnoreEOL), nil);
 
@@ -1160,6 +1174,7 @@ begin
     RegisterMethodName('SEARCHREPLACEEX', @ExecBasicHandler, Pointer(FunctionId_SearchReplaceEx), nil);
 
     RegisterPropertyNameHelper('LINES', @ExecBasicHandler, Pointer(PropReadId_Lines), nil, Pointer(PropWriteId_Lines), nil);
+    RegisterPropertyNameHelper('LINESCOUNT', @ExecBasicHandler, Pointer(PropReadId_LinesCount), nil, Pointer(PropWriteId_LinesCount), nil);
     RegisterPropertyNameHelper('LINEATCARET', @ExecBasicHandler, Pointer(PropReadId_LineAtCaret), nil, Pointer(PropWriteId_LineAtCaret), nil);
     RegisterMethodName('INSERTTEXTATCARET', @ExecBasicHandler, Pointer(FunctionId_InsertTextAtCaret), nil);
 
@@ -1208,6 +1223,7 @@ begin
     RegisterMethod(@TEmsSynWrapper.EMS_SearchReplaceEx, 'SEARCHREPLACEEX');
 
     RegisterPropertyHelper(@TSynEdit_Lines_R, nil, 'LINES');
+    RegisterPropertyHelper(@TSynEdit_LinesCount_R, nil, 'LINESCOUNT');
     RegisterPropertyHelper(@TSynEdit_LineAtCaret_R, nil, 'LINEATCARET');
     RegisterMethod(@TEmsSynWrapper.EMS_InsertTextAtCaret, 'INSERTTEXTATCARET');
 

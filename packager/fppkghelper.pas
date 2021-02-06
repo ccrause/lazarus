@@ -12,10 +12,8 @@ uses
   fprepos,
   LazarusIDEStrConsts,
   {$ENDIF}
-  LazLogger,
-  LazFileCache,
-  FileUtil,
-  LazFileUtils;
+  // LazUtils
+  LazLogger, LazFileCache, FileUtil, LazFileUtils;
 
 type
 
@@ -458,13 +456,8 @@ var
   i: Integer;
 begin
   for i := 0 to High(FpcPackages) do
-    begin
     if SameText(PackageName, FpcPackages[i]) then
-      begin
-      Result := True;
-      Exit;
-      end;
-    end;
+      Exit(True);
   Result := False;
 end;
 
@@ -483,7 +476,7 @@ procedure TFppkgHelper.ReInitialize;
 begin
   FIsProperlyConfigured := fpcUnknown;
   {$IF FPC_FULLVERSION>30100}
-  FFPpkg.Free;
+  FreeAndNil(FFPpkg);
   {$ENDIF}
   InitializeFppkg;
 end;

@@ -45,11 +45,12 @@ uses
   Math, // Math after gtk to get the correct Float type
   Types,
   // LCL
-  LMessages, LCLProc, LCLIntf, LCLType, GraphType, Graphics,
+  LMessages, LCLProc, LCLIntf, LCLType, Graphics,
   LResources, Controls, Forms, Buttons, Menus, StdCtrls, ComCtrls, ExtCtrls,
   Dialogs, ExtDlgs, ImgList, LCLMessageGlue,
   // LazUtils
-  Masks, FileUtil, LazFileUtils, LazStringUtils, LazLoggerBase, LazUTF8, DynHashArray,
+  FileUtil, LazFileUtils, LazStringUtils, LazUtilities, LazLoggerBase, LazTracer,
+  GraphType, Masks, LazUTF8, DynHashArray,
   // Gtk2
   Gtk2FontCache, Gtk2Globals, Gtk2Def, Gtk2Extra, {%H-}Gtk2Debug;
 
@@ -99,13 +100,14 @@ function gtkactivateCB(widget: PGtkWidget; data: gPointer): GBoolean; cdecl;
 function gtkchangedCB( widget: PGtkWidget; data: gPointer): GBoolean; cdecl;
 procedure gtkchanged_editbox_delete_text(Widget: PGtkWidget;
   {%H-}AStartPos, {%H-}AEndPos: gint; {%H-}data: gPointer); cdecl;
-procedure gtkchanged_editbox_insert_text(Widget: PGtkWidget; {%H-}ANewText: gChar;
+procedure gtkchanged_editbox_insert_text(Widget: PGtkWidget; {%H-}ANewText: PgChar;
   {%H-}ANewTextLength: gint; {%H-}APosition: pgint; {%H-}data: gPointer); cdecl;
 function gtkchanged_editbox( widget: PGtkWidget; data: gPointer): GBoolean; cdecl;
 function gtkchanged_editbox_delete(widget: PGtkWidget;
   {%H-}AType: TGtkDeleteType; {%H-}APos: gint; {%H-}data: gPointer): GBoolean; cdecl;
 function gtkdaychanged(Widget: PGtkWidget; data: gPointer): GBoolean; cdecl;
 function gtktoggledCB( widget: PGtkWidget; data: gPointer): GBoolean; cdecl;
+function gtkpaste_editbox(Widget: PGtkWidget; data: gPointer): GBoolean; cdecl;
 
 function gtkExposeEvent(Widget: PGtkWidget; Event: PGDKEventExpose;
   Data: gPointer): GBoolean; cdecl;
@@ -439,10 +441,7 @@ function GTKEventStateToShiftState(KeyState: LongWord): TShiftState;
 procedure gdk_event_key_get_string(Event: PGDKEventKey; var theString: Pointer);
 procedure gdk_event_key_set_string(Event: PGDKEventKey; const NewString: PChar);
 function gdk_event_get_type(Event: Pointer): TGdkEventType;
-procedure RememberKeyEventWasHandledByLCL(Event: PGdkEventKey;
-                                          BeforeEvent: boolean);
-function KeyEventWasHandledByLCL(Event: PGdkEventKey;
-                                 BeforeEvent: boolean): boolean;
+
 function HandleGTKKeyUpDown(AWidget: PGtkWidget; AEvent: PGdkEventKey;
   AData: gPointer; ABeforeEvent, AHandleDown: Boolean; const AEventName: PGChar
   ) : GBoolean;

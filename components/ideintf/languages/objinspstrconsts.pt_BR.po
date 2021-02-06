@@ -298,15 +298,41 @@ msgstr "\"IfNDef\""
 msgid "Set value"
 msgstr "Definir valor"
 
-#: objinspstrconsts.lisunabletofindparserfortool
-#, object-pascal-format
-msgid "Unable to find parser for tool \"%s\""
-msgstr "Incapaz de localizar analisador para a ferramenta \"%s\""
+#: objinspstrconsts.lrsbufdsfilters
+msgid "XML data files|*.xml;Binary data files|*.dat"
+msgstr "Arquivo de dados XML|*.xml;Arquivos de dados binários|*.dat"
 
-#: objinspstrconsts.lisunabletofindparserwithname
-#, object-pascal-format
-msgid "Unable to find parser with name \"%s\""
-msgstr "Incapaz de encontrar analisador com o nome \"%s\""
+#: objinspstrconsts.lrscopyfromdataset
+msgid "Copy data from other dataset"
+msgstr "Copiar dados de outro \"dataset\""
+
+#: objinspstrconsts.lrscreatedataset
+msgid "Create dataset"
+msgstr "Criar \"dataset\""
+
+#: objinspstrconsts.lrsdatasetactive
+msgid "Dataset is already active, close it first."
+msgstr "\"Dataset\" já está ativo, fechar primeiro."
+
+#: objinspstrconsts.lrsloadfromfile
+msgid "Load data from file"
+msgstr "Carregar dados de arquivo"
+
+#: objinspstrconsts.lrsnodatasetsavailableforcopy
+msgid "No dataset available to copy data from."
+msgstr "Nenhum \"dataset\" disponível de onde copiar dados."
+
+#: objinspstrconsts.lrsprovidedatafilename
+msgid "Select a data file to save data to"
+msgstr "Selecionar um arquivo para salvar dados"
+
+#: objinspstrconsts.lrssavetofile
+msgid "Save data to file"
+msgstr "Salvar dados para arquivo"
+
+#: objinspstrconsts.lrsselectdatafilename
+msgid "Select a file with data to load into dataset"
+msgstr "Selecionar um arquivo com dados para carregar no \"dataset\""
 
 #: objinspstrconsts.nbcesaddpage
 msgctxt "objinspstrconsts.nbcesaddpage"
@@ -482,10 +508,6 @@ msgstr "Confirmar exclusão"
 msgctxt "objinspstrconsts.oiscopycomponents"
 msgid "&Copy"
 msgstr "&Copiar"
-
-#: objinspstrconsts.oiscreateanewpascalunit
-msgid "Create a new pascal unit."
-msgstr "Criar uma nova unidade pascal."
 
 #: objinspstrconsts.oiscreatedefaultevent
 msgid "Create default event"
@@ -866,10 +888,6 @@ msgstr "Definir para padrão: %s"
 #: objinspstrconsts.oissettodefaulthint
 msgid "Set property value to Default"
 msgstr "Definir valor da propriedade para o padrão"
-
-#: objinspstrconsts.oisshowalloutputlines
-msgid "Show all output lines"
-msgstr "Exibir todas as linhas de saída"
 
 #: objinspstrconsts.oisshowclasses
 msgid "Show classes"
@@ -1279,10 +1297,6 @@ msgstr "Editor filtro"
 #: objinspstrconsts.pefiltername
 msgid "Filter name"
 msgstr "Nome filtro"
-
-#: objinspstrconsts.pirsunit
-msgid "Pascal unit"
-msgstr "unidade Pascal"
 
 #: objinspstrconsts.rscdalignment
 msgid "Alignment"

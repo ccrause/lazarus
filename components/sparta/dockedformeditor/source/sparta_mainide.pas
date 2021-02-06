@@ -165,7 +165,7 @@ type
     class procedure OnDesignRefreshPropertyValues;
     class procedure OnModifiedPersistentAdded({%H-}APersistent: TPersistent; {%H-}Select: Boolean);
     class procedure OnModifiedSender(Sender: TObject);
-    class procedure OnModified;
+    class procedure OnModified(APersistent: TPersistent);
     class procedure DesignerSetFocus;
     class procedure OnDesignMouseDown(Sender: TObject; {%H-}Button: TMouseButton;
       {%H-}Shift: TShiftState; {%H-}X, {%H-}Y: Integer);
@@ -912,10 +912,13 @@ var
   var
     i: Integer;
     se: TSourceEditorInterface;
+    ASourceEditorWindowData: TSourceEditorWindowData;
   begin
     if (LastActiveSourceEditorWindow = nil) or (LastActiveSourceEditor = nil) then
       Exit(False);
-    for se in SourceEditorWindows[LastActiveSourceEditorWindow].FPageCtrlList.Keys do
+
+    ASourceEditorWindowData := SourceEditorWindows[LastActiveSourceEditorWindow];
+    for se in ASourceEditorWindowData.FPageCtrlList.Keys do
     begin
       Result := True;
       for i := 0 to LastActiveSourceEditorWindow.Count - 1 do
@@ -1022,6 +1025,7 @@ var
   LSourceEditor: TSourceEditorInterface;
   LPageCtrl: TModulePageControl;
   LSourceEditorWindow: TSourceEditorWindowInterface;
+  LSourceEditorWindowData: TSourceEditorWindowData;
   LFormData: TDesignFormData;
 begin
   // sender is here as special parameter, because is possible situation where is moved editor
@@ -1033,8 +1037,10 @@ begin
 
   // parent don't exist anymore and we must search in each window...
   if Sender = nil then // but not for Sender = nil :P
-    LPageCtrl := SourceEditorWindows[LastActiveSourceEditorWindow].FPageCtrlList[LastActiveSourceEditor]
-  else
+  begin
+    LSourceEditorWindowData := SourceEditorWindows[LastActiveSourceEditorWindow];
+    LPageCtrl := LSourceEditorWindowData.FPageCtrlList[LastActiveSourceEditor]
+  end else
     LPageCtrl := AbsoluteFindModulePageControl(LSourceEditor);
 
   if LPageCtrl = nil then
@@ -1069,7 +1075,6 @@ var
   LPageCtrl: TModulePageControl;
 begin
   Result := nil;
-  Application.ProcessMessages;
   if (FormEditingHook = nil) or (GlobalDesignHook = nil) then
     Exit;
   LForm := FormEditingHook.GetDesignerForm(GlobalDesignHook.LookupRoot);
@@ -1208,10 +1213,10 @@ end;
 
 class procedure TSpartaMainIDE.OnModifiedSender(Sender: TObject);
 begin
-  OnModified;
+  OnModified(Nil);
 end;
 
-class procedure TSpartaMainIDE.OnModified;
+class procedure TSpartaMainIDE.OnModified(APersistent: TPersistent);
 var
   LResizer: TResizer;
 begin
@@ -1223,7 +1228,7 @@ end;
 class procedure TSpartaMainIDE.OnModifiedPersistentAdded(
   APersistent: TPersistent; Select: Boolean);
 begin
-  OnModified;
+  OnModified(Nil);
 end;
 
 class procedure TSpartaMainIDE.OnShowDesignerForm(Sender: TObject; AEditor: TSourceEditorInterface;
@@ -1340,7 +1345,9 @@ begin
       Exit;
     LForm := TCustomForm(GlobalDesignHook.LookupRoot);
     LFormData := FindDesignFormData(LForm);
-    LFormData.RepaintFormImages;
+    LSourceWindow := (LFormData as IDesignedFormIDE).LastActiveSourceWindow;
+    LPageCtrl := FindModulePageControl(LSourceWindow);
+    LPageCtrl.BoundToDesignTabSheet;
   end;
 end;
 

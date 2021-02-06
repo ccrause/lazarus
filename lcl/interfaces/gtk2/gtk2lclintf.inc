@@ -869,6 +869,30 @@ begin
   Result := False;
 end;
 
+
+function gtk_message_dialog_get_message_area(Dialog:PGtkMessageDialog):PGtkWidget; cdecl; external gtklib;
+
+procedure set_message_text(Dialog:PGtkMessageDialog;const msg: string;const is_pango_markup:boolean=false);
+var
+  ma:PGtkWidget;
+  mainList,ChildList:PgList;
+begin
+  if is_pango_markup then
+    gtk_message_dialog_set_markup(Dialog, PGChar(msg))
+  else
+  begin
+    ma:=gtk_message_dialog_get_message_area(Dialog);
+    MainList := gtk_container_get_children(PGtkContainer(ma));
+    if Assigned(MainList) then
+    begin
+      gtk_label_set_label(PGtkLabel(MainList^.data),PGChar(msg));
+      g_list_free(MainList);
+    end;
+
+  end;
+end;
+
+
 function TGtk2WidgetSet.AskUser(const DialogCaption, DialogMessage: string; DialogType:
   LongInt; Buttons: TDialogButtons; HelpCtx: Longint): LongInt;
 
@@ -896,6 +920,8 @@ var
       idButtonAll      : Result := GTK_RESPONSE_LCL_ALL;
       idButtonNoToAll  : Result := GTK_RESPONSE_LCL_NOTOALL;
       idButtonYesToAll : Result := GTK_RESPONSE_LCL_YESTOALL;
+    else
+      Result:=AnID;
     end;
   end;
 
@@ -995,7 +1021,7 @@ begin
     GTK_DIALOG_MODAL, GtkDialogType, Btns,
      nil);
 
-  gtk_message_dialog_set_markup(PGtkMessageDialog(Dialog), PGChar(DialogMessage));
+  set_message_text(PGtkMessageDialog(Dialog), PGChar(DialogMessage));
 
   g_signal_connect(PGtkObject(Dialog), 'delete-event',
     TGtkSignalFunc(@PromptUserBoxClosed),
@@ -1044,7 +1070,10 @@ begin
         BtnID := -1;
         BtnResult:=DlgBtn.ModalResult;
         if (BtnResult>=Low(ButtonResults)) and (BtnResult<=High(ButtonResults)) then
-          BtnID := ButtonResults[DlgBtn.ModalResult];
+          BtnID := ButtonResults[DlgBtn.ModalResult]
+        else
+          BtnID := DlgBtn.ModalResult;
+
         if (BtnIdx=CancelID) then
           g_object_set_data(PGObject(Dialog), 'modal_result', {%H-}Pointer(PtrInt(DlgBtn.ModalResult)));
 
@@ -1057,7 +1086,8 @@ begin
 
         if DefaultID = BtnIdx then
         begin
-          gtk_dialog_set_default_response(PGtkDialog(Dialog), ResponseID(BtnID));
+          gtk_dialog_set_default_response(PGtkDialog(Dialog),  BtnID);
+          gtk_widget_grab_focus(PgtkWidget(Btn));
           X := DlgBtn.ModalResult;
           if CancelID<0 then
             g_object_set_data(PGObject(Dialog), 'modal_result',

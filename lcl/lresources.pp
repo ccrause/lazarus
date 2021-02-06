@@ -37,7 +37,7 @@ uses
   // LCL
   LCLProc, LCLStrConsts,
   // LazUtils
-  LazConfigStorage, FPCAdds, DynQueue, LazUTF8, LazUTF8Classes, LazLoggerBase;
+  LazConfigStorage, FPCAdds, DynQueue, LazUTF8, LazLoggerBase;
 
 {$DEFINE UseLRS}
 {$DEFINE UseRES}
@@ -175,9 +175,7 @@ type
     function ReadInt32: LongInt; override;
     function ReadInt64: Int64; override;
     function ReadSet(EnumType: Pointer): Integer; override;
-    {$IF FPC_FULLVERSION >= 30000}
     procedure ReadSignature; override;
-    {$ENDIF}
     function ReadStr: String; override;
     function ReadString(StringType: TValueType): String; override;
     function ReadWideString: WideString; override;
@@ -251,7 +249,7 @@ type
     procedure FlushStackToStream;
     procedure WriteToStream(const Buffer; Count: Longint);
   protected
-    procedure FlushBuffer;
+    procedure FlushBuffer; {$IF FPC_FULLVERSION >= 30200}override;{$ENDIF}
     procedure WriteValue(Value: TValueType);
     procedure WriteStr(const Value: String);
     procedure WriteIntegerContent(i: integer);
@@ -275,9 +273,7 @@ type
     procedure BeginCollection; override;{ Ends with the next "EndList" }
     procedure BeginComponent(Component: TComponent; Flags: TFilerFlags;
       ChildPos: Integer); override; { Ends after the second "EndList" }
-    {$IF FPC_FULLVERSION >= 30000}
     procedure WriteSignature; override;
-    {$ENDIF}
     procedure BeginList; override;
     procedure EndList; override;
     procedure BeginProperty(const PropName: String); override;
@@ -474,8 +470,7 @@ var
   LRSObjectReaderClass: TLRSObjectReaderClass=TLRSObjectReader;
   LRSObjectWriterClass: TLRSObjectWriterClass=TLRSObjectWriter;
 
-function InitResourceComponent(Instance: TComponent;
-  RootAncestor: TClass):Boolean;
+function InitResourceComponent(Instance: TComponent; RootAncestor: TClass): Boolean;
 function InitLazResourceComponent(Instance: TComponent;
                                   RootAncestor: TClass): Boolean;
 function CreateLRSReader(s: TStream; var DestroyDriver: boolean): TReader;
@@ -798,8 +793,7 @@ begin
   end;
 end;
 
-function InitResourceComponent(Instance: TComponent;
-  RootAncestor: TClass):Boolean;
+function InitResourceComponent(Instance: TComponent; RootAncestor: TClass): Boolean;
 begin
   Result := InitLazResourceComponent(Instance, RootAncestor);
 end;
@@ -817,7 +811,7 @@ end;
 {$else}
 begin
   Result := FindResource(HInstance,PChar(ResName),
-    {$if (FPC_FULLVERSION>=20701) and defined(Windows)}Windows.{$endif}RT_RCDATA);
+    {$ifdef Windows}Windows.{$endif}RT_RCDATA);
 end;
 {$endif}
 
@@ -1367,13 +1361,13 @@ end;
 function LFMtoLRSfile(const LFMfilename: string):boolean;
 // returns true if successful
 var
-  LFMFileStream, LRSFileStream: TFileStreamUTF8;
+  LFMFileStream, LRSFileStream: TFileStream;
   LFMMemStream, LRSMemStream: TMemoryStream;
   LRSfilename, LFMfilenameExt: string;
 begin
   Result:=true;
   try
-    LFMFileStream:=TFileStreamUTF8.Create(LFMfilename,fmOpenRead);
+    LFMFileStream:=TFileStream.Create(LFMfilename,fmOpenRead);
     LFMMemStream:=TMemoryStream.Create;
     LRSMemStream:=TMemoryStream.Create;
     try
@@ -1386,7 +1380,7 @@ begin
       Result:=LFMtoLRSstream(LFMMemStream,LRSMemStream);
       if not Result then exit;
       LRSMemStream.Position:=0;
-      LRSFileStream:=TFileStreamUTF8.Create(LRSfilename,fmCreate);
+      LRSFileStream:=TFileStream.Create(LRSfilename,fmCreate);
       try
         LRSFileStream.CopyFrom(LRSMemStream,LRSMemStream.Size);
       finally
@@ -2112,13 +2106,13 @@ end;
 function ReadLFMHeaderFromFile(const Filename: string; out LFMType,
   LFMComponentName, LFMClassName: String): boolean;
 var
-  fs: TFileStreamUTF8;
+  fs: TFileStream;
   Header: string;
   Cnt: LongInt;
 begin
   Result:=false;
   try
-    fs:=TFileStreamUTF8.Create(Filename,fmOpenRead);
+    fs:=TFileStream.Create(Filename,fmOpenRead);
     try
       SetLength(Header,600);
       Cnt:=fs.Read(Header[1],length(Header));
@@ -3102,7 +3096,7 @@ begin
 end;
 
 function InitLazResourceComponent(Instance: TComponent;
-  RootAncestor: TClass): Boolean;
+                                  RootAncestor: TClass): Boolean;
 
   function InitComponent(ClassType: TClass): Boolean;
   var
@@ -3113,6 +3107,7 @@ function InitLazResourceComponent(Instance: TComponent;
     FPResource: TFPResourceHandle;
     {$endif}
     ResName: String;
+    GenericInd: Integer;
     Stream: TStream;
     Reader: TReader;
     DestroyDriver: Boolean;
@@ -3127,7 +3122,11 @@ function InitLazResourceComponent(Instance: TComponent;
       
     Stream := nil;
     ResName := ClassType.ClassName;
-    
+    // Generics class name can contain <> and resource files do not support it
+    GenericInd := ResName.IndexOf('<');
+    if GenericInd > 0 then
+      SetLength(ResName, GenericInd);
+
     {$ifdef UseLRS}
     LazResource := LazarusResources.Find(ResName);
     if (LazResource <> nil) and (LazResource.Value <> '') then
@@ -3302,8 +3301,7 @@ begin
   QWord(Result):=Mantissa or (qword(ExponentAndSign) shl 52);
 end;
 
-procedure ConvertEndianBigDoubleToLRSExtended(BigEndianDouble,
-  LRSExtended: Pointer);
+procedure ConvertEndianBigDoubleToLRSExtended(BigEndianDouble, LRSExtended: Pointer);
 // Floats consists of a sign bit, some exponent bits and the mantissa bits
 // A 0 is all bits 0
 // not 0 has always a leading 1, which exponent is stored
@@ -4245,11 +4243,9 @@ begin
   end;
 end;
 
-{$IF FPC_FULLVERSION >= 30000}
 procedure TLRSObjectReader.ReadSignature;
 begin
 end;
-{$ENDIF}
 
 function TLRSObjectReader.ReadStr: String;
 var
@@ -4779,11 +4775,9 @@ begin
   EndHeader;
 end;
 
-{$IF FPC_FULLVERSION >= 30000}
 procedure TLRSObjectWriter.WriteSignature;
 begin
 end;
-{$ENDIF}
 
 procedure TLRSObjectWriter.BeginList;
 begin

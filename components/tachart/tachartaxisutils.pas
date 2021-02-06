@@ -84,6 +84,7 @@ type
   strict private
     FDefaultListener: TListener;
     FDefaultSource: TIntervalChartSource;
+    FSourceExchangeXY: Boolean;
     FStripes: TChartStyles;
     procedure SetStripes(AValue: TChartStyles);
   strict protected
@@ -95,6 +96,8 @@ type
       ADrawer: IChartDrawer; AIsVertical: Boolean; ATickLength: Integer;
       AValues: TChartValueTextArray): Integer;
     property DefaultSource: TIntervalChartSource read FDefaultSource;
+    property SourceExchangeXY: Boolean
+      read FSourceExchangeXY write FSourceExchangeXY default false;
     property Stripes: TChartStyles read FStripes write SetStripes;
   end;
 
@@ -138,6 +141,7 @@ type
     property Range: TChartRange read FRange write SetRange;
     property RotationCenter;
     property Source: TCustomChartSource read FSource write SetSource;
+    property SourceExchangeXY;
     property Stripes;
     property Style default smsValue;
     property TextFormat;
@@ -413,13 +417,13 @@ var
   p1, p2: TPoint;
 begin
   if FAxis.IsFlipped then begin
-    p1 := Point(IfThen(FAtDataOnly, GraphToImage(FMaxForMarks), FClipRect^.Left), AFixedCoord);
-    p2 := Point(IfThen(FAtDataOnly, GraphToImage(FMinForMarks), FClipRect^.Right), AFixedCoord);
+    p1 := Point(Math.IfThen(FAtDataOnly, GraphToImage(FMaxForMarks), FClipRect^.Left), AFixedCoord);
+    p2 := Point(Math.IfThen(FAtDataOnly, GraphToImage(FMinForMarks), FClipRect^.Right), AFixedCoord);
     if FAxis.Arrow.Visible then
       p1.X -= FDrawer.Scale(FAxis.Arrow.Length);
   end else begin
-    p1 := Point(IfThen(FAtDataOnly, GraphToImage(FMinForMarks), FClipRect^.Left), AFixedCoord);
-    p2 := Point(IfThen(FAtDataOnly, GraphToImage(FMaxForMarks), FClipRect^.Right), AFixedCoord);
+    p1 := Point(Math.IfThen(FAtDataOnly, GraphToImage(FMinForMarks), FClipRect^.Left), AFixedCoord);
+    p2 := Point(Math.IfThen(FAtDataOnly, GraphToImage(FMaxForMarks), FClipRect^.Right), AFixedCoord);
     if FAxis.Arrow.Visible then
       p2.X += FDrawer.Scale(FAxis.Arrow.Length);
   end;
@@ -482,13 +486,13 @@ var
   p1, p2: TPoint;
 begin
   if FAxis.IsFlipped then begin
-    p1 := Point(AFixedCoord, IfThen(FAtDataOnly, GraphToImage(FMaxForMarks), FClipRect^.Bottom));
-    p2 := Point(AFixedCoord, IfThen(FAtDataOnly, GraphToImage(FMinForMarks), FClipRect^.Top));
+    p1 := Point(AFixedCoord, Math.IfThen(FAtDataOnly, GraphToImage(FMaxForMarks), FClipRect^.Bottom));
+    p2 := Point(AFixedCoord, Math.IfThen(FAtDataOnly, GraphToImage(FMinForMarks), FClipRect^.Top));
     if FAxis.Arrow.Visible then
       p1.Y += FDrawer.Scale(FAxis.Arrow.Length);
   end else begin
-    p1 := Point(AFixedCoord, IfThen(FAtDataOnly, GraphToImage(FMinForMarks), FClipRect^.Bottom));
-    p2 := Point(AFixedCoord, IfThen(FAtDataOnly, GraphToImage(FMaxForMarks), FClipRect^.Top));
+    p1 := Point(AFixedCoord, Math.IfThen(FAtDataOnly, GraphToImage(FMinForMarks), FClipRect^.Bottom));
+    p2 := Point(AFixedCoord, Math.IfThen(FAtDataOnly, GraphToImage(FMaxForMarks), FClipRect^.Top));
     if FAxis.Arrow.Visible then
       p2.Y -= FDrawer.Scale(FAxis.Arrow.Length);
   end;
@@ -619,7 +623,7 @@ begin
   for t in AValues do
     // Workaround for issue #19780, fix after upgrade to FPC 2.6.
     with MeasureLabel(ADrawer, t.FText) do
-      Result := Max(IfThen(AIsVertical, cy, cx), Result);
+      Result := Max(Math.IfThen(AIsVertical, cy, cx), Result);
   if Result = 0 then exit;
   if DistanceToCenter then
     Result := Result div 2;

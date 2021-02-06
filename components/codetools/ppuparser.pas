@@ -34,7 +34,9 @@ unit PPUParser;
 interface
 
 uses
-  Classes, SysUtils, contnrs, FileProcs, LazFileUtils, lazutf8classes;
+  Classes, SysUtils, contnrs,
+  FileProcs,
+  LazFileUtils, LazUTF8;
 
 const
   PPUIsEndianBig = {$IFDEF ENDIAN_BIG}True{$ELSE}False{$ENDIF};
@@ -858,7 +860,7 @@ type
         system_x86_64_darwin,      { 61 }
         system_avr_embedded,       { 62 }
         system_i386_haiku,         { 63 }
-        system_arm_darwin,         { 64 }
+        system_arm_ios,            { 64 }
         system_x86_64_solaris,     { 65 }
         system_mips_linux,         { 66 }
         system_mipsel_linux,       { 67 }
@@ -880,8 +882,10 @@ type
         system_i386_aros,          { 83 }
         system_x86_64_aros,        { 84 }
         system_x86_64_dragonfly,   { 85 }
-        system_aarch64_darwin,     { 85 }
-        system_x86_64_iphonesim    { 86 }
+        system_aarch64_ios,        { 86 }
+        system_x86_64_iphonesim,   { 87 }
+        system_aarch64_win64,      { 107 }
+        system_aarch64_darwin      { 111 }
       );
 const
   // taken form ppudump.pp
@@ -950,7 +954,7 @@ const
   { 61 }  'MacOSX-x64',
   { 62 }  'Embedded-avr',
   { 63 }  'Haiku-i386',
-  { 64 }  'Darwin-ARM',
+  { 64 }  'iOS-ARM',
   { 65 }  'Solaris-x86-64',
   { 66 }  'Linux-MIPS',
   { 67 }  'Linux-MIPSel',
@@ -972,8 +976,10 @@ const
   { 83 }  'AROS-i386',
   { 84 }  'AROS-x86-64',
   { 85 }  'DragonFly-x86-64',
-  { 85 }  'Darwin-AArch64',
-  { 86 }  'iPhoneSim-x86-64'
+  { 86 }  'iOS-AArch64',
+  { 87 }  'iPhoneSim-x86-64',
+  { 107 }  'Win64-AArch64',
+  { 111 }  'Darwin-AArch64'
   );
 begin
   if w<=ord(high(ttarget)) then
@@ -2540,7 +2546,7 @@ begin
   while not EndOfEntry do begin
     AUnitName:=ReadEntryShortstring;
     if List=nil then
-      List:=TStringList.Create;
+      List:=TStringListUTF8Fast.Create;
     if List.IndexOf(AUnitName)<0 then
       List.Add(AUnitName);
     ReadEntryDWord; // CRC
@@ -2617,9 +2623,9 @@ end;
 procedure TPPU.LoadFromFile(const Filename: string; const Parts: TPPUParts);
 var
   ms: TMemoryStream;
-  fs: TFileStreamUTF8;
+  fs: TFileStream;
 begin
-  fs:=TFileStreamUTF8.Create(Filename,fmOpenRead or fmShareDenyWrite);
+  fs:=TFileStream.Create(Filename,fmOpenRead or fmShareDenyWrite);
   ms:=TMemoryStream.Create;
   try
     ms.Size:=fs.Size;

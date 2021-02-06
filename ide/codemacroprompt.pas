@@ -33,7 +33,7 @@ interface
 uses
   Classes, SysUtils, LCLProc, Forms, Controls, Graphics, Dialogs,
   BasicCodeTools, CodeToolManager,
-  SynEditAutoComplete, SynPluginTemplateEdit, SynPluginSyncronizedEditBase, SynEdit,
+  SynEditAutoComplete, SynPluginTemplateEdit, SynPluginSyncronizedEditBase, SynEdit, SynEditTypes,
   LazIDEIntf, SrcEditorIntf, LazUTF8;
 
 type
@@ -517,7 +517,7 @@ begin
       TokenStartX:=length(s)+1;
     j:=length(TemplateName);
     while (j>0)
-    and (UTF8CompareText(copy(TemplateName,1,j),copy(s,TokenStartX-j,j))<>0) do
+    and (UTF8CompareLatinTextFast(copy(TemplateName,1,j),copy(s,TokenStartX-j,j))<>0) do
       dec(j);
     dec(TokenStartX,j);
     AEditor.BlockBegin := Point(TokenStartX, p.y);

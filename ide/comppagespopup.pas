@@ -34,10 +34,16 @@ unit CompPagesPopup;
 interface
 
 uses
-  Classes, SysUtils, math, FileUtil, LazLoggerBase, Forms, Controls, Graphics,
-  LMessages, Dialogs, ComCtrls, ExtCtrls, Buttons, LCLIntf, LCLType,
-  IDEImagesIntf, MenuIntf, LazarusIDEStrConsts, MainBar,
-  ComponentPalette_Options, MainBase;
+  Classes, SysUtils, math,
+  // LCL
+  LCLIntf, LCLType, LMessages, Forms, Controls, ComCtrls, ExtCtrls,
+  Graphics, Dialogs, Buttons,
+  // LazUtils
+  LazLoggerBase, LazUTF8,
+  // IdeIntf
+  IDEImagesIntf, MenuIntf,
+  // IDE
+  LazarusIDEStrConsts, ComponentPalette_Options, MainBase, MainBar;
 
 type
 
@@ -55,7 +61,7 @@ type
     procedure TreeView1Click(Sender: TObject);
   private
     fViewAllNode, fOptionsNode: TTreeNode;
-    fGroups: TStringList;   // Objects have group TreeNodes
+    fGroups: TStringListUTF8Fast;   // Objects have group TreeNodes
     fLastCloseUp: QWord;
     fLastCanShowCheck: Boolean;
     procedure AppDeactivated(Sender: TObject);
@@ -305,7 +311,7 @@ begin
     TreeView1.Items.AddChild(nil,'Sorry, No Pages');
     Exit;
   end;
-  fGroups := TStringList.Create;
+  fGroups := TStringListUTF8Fast.Create;
   try
     FindGroups;
     for i:=0 to MainIDEBar.ComponentPageControl.PageCount-1 do
@@ -316,7 +322,7 @@ begin
 
   // add 'View all'
   fViewAllNode:=TreeView1.Items.AddChild(nil, lisCompPalComponentList);
-  fViewAllNode.ImageIndex:=IDEImages.GetImageIndex('item_package');
+  fViewAllNode.ImageIndex:=IDEImages.GetImageIndex('menu_view_components');
   fViewAllNode.SelectedIndex:=fViewAllNode.ImageIndex;
 
   for i := 0 to ComponentPalettePageDropDownExtraEntries.Count - 1 do begin
@@ -326,7 +332,7 @@ begin
   end;
 
   // add 'Options'
-  fOptionsNode:=TreeView1.Items.AddChild(nil, lisOptions);
+  fOptionsNode:=TreeView1.Items.AddChild(nil, lisMenuGeneralOptions);
   fOptionsNode.ImageIndex:=IDEImages.LoadImage('menu_environment_options');
   fOptionsNode.SelectedIndex:=fOptionsNode.ImageIndex;
 

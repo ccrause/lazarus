@@ -82,13 +82,33 @@ begin
   result := PGdkEvent(Event)^._type;
 end;
 
-procedure RememberKeyEventWasHandledByLCL(Event: PGdkEventKey;
-  BeforeEvent: boolean);
+function KeyEventWasHandledByLCL(Event: PGdkEventKey; BeforeEvent: boolean
+  ): TLCLHandledKeyEvent;
 var
-  HandledEvent: TLCLHandledKeyEvent;
+  i: Integer;
   EventList: TFPList;
 begin
-  if KeyEventWasHandledByLCL(Event,BeforeEvent) then exit;
+  Result:=nil;
+  if BeforeEvent then
+    EventList:=LCLHandledKeyEvents
+  else
+    EventList:=LCLHandledKeyAfterEvents;
+  if EventList=nil then exit;
+  for i:=0 to EventList.Count-1 do begin
+    Result:=TLCLHandledKeyEvent(EventList[i]);
+    if Result.IsEqual(Event) then
+      exit;
+  end;
+  Result:=nil;
+end;
+
+function RememberKeyEventWasHandledByLCL(Event: PGdkEventKey;
+  BeforeEvent: boolean):TLCLHandledKeyEvent;
+var
+  EventList: TFPList;
+begin
+  Result:= KeyEventWasHandledByLCL(Event,BeforeEvent);
+  if Result<>nil then exit;
   if BeforeEvent then begin
     if LCLHandledKeyEvents=nil then
       LCLHandledKeyEvents:=TFPList.Create;
@@ -98,34 +118,11 @@ begin
       LCLHandledKeyAfterEvents:=TFPList.Create;
     EventList:=LCLHandledKeyAfterEvents;
   end;
-  HandledEvent:=TLCLHandledKeyEvent.Create(Event);
-  EventList.Add(HandledEvent);
+  Result:=TLCLHandledKeyEvent.Create(Event);
+  EventList.Add(Result);
   while EventList.Count>10 do begin
-    HandledEvent:=TLCLHandledKeyEvent(EventList[0]);
-    HandledEvent.Free;
+    TLCLHandledKeyEvent(EventList[0]).Free;
     EventList.Delete(0);
-  end;
-end;
-
-function KeyEventWasHandledByLCL(Event: PGdkEventKey; BeforeEvent: boolean
-  ): boolean;
-var
-  i: Integer;
-  HandledEvent: TLCLHandledKeyEvent;
-  EventList: TFPList;
-begin
-  Result:=false;
-  if BeforeEvent then
-    EventList:=LCLHandledKeyEvents
-  else
-    EventList:=LCLHandledKeyAfterEvents;
-  if EventList=nil then exit;
-  for i:=0 to EventList.Count-1 do begin
-    HandledEvent:=TLCLHandledKeyEvent(EventList[i]);
-    if HandledEvent.IsEqual(Event) then begin
-      Result:=true;
-      exit;
-    end;
   end;
 end;
 
@@ -636,8 +633,7 @@ end;
 function ComponentIsDestroyingHandle(AWinControl: TWinControl): boolean;
 begin
   Result:=
-    (AWinControl<>nil) and (AWinControl is TWinControl)
-    and (AWinControl.HandleAllocated)
+    (AWinControl is TWinControl) and (AWinControl.HandleAllocated)
     and WidgetIsDestroyingHandle({%H-}PGtkWidget(AWinControl.Handle));
 end;
 
@@ -1447,9 +1443,8 @@ begin
   {$ENDIF}
   If RGN = nil then
     Result := ERROR
-  else
-    If gdk_region_empty(RGN) then
-      Result := NULLREGION
+  else if gdk_region_empty(RGN) then
+    Result := NULLREGION
   else begin
     gdk_region_get_clipbox(RGN,@aRect);
     SimpleRGN := gdk_region_rectangle(@aRect);
@@ -1880,7 +1875,7 @@ var
   FocusedWidget: PGtkWidget;
   LCLObject: TObject;
   FocusedWinControl: TWinControl;
-  HandledByLCL: Boolean;
+  EventHandledByLCL: TLCLHandledKeyEvent;
   TargetWidget: PGtkWidget;
   TargetObj: gPointer;
   KeyPressesChar: char;
@@ -1897,6 +1892,8 @@ var
     end;
     {MWE:.$EndIf}
     AEvent^.KeyVal := 0;
+    if EventHandledByLCL <> nil then
+      EventHandledByLCL.keyval := 0;
   end;
 
   procedure StopKeyEvent;
@@ -2107,10 +2104,36 @@ var
     // The LCL does not use that and needs the return key event
     // => emulate it
 
-    // emulate VK_RETURN on GtkButton. issue #21483
     // spin button needs VK_RETURN to send OnEditingDone. issue #21224
-    if GtkWidgetIsA(TargetWidget, gtk_type_button) or
-     GtkWidgetIsA(TargetWidget, gtk_type_spin_button) then
+    // Fix for spin button not triggering TApplication.ControlKeyUp() when
+    //   VK_RETURN or VK_ESCAPE is pressed
+    if GtkWidgetIsA(TargetWidget, gtk_type_spin_button) and
+      (gdk_event_get_type(AEvent) = GDK_KEY_RELEASE) and
+      ((VKey = VK_RETURN) or (VKey = VK_ESCAPE)) then
+    begin
+      // emulate keyup and keydown
+      FillChar(Msg, SizeOf(Msg), 0);
+      Msg.CharCode := VKey;
+      if SysKey then
+        Msg.msg := LM_SYSKEYDOWN
+      else
+        Msg.msg := LM_KEYDOWN;
+      Msg.KeyData := CommonKeyData or (Flags shl 16) or $0001;
+      // send the (Sys)KeyDown message directly to the LCL
+      NotifyApplicationUserInput(TControl(TargetObj), Msg.Msg);
+      DeliverKeyMessage(TargetObj, Msg);
+
+      if SysKey then
+        Msg.msg := LM_SYSKEYUP
+      else
+        Msg.msg := LM_KEYUP;
+      // send the (Sys)KeyUp message directly to the LCL
+      NotifyApplicationUserInput(TControl(TargetObj), Msg.Msg);
+      DeliverKeyMessage(TargetObj, Msg);
+    end else
+
+    // emulate VK_RETURN on GtkButton. issue #21483
+    if GtkWidgetIsA(TargetWidget, gtk_type_button) then
     begin
       if (gdk_event_get_type(AEvent) = GDK_KEY_RELEASE) and
         (VKey = VK_RETURN) then
@@ -2197,7 +2220,7 @@ begin
   Result := CallBackDefaultReturn;
 
   EventStopped := False;
-  HandledByLCL := KeyEventWasHandledByLCL(AEvent, ABeforeEvent);
+  EventHandledByLCL := KeyEventWasHandledByLCL(AEvent, ABeforeEvent);
 
   {$IFDEF VerboseKeyboard}
   DebugLn(['[HandleGTKKeyUpDown] START ',DbgSName(TControl(AData)),
@@ -2209,11 +2232,11 @@ begin
     ' _string="',dbgMemRange(PByte(AEvent^._string),AEvent^.length),'"',
     ' group=',(AEvent^.group),
     ' Widget=',GetWidgetClassName(AWidget),
-    ' Before=',ABeforeEvent,' Down=',AHandleDown,' HandledByLCL=',HandledByLCL]);
+    ' Before=',ABeforeEvent,' Down=',AHandleDown,' HandledByLCL=',HandledByLCL<>nil]);
   {$ENDIF}
   
   // handle every key event only once
-  if HandledByLCL then exit;
+  if EventHandledByLCL<>nil then exit;
 
   while (not GtkWidgetIsA(AWidget, gtk_window_get_type)) and (AWidget^.parent <> nil) do
     AWidget := AWidget^.parent;
@@ -2254,7 +2277,7 @@ begin
   end;
 
   // remember this event
-  RememberKeyEventWasHandledByLCL(AEvent, ABeforeEvent);
+  EventHandledByLCL := RememberKeyEventWasHandledByLCL(AEvent, ABeforeEvent);
 
   if TargetWidget = nil then Exit;
 
@@ -3647,7 +3670,7 @@ var
   Info: TSearchRec;
   DirName: PChar;
   Dir: string;
-  StrList: TStringList;
+  StrList: TStringListUTF8Fast;
   CurFileMask: String;
   
   procedure Add(List: PGtkCList; const s: string);
@@ -3668,7 +3691,7 @@ var
   end;
   
 begin
-  StrList := TStringList.Create;
+  StrList := TStringListUTF8Fast.Create;
   dirs := PGtkCList(FileSelection^.dir_list);
   files := PGtkCList(FileSelection^.file_list);
   DirName := gtk_file_selection_get_filename(FileSelection);
@@ -4070,10 +4093,10 @@ function GetControlWindow(Widget: Pointer) : PGDKWindow;
 begin
   if Widget <> nil then 
   begin
-    If not GTKWidgetIsA(PGTKWidget(Widget), GTK_Layout_Get_Type) then
-      Result := PGTKWidget(Widget)^.Window
+    If GTKWidgetIsA(PGTKWidget(Widget), GTK_Layout_Get_Type) then
+      Result := PGtkLayout(Widget)^.bin_window
     else
-      Result := PGtkLayout(Widget)^.bin_window;
+      Result := PGTKWidget(Widget)^.Window;
     if (Result=nil) and (GTK_WIDGET_NO_WINDOW(Widget)) then
       Result:=gtk_widget_get_parent_window(Widget);
   end else
@@ -4106,6 +4129,7 @@ begin
   if Result = nil then Exit;
   
   Result^.LCLObject := AObject;
+  Result^.FirstPaint := False;
   // in most cases the created widget is the core widget so default to it
   Result^.CoreWidget := AWidget;
   Result^.Style := AParams.Style;
@@ -6906,7 +6930,7 @@ begin
   LCLObject:=GetNearestLCLObject(Widget);
   DbgOut('TGtkWidgetSet.SetWidgetSizeAndPosition Widget='+DbgS(Widget)+WidgetFlagsToString(Widget)+
     ' New='+dbgs(LCLWidth)+','+dbgs(LCLHeight));
-  if (LCLObject<>nil) and (LCLObject is TControl) then begin
+  if LCLObject is TControl then begin
     with TControl(LCLObject) do
       DebugLn(' LCL=',Name,':',ClassName,' ',dbgs(Left),',',dbgs(Top),',',dbgs(Width),',',dbgs(Height));
   end else begin
@@ -7551,7 +7575,7 @@ function CreateFormContents(AForm: TCustomForm;
   var FormWidget: Pointer; AWidgetInfo: PWidgetInfo = nil): Pointer;
 var
   ScrolledWidget, ClientAreaWidget: PGtkWidget;
-  WindowStyle: PGtkStyle;
+//  WindowStyle: PGtkStyle;
   Adjustment: PGtkAdjustment;
 begin
   // Create the VBox. We need that to place controls outside
@@ -7568,8 +7592,10 @@ begin
   gtk_widget_show(ScrolledWidget);
 
   ClientAreaWidget := gtk_layout_new(nil, nil);
-  WindowStyle := GetStyle(lgsWindow);
-  gtk_widget_set_style(ClientAreaWidget, WindowStyle);
+  // issue #16183: not sure why the GtkLayout is given a GtkWindow style here,
+  // this prevents setting color to the GtkLayout
+//  WindowStyle := GetStyle(lgsWindow);
+//  gtk_widget_set_style(ClientAreaWidget, WindowStyle);
   //debugln('CreateFormContents Style=',GetStyleDebugReport(WindowStyle));
   gtk_container_add(PGtkContainer(ScrolledWidget), ClientAreaWidget);
 
@@ -9314,13 +9340,15 @@ begin
              XInternAtom(xdisplay, '_NET_WORKAREA', false),
              0, MaxInt, False, XA_CARDINAL, @atomtype, @format, @nitems,
              @bytes_after, gpointer(@current_desktop));
-  if (atomtype = XA_CARDINAL) and (format = 32) and  (nitems > 0) then begin
+  if (atomtype = XA_CARDINAL) and (format = 32) and  (nitems > 0) then
+  begin
     result:=res;
     ax:=current_desktop[0];
     ay:=current_desktop[1];
     awidth:=current_desktop[2];
     aheight:=current_desktop[3];
-  end else begin
+  end else
+  begin
     ax:=0;
     ay:=0;
     awidth:=0;

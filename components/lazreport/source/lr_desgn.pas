@@ -1287,6 +1287,7 @@ end;
 
 destructor TfrDesignerPage.destroy;
 begin
+  fGuides.Free;
   fPaintSel.Free;
   inherited destroy;
 end;
@@ -3312,8 +3313,7 @@ var
 begin
   s := StrPas(LogFont.elfLogFont.lfFaceName);
   Lst := TStrings(PtrInt(Data));
-  if Lst.IndexOf(S)<0 then
-    Lst.AddObject(S, TObject(PtrInt(FontType)));
+  Lst.AddObject(S, TObject(PtrInt(FontType)));
   Result := 1;
 end;
 
@@ -3371,64 +3371,73 @@ procedure TfrDesignerForm.GetFontList;
 var
   DC: HDC;
   Lf: TLogFont;
+  SysList: TStringList;
   {$IFDEF USE_PRINTER_FONTS}
-  Lst: TStrings;
+  PrnList: TStringList;
   i: Integer;
   j: PtrInt;
   {$ENDIF}
 begin
-  C2.Items.Clear;
-  DC := GetDC(0);
+  SysList := TStringList.Create;
+  SysList.Duplicates := dupIgnore;
+  SysList.Sorted := true;
   try
-    Lf.lfFaceName := '';
-    Lf.lfCharSet := DEFAULT_CHARSET;
-    Lf.lfPitchAndFamily := 0;
-    EnumFontFamiliesEx(DC, @Lf, @EnumFontsProc, PtrInt(C2.Items), 0);
-  finally
-    ReleaseDC(0, DC);
-  end;
-  {$IFDEF USE_PRINTER_FONTS}
-  if not CurReport.PrintToDefault then
-  begin
-    // we could use prn.Printer.Fonts but we would be tied to
-    // implementation detail of list.objects[] encoded with fonttype
-    // that's why we collect the fonts ourselves here
-    //
-    Lst := TStringList.Create;
+    DC := GetDC(0);
     try
-      EnumFontFamiliesEx(Prn.Printer.Canvas.Handle, @Lf, @EnumFontsProc, PtrInt(Lst), 0);
-      for i:=0 to Lst.Count-1 do
-        if C2.Items.IndexOf(Lst[i])<0 then begin
-          j := PtrInt(Lst.Objects[i]) or $100;
-          C2.Items.AddObject(Lst[i], TObject(j));
-        end;
+      Lf.lfFaceName := '';
+      Lf.lfCharSet := DEFAULT_CHARSET;
+      Lf.lfPitchAndFamily := 0;
+      EnumFontFamiliesEx(DC, @Lf, @EnumFontsProc, PtrInt(SysList), 0);
     finally
-      Lst.free;
+      ReleaseDC(0, DC);
     end;
-  end;
-  {$ENDIF}
-
-  if (SelNum>0) and (FirstSelected is TfrCustomMemoView) then
-  begin
-    // font of selected memo has preference, select it
-    LastFontname := TfrCustomMemoView(FirstSelected).Font.Name;
-    LastFontSize := TfrCustomMemoView(FirstSelected).Font.Size;
-  end else
-  if C2.Items.IndexOf(LastFontName)>=0 then
-    // last font name remains valid, keep it together with lastFontSize
-  else begin
-    // setup an initial font name and size
-    if C2.Items.Count>0 then
-      LastFontName := C2.Items[0]
-    else
-      LastFontName := '';
-    if C2.Items.IndexOf('Arial') <> -1 then
-      LastFontName := 'Arial'
-    else if C2.Items.IndexOf('helvetica [urw]')<>-1 then
-      LastFontName := 'helvetica [urw]'
-    else if C2.Items.IndexOf('Arial Cyr') <> -1 then
-      LastFontName := 'Arial Cyr';
-    LastFontSize := 10;
+    {$IFDEF USE_PRINTER_FONTS}
+    if not CurReport.PrintToDefault then
+    begin
+      PrnList := TStringList.Create;
+      PrnList.Duplicates := dupIgnore;
+      PrnList.Sorted := true;
+      try
+        // we could use prn.Printer.Fonts but we would be tied to
+        // implementation detail of list.objects[] encoded with fonttype
+        // that's why we collect the fonts ourselves here
+        //
+        EnumFontFamiliesEx(Prn.Printer.Canvas.Handle, @Lf, @EnumFontsProc, PtrInt(PrnList), 0);
+        for i:=0 to PrnList.Count-1 do
+          if SysList.IndexOf(PrnList[i])<0 then begin
+            j := PtrInt(PrnList.Objects[i]) or $100;
+            SysList.AddObject(PrnList[i], TObject(PtrInt(j)));
+          end;
+      finally
+        PrnList.Free;
+      end;
+    end;
+    {$ENDIF}
+    if (SelNum>0) and (FirstSelected is TfrCustomMemoView) then
+    begin
+      // font of selected memo has preference, select it
+      LastFontname := TfrCustomMemoView(FirstSelected).Font.Name;
+      LastFontSize := TfrCustomMemoView(FirstSelected).Font.Size;
+    end else
+    if SysList.IndexOf(LastFontName)>=0 then
+      // last font name remains valid, keep it together with lastFontSize
+    else begin
+      // setup an initial font name and size
+      if SysList.Count>0 then
+        LastFontName := SysList[0]
+      else
+        LastFontName := '';
+      if SysList.IndexOf('Arial') <> -1 then
+        LastFontName := 'Arial'
+      else if SysList.IndexOf('helvetica [urw]')<>-1 then
+        LastFontName := 'helvetica [urw]'
+      else if SysList.IndexOf('Arial Cyr') <> -1 then
+        LastFontName := 'Arial Cyr';
+      LastFontSize := 10;
+    end;
+  finally
+    C2.Items.Assign(SysList);
+    SysList.Free;
   end;
 end;
 
@@ -3971,10 +3980,11 @@ begin
   Busy := True;
   DocMode := dmDesigning;
   
-  //if C2.Items.Count=0 then
-  //  GetFontList; // defered to speed loading
+  if C2.Items.Count=0 then
+    GetFontList;
+
   LastFontSize := 10;
-  {$IFDEF WIN32}
+  {$IFDEF MSWINDOWS}
   LastFontName := 'Arial';
   {$ELSE}
   LastFontName := 'helvetica [urw]';
@@ -6458,14 +6468,14 @@ begin
       RB1.Checked := True
     else
       RB2.Checked := True;
-    ComB1.Items := Prn.PaperNames;
-    ComB1.ItemIndex := Prn.GetArrayPos(pgSize);
+    Prn.FillPapers(COMB1.Items);
+    ComB1.ItemIndex := COMB1.Items.IndexOfObject(TObject(PtrInt(pgSize)));
     E1.Text := ''; E2.Text := '';
 
     if pgSize = $100 then
     begin
-      E1.Text := IntToStr(Width div 10);
-      E2.Text := IntToStr(Height div 10);
+      PaperWidth := round(Width * 25.4 / 72);      // pt to mm
+      PaperHeight := round(Height * 25.4 / 72);    // pt to mm
     end;
     
     E3.Text := PointsToMMStr(Margins.Left);
@@ -6496,12 +6506,12 @@ begin
       else
         LayoutOrder := loRows;
         
-      p := Prn.PaperSizes[ComB1.ItemIndex];
+      p := frPgoptForm.pgSize;
       w := 0; h := 0;
       if p = $100 then
         try
-          w := StrToInt(E1.Text) * 10;
-          h := StrToInt(E2.Text) * 10;
+          w := round(PaperWidth * 72 / 25.4);    // mm to pt
+          h := round(PaperHeight * 72 / 25.4);   // mm to pt
         except
           on exception do p := 9; // A4
         end;

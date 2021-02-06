@@ -38,11 +38,11 @@ unit ComponentPalette;
 interface
 
 uses
-  Classes, SysUtils, fgl, Laz_AVL_Tree,
+  Classes, SysUtils, Laz_AVL_Tree,
   // LCL
   LCLProc, Controls, Forms, Graphics, ComCtrls, Buttons, Menus, ExtCtrls,
   // LazUtils
-  LazFileUtils, LazFileCache,
+  LazFileUtils, LazFileCache, AvgLvlTree,
   // IdeIntf
   FormEditingIntf, LazIDEIntf, IDEImagesIntf, PropEdits, ComponentReg,
   // IDE
@@ -61,11 +61,11 @@ type
     fPageComponent: TCustomPage;
     fSelectButton: TComponent;
     fBtnIndex: integer;
-    fCompNames: TStringList;   // Reference to component names.
+    fRegComps: TRegisteredCompList;   // Reference to components.
     fGuiCreated: Boolean;
     procedure ReAlignButtons;
     procedure RemoveSheet;
-    procedure InsertVisiblePage(aCompNames: TStringList);
+    procedure InsertVisiblePage(aCompNames: TRegisteredCompList);
     procedure CreateSelectionButton(aButtonUniqueName: string; aScrollBox: TScrollBox);
     procedure CreateOrDelButton(aComp: TPkgComponent; aButtonUniqueName: string;
       aScrollBox: TScrollBox);
@@ -79,8 +79,6 @@ type
     property PageComponent: TCustomPage read fPageComponent write fPageComponent;
     property SelectButton: TComponent read fSelectButton write fSelectButton;
   end;
-
-  TComponentButtonMap = specialize TFPGMap<String,TSpeedButton>;
 
   { TComponentPalette }
 
@@ -98,7 +96,9 @@ type
     procedure PalettePopupMenuPopup(Sender: TObject);
     procedure PopupMenuPopup(Sender: TObject);
   private
-    fComponentButtons: TComponentButtonMap;
+    // Generics TFPGMap<> is bocus, being actually a sorted list, slow adding items.
+    // Instead use a tree container as Map<TComponentClass,TSpeedButton>.
+    fComponentButtons: TPointerToPointerTree;
     // Visual container for tabs
     FPageControl: TPageControl;
     FOnOpenPackage: TNotifyEvent;
@@ -106,6 +106,7 @@ type
     FOnChangeActivePage: TNotifyEvent;
     fSelectButtonIcon: TCustomBitmap;
     fUpdatingPageControl: boolean;
+    fUpdateLock: integer;
     // Used by UpdateNoteBookButtons
     fOldActivePage: TTabSheet;
     fVisiblePageIndex: integer;
@@ -133,12 +134,16 @@ type
     function SelectAButton(Button: TSpeedButton): boolean;
     procedure ComponentWasAdded({%H-}ALookupRoot, {%H-}AComponent: TComponent;
                                 {%H-}ARegisteredComponent: TRegisteredComponent);
-    procedure CheckComponentDesignerVisible(AComponent: TComponent; var Invisible: boolean);
+  protected
+    procedure DoChange; override;
   public
     constructor Create;
     destructor Destroy; override;
     procedure OnGetNonVisualCompIcon(Sender: TObject;
       AComponent: TComponent; var ImageList: TCustomImageList; var ImageIndex: TImageIndex);
+    procedure BeginUpdate; override;
+    procedure EndUpdate; override;
+    function IsUpdateLocked: boolean;
     procedure Update(ForceUpdateAll: Boolean); override;
   public
     property PageControl: TPageControl read FPageControl write SetPageControl;
@@ -296,7 +301,7 @@ begin
   PageComponent:=nil;
 end;
 
-procedure TComponentPage.InsertVisiblePage(aCompNames: TStringList);
+procedure TComponentPage.InsertVisiblePage(aCompNames: TRegisteredCompList);
 var
   Pal: TComponentPalette;
   TabIndex: Integer;
@@ -310,7 +315,7 @@ begin
     {$ENDIF}
     exit;
   end;
-  fCompNames := aCompNames;
+  fRegComps := aCompNames;
   Pal := TComponentPalette(Palette);
   TabControl := TCustomTabControl(Pal.FPageControl);
   if PageComponent=nil then
@@ -424,24 +429,20 @@ procedure TComponentPage.CreateOrDelButton(aComp: TPkgComponent; aButtonUniqueNa
   aScrollBox: TScrollBox);
 var
   Pal: TComponentPalette;
+  CompCls: TComponentClass;
   Btn: TSpeedButton;
-  CompCN: String;      // Component ClassName
-  i: Integer;
 begin
   Pal := TComponentPalette(Palette);
-  CompCN := aComp.ComponentClass.ClassName;
-  if Pal.fComponentButtons.Find(CompCN, i) then
-    Btn := Pal.fComponentButtons.Data[i]
-  else
-    Btn := nil;
+  CompCls := aComp.ComponentClass;
+  Btn := TSpeedButton(Pal.fComponentButtons[CompCls]);
   if aComp.Visible then
   begin
     inc(fBtnIndex);
     if Btn=nil then
     begin
       Btn := TSpeedButton.Create(nil);
-      Pal.fComponentButtons[CompCN] := Btn;
-      Btn.Name := CompPaletteCompBtnPrefix + aButtonUniqueName + CompCN;
+      Pal.fComponentButtons[CompCls] := Btn;
+      Btn.Name := CompPaletteCompBtnPrefix + aButtonUniqueName + CompCls.ClassName;
       // Left and Top will be set in ReAlignButtons.
       Btn.SetBounds(Btn.Left, Btn.Top,
                     aScrollBox.Scale96ToForm(ComponentPaletteBtnWidth),
@@ -455,18 +456,18 @@ begin
       Btn.OnDblClick := @Pal.ComponentBtnDblClick;
       Btn.OnMouseWheel := @Pal.OnPageMouseWheel;
       Btn.ShowHint := EnvironmentOptions.ShowHintsForComponentPalette;
-      Btn.Hint := CompCN + sLineBreak +
+      Btn.Hint := CompCls.ClassName + sLineBreak +
         '(' + aComp.ComponentClass.UnitName+', '+aComp.PkgFile.LazPackage.Name + ')';
       Btn.PopupMenu:=Pal.PopupMenu;
       {$IFDEF VerboseComponentPalette}
       if aComp.RealPage.PageName = CompPalVerbPgName then
-        DebugLn(['TComponentPalette.CreateOrDelButton Created Button: ',CompCN,' ',Btn.Name]);
+        DebugLn(['TComponentPalette.CreateOrDelButton Created Button: ',CompCls.ClassName,' ',Btn.Name]);
       {$ENDIF}
     end else
     begin
       {$IFDEF VerboseComponentPalette}
       if aComp.RealPage.PageName = CompPalVerbPgName then
-        DebugLn(['TComponentPalette.CreateOrDelButton Keep Button: ',CompCN,' ',Btn.Name,' ',DbgSName(Btn.Parent)]);
+        DebugLn(['TComponentPalette.CreateOrDelButton Keep Button: ',CompCls.ClassName,' ',Btn.Name,' ',DbgSName(Btn.Parent)]);
       {$ENDIF}
     end;
     Btn.Parent := aScrollBox;
@@ -476,10 +477,10 @@ begin
   begin
     {$IFDEF VerboseComponentPalette}
     if aComp.RealPage.PageName = CompPalVerbPgName then
-      DebugLn(['TComponentPalette.CreateOrDelButton Destroy Button: ',CompCN,' ',Btn.Name]);
+      DebugLn(['TComponentPalette.CreateOrDelButton Destroy Button: ',CompCls.ClassName,' ',Btn.Name]);
     {$ENDIF}
     Application.ReleaseComponent(Btn);
-    Pal.fComponentButtons.Remove(CompCN);
+    Pal.fComponentButtons.Remove(CompCls);
     Btn.Visible:=false;
   end;
 end;
@@ -487,17 +488,15 @@ end;
 procedure TComponentPage.CreateButtons;
 // Create speedbuttons for every visible component
 var
-  Pal: TComponentPalette;
   ScrollBox: TScrollBox;
   Comp: TPkgComponent;
   i: Integer;
 begin
   if not Visible then Exit;
-  Pal := TComponentPalette(Palette);
   ScrollBox := GetScrollBox;
   Assert(Assigned(ScrollBox), 'CreateButtons: ScrollBox not assigned.');
-  ScrollBox.OnResize := @Pal.OnScrollBoxResize;
-  ScrollBox.OnMouseWheel := @Pal.OnPageMouseWheel;
+  ScrollBox.OnResize := @TComponentPalette(Palette).OnScrollBoxResize;
+  ScrollBox.OnMouseWheel := @TComponentPalette(Palette).OnPageMouseWheel;
   {$IFDEF VerboseComponentPalette}
   if PageName = CompPalVerbPgName then
     DebugLn(['TComponentPalette.CreateButtons PAGE="',PageName,'", PageIndex=',PageComponent.PageIndex]);
@@ -506,9 +505,9 @@ begin
   CreateSelectionButton(IntToStr(FIndex), ScrollBox);
   // create component buttons and delete unneeded ones
   fBtnIndex := 0;
-  Assert(Assigned(fCompNames), 'TComponentPage.CreateButtons: fCompNames is not assigned.');
-  for i := 0 to fCompNames.Count-1 do begin
-    Comp := Pal.FindComponent(fCompNames[i]) as TPkgComponent;
+  Assert(Assigned(fRegComps), 'TComponentPage.CreateButtons: fCompNames is not assigned.');
+  for i := 0 to fRegComps.Count-1 do begin
+    Comp := fRegComps[i] as TPkgComponent;
     if Assigned(Comp) then
       CreateOrDelButton(Comp, Format('%d_%d_',[FIndex,i]), ScrollBox);
   end;
@@ -632,12 +631,13 @@ begin
         Name:='ComponentListMenuItem';
         Caption:=lisCompPalComponentList;
         OnClick:=@ComponentListClicked;
+        ImageIndex := IDEImages.LoadImage('menu_view_components');
       end;
       PalettePopupMenu.Items.Add(miCompList);
       miOptions:=TMenuItem.Create(PalettePopupMenu);
       with miOptions do begin
         Name:='OptionsMenuItem';
-        Caption:=lisOptions;
+        Caption:=lisMenuGeneralOptions;
         OnClick:=@OptionsClicked;
         ImageIndex := IDEImages.LoadImage('menu_environment_options');
       end;
@@ -735,7 +735,7 @@ end;
 procedure TComponentPalette.SelectionWasChanged;
 var
   Sheet: TTabSheet;
-  i: Integer;
+  Btn: TSpeedButton;
 begin
   if FPageControl=nil then exit;
   UnselectAllButtons;
@@ -748,11 +748,13 @@ begin
   // Switch to the new page
   FPageControl.ActivePage:=Sheet;
   // Build the GUI layout for this page if not done yet.
-  if not fComponentButtons.Find(Selected.ComponentClass.ClassName, i) then
+  Btn:=TSpeedButton(fComponentButtons[Selected.ComponentClass]);
+  if Btn=nil then
     ReAlignButtons(FPageControl.ActivePage);
   // Select button
-  if fComponentButtons.Find(Selected.ComponentClass.ClassName, i) then //find again!
-    fComponentButtons.Data[i].Down := true;
+  Btn:=TSpeedButton(fComponentButtons[Selected.ComponentClass]);  //find again!
+  if Btn<>nil then
+    Btn.Down:=true;
 end;
 
 procedure TComponentPalette.CreatePopupMenu;
@@ -794,7 +796,7 @@ begin
   MenuItem:=TMenuItem.Create(PopupMenu);
   with MenuItem do begin
     Name:='OptionsMenuItem';
-    Caption:=lisOptions;
+    Caption:=lisMenuGeneralOptions;
     OnClick:=@OptionsClicked;
     ImageIndex := IDEImages.LoadImage('menu_environment_options');
   end;
@@ -821,55 +823,64 @@ begin
   Handled := True;
 end;
 
-procedure TComponentPalette.Update(ForceUpdateAll: Boolean);
-begin
-  inherited Update(ForceUpdateAll);
-  {$IFDEF VerboseComponentPalette}
-  DebugLn(['TComponentPalette.Update, calling UpdateNoteBookButtons, fUpdatingPageControl=', fUpdatingPageControl]);
-  {$ENDIF}
-  UpdateNoteBookButtons(ForceUpdateAll);
-end;
-
-procedure TComponentPalette.CheckComponentDesignerVisible(
-  AComponent: TComponent; var Invisible: boolean);
-var
-  RegComp: TRegisteredComponent;
-  AControl: TControl;
-begin
-  if (AComponent is TControl) then begin
-    AControl:=TControl(AComponent);
-    Invisible:=(csNoDesignVisible in AControl.ControlStyle)
-  end else begin
-    RegComp:=FindComponent(AComponent.ClassName);
-    Invisible:=(RegComp=nil) or (RegComp.OrigPageName='');
-  end;
-end;
-
 constructor TComponentPalette.Create;
 begin
   inherited Create(EnvironmentOptions.Desktop.ComponentPaletteOptions);
-  fComponentButtons:=TComponentButtonMap.Create;
-  fComponentButtons.Sorted:=True;
-  OnComponentIsInvisible:=@CheckComponentDesignerVisible;
-  {IDEComponentPalette.} AddHandlerComponentAdded(@ComponentWasAdded);
-  {IDEComponentPalette.} AddHandlerSelectionChanged(@SelectionWasChanged);
+  fComponentButtons:=TPointerToPointerTree.Create;
+  AddHandlerComponentAdded(@ComponentWasAdded);
+  AddHandlerSelectionChanged(@SelectionWasChanged);
   ComponentPageClass := TComponentPage;   // Used by CreatePagesFromUserOrder
 end;
 
 destructor TComponentPalette.Destroy;
 var
-  i: Integer;
+  AVLNode: TAVLTreeNode;
+  P2PItem: PPointerToPointerItem;
 begin
-  if OnComponentIsInvisible=@CheckComponentDesignerVisible then
-    OnComponentIsInvisible:=nil;
   PageControl:=nil;
-  for i := 0 to fComponentButtons.Count-1 do
-    fComponentButtons.Data[i].Free;
+  // Free SpeedButtons stored in the tree map.
+  AVLNode:=fComponentButtons.Tree.FindLowest;
+  while AVLNode<>nil do begin
+    P2PItem:=PPointerToPointerItem(AVLNode.Data);
+    TSpeedButton(P2PItem^.Value).Free;
+    AVLNode:=fComponentButtons.Tree.FindSuccessor(AVLNode);
+  end;
   FreeAndNil(fComponentButtons);
   FreeAndNil(fSelectButtonIcon);
   FreeAndNil(PopupMenu);
   FreeAndNil(PalettePopupMenu);
   inherited Destroy;
+end;
+
+procedure TComponentPalette.BeginUpdate;
+begin
+  inc(FUpdateLock);
+end;
+
+procedure TComponentPalette.EndUpdate;
+begin
+  if FUpdateLock<=0 then
+    raise Exception.Create('TBaseComponentPalette.EndUpdate: FUpdateLock<=0');
+  dec(FUpdateLock);
+  if (FUpdateLock=0) and FChanged then
+    Update(False);
+end;
+
+function TComponentPalette.IsUpdateLocked: boolean;
+begin
+  Result:=FUpdateLock>0;
+end;
+
+procedure TComponentPalette.Update(ForceUpdateAll: Boolean);
+begin
+  if not (ForceUpdateAll or FChanged) then Exit;
+  inherited Update(ForceUpdateAll);
+  {$IFDEF VerboseComponentPalette}
+  DebugLn(['TComponentPalette.Update, calling UpdateNoteBookButtons, fUpdatingPageControl=',
+           fUpdatingPageControl, ', ForceUpdateAll=', ForceUpdateAll, ', FChanged=', FChanged]);
+  {$ENDIF}
+  UpdateNoteBookButtons(ForceUpdateAll);
+  FChanged:=False;
 end;
 
 procedure TComponentPalette.ClearButtons;
@@ -919,6 +930,14 @@ procedure TComponentPalette.ComponentWasAdded(ALookupRoot, AComponent: TComponen
 begin
   if not (ssShift in GetKeyShiftState) and (SelectionMode = csmSingle) then
     Selected := nil;
+end;
+
+procedure TComponentPalette.DoChange;
+begin
+  if FUpdateLock>0 then
+    FChanged:=true
+  else
+    Update(False);
 end;
 
 procedure TComponentPalette.ReAlignButtons(aSheet: TCustomPage);
@@ -999,7 +1018,7 @@ begin
         Pg.RemoveSheet;
       end;
       {$ENDIF}
-      Pg.InsertVisiblePage(TStringList(UserOrder.ComponentPages.Objects[i]));
+      Pg.InsertVisiblePage(UserOrder.ComponentPages.Objects[i] as TRegisteredCompList);
       {$IFDEF VerboseComponentPalette}
       DebugLn(['TComponentPalette.UpdateNoteBookButtons: PageIndex=', i, ' PageName=',Pages[i].PageName]);
       {$ENDIF}
@@ -1036,7 +1055,7 @@ var
   ARegComp: TRegisteredComponent;
 begin
   if AComponent<>nil then
-    ARegComp:=FindComponent(AComponent.ClassName)
+    ARegComp:=FindRegComponent(AComponent.ClassType)
   else
     ARegComp:=nil;
   if ARegComp<>nil then
@@ -1061,11 +1080,11 @@ end;
 
 function TComponentPalette.FindCompByButton(Button: TSpeedButton): TRegisteredComponent;
 var
-  i: Integer;
+  CompClass: TComponentClass;
 begin
-  i := fComponentButtons.IndexOfData(Button);
-  if i >= 0 then
-    Result := FindComponent(fComponentButtons.Keys[i])
+  CompClass := TComponentClass(fComponentButtons.FindByValue(Button));
+  if Assigned(CompClass) then
+    Result := FindRegComponent(CompClass)
   else
     Result := nil;
 end;

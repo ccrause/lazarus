@@ -19,6 +19,7 @@ unit StdCtrls;
 
 {$mode objfpc}{$H+}
 {$I lcl_defines.inc}
+{$modeswitch typehelpers}
 
 interface
 
@@ -234,6 +235,9 @@ type
     property OnUTF8KeyPress;
   end;
 
+  // Used for TCustomComboBox and TCustomEdit.
+  TEmulatedTextHintStatus = (thsHidden, thsShowing, thsChanging);
+
   { TCustomComboBox }
   TComboBoxAutoCompleteTextOption = (
     cbactEnabled,             //Enable Auto-Completion Feature
@@ -257,6 +261,14 @@ type
     csOwnerDrawEditableVariable// like csOwnerDrawVariable, but with TEdit
   );
 
+  TComboBoxStyleHelper = type helper for TComboBoxStyle
+  public
+    function HasEditBox: Boolean;
+    function SetEditBox(const AHasEditBox: Boolean): TComboBoxStyle; // return a style with/without editbox according to the current style
+    function IsOwnerDrawn: Boolean;
+    function IsVariable: Boolean;
+  end;
+
   TOwnerDrawState = LCLType.TOwnerDrawState;
 
   TDrawItemEvent = procedure(Control: TWinControl; Index: Integer;
@@ -268,16 +280,18 @@ type
 
   TCustomComboBox = class(TWinControl)
   private
-    FCharCase: TEditCharCase;
+    FArrowKeysTraverseList: Boolean;
     FAutoCompleteText: TComboBoxAutoCompleteText;
     FAutoSelect: Boolean;
     FAutoSelected: Boolean;
     FAutoDropDown: Boolean;
     FCanvas: TCanvas;
+    FCharCase: TEditCharCase;
     FDropDownCount: Integer;
     FDroppedDown: boolean;
     FDroppingDown: Boolean;
     FEditingDone: Boolean;
+    FEmulatedTextHintStatus: TEmulatedTextHintStatus;
     FItemHeight: integer;
     FItemIndex: integer;
     FItemWidth: integer;
@@ -290,29 +304,36 @@ type
     FOnGetItems: TNotifyEvent;
     FOnMeasureItem: TMeasureItemEvent;
     FOnSelect: TNotifyEvent;
+    FReadOnly: Boolean;
+    FReturnArrowState: Boolean; //used to return the state of arrow keys from termporary change
     FSelLength: integer;
     FSelStart: integer;
     FSorted: boolean;
     FStyle: TComboBoxStyle;
-    FArrowKeysTraverseList: Boolean;
-    FReturnArrowState: Boolean; //used to return the state of arrow keys from termporary change
+    FTextHint: TTranslateString;
     function GetAutoComplete: boolean;
     function GetDroppedDown: Boolean;
     function GetItemWidth: Integer;
-    function GetReadOnly: Boolean;
     procedure SetAutoComplete(const AValue: boolean);
+    procedure SetArrowKeysTraverseList(Value: Boolean);
     procedure SetItemWidth(const AValue: Integer);
+    procedure SetCharCase(eccCharCase: TEditCharCase);
+    procedure SetReadOnly(const AValue: Boolean);
+    procedure SetTextHint(const AValue: TTranslateString);
+    procedure ShowEmulatedTextHintIfYouCan;
+    procedure ShowEmulatedTextHint;
+    procedure HideEmulatedTextHint;
+    procedure UpdateSorted;
     procedure LMDrawListItem(var TheMessage: TLMDrawListItem); message LM_DrawListItem;
     procedure LMMeasureItem(var TheMessage: TLMMeasureItem); message LM_MeasureItem;
     procedure LMSelChange(var TheMessage); message LM_SelChange;
     procedure CNCommand(var TheMessage: TLMCommand); message CN_Command;
-    procedure SetReadOnly(const AValue: Boolean);
-    procedure UpdateSorted;
-    procedure SetArrowKeysTraverseList(Value: Boolean);
     procedure WMChar(var Message: TLMChar); message LM_CHAR;
-    procedure SetCharCase(eccCharCase: TEditCharCase);
+    procedure WMKillFocus(var Message: TLMKillFocus); message LM_KILLFOCUS;
+    procedure WMSetFocus(var Message: TLMSetFocus); message LM_SETFOCUS;
   protected
     class procedure WSRegisterClass; override;
+    function CanShowEmulatedTextHint: Boolean; virtual;
     procedure CreateParams(var Params: TCreateParams); override;
     procedure InitializeWnd; override;
     procedure DestroyWnd; override;
@@ -352,6 +373,7 @@ type
     procedure SetSelText(const Val: string); virtual;
     procedure SetSorted(Val: boolean); virtual;
     procedure SetStyle(Val: TComboBoxStyle); virtual;
+    function  RealGetText: TCaption; override;
     procedure RealSetText(const AValue: TCaption); override;
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure KeyUp(var Key: Word; Shift: TShiftState); override;
@@ -388,13 +410,11 @@ type
     property DroppedDown: Boolean read GetDroppedDown write SetDroppedDown;
     property DroppingDown: Boolean read FDroppingDown write FDroppingDown; deprecated 'Will be removed in 2.2';
     procedure SelectAll;
-    property AutoComplete: boolean
-      read GetAutoComplete write SetAutoComplete default False;
+    property AutoComplete: boolean read GetAutoComplete write SetAutoComplete default False;
     property AutoCompleteText: TComboBoxAutoCompleteText
                            read FAutoCompleteText write FAutoCompleteText
                            default DefaultComboBoxAutoCompleteText;
-    property AutoDropDown: Boolean
-                           read FAutoDropDown write FAutoDropDown default False;
+    property AutoDropDown: Boolean read FAutoDropDown write FAutoDropDown default False;
     property AutoSelect: Boolean read FAutoSelect write FAutoSelect default True;
     property AutoSelected: Boolean read FAutoSelected write FAutoSelected;
     property AutoSize default True; // Overrides default value
@@ -402,15 +422,17 @@ type
                                     write SetArrowKeysTraverseList default True;
     property Canvas: TCanvas read FCanvas;
     property DropDownCount: Integer read FDropDownCount write SetDropDownCount default 8;
+    property EmulatedTextHintStatus: TEmulatedTextHintStatus read FEmulatedTextHintStatus;
     property Items: TStrings read FItems write SetItems;
     property ItemIndex: integer read GetItemIndex write SetItemIndex default -1;
-    property ReadOnly: Boolean read GetReadOnly write SetReadOnly stored False;
+    property ReadOnly: Boolean read FReadOnly write SetReadOnly default False;
     property SelLength: integer read GetSelLength write SetSelLength;// UTF-8 length
     property SelStart: integer read GetSelStart write SetSelStart;// UTF-8 position
     property SelText: String read GetSelText write SetSelText;
     property Style: TComboBoxStyle read FStyle write SetStyle default csDropDown;
     property TabStop default true;
     property Text;
+    property TextHint: TTranslateString read FTextHint write SetTextHint;
   end;
 
 
@@ -480,13 +502,14 @@ type
     property ParentFont;
     property ParentShowHint;
     property PopupMenu;
-    property ReadOnly; deprecated 'Will be removed in 2.2 - use extended Style values instead.';
+    property ReadOnly;
     property ShowHint;
     property Sorted;
     property Style;
     property TabOrder;
     property TabStop;
     property Text;
+    property TextHint;
     property Visible;
   end;
 
@@ -594,6 +617,7 @@ type
     procedure MakeCurrentVisible;
     procedure MeasureItem(Index: Integer; var TheHeight: Integer); virtual;
     procedure SelectAll; virtual;
+    procedure SelectRange(ALow, AHigh: integer; ASelected: boolean); virtual;
     procedure DeleteSelected; virtual;
     procedure UnlockSelectionChange;
   public
@@ -736,6 +760,7 @@ type
     FCharCase: TEditCharCase;
     fCaretPos: TPoint;
     FEchoMode: TEchoMode;
+    FEmulatedTextHintStatus: TEmulatedTextHintStatus;
     FHideSelection: Boolean;
     FMaxLength: Integer;
     FModified: Boolean;
@@ -749,24 +774,19 @@ type
     FTextChangedByRealSetText: Boolean;
     FTextChangedLock: Boolean;
     FTextHint: TTranslateString;
-    procedure ShowEmulatedTextHint(const ForceShow: Boolean = False);
+    procedure ShowEmulatedTextHintIfYouCan;
+    procedure ShowEmulatedTextHint;
     procedure HideEmulatedTextHint;
     procedure SetAlignment(const AValue: TAlignment);
     function GetCanUndo: Boolean;
     function GetModified: Boolean;
-    procedure SetCharCase(Value: TEditCharCase);
     procedure SetHideSelection(const AValue: Boolean);
     procedure SetMaxLength(Value: Integer);
     procedure SetModified(Value: Boolean);
     procedure SetPasswordChar(const AValue: Char);
-  protected type
-    TEmulatedTextHintStatus = (thsHidden, thsShowing, thsChanging);
   protected
-    FEmulatedTextHintStatus: TEmulatedTextHintStatus;
-
     class procedure WSRegisterClass; override;
     function CanShowEmulatedTextHint: Boolean; virtual;
-    function CreateEmulatedTextHintFont: TFont; virtual;
     procedure CalculatePreferredSize(var PreferredWidth, PreferredHeight: integer;
                                      WithThemeSpace: Boolean); override;
     procedure CreateParams(var Params: TCreateParams); override;
@@ -785,6 +805,7 @@ type
     function GetSelText: string; virtual;
     function GetTextHint: TTranslateString; virtual;
     procedure SetCaretPos(const Value: TPoint); virtual;
+    procedure SetCharCase(Value: TEditCharCase); virtual;
     procedure SetEchoMode(Val: TEchoMode); virtual;
     procedure SetNumbersOnly(Value: Boolean); virtual;
     procedure SetReadOnly(Value: Boolean); virtual;
@@ -795,8 +816,8 @@ type
     function ChildClassAllowed(ChildClass: TClass): boolean; override;
     class function GetControlClassDefaultSize: TSize; override;
     procedure MouseUp(Button: TMouseButton; Shift:TShiftState; X, Y: Integer); override;
-    procedure RealSetText(const AValue: TCaption); override;
     function  RealGetText: TCaption; override;
+    procedure RealSetText(const AValue: TCaption); override;
     procedure KeyUpAfterInterface(var Key: Word; Shift: TShiftState); override;
     procedure WMChar(var Message: TLMChar); message LM_CHAR;
     procedure CMWantSpecialKey(var Message: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
@@ -831,6 +852,7 @@ type
     property CaretPos: TPoint read GetCaretPos write SetCaretPos;
     property CharCase: TEditCharCase read FCharCase write SetCharCase default ecNormal;
     property EchoMode: TEchoMode read FEchoMode write SetEchoMode default emNormal;
+    property EmulatedTextHintStatus: TEmulatedTextHintStatus read FEmulatedTextHintStatus;
     property HideSelection: Boolean read FHideSelection write SetHideSelection default True;
     property MaxLength: Integer read FMaxLength write SetMaxLength default 0;
     property Modified: Boolean read GetModified write SetModified;
@@ -877,24 +899,22 @@ type
     FWantReturns: Boolean;
     FWantTabs: boolean;
     FWordWrap: Boolean;
-    procedure SetHorzScrollBar(const AValue: TMemoScrollBar);
-    procedure SetVertScrollBar(const AValue: TMemoScrollBar);
   protected
     class procedure WSRegisterClass; override;
     procedure CreateParams(var Params: TCreateParams); override;
     procedure InitializeWnd; override;
     procedure FinalizeWnd; override;
     function  RealGetText: TCaption; override;
-    procedure RealSetText(const Value: TCaption); override;
+    procedure RealSetText(const AValue: TCaption); override;
     function GetCachedText(var CachedText: TCaption): boolean; override;
     function GetCaretPos: TPoint; override;
     procedure KeyUpAfterInterface(var Key: Word; Shift: TShiftState); override;
-    procedure SetCaretPos(const Value: TPoint); override;
-    procedure SetLines(const Value: TStrings);
+    procedure SetCaretPos(const AValue: TPoint); override;
+    procedure SetLines(const AValue: TStrings);
     procedure SetWantReturns(const AValue: Boolean);
     procedure SetWantTabs(const NewWantTabs: boolean);
-    procedure SetWordWrap(const Value: boolean);
-    procedure SetScrollBars(const Value: TScrollStyle);
+    procedure SetWordWrap(const AValue: boolean);
+    procedure SetScrollBars(const AValue: TScrollStyle);
     procedure Loaded; override;
     procedure CMWantSpecialKey(var Message: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
     procedure WMGetDlgCode(var Message: TLMGetDlgCode); message LM_GETDLGCODE;
@@ -904,12 +924,12 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
-    procedure Append(const Value: String);
+    procedure Append(const AValue: String);
     procedure ScrollBy(DeltaX, DeltaY: Integer); override;
   public
     property Lines: TStrings read FLines write SetLines;
-    property HorzScrollBar: TMemoScrollBar read FHorzScrollBar write SetHorzScrollBar;
-    property VertScrollBar: TMemoScrollBar read FVertScrollBar write SetVertScrollBar;
+    property HorzScrollBar: TMemoScrollBar read FHorzScrollBar write FHorzScrollBar;
+    property VertScrollBar: TMemoScrollBar read FVertScrollBar write FVertScrollBar;
     property ScrollBars: TScrollStyle read FScrollBars write SetScrollBars default ssNone;
     property WantReturns: Boolean read FWantReturns write SetWantReturns default true;
     property WantTabs: Boolean read FWantTabs write SetWantTabs default false;
@@ -1535,8 +1555,7 @@ type
   protected
     class procedure WSRegisterClass; override;
     function  CanTab: boolean; override;
-    procedure DoMeasureTextPosition(var TextTop: integer;
-      var TextLeft: integer); virtual;
+    procedure DoDrawText(var Rect: TRect; Flags: Longint); virtual;
     function  HasMultiLine : boolean;
     procedure CalculatePreferredSize(
                          var PreferredWidth, PreferredHeight: integer;
@@ -1638,7 +1657,9 @@ type
     property OptimalFill;
   end;
 
+function CreateEmulatedTextHintFont(AWinControl: TWinControl): TFont;
 procedure Register;
+
 
 implementation
 
@@ -1700,6 +1721,20 @@ begin
   Canvas.Brush.Style := OldBrushStyle;
   Canvas.TextStyle := OldTextStyle;
 end;
+
+// Get font for TextHint in some controls / widgetsets.
+function CreateEmulatedTextHintFont(AWinControl: TWinControl): TFont;
+begin
+  Result := TFont.Create;
+  try
+    Result.Assign(AWinControl.Font);
+    Result.Color := clGrayText;
+  except
+    FreeAndNil(Result);
+    raise;
+  end;
+end;
+
 
 {$I customgroupbox.inc}
 {$I customcombobox.inc}

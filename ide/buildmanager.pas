@@ -44,13 +44,15 @@ uses
   // LazUtils
   LConvEncoding, FileUtil, LazFileUtils, LazFileCache, LazUTF8, Laz2_XMLCfg,
   LazUtilities, LazStringUtils, LazMethodList,
+  // BuildIntf
+  BaseIDEIntf, IDEOptionsIntf, ProjectIntf, MacroIntf, PublishModuleIntf,
+  IDEExternToolIntf, CompOptsIntf, MacroDefIntf,
   // IDEIntf
-  BaseIDEIntf, IDEOptionsIntf, ProjectIntf, MacroIntf, IDEDialogs, IDEExternToolIntf,
-  CompOptsIntf, LazIDEIntf, MacroDefIntf, IDEMsgIntf,
+  IDEDialogs, LazIDEIntf, IDEMsgIntf,
   // IDE
   IDECmdLine, LazarusIDEStrConsts, DialogProcs, IDEProcs,
   InputHistory, EditDefineTree, ProjectResources, MiscOptions, LazConf,
-  EnvironmentOpts, TransferMacros, CompilerOptions, PublishModule,
+  EnvironmentOpts, TransferMacros, CompilerOptions,
   ExtTools, etMakeMsgParser, etFPCMsgParser, etPas2jsMsgParser,
   Compiler, FPCSrcScan, PackageDefs, PackageSystem, Project, ProjectIcon,
   ModeMatrixOpts, BaseBuildManager, ApplicationBundle, RunParamsOpts;
@@ -200,6 +202,7 @@ type
     function GetTargetCPU: string; override;
     function GetLCLWidgetType: string; override;
     function GetRunCommandLine: string; override;
+    procedure WriteDebug_RunCommandLine; override;
 
     function GetCompilerFilename: string; override;
     function GetFPCompilerFilename: string; override;
@@ -244,7 +247,7 @@ type
                              ScanFPCSrc: TScanModeFPCSources; Quiet: boolean);
     procedure SetBuildTargetProject1; override; overload;
     procedure SetBuildTargetProject1(Quiet: boolean; ScanFPCSrc: TScanModeFPCSources = smsfsBackground); overload;
-    procedure SetBuildTargetIDE; override;
+    procedure SetBuildTargetIDE(aQuiet: boolean = false); override;
     function BuildTargetIDEIsDefault: boolean; override;
 
     property FPCSrcScans: TFPCSrcScans read FFPCSrcScans;
@@ -357,7 +360,7 @@ end;
 
 destructor TBuildManager.Destroy;
 begin
-  FreeAndNil(ExternalTools);
+  ExternalToolList.Free; // sets ExternalToolList to nil, do not use FreeAndNil!
 
   GetBuildMacroValues:=nil;
   OnAppendCustomOption:=nil;
@@ -530,9 +533,13 @@ begin
 end;
 
 procedure TBuildManager.SetupExternalTools(aToolsClass: TExternalToolsClass);
+var
+  Tools: TExternalTools;
 begin
   // setup the external tool queue
-  ExternalTools:=aToolsClass.Create(Self);
+  Tools:=aToolsClass.Create(Self);
+  if Tools<>ExternalToolList then
+    raise Exception.Create('TBuildManager.SetupExternalTools ExternalTools='+DbgSName(ExternalToolList));
   EnvOptsChanged;
   RegisterFPCParser;
   RegisterPas2jsParser;
@@ -557,9 +564,9 @@ end;
 procedure TBuildManager.EnvOptsChanged;
 begin
   if EnvironmentOptions.MaxExtToolsInParallel<=0 then
-    ExternalTools.MaxProcessCount:=DefaultMaxProcessCount
+    ExternalToolsRef.MaxProcessCount:=DefaultMaxProcessCount
   else
-    ExternalTools.MaxProcessCount:=EnvironmentOptions.MaxExtToolsInParallel;
+    ExternalToolsRef.MaxProcessCount:=EnvironmentOptions.MaxExtToolsInParallel;
 end;
 
 function TBuildManager.GetBuildMacroOverride(const MacroName: string): string;
@@ -639,6 +646,49 @@ begin
       Result:='';
   end else begin
     if not GlobalMacroList.SubstituteStr(Result) then Result:='';
+  end;
+end;
+
+procedure TBuildManager.WriteDebug_RunCommandLine;
+var
+  AMode: TRunParamsOptionsMode;
+  s, TargetFilename: String;
+begin
+  s:='';
+  if Project1=nil then
+  begin
+    debugln(['Note: (lazarus) [TBuildManager.WriteDebug_RunCommandLine] Project1=nil RunCmdLine=[',GetRunCommandLine,']']);
+  end else begin
+    AMode := Project1.RunParameterOptions.GetActiveMode;
+    if AMode<>nil then
+      debugln(['Note: (lazarus) [TBuildManager.WriteDebug_RunCommandLine] AMode="',AMode.Name,'" AMode.WorkingDirectory=[',AMode.WorkingDirectory,']'])
+    else
+      debugln(['Note: (lazarus) [TBuildManager.WriteDebug_RunCommandLine] AMode=nil']);
+    if (AMode<>nil) and AMode.UseLaunchingApplication then
+    begin
+      s := AMode.LaunchingApplicationPathPlusParams;
+      debugln(['Note: (lazarus) [TBuildManager.WriteDebug_RunCommandLine] LaunchingApplicationPathPlusParams=[',s,']']);
+    end;
+
+    if s='' then
+    begin
+      // no launching app
+      debugln(['Note: (lazarus) [TBuildManager.WriteDebug_RunCommandLine] no LaunchingApplication']);
+      if (AMode<>nil) then
+      begin
+        s := AMode.CmdLineParams;
+        if s<>'' then
+          debugln(['Note: (lazarus) [TBuildManager.WriteDebug_RunCommandLine] AMode.CmdLineParams=[',s,']']);
+      end;
+      TargetFilename := GetTargetFilename;
+      if (TargetFilename <> '')
+      and (TargetFilename[Length(TargetFilename)] in AllowDirectorySeparators) then
+        TargetFilename += ExtractFileNameOnly(
+                       Project1.CompilerOptions.GetDefaultMainSourceFileName);
+
+      debugln(['Note: (lazarus) [TBuildManager.WriteDebug_RunCommandLine] TargetFilename=[',TargetFilename,']']);
+    end;
+    debugln(['Note: (lazarus) [TBuildManager.WriteDebug_RunCommandLine] Project1<>nil RunCmdLine=[',GetRunCommandLine,']']);
   end;
 end;
 
@@ -822,7 +872,7 @@ procedure TBuildManager.RescanCompilerDefines(ResetBuildTarget,
     if ConfigCache.Units=nil then exit;
     AFilename:=ConfigCache.Units['system'];
     if AFilename='' then exit;
-    if CompareFileExt(AFilename,'.ppu',false)<>0 then exit;
+    if CompareFileExt(AFilename,'ppu',true)<>0 then exit;
     Result:=true;
   end;
 
@@ -1178,7 +1228,7 @@ var
     if AnUnitInfo.IsPartOfProject or AnUnitInfo.IsVirtual then exit;
     if not FileExistsCached(AnUnitInfo.Filename) then exit;
     if StateFileAge>=FileAgeCached(AnUnitInfo.Filename) then exit;
-    if FilenameIsPascalUnit(AnUnitInfo.Filename) then
+    if FilenameHasPascalExt(AnUnitInfo.Filename) then
     begin
       if (SearchDirectoryInSearchPath(AProject.CompilerOptions.GetUnitPath(false),
                                 ExtractFilePath(AnUnitInfo.Filename))>0)
@@ -1495,7 +1545,7 @@ begin
   if (EnvironmentOptions.AmbiguousFileAction=afaWarnOnCompile)
   and not Compiling then exit;
 
-  if FilenameIsPascalUnit(AFilename) then begin
+  if FilenameHasPascalExt(AFilename) then begin
     Ext:=ExtractFileExt(AFilename);
     LowExt:=lowercase(Ext);
     for i:=Low(PascalFileExt) to High(PascalFileExt) do begin
@@ -1523,7 +1573,7 @@ begin
     if FindFirstUTF8(ADirectory+GetAllFilesMask,faAnyFile,FileInfo)=0 then
     begin
       ShortFilename:=ExtractFileName(Filename);
-      IsPascalUnit:=FilenameIsPascalUnit(ShortFilename);
+      IsPascalUnit:=FilenameHasPascalExt(ShortFilename);
       AUnitName:=ExtractFilenameOnly(ShortFilename);
       repeat
         if (FileInfo.Name='.') or (FileInfo.Name='..')
@@ -1534,7 +1584,7 @@ begin
         if (SysUtils.CompareText(ShortFilename,FileInfo.Name)=0)
         then begin
           // same name different case => ambiguous
-        end else if IsPascalUnit and FilenameIsPascalUnit(FileInfo.Name)
+        end else if IsPascalUnit and FilenameHasPascalExt(FileInfo.Name)
            and (SysUtils.CompareText(AUnitName,ExtractFilenameOnly(FileInfo.Name))=0)
         then begin
           // same unit name => ambiguous
@@ -1636,9 +1686,9 @@ begin
           repeat
             if (FileInfo.Name='.') or (FileInfo.Name='..') or (FileInfo.Name='')
             or ((FileInfo.Attr and faDirectory)<>0) then continue;
-            if FilenameIsPascalUnit(FileInfo.Name) then
+            if FilenameHasPascalExt(FileInfo.Name) then
               CurUnitTree:=SourceUnitTree
-            else if (CompareFileExt(FileInfo.Name,CompiledExt,false)=0) then
+            else if (CompareFileExt(FileInfo.Name,CompiledExt,true)=0) then
               CurUnitTree:=CompiledUnitTree
             else
               continue;
@@ -2852,13 +2902,17 @@ begin
 
   if PCTargetChanged or LCLTargetChanged then begin
     if ConsoleVerbosity>=0 then
-      DebugLn(['Hint: (lazarus) [TBuildManager.SetBuildTarget] Old=',OldTargetCPU,'-',OldTargetOS,'-',OldLCLWidgetType,' New=',fTargetCPU,'-',fTargetOS,'-',fLCLWidgetType,' Changed: OS/CPU=',PCTargetChanged,' LCL=',LCLTargetChanged]);
+      DebugLn(['Hint: (lazarus) [TBuildManager.SetBuildTarget] Old=',OldTargetCPU,
+               '-',OldTargetOS,'-',OldLCLWidgetType,' New=',fTargetCPU,'-',fTargetOS,
+               '-',fLCLWidgetType,' Changed: OS/CPU=',PCTargetChanged,' LCL=',LCLTargetChanged]);
   end;
   if LCLTargetChanged then
     CodeToolBoss.SetGlobalValue(ExternalMacroStart+'LCLWidgetType',fLCLWidgetType);
   if ScanFPCSrc<>smsfsSkip then
     RescanCompilerDefines(false,false,ScanFPCSrc=smsfsWaitTillDone,Quiet);
-  //if (PackageGraph<>nil) and (PackageGraph.CodeToolsPackage<>nil) then debugln(['TBuildManager.SetBuildTarget CODETOOLS OUTDIR=',PackageGraph.CodeToolsPackage.CompilerOptions.GetUnitOutPath(true,coptParsed),' ',PackageGraph.CodeToolsPackage.CompilerOptions.ParsedOpts.ParsedStamp[pcosOutputDir],' ',CompilerParseStamp]);
+  //if (PackageGraph<>nil) and (PackageGraph.CodeToolsPackage<>nil) then
+  //  debugln(['TBuildManager.SetBuildTarget CODETOOLS OUTDIR=',PackageGraph.CodeToolsPackage.CompilerOptions.GetUnitOutPath(true,coptParsed),
+  //           ' ',PackageGraph.CodeToolsPackage.CompilerOptions.ParsedOpts.ParsedStamp[pcosOutputDir],' ',CompilerParseStamp]);
 end;
 
 procedure TBuildManager.SetBuildTargetProject1;
@@ -2876,7 +2930,7 @@ begin
   SetBuildTarget('','','',ScanFPCSrc,Quiet);
 end;
 
-procedure TBuildManager.SetBuildTargetIDE;
+procedure TBuildManager.SetBuildTargetIDE(aQuiet: boolean);
 var
   NewTargetOS: String;
   NewTargetCPU: String;
@@ -2891,7 +2945,7 @@ begin
   end;
   if ConsoleVerbosity>=1 then
     debugln(['Hint: (lazarus) [TBuildManager.SetBuildTargetIDE] OS=',NewTargetOS,' CPU=',NewTargetCPU,' WS=',NewLCLWidgetSet]);
-  SetBuildTarget(NewTargetOS,NewTargetCPU,NewLCLWidgetSet,smsfsBackground,false);
+  SetBuildTarget(NewTargetOS,NewTargetCPU,NewLCLWidgetSet,smsfsBackground,aQuiet);
 end;
 
 function TBuildManager.BuildTargetIDEIsDefault: boolean;

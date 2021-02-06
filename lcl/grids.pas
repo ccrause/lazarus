@@ -34,15 +34,15 @@ interface
 
 uses
   // RTL + FCL
-  Classes, SysUtils, Types, TypInfo, Math, FPCanvas, HtmlDefs,
+  Classes, SysUtils, Types, TypInfo, Math, FPCanvas, HtmlDefs, StrUtils,
   // LCL
   LCLStrConsts, LCLType, LCLIntf, Controls, Graphics, Forms,
   LMessages, StdCtrls, LResources, MaskEdit, Buttons, Clipbrd, Themes, imglist,
   // LazUtils
-  LazFileUtils, DynamicArray, Maps, LazUTF8, LazUtf8Classes, Laz2_XMLCfg,
+  LazFileUtils, DynamicArray, Maps, LazUTF8, Laz2_XMLCfg,
   LazLoggerBase, LazUtilities, LCSVUtils, IntegerList
 {$ifdef WINDOWS}
-  ,messages
+  ,messages, imm
 {$endif}
   ;
 
@@ -1145,8 +1145,6 @@ type
     procedure RowHeightsChanged; virtual;
     procedure SaveContent(cfg: TXMLConfig); virtual;
     procedure SaveGridOptions(cfg: TXMLConfig); virtual;
-    procedure FixDesignFontsPPI(const ADesignTimePPI: Integer); override;
-    procedure ScaleFontsPPI(const AToPPI: Integer; const AProportion: Double); override;
     procedure ScrollBarRange(Which:Integer; aRange,aPage,aPos: Integer);
     procedure ScrollBarPosition(Which, Value: integer);
     function  ScrollBarIsVisible(Which:Integer): Boolean;
@@ -1321,6 +1319,7 @@ type
 
     procedure EndUpdate(aRefresh: boolean = true);
     procedure EraseBackground(DC: HDC); override;
+    procedure FixDesignFontsPPI(const ADesignTimePPI: Integer); override;
     function  Focused: Boolean; override;
     function  HasMultiSelection: Boolean;
     procedure HideSortArrow;
@@ -1339,6 +1338,7 @@ type
     function  MouseToGridZone(X,Y: Integer): TGridZone;
     procedure SaveToFile(FileName: string); virtual;
     procedure SaveToStream(AStream: TStream); virtual;
+    procedure ScaleFontsPPI(const AToPPI: Integer; const AProportion: Double); override;
     procedure SetFocus; override;
 
     property CursorState: TGridCursorState read FCursorState;
@@ -1351,6 +1351,7 @@ type
   protected
     procedure IMEStartComposition(var Msg:TMessage); message WM_IME_STARTCOMPOSITION;
     procedure IMEComposition(var Msg:TMessage); message WM_IME_COMPOSITION;
+    procedure IMEEndComposition(var Msg:TMessage); message WM_IME_ENDCOMPOSITION;
 {$endif}
   end;
 
@@ -7211,7 +7212,8 @@ begin
   {$ifdef dbgGrid}DebugLnEnter('grid.DoEditorHide [',Editor.ClassName,'] INIT');{$endif}
   if gfEditingDone in FGridFlags then begin
     ParentForm := GetParentForm(Self);
-    ParentForm.ActiveControl := self;
+    if Self.CanFocus then
+      ParentForm.ActiveControl := self;
   end;
   Editor.Visible:=False;
   {$ifdef dbgGrid}DebugLnExit('grid.DoEditorHide [',Editor.ClassName,'] END');{$endif}
@@ -7219,6 +7221,7 @@ end;
 procedure TCustomGrid.DoEditorShow;
 var
   ParentChanged: Boolean;
+  Column: TGridColumn;
 begin
   {$ifdef dbgGrid}DebugLnEnter('grid.DoEditorShow [',Editor.ClassName,'] INIT');{$endif}
   ScrollToCell(FCol,FRow, True);
@@ -7235,8 +7238,9 @@ begin
     Editor.Parent:=Self;
   if (FEditor = FStringEditor) or (FEditor = FButtonStringEditor) then
   begin
-    if FCol-FFixedCols<Columns.Count then
-      FStringEditor.Alignment:=Columns[FCol-FFixedCols].Alignment
+    Column:=ColumnFromGridColumn(FCol);
+    if Column<>nil then
+      FStringEditor.Alignment:=Column.Alignment
     else
       FStringEditor.Alignment:=taLeftJustify;
   end;
@@ -8409,19 +8413,22 @@ var
 begin
   if not EditorLocked and (Editor<>nil) and Editor.Visible then
   begin
-    WasFocused := Editor.Focused;
-    FEditorMode:=False;
+    FEditorMode := False;
     FGridState := gsNormal;
-    {$ifdef dbgGrid}DebugLnEnter('EditorHide [',Editor.ClassName,'] INIT FCol=',IntToStr(FCol),' FRow=',IntToStr(FRow));{$endif}
-    LockEditor;
-    try
-      DoEditorHide;
-    finally
-      if WasFocused then
-        SetFocus;
-      UnLockEditor;
+    if Editor.Parent<>nil then  // May be nil when the form is closing.
+    begin
+      WasFocused := Editor.Focused;
+      {$ifdef dbgGrid}DebugLnEnter('EditorHide [',Editor.ClassName,'] INIT FCol=',IntToStr(FCol),' FRow=',IntToStr(FRow));{$endif}
+      LockEditor;
+      try
+        DoEditorHide;
+      finally
+        if WasFocused then
+          SetFocus;
+        UnLockEditor;
+      end;
+      {$ifdef dbgGrid}DebugLnExit('EditorHide END');{$endif}
     end;
-    {$ifdef dbgGrid}DebugLnExit('EditorHide END');{$endif}
   end;
 end;
 
@@ -8567,6 +8574,9 @@ begin
       // this should avoid range check errors on widgetsets that can't handle
       // high control coords (like GTK2)
       CellR := Bounds(-FEditor.Width-100, -FEditor.Height-100, CellR.Right-CellR.Left, CellR.Bottom-CellR.Top);
+
+    // Make sure to use the grid font, not that of the title (issue #38203).
+    Canvas.Font.Assign(Font);
 
     if FEditorOptions and EO_AUTOSIZE = EO_AUTOSIZE then begin
       if (FEditor = FStringEditor) and (EditorBorderStyle = bsNone) then
@@ -9085,16 +9095,6 @@ var
     DeltaRow := 0;
 
     aa := AAutoAdvance;
-    if UseRightToLeftAlignment then
-      case AAutoAdvance of
-        aaLeftUp:     aa := aaRightUp;
-        aaLeftDown:   aa := aaRightDown;
-        aaLeft:       aa := aaRight;
-        aaRightUp:    aa := aaLeftUp;
-        aaRightDown:  aa := aaLeftDown;
-        aaRight:      aa := aaLeft;
-      end;
-    // invert direction if necessary
     if Inverse then
       case aa of
         aaRight:      aa := aaLeft;
@@ -9988,29 +9988,36 @@ begin
 end;
 
 {$ifdef WINDOWS}
+// editor focusing make bad on IME input.
 procedure TCustomGrid.IMEStartComposition(var Msg: TMessage);
 begin
-  // enable editor
-  SelectEditor;
-  EditorShow(True);
-  if Editor<>nil then
-    Msg.Result:=SendMessage(Editor.Handle,Msg.msg,Msg.wParam,Msg.lParam);
+  EditorSetValue;
+  if EditingAllowed(FCol) and CanEditShow and (not FEditorShowing) and
+     (Editor<>nil) and (not Editor.Visible) and (not EditorLocked) then
+  begin
+    // prepare IME input on Editor
+    Editor.Visible:=True;
+    FEditorOldValue := GetCells(FCol,FRow);
+    EditorSelectAll;
+    FGridState := gsNormal;
+    Editor.Dispatch(Msg);
+  end;
 end;
 
 procedure TCustomGrid.IMEComposition(var Msg: TMessage);
-var
-  wc : pWideChar;
-  s : string;
 begin
-  wc := @Msg.wParamlo;
-  s := Ansistring(WideCharLenToString(wc,1));
-  // check valid mbcs
-  if (Length(s)>0) and (s[1]<>'?') then
-    Msg.wParamlo:=swap(pword(@s[1])^);
-  // send first mbcs to editor
-  if Editor<>nil then
-    Msg.Result:=SendMessage(Editor.Handle,Msg.msg,Msg.wParam,Msg.lParam);
+  if EditingAllowed(FCol) and CanEditShow and (not FEditorShowing) and
+     (Editor<>nil) and (not Editor.Visible) and (not EditorLocked) then
+    Editor.Dispatch(Msg);
 end;
+
+procedure TCustomGrid.IMEEndComposition(var Msg: TMessage);
+begin
+  if EditingAllowed(FCol) and CanEditShow and (not FEditorShowing) and
+     (Editor<>nil) and (not Editor.Visible) and (not EditorLocked) then
+    Editor.Dispatch(Msg);
+end;
+
 {$endif}
 
 function TCustomGrid.ClearCols: Boolean;
@@ -11461,13 +11468,12 @@ begin
   end;
 end;
 
-function TCustomStringGrid.DoCompareCells(Acol, ARow, Bcol, BRow: Integer
-  ): Integer;
+function TCustomStringGrid.DoCompareCells(Acol, ARow, Bcol, BRow: Integer): Integer;
 begin
   if Assigned(OnCompareCells) then
     Result:=inherited DoCompareCells(Acol, ARow, Bcol, BRow)
   else begin
-    Result:=UTF8CompareText(Cells[ACol,ARow], Cells[BCol,BRow]);
+    Result:=UTF8CompareLatinTextFast(Cells[ACol,ARow], Cells[BCol,BRow]);
     if SortOrder=soDescending then
       result:=-result;
   end;
@@ -11619,6 +11625,7 @@ begin
   end;
 end;
 
+
 procedure TCustomStringGrid.SelectionSetHTML(TheHTML, TheText: String);
 var
   bStartCol, bStartRow, bCol, bRow: Integer;
@@ -11628,28 +11635,42 @@ var
   bCellData, bTagEnd: Boolean;
   bStr, bEndStr: PChar;
 
-  function ReplaceEntities(cSt: string): string;
+  function ReplaceEntities(const cSt: string): string;
   var
-    o,a,b: pchar;
     dName: widestring;
     dEntity: WideChar;
+    pAmp, pSemi, pStart: Integer;
   begin
+    //debugln(['ReplaceEntities: cSt=',cSt]);
+    Result := '';
+    if (cSt = '') then
+      Exit;
+    pStart := 1;
     while true do begin
-      result := cSt;
-      if cSt = '' then
-        break;
-      o := @cSt[1];
-      a := strscan(o, '&');
-      if a = nil then
-        break;
-      b := strscan(a + 1, ';');
-      if b = nil then
-        break;
-      dName := UTF8Decode(copy(cSt, a - o + 2, b - a - 1));
+      //debugln(['  pStart=',pStart]);
+      pAmp := PosEx('&', cSt, pStart);
+      if (pAmp > 0) then
+        pSemi := PosEx(';', cSt, pAmp);
+      if ((pAmp and pSemi) = 0) then  begin
+        //debugln('  pAmp or pSemi = 0');
+        Result := Result + Copy(cSt, pStart, MaxInt);
+        Exit;
+      end;
+      //debugln(['  pAmp=',pAmp,', pSemi=',pSemi]);
+      dName := Utf8Decode(Copy(cSt, pAmp + 1, pSemi - pAmp - 1));
+      //debugln(['  dName=',Utf8Encode(dName)]);
+      Result := Result + Copy(cSt, pStart, pAmp - pStart);
+      pStart := pSemi + 1;
+
       dEntity := ' ';
       if ResolveHTMLEntityReference(dName, dEntity) then begin
-        system.delete(cSt, a - o + 1, b - a + 1);
-        system.insert(UTF8Encode(dEntity), cSt, a - o + 1);
+        //debugln(['dEntity=',Utf8Encode(dEntity)]);
+        result := result + Utf8Encode(dEntity);
+      end
+      else begin
+        //illegal html entity
+        //debugln('  illegal html entity: replace with "?"');
+        Result := Result + '?';
       end;
     end;
   end;
@@ -11993,9 +12014,9 @@ procedure TCustomStringGrid.LoadFromCSVFile(AFilename: string;
   ADelimiter: Char=','; UseTitles: boolean=true; FromLine: Integer=0;
   SkipEmptyLines: Boolean=true);
 var
-  TheStream: TFileStreamUtf8;
+  TheStream: TFileStream;
 begin
-  TheStream:=TFileStreamUtf8.Create(AFileName,fmOpenRead or fmShareDenyWrite);
+  TheStream:=TFileStream.Create(AFileName,fmOpenRead or fmShareDenyWrite);
   try
     LoadFromCSVStream(TheStream, ADelimiter, UseTitles, FromLine, SkipEmptyLines);
   finally
@@ -12078,9 +12099,9 @@ end;
 procedure TCustomStringGrid.SaveToCSVFile(AFileName: string; ADelimiter: Char;
   WriteTitles: boolean=true; VisibleColumnsOnly: boolean=false);
 var
-  TheStream: TFileStreamUtf8;
+  TheStream: TFileStream;
 begin
-  TheStream:=TFileStreamUtf8.Create(AFileName,fmCreate);
+  TheStream:=TFileStream.Create(AFileName,fmCreate);
   try
     SaveToCSVStream(TheStream, ADelimiter, WriteTitles, VisibleColumnsOnly);
   finally

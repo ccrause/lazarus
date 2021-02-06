@@ -174,6 +174,8 @@ type
     keyCaptured: Boolean;
     function lclGetCallback: ICommonCallback; override;
     function becomeFirstResponder: LCLObjCBoolean; override;
+    procedure setDelegate(adelegate: NSTextDelegateProtocol); override;
+    procedure lclReviseCursorColor; message 'lclReviseCursorColor';
     // keyboard
     procedure doCommandBySelector(aSelector: SEL); override;
     procedure insertNewline(sender: id); override;
@@ -401,6 +403,7 @@ type
     decimalPlaces: Integer;
 
     avoidChangeEvent: Integer;
+    anyChange: Boolean;
 
     //Spin: TCustomFloatSpinEdit;
     procedure dealloc; override;
@@ -411,6 +414,7 @@ type
     procedure PositionSubcontrols(const ALeft, ATop, AWidth, AHeight: Integer); message 'PositionSubcontrols:ATop:AWidth:AHeight:';
     procedure StepperChanged(sender: NSObject); message 'StepperChanged:';
     procedure textDidChange(notification: NSNotification); override;
+    procedure textDidEndEditing(notification: NSNotification); override;
     // lcl
     function acceptsFirstResponder: LCLObjCBoolean; override;
     function lclGetCallback: ICommonCallback; override;
@@ -754,10 +758,38 @@ begin
   else Result := nil;
 end;
 
+function ReverseColor(clr: NSColor): NSColor;
+var
+  r,g,b: byte;
+begin
+  r := $FF xor byte(Round(clr.redComponent * 255));
+  g := $FF xor byte(Round(clr.greenComponent * 255));
+  b := $FF xor byte(Round(clr.blueComponent * 255));
+  Result := NSColor.colorWithDeviceRed_green_blue_alpha(r / 255, g / 255, b / 255, 1);
+end;
+
 function TCocoaFieldEditor.becomeFirstResponder: LCLObjCBoolean;
 begin
   if goingReadOnly then Result := false
   else Result:=inherited becomeFirstResponder;
+end;
+
+procedure TCocoaFieldEditor.setDelegate(adelegate: NSTextDelegateProtocol);
+begin
+  inherited setDelegate(adelegate);
+  lclReviseCursorColor;
+end;
+
+procedure TCocoaFieldEditor.lclReviseCursorColor;
+var
+  clr :NSColor;
+begin
+  if not Assigned(delegate) then Exit;
+  if not (NSObject(delegate).isKindOfClass(NSTextField)) then Exit;
+  clr := NSTextField(delegate).backgroundColor.colorUsingColorSpace(NSColorSpace.deviceRGBColorSpace);
+
+  if Assigned(clr) then
+    setInsertionPointColor(ReverseColor(clr));
 end;
 
 procedure TCocoaFieldEditor.doCommandBySelector(aSelector: SEL);
@@ -957,7 +989,7 @@ begin
   begin
     inherited mouseDown(event);
     // the text selection is handled withing mouseDown
-    if Assigned(callback) then
+    if Assigned(callback) and isSelectable  then
       callback.MouseUpDownEvent(event, True);
   end;
 end;
@@ -2013,15 +2045,43 @@ begin
 end;
 
 procedure TCocoaSpinEdit.textDidChange(notification: NSNotification);
+var
+  w : NSWindow;
 begin
-  inc(avoidChangeEvent);
-  try
+  w := Self.window;
+  if Assigned(w)
+      and (w.firstResponder.isKindOfClass(NSTextView))
+      and (NSObject(NSTextView(w.firstResponder).delegate) = self) // is focused
+  then
+  begin
+    anyChange:=true;
+    updateStepper; // just update float value, keep text as is!
+    if (callback <> nil) and (avoidChangeEvent=0) then
+      callback.SendOnTextChanged();
+  end
+  else
+  begin
+    // not focused
+    inc(avoidChangeEvent);
+    try
+      updateStepper;
+      StepperChanged(nil); // and refresh self
+      inherited textDidChange(notification);
+    finally
+      dec(avoidChangeEvent);
+    end;
+  end;
+end;
+
+procedure TCocoaSpinEdit.textDidEndEditing(notification: NSNotification);
+begin
+  if anyChange then
+  begin
     updateStepper;
     StepperChanged(nil); // and refresh self
-    inherited textDidChange(notification);
-  finally
-    dec(avoidChangeEvent);
+    anyChange := false;
   end;
+  inherited textDidEndEditing(notification);
 end;
 
 function TCocoaSpinEdit.acceptsFirstResponder: LCLObjCBoolean;

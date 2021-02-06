@@ -34,8 +34,10 @@ unit SetAnyWordCaps;
 interface
 
 uses
-    { delphi }Classes,
-    { local }JcfSetBase, SettingsStream;
+  Classes, SysUtils,
+  Dialogs,
+  { local }
+  JcfSetBase, SettingsStream;
 
 type
 
@@ -61,9 +63,6 @@ type
   end;
 
 implementation
-
-uses
-    { delphi }SysUtils, Dialogs;
 
 const
   REG_ENABLED = 'Enabled';
@@ -134,7 +133,8 @@ begin
   inherited;
   SetSection('SpecificWordCaps');
 
-  fcWords := TStringList.Create;
+  fcWords := TStringList.Create;        // Will compare with CompareText.
+  {$IF FPC_FULLVERSION>=30200}fcWords.UseLocale := False;{$ENDIF}
   fcWords.Duplicates := dupIgnore;
 end;
 
@@ -192,11 +192,7 @@ end;
 function TSetAnyWordCaps.HasWord(const psWord: string): boolean;
 begin
   if psWord = '' then
-  begin
-    Result := False;
-    exit;
-  end;
-
+    exit(False);
   Result := (fcWords.IndexOf(psWord) > -1);
 end;
 

@@ -116,7 +116,12 @@ begin
       exit;
     end;
     if Gtk3IsGdkWindow(AWidget.Widget^.window) then
-      gdk_window_get_origin(AWidget.Widget^.window, @Pt.X, @Pt.Y)
+    begin
+      gdk_window_get_origin(AWidget.Widget^.window, @Pt.X, @Pt.Y);
+      gtk_widget_get_allocation(AWidget.Widget, @TempAlloc);
+      Pt.X += TempAlloc.x;
+      Pt.Y += TempAlloc.y;
+    end
     else
     begin
       gtk_widget_get_allocation(AWidget.Widget, @TempAlloc);
@@ -141,13 +146,30 @@ begin
   Result:=inherited ClipboardFormatToMimeType(FormatID);
 end;
 
+const
+  sPrimary = 'PRIMARY';
+  sClipboard = 'CLIPBOARD';
+
 function TGtk3WidgetSet.ClipboardGetData(ClipboardType: TClipboardType;
   FormatID: TClipboardFormat; Stream: TStream): boolean;
+var
+  pclp:PGtkClipboard;
+  pc:pgchar;
+  pcname:PgdkAtom;
 begin
-  {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
-  DebugLn('WARNING: TGtk3WidgetSet.ClipboardGetData not implemented ...');
-  {$ENDIF}
-  Result:=inherited ClipboardGetData(ClipboardType, FormatID, Stream);
+  case ClipboardType of
+  ctPrimarySelection: pcname:=TGdkAtom.intern(sPrimary,false);
+  ctSecondarySelection: pcname:=nil;
+  ctClipboard: pcname:=TGdkAtom.intern(sClipboard,false);
+  end;
+  if not Assigned(pcname) then exit;
+  pclp:=TGtkClipboard.get(pcname);
+  if not Assigned(pclp) then exit(false);
+  // text handling
+  //pclp^.request_text(@ClipboardTextReceivedFunc,Stream);
+  pc:=pclp^.wait_for_text;
+  Stream.Write(pc^,strlen(pc));
+  Result:=true;
 end;
 
 function TGtk3WidgetSet.ClipboardGetFormats(ClipboardType: TClipboardType;
@@ -162,12 +184,24 @@ end;
 function TGtk3WidgetSet.ClipboardGetOwnerShip(ClipboardType: TClipboardType;
   OnRequestProc: TClipboardRequestEvent; FormatCount: integer;
   Formats: PClipboardFormat): boolean;
+var
+  pclp:PGtkClipboard;
+  pc:pgchar;
+  pcname:PgdkAtom;
 begin
-  {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
-  DebugLn('WARNING: TGtk3WidgetSet.ClipboardGetOwnerShip not implemented ...');
-  {$ENDIF}
-  Result:=inherited ClipboardGetOwnerShip(ClipboardType, OnRequestProc,
-    FormatCount, Formats);
+  case ClipboardType of
+  ctPrimarySelection: pcname:=TGdkAtom.intern(sPrimary,false);
+  ctSecondarySelection: pcname:=nil;
+  ctClipboard: pcname:=TGdkAtom.intern(sClipboard,false);
+  end;
+  if not Assigned(pcname) then exit;
+  pclp:=TGtkClipboard.get(pcname);
+  if not Assigned(pclp) then exit(false);
+{  // text handling
+  //pclp^.request_text(@ClipboardTextReceivedFunc,Stream);
+  pc:=pclp^.wait_for_text;
+  Stream.Write(pc^,strlen(pc)); }
+  Result:=true;
 end;
 
 function TGtk3WidgetSet.ClipboardRegisterFormat(const AMimeType: string): TClipboardFormat;
@@ -384,11 +418,14 @@ end;
 
 function TGtk3WidgetSet.CreateEllipticRgn(X1, Y1, X2, Y2: Integer): HRGN;
 begin
-  {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
-  DebugLn('WARNING: TGtk3WidgetSet.CreateEllipticRgn not implemented ...');
-  {$ENDIF}
-  Result := inherited CreateEllipticRgn(X1, Y1, X2, Y2);
+  Result:=HRGN(TGtk3Region.CreateEllipse(X1,Y1,X2,Y2));
 end;
+
+function TGtk3WidgetSet.CreateRoundRectRgn(X1, Y1, X2, Y2, nW, nH: Integer): HRGN;
+begin
+  Result:=HRGN(TGtk3Region.Create(X1,Y1,X2,Y2,nW,nH));
+end;
+
 
 function TGtk3WidgetSet.CreateFontIndirect(const LogFont: TLogFont): HFONT;
 begin
@@ -415,15 +452,17 @@ begin
       Result := HICON(TGtk3Image.Create(TGtk3Image(IconInfo^.hbmColor).Handle));
     end else
     begin
+      Result := HCURSOR({%H-}PtrUInt(gdk_cursor_new_from_pixbuf(gdk_display_get_default,
+        TGtk3Image(IconInfo^.hbmColor).Handle, IconInfo^.xHotSpot, IconInfo^.yHotSpot)));
       // create cursor from pixbuf
-      W := gdk_pixbuf_get_width(TGtk3Image(IconInfo^.hbmColor).Handle);
+     { W := gdk_pixbuf_get_width(TGtk3Image(IconInfo^.hbmColor).Handle);
       H := gdk_pixbuf_get_height(TGtk3Image(IconInfo^.hbmColor).Handle);
       DebugLn('TGtk3WidgetSet.CreateIconIndirect W=',dbgs(W),' H=',dbgs(H));
       PixBuf := gdk_pixbuf_new_subpixbuf(TGtk3Image(IconInfo^.hbmColor).Handle, 0, 0, W, H);
       Result := HCURSOR({%H-}PtrUInt(gdk_cursor_new_from_pixbuf(gdk_display_get_default,
         pixbuf, IconInfo^.xHotSpot, IconInfo^.yHotSpot)));
       if pixbuf <> nil then
-        g_object_unref(PixBuf);
+        g_object_unref(PixBuf); }
     end;
   end;
 end;
@@ -569,36 +608,10 @@ begin
 end;
 
 function TGtk3WidgetSet.DrawFocusRect(DC: HDC; const aRect: TRect): boolean;
-var
-  Context: PGtkStyleContext;
-  AValue: TGValue;
 begin
   Result := False;
   if IsValidDC(DC) then
-  begin
-    if TGtk3DeviceContext(DC).Parent <> nil then
-      Context := TGtk3DeviceContext(DC).Parent^.get_style_context
-    else
-    if gtk_widget_get_default_style^.has_context then
-    begin
-      // Context := gtk_widget_get_default_style^.has_context
-      AValue.g_type := G_TYPE_POINTER;
-      AValue.set_pointer(nil);
-      g_object_get_property(gtk_widget_get_default_style,'context',@AValue);
-      Context := AValue.get_pointer;
-      AValue.unset;
-    end else
-      Context := nil;
-    if Context = nil then
-    begin
-      DebugLn('WARNING: TGtk3WidgetSet.DrawFocusRect drawing focus on non widget context isn''t implemented.');
-      exit;
-    end;
-    with aRect do
-      gtk_render_focus(Context ,TGtk3DeviceContext(DC).Widget, Left, Top, Right - Left, Bottom - Top);
-
-    Result := True;
-  end;
+    Result:=TGtk3DeviceContext(DC).drawFocusRect(aRect);
 end;
 
 function TGtk3WidgetSet.DrawEdge(DC: HDC; var ARect: TRect; Edge: Cardinal;
@@ -1444,7 +1457,7 @@ begin
     //TODO: APen.setDashPattern
   end;
 
-  APen.Color := lplb.lbColor;
+  APen.Color := TColor(lplb.lbColor);  // ColorToRGB() ?
   APen.LogPen.lopnColor := lplb.lbColor;
   APen.LogPen.lopnStyle := (dwPenStyle and PS_STYLE_MASK) or (dwPenStyle and PS_JOIN_MASK) or (dwPenStyle and PS_ENDCAP_MASK);
   APen.LogPen.lopnWidth.X := dwWidth;
@@ -1453,8 +1466,7 @@ begin
   Result := HPen(APen);
 end;
 
-function TGtk3WidgetSet.ExtSelectClipRGN(dc: hdc; rgn: hrgn; Mode: Longint
-  ): Integer;
+function TGtk3WidgetSet.ExtSelectClipRGN(dc: hdc; rgn: hrgn; Mode: Longint): Integer;
 var
   GtkDC: TGtk3DeviceContext absolute DC;
   ARect: TGdkRectangle;
@@ -1486,7 +1498,7 @@ begin
             exit;
           end;
           // get existing clip
-          gdk_cairo_get_clip_rectangle(GtkDC.Widget, @ARect);
+          gdk_cairo_get_clip_rectangle(GtkDC.pcr, @ARect);
           R := RectFromGdkRect(ARect);
           if IsRectEmpty(R) then
           begin
@@ -1521,7 +1533,7 @@ begin
         //exit;
         // when substracting we must have active clipregion
         // with all of its rects.
-        gdk_cairo_get_clip_rectangle(GtkDC.Widget, @ARect);
+        gdk_cairo_get_clip_rectangle(GtkDC.pcr, @ARect);
         R := RectFromGdkRect(ARect);
         if IsRectEmpty(R) then
         begin
@@ -1627,7 +1639,7 @@ begin
       end;
   end;
 
-  cr := TGtk3DeviceContext(DC).Widget;
+  cr := TGtk3DeviceContext(DC).pcr;
   cairo_save(cr);
   try
     cairo_set_line_width(cr, 1);
@@ -1669,7 +1681,7 @@ begin
   Result := 0;
   if not IsValidDC(DC) then
     exit;
-  cr := TGtk3DeviceContext(DC).Widget;
+  cr := TGtk3DeviceContext(DC).pcr;
   cairo_rectangle(cr, ARect.Left+PixelOffset, ARect.Top+PixelOffset, ARect.Right-ARect.Left-1, ARect.Bottom-ARect.Top-1);
   if IsValidGDIObject(hBr) then
     TGtk3DeviceContext(DC).SetSourceColor(TGtk3Brush(HBR).Color);
@@ -1696,9 +1708,10 @@ begin
   AWindow := gdk_screen_get_active_window(gdk_screen_get_default);
   if AWindow <> nil then
   begin
-    AData := g_object_get_data(AWindow, 'lclwidget');
-    if AData <> nil then
+    gdk_window_get_user_data(AWindow,@AWidget);
+    if AWidget <> nil then
     begin
+      AData := g_object_get_data(AWidget, 'lclwidget');
       // DebugLn('TGtk3WidgetSet.GetActiveWindow found window from data ...',dbgsName(TGtk3Widget(AData).LCLObject));
       exit(HWND(AData));
     end;
@@ -1805,7 +1818,7 @@ begin
 
   if Result <> ERROR then
   begin
-    cr := GtkDC.Widget;
+    cr := GtkDC.pcr;
     if gdk_cairo_get_clip_rectangle(cr, @ARect) then
     begin
       lpRect^ := RectFromGdkRect(ARect);
@@ -1824,7 +1837,7 @@ begin
   Result := -1;
   if not IsValidDC(DC) or (RGN = 0) then
     exit;
-  gdk_cairo_get_clip_rectangle(TGtk3DeviceContext(DC).Widget, @ARect);
+  gdk_cairo_get_clip_rectangle(TGtk3DeviceContext(DC).pcr, @ARect);
   // DebugLn('GetClipRgn ',dbgs(TGtk3Region(RGN).GetExtents),' clipRect ',dbgs(RectFromGdkRect(ARect)));
   if IsRectEmpty(RectFromGdkRect(ARect)) then
     exit(0)
@@ -1989,9 +2002,9 @@ begin
     p.Y := TGtk3DeviceContext(DC).ParentPixmap^.get_height;
     Result := True;
   end else
-  if TGtk3DeviceContext(DC).Widget <> nil then
+  if TGtk3DeviceContext(DC).pcr <> nil then
   begin
-    gdk_cairo_get_clip_rectangle(TGtk3DeviceContext(DC).Widget, @ARect);
+    gdk_cairo_get_clip_rectangle(TGtk3DeviceContext(DC).pcr, @ARect);
     p.X := ARect.Width;
     p.Y := ARect.Height;
     Result := True;
@@ -2003,6 +2016,34 @@ function TGtk3WidgetSet.GetDIBits(DC: HDC; Bitmap: HBitmap; StartScan,
 begin
   Result:=inherited GetDIBits(DC, Bitmap, StartScan, NumScans, Bits, BitInfo,
     Usage);
+end;
+
+function TGtk3WidgetSet.GetDpiForMonitor(hmonitor: HMONITOR;
+  dpiType: TMonitorDpiType; out dpiX: UINT; out dpiY: UINT): HRESULT;
+var
+  w,w_mm,h,h_mm:gint;
+  rr:double;
+  pscr:PGdkScreen;
+begin
+  (*  MONITOR_DPI_TYPE = (
+    MDT_EFFECTIVE_DPI = 0,
+    MDT_ANGULAR_DPI = 1,
+    MDT_RAW_DPI = 2,
+    MDT_DEFAULT = MDT_EFFECTIVE_DPI);
+  TMonitorDpiType = MONITOR_DPI_TYPE;
+  *)
+  pscr:=TGdkScreen.get_default;
+  w:=pscr^.get_width;
+  w_mm:=pscr^.get_width_mm;
+  h:=pscr^.get_height;
+  h_mm:=pscr^.get_height_mm;
+
+  dpiX:=round(25.4*w/w_mm);
+  dpiY:=round(25.4*h/h_mm);
+
+  rr:=TGdkScreen.get_default^.get_resolution();
+  Result:=0;
+  //Result:=inherited GetDpiForMonitor(hmonitor, dpiType, dpiX, dpiY);
 end;
 
 function TGtk3WidgetSet.GetFocus: HWND;
@@ -2209,12 +2250,6 @@ end;
 
 function TGtk3WidgetSet.GetObject(GDIObj: HGDIOBJ; BufSize: Integer;
   Buf: Pointer): Integer;
-var
-  aObject: TObject;
-  ALogFont: PLogFont absolute Buf;
-  ALogPen: PLogPen absolute Buf;
-  //AExtLogPen: PExtLogPen absolute Buf;
-  ALogBrush: PLogBrush absolute Buf;
 begin
   Result := 0;
   if not IsValidGDIObject(GDIObj) then
@@ -2224,49 +2259,7 @@ begin
     {$endif}
     Exit;
   end;
-  aObject := TObject(GdiObj);
-  DebugLn('TGtk3WidgetSet.GetObject ',dbgsName(aObject));
-  if aObject is TGtk3Pen then
-  begin
-    if Buf = nil then
-      Result := SizeOf(TLogPen)
-    else
-    begin
-      Result := SizeOf(TLogPen);
-      ALogPen^ := TGtk3Pen(aObject).LogPen;
-    end;
-  end else
-  if aObject is TGtk3Brush then
-  begin
-    if Buf = nil then
-    begin
-      // DebugLn('TGtk3WidgetSet.GetObject ',dbgsName(aObject),' Buffer is empty ',dbgHex(PtrUInt(ALogBrush)));
-      Result := SizeOf(TLogBrush);
-    end else
-    if BufSize >= SizeOf(TLogBrush) then
-    begin
-      Result := SizeOf(TLogBrush);
-      // ALogBrush^ := TGtk3Brush(aObject).Color;
-      ALogBrush^ := TGtk3Brush(AObject).LogBrush;
-      // DebugLn('TGtk3WidgetSet.GetObject ',dbgsName(aObject),' ALogBrush ',dbgHex(PtrUInt(ALogBrush)));
-    end;
-  end else
-  if aObject is TGtk3Font then
-  begin
-    if Buf = nil then
-    begin
-      // DebugLn('TGtk3WidgetSet.GetObject ',dbgsName(aObject),' Buffer is empty ',dbgHex(PtrUInt(ALogBrush)));
-      Result := SizeOf(TLogFont);
-    end else
-    if BufSize >= SizeOf(TLogFont) then
-    begin
-      Result := SizeOf(TLogFont);
-      // ALogBrush^ := TGtk3Brush(aObject).Color;
-       TGtk3Font(AObject).UpdateLogFont;
-      ALogFont^ := TGtk3Font(AObject).LogFont;
-      // DebugLn('TGtk3WidgetSet.GetObject ',dbgsName(aObject),' ALogBrush ',dbgHex(PtrUInt(ALogBrush)));
-    end;
-  end;
+  Result:=TGtk3ContextObject(GDIObj).Get(bufsize, buf);
 end;
 
 function TGtk3WidgetSet.GetParent(Handle: HWND): HWND;
@@ -2760,7 +2753,7 @@ begin
     {$endif}
     exit;
   end;
-  cairo_get_matrix(TGtk3DeviceContext(DC).Widget, @Matrix);
+  cairo_get_matrix(TGtk3DeviceContext(DC).pcr, @Matrix);
   dx := 0;
   dy := 0;
   cairo_matrix_transform_point(@Matrix, @dx, @dy);
@@ -2929,7 +2922,7 @@ begin
   // inherited LPtoDP(DC, Points, Count);
   if not IsValidDC(DC) then
     exit;
-  cr := TGtk3DeviceContext(DC).Widget;
+  cr := TGtk3DeviceContext(DC).pcr;
 
   P := @Points;
   while Count > 0 do
@@ -2949,116 +2942,29 @@ begin
   Result:=true;
 end;
 
-function MessageButtonClicked(Widget : PGtkWidget; data: gPointer) : GBoolean; cdecl;
-begin
-  //DebugLn('[MessageButtonClicked] ',dbgs(data),' ',dbgs(g_object_get_data(PGtkObject(Widget), 'modal_result')));
-  if PInteger(data)^ = 0 then
-    PInteger(data)^:={%H-}PtrUInt(g_object_get_data(PGObject(Widget), 'modal_result'));
-  Result:=false;
-end;
-
-function MessageBoxClosed(Widget : PGtkWidget; {%H-}Event : PGdkEvent;
-  data: gPointer) : GBoolean; cdecl;
-var ModalResult : PtrUInt;
-begin
-  { We were requested by window manager to close }
-  if PInteger(data)^ = 0 then begin
-    ModalResult:= {%H-}PtrUInt(g_object_get_data(PGObject(Widget), 'modal_result'));
-    { Don't allow to close if we don't have a default return value }
-    Result:= (ModalResult = 0);
-    if not Result then PInteger(data)^:= ModalResult
-    else DebugLn('Do not close !!!');
-  end else Result:= false;
-end;
-
 function TGtk3WidgetSet.MessageBox(hWnd: HWND; lpText, lpCaption: PChar;
   uType: Cardinal): integer;
 var
-  Dialog, ALabel : PGtkWidget;
-  ButtonCount, DefButton, ADialogResult : Integer;
-  DialogType : Cardinal;
-  procedure CreateButton(const ALabel : PChar; const RetValue : integer);
-  var AButton : PGtkWidget;
-  begin
-    AButton:= gtk_button_new_with_label(ALabel);
-    Inc(ButtonCount);
-    if ButtonCount = DefButton then begin
-      gtk_window_set_focus(PGtkWindow(Dialog), AButton);
-    end;
-    { If there is the Cancel button, allow the dialog to close }
-    if RetValue = IDCANCEL then begin
-      g_object_set_data(PGObject(Dialog), 'modal_result', Pointer(IDCANCEL));
-    end;
-    g_object_set_data(AButton, 'modal_result',
-                        {%H-}Pointer(PtrInt(RetValue)));
-    g_signal_connect_data(AButton, 'clicked',
-                     TGCallback(@MessageButtonClicked), GPointer(@ADialogResult), nil, 0);
-    gtk_container_add (PGtkContainer(PGtkDialog(Dialog)^.get_action_area), AButton);
-  end;
-
+  fact:TGtk3DialogFactory;
 begin
-  ButtonCount:= 0;
-  { Determine which is the default button }
-  DefButton:= ((uType and $00000300) shr 8) + 1;
-  //DebugLn('Trace:Default button is ' + IntToStr(DefButton));
+  fact:=TGtk3DialogFactory.CreateMsgBox(hWnd,lpText,lpCaption,uType);
+  try
+    fact.run;
+    Result:=fact.lcl_result;
+  finally
+    fact.Free;
+  end;
+end;
 
-  ADialogResult:= 0;
-  Dialog:= gtk_dialog_new;
-  g_signal_connect_data(Dialog, 'delete-event', TGCallback(@MessageBoxClosed), @ADialogResult, nil, 0);
-  gtk_window_set_default_size(PGtkWindow(Dialog), 100, 100);
-  ALabel:= gtk_label_new(lpText);
-  gtk_container_add (PGtkContainer(PGtkDialog(Dialog)^.get_content_area), ALabel);
-  DialogType:= (uType and $0000000F);
-  if DialogType = MB_OKCANCEL
-  then begin
-    CreateButton(PChar(rsMbOK), IDOK);
-    CreateButton(PChar(rsMbCancel), IDCANCEL);
-  end
-  else begin
-    if DialogType = MB_ABORTRETRYIGNORE
-    then begin
-      CreateButton(PChar(rsMbAbort), IDABORT);
-      CreateButton(PChar(rsMbRetry), IDRETRY);
-      CreateButton(PChar(rsMbIgnore), IDIGNORE);
-    end
-    else begin
-      if DialogType = MB_YESNOCANCEL
-      then begin
-        CreateButton(PChar(rsMbYes), IDYES);
-        CreateButton(PChar(rsMbNo), IDNO);
-        CreateButton(PChar(rsMbCancel), IDCANCEL);
-      end
-      else begin
-        if DialogType = MB_YESNO
-        then begin
-          CreateButton(PChar(rsMbYes), IDYES);
-          CreateButton(PChar(rsMbNo), IDNO);
-        end
-        else begin
-          if DialogType = MB_RETRYCANCEL
-          then begin
-            CreateButton(PChar(rsMbRetry), IDRETRY);
-            CreateButton(PChar(rsMbCancel), IDCANCEL);
-          end
-          else begin
-            { We have no buttons to show. Create the default of OK button }
-            CreateButton(PChar(rsMbOK), IDOK);
-          end;
-        end;
-      end;
-    end;
-  end;
-  gtk_window_set_title(PGtkWindow(Dialog), lpCaption);
-  gtk_window_set_position(PGtkWindow(Dialog), GTK_WIN_POS_CENTER);
-  gtk_window_set_modal(PGtkWindow(Dialog), true);
-  gtk_widget_show_all(Dialog);
-  while ADialogResult = 0 do
-  begin
-    Application.HandleMessage;
-  end;
-  if Gtk3IsWidget(Dialog) then
-    gtk_widget_destroy(Dialog);
-  Result:= ADialogResult;
+function TGtk3WidgetSet.MonitorFromPoint(ptScreenCoords: TPoint; dwFlags: DWord
+  ): HMONITOR;
+var
+  pscr:PGdkScreen;
+  nmon:gint;
+begin
+  pscr:=TGdkScreen.get_default;
+  nmon:=pscr^.get_monitor_at_point(ptScreenCoords.X,ptScreenCoords.Y);
+  Result:=HMONITOR(nmon+1);
 end;
 
 function TGtk3WidgetSet.MoveToEx(DC: HDC; X, Y: Integer; OldPoint: PPoint
@@ -3335,7 +3241,7 @@ begin
   Result := False;
   if not IsValidDC(DC) then
     exit;
-  cairo_restore(TGtk3DeviceContext(DC).Widget);
+  cairo_restore(TGtk3DeviceContext(DC).pcr);
   Result := True;
 end;
 
@@ -3356,7 +3262,7 @@ begin
   Result := 0;
   if not IsValidDC(DC) then
     exit;
-  cairo_save(TGtk3DeviceContext(DC).Widget);
+  cairo_save(TGtk3DeviceContext(DC).pcr);
   Result := 1;
 end;
 
@@ -3436,37 +3342,7 @@ begin
     exit;
   if IsValidGDIObject(GDIObj) then
   begin
-    if TObject(GDIObj) is TGtk3Pen then
-    begin
-      // DebugLn('TGtk3WidgetSet.SelectObject PEN ');
-      Result := HGDIOBJ(TGtk3DeviceContext(DC).CurrentPen);
-      TGtk3DeviceContext(DC).CurrentPen:= TGtk3Pen(GDIObj);
-    end else
-    if TObject(GDIObj) is TGtk3Brush then
-    begin
-      Result := HGDIOBJ(TGtk3DeviceContext(DC).CurrentBrush);
-      // DebugLn('TGtk3WidgetSet.SelectObject BRUSH ',dbgHex(Result),'  ',TimeToStr(Now()));
-      TGtk3DeviceContext(DC).CurrentBrush:= TGtk3Brush(GDIObj);
-    end else
-    if TObject(GDIObj) is TGtk3Font then
-    begin
-      Result := HGDIOBJ(TGtk3DeviceContext(DC).CurrentFont);
-      TGtk3DeviceContext(DC).CurrentFont:= TGtk3Font(GDIObj);
-      // DebugLn('TGtk3WidgetSet.SelectObject Font ');
-    end else
-    if TObject(GDIObj) is TGtk3Region then
-    begin
-      Debugln('WARNING: TGtk3WidgetSet.SelectObject missing result for TGtk3Region.');
-      Result := 0;
-      SelectClipRGN(DC, GdiObj);
-    end else
-    if TObject(GDIObj) is TGtk3Image then
-    begin
-      // Debugln('WARNING: TGtk3WidgetSet.SelectObject missing result for TGtk3Image.');
-      Result := HGDIOBJ(TGtk3DeviceContext(DC).CurrentImage);
-      // TGtk3DeviceContext(DC).SetCurrentImage(TGtk3Image(GdiObj));
-      TGtk3DeviceContext(DC).SetImage(TGtk3Image(GdiObj));
-    end;
+    Result:=HGDIOBJ(TGtk3ContextObject(GDIOBJ).Select(TGtk3DeviceContext(DC)));
   end;
 end;
 
@@ -3913,14 +3789,14 @@ begin
   if IsValidDC(DC) then
   begin
     GetWindowOrgEx(dc, OldPoint);
-    cairo_get_matrix(TGtk3DeviceContext(DC).Widget, @Matrix);
+    cairo_get_matrix(TGtk3DeviceContext(DC).pcr, @Matrix);
     //dx := 0;
     //dy := 0;
     // cairo_matrix_init_translate(Matrix, -NewX, -NewY);
     cairo_matrix_translate(@Matrix,
     	-NewX - TGtk3DeviceContext(DC).fncOrigin.x,
         -NewY - TGtk3DeviceContext(DC).fncOrigin.Y);
-    cairo_transform(TGtk3DeviceContext(DC).Widget, @Matrix);
+    cairo_transform(TGtk3DeviceContext(DC).pcr, @Matrix);
     // cairo_set_matrix(TGtk3DeviceContext(DC).Widget, Matrix);
     // DebugLn('TGtk3WidgetSet.SetWindowOrgEx NewX=',dbgs(NewX),' NewY=',dbgs(NewY));
     Result := True;
@@ -3939,11 +3815,17 @@ end;
 
 function TGtk3WidgetSet.SetWindowRgn(hWnd: HWND; hRgn: HRGN; bRedraw: Boolean
   ): longint;
+var
+  PCR: Pcairo_region_t;
 begin
-  {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
-  DebugLn('WARNING: TGtk3WidgetSet.SetWindowRgn not implemented ...');
-  {$ENDIF}
-  Result:=inherited SetWindowRgn(hWnd, hRgn, bRedraw);
+  if hRgn = 0 then
+    PCR := nil
+  else
+    PCR := TGtk3Region(hRgn).Handle;
+  gtk_widget_shape_combine_region(TGtk3Widget(hWnd).Widget, PCR);
+  if bRedraw then
+    TGtk3Widget(hWnd).Widget^.realize;
+  Result:=1;
 end;
 
 function TGtk3WidgetSet.ShowCaret(hWnd: HWND): Boolean;
@@ -4044,7 +3926,7 @@ begin
   ATargetRect := Rect(X, Y, Width + X, Height + Y);
   ASrcRect := Rect(XSrc, YSrc, SrcWidth + XSrc, SrcHeight + YSrc);
 
-  if (DestContext.OwnsSurface) then
+  if (DestContext.OwnsSurface) and (SrcContext.OwnsSurface)  or (mask<>0) then
     DestContext.drawImage1(@ATargetRect, PgdkPixbuf(SrcContext.CurrentImage.Handle) , @ASrcRect, nil, nil)
   else
     DestContext.drawSurface(@ATargetRect,SrcContext.CairoSurface , @ASrcRect, nil, nil);
@@ -4054,11 +3936,28 @@ end;
 
 function TGtk3WidgetSet.SystemParametersInfo(uiAction: DWord; uiParam: DWord;
   pvParam: Pointer; fWinIni: DWord): LongBool;
+var
+  wa:TGdkRectangle;
+  pdisp:PGdkDisplay;
+  pmon:PgdkMonitor;
+  pr:PRect;
 begin
-  {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
-  DebugLn('WARNING: TGtk3WidgetSet.SystemParametersInfo not implemented ...');
-  {$ENDIF}
-  Result:=inherited SystemParametersInfo(uiAction, uiParam, pvParam, fWinIni);
+  Result:=True;
+  Case uiAction of
+    SPI_GETWHEELSCROLLLINES: PDword(pvParam)^ := 3;
+    SPI_GETWORKAREA: begin
+      pdisp:=TGdkDisplay.get_default;
+      pmon:=pdisp^.get_primary_monitor();
+      pmon^.get_workarea(@wa);
+      pr:=PRect(pvParam);
+      pr^.Left:=wa.x;
+      pr^.Top:=wa.y;
+      pr^.Width:=wa.width;
+      pr^.Height:=wa.height;
+    end;
+  else
+    Result:=False;
+  end;
 end;
 
 function TGtk3WidgetSet.TextOut(DC: HDC; X, Y: Integer; Str: PChar; Count: Integer): Boolean;

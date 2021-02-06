@@ -148,6 +148,10 @@ msgstr "Paramètres de constructeur"
 msgid "Property type suffix"
 msgstr "Suffixe de type propriété"
 
+#: tcreatecodeform.letoplevelclassname.caption
+msgid "Toplevel class name"
+msgstr ""
+
 #: tcreatecodeform.leunitname.caption
 msgid "Unit name"
 msgstr "Nom de l'unité"
@@ -404,6 +408,10 @@ msgstr "Indiquer les valeurs chaînes"
 #: tmainform.misaveformatted.caption
 msgid "Save Formatted JSON"
 msgstr "Sauvegarder JSON formaté"
+
+#: tmainform.mishowrest.caption
+msgid "Show REST panel"
+msgstr ""
 
 #: tmainform.misortmembers.caption
 msgid "Sort object members"

@@ -40,9 +40,9 @@ uses
   Classes, SysUtils, strutils, Laz_AVL_Tree,
   // LCL
   LCLProc, LCLType, LCLIntf, Forms, Controls, Graphics, ComCtrls, Menus, Clipbrd,
-  ActnList, ExtCtrls,
+  ActnList, ExtCtrls, StdCtrls, Dialogs,
   // LazControls
-  TreeFilterEdit,
+  TreeFilterEdit, ExtendedNotebook,
   // LazUtils
   LazUTF8, LazFileUtils, LazLoggerBase, LazStringUtils,
   // IdeIntf
@@ -120,14 +120,12 @@ type
     procedure ShortenPaths;
     procedure FreeObjectsTN(tnItems: TTreeNodes);
     procedure FreeObjects(slItems: TStrings);
-    function BeautifyLine(const Filename: string; X, Y: integer; const Line: string): string;
-    function BeautifyLine(SearchPos: TLazSearchMatchPos): string;
+    function BeautifyLineAt(SearchPos: TLazSearchMatchPos): string;
     property Filtered: Boolean read fFiltered write fFiltered;
     property SearchInListPhrases: string read FSearchInListPhrases write FSearchInListPhrases;
     property UpdateItems: TStrings read fUpdateStrings write fUpdateStrings;
     property Updating: boolean read fUpdating;
     property Skipped: integer read FSkipped write SetSkipped;
-    property Items;
     function ItemsAsStrings: TStrings;
   end;
 
@@ -142,8 +140,8 @@ type
     actNextPage: TAction;
     actPrevPage: TAction;
     ActionList: TActionList;
-    ClosePageButton1: TToolButton;
     ControlBar1: TPanel;
+    PageLabel: TLabel;
     MenuItem1: TMenuItem;
     mniCollapseAll: TMenuItem;
     mniExpandAll: TMenuItem;
@@ -152,27 +150,28 @@ type
     mniCopyItem: TMenuItem;
     pnlToolBars: TPanel;
     popList: TPopupMenu;
-    ResultsNoteBook: TPageControl;
+    ResultsNoteBook: TExtendedNotebook;
     tbbCloseLeft: TToolButton;
     tbbCloseOthers: TToolButton;
     tbbCloseRight: TToolButton;
-    ToolBar: TToolBar;
-    SearchAgainButton: TToolButton;
+    PageToolBar: TToolBar;
     CloseTabs: TToolBar;
-    ToolButton1: TToolButton;
+    RefreshButton: TToolButton;
+    SearchAgainButton: TToolButton;
     ClosePageButton: TToolButton;
     SearchInListEdit: TTreeFilterEdit;
-    ToolButton2: TToolButton;
     ToolButton3: TToolButton;
     tbbCloseAll: TToolButton;
     procedure actNextPageExecute(Sender: TObject);
     procedure actPrevPageExecute(Sender: TObject);
+    procedure RefreshButtonClick(Sender: TObject);
+    procedure SearchAgainButtonClick(Sender: TObject);
+    procedure ClosePageButtonClick(Sender: TObject);
     procedure ResultsNoteBookResize(Sender: TObject);
     procedure tbbCloseAllClick(Sender: TObject);
     procedure tbbCloseLeftClick(Sender: TObject);
     procedure tbbCloseOthersClick(Sender: TObject);
     procedure tbbCloseRightClick(Sender: TObject);
-    procedure ClosePageButtonClick(Sender: TObject);
     procedure Form1Create(Sender: TObject);
     procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormKeyDown(Sender: TObject; var Key: Word; {%H-}Shift: TShiftState);
@@ -186,7 +185,6 @@ type
       {%H-}Shift: TShiftState; X, Y: Integer);
     procedure TreeViewKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure ResultsNoteBookClosetabclicked(Sender: TObject);
-    procedure SearchAgainButtonClick(Sender: TObject);
     procedure TreeViewAdvancedCustomDrawItem(Sender: TCustomTreeView;
       Node: TTreeNode; State: TCustomDrawState; Stage: TCustomDrawStage;
       var {%H-}PaintImages, {%H-}DefaultDraw: Boolean);
@@ -262,9 +260,6 @@ implementation
 
 {$R *.lfm}
 
-const
-  MaxTextLen = 80;
-
 function CompareTVNodeTextAsFilename(Node1, Node2: Pointer): integer;
 var
   TVNode1: TTreeNode absolute Node1;
@@ -325,8 +320,9 @@ begin
   Name:=NonModalIDEWindowNames[nmiwSearchResultsView];
   Caption:=lisMenuViewSearchResults;
 
-  SearchAgainButton.Hint:=rsStartANewSearch;
-  ClosePageButton.Hint := rsCloseCurrentPage;
+  RefreshButton.Hint:=rsRefreshTheSearch;
+  SearchAgainButton.Hint:=rsNewSearchWithSameCriteria;
+  ClosePageButton.Hint:=rsCloseCurrentPage;
   SearchInListEdit.Hint:=rsFilterTheListWithString;
   { Close tabs buttons }
   actCloseLeft.Hint:=rsCloseLeft;
@@ -353,9 +349,10 @@ begin
   mniExpandAll.Caption := lisExpandAll;
   mniCollapseAll.Caption := lisCollapseAll;
 
-  ToolBar.Images := IDEImages.Images_16;
+  PageToolBar.Images := IDEImages.Images_16;
+  RefreshButton.ImageIndex     := IDEImages.LoadImage('laz_refresh');
   SearchAgainButton.ImageIndex := IDEImages.LoadImage('menu_new_search');
-  ClosePageButton.ImageIndex := IDEImages.LoadImage('menu_close');
+  ClosePageButton.ImageIndex   := IDEImages.LoadImage('menu_close');
   ActionList.Images := IDEImages.Images_16;
   actClosePage.ImageIndex := IDEImages.LoadImage('menu_close');
   { Close tabs buttons }
@@ -454,6 +451,26 @@ begin
   end;
 end;
 
+procedure TSearchResultsView.RefreshButtonClick(Sender: TObject);
+begin
+  ShowMessage('ToDo: Refresh the search in current page.');
+end;
+
+procedure TSearchResultsView.SearchAgainButtonClick(Sender: TObject);
+var
+  CurrentTV: TLazSearchResultTV;
+  SearchObj: TLazSearch;
+begin
+  CurrentTV:= GetTreeView(ResultsNoteBook.PageIndex);
+  if not Assigned(CurrentTV) then
+    MainIDEInterface.FindInFilesPerDialog(Project1)
+  else begin
+    SearchObj:= CurrentTV.SearchObject;
+    OnSearchAgainClicked(SearchObj);
+    MainIDEInterface.FindInFiles(Project1, SearchObj.SearchString);
+  end;
+end;
+
 procedure TSearchResultsView.ClosePageButtonClick(Sender: TObject);
 begin
   ClosePage(ResultsNoteBook.PageIndex);
@@ -536,10 +553,17 @@ begin
 end;
 
 procedure TSearchResultsView.tbbCloseAllClick(Sender: TObject);
+var
+  lPageIx : integer;
 begin
-  with ResultsNoteBook do
-    while PageCount>0 do
-      ClosePage(PageCount-1);
+  with ResultsNoteBook do begin
+    lPageIx := PageCount;
+    while lPageIx > 0 do begin
+      Dec(lPageIx);
+      if lPageIx < PageCount then
+        ClosePage(lPageIx);
+    end;
+  end;
 end;
 
 {Keeps track of the Index of the Item the mouse is over, Sets ShowHint to true
@@ -655,7 +679,7 @@ function TSearchResultsView.BeautifyPageName(const APageName: string): string;
 const
   MaxPageName = 25;
 begin
-  Result:=SpecialCharsToHex(APageName);
+  Result:=Utf8EscapeControlChars(APageName, emHexPascal);
   if UTF8Length(Result)>MaxPageName then
     Result:=UTF8Copy(Result,1,MaxPageName-5)+'...';
 end;
@@ -693,7 +717,7 @@ begin
     SearchPos.FileEndPos:=EndPos;
     SearchPos.TheText:=TheText;
     SearchPos.ShownFilename:=SearchPos.Filename;
-    ShownText:=CurrentTV.BeautifyLine(SearchPos);
+    ShownText:=CurrentTV.BeautifyLineAt(SearchPos);
     LastPos:=nil;
     if CurrentTV.Updating then begin
       if (CurrentTV.UpdateItems.Count>0)
@@ -847,6 +871,7 @@ var
 begin
   CurrentTV:= GetTreeView(ResultsNoteBook.PageIndex);
   state := Assigned(CurrentTV) and not CurrentTV.Updating;
+  RefreshButton.Enabled := state;
   SearchAgainButton.Enabled := state;
   ClosePageButton.Enabled := state;
   SearchInListEdit.Enabled := state;
@@ -939,22 +964,6 @@ procedure TSearchResultsView.ResultsNoteBookClosetabclicked(Sender: TObject);
 begin
   if (Sender is TTabSheet) then
     ClosePage(TTabSheet(Sender).PageIndex)
-end;
-
-procedure TSearchResultsView.SearchAgainButtonClick(Sender: TObject);
-var
-  CurrentTV: TLazSearchResultTV;
-  SearchObj: TLazSearch;
-begin
-  CurrentTV:= GetTreeView(ResultsNoteBook.PageIndex);
-  if not Assigned(CurrentTV) then begin
-    MainIDEInterface.FindInFilesPerDialog(Project1);
-  end
-  else begin
-    SearchObj:= CurrentTV.SearchObject;
-    OnSearchAgainClicked(SearchObj);
-    MainIDEInterface.FindInFiles(Project1, SearchObj.SearchString);
-  end;
 end;
 
 procedure TSearchResultsView.TreeViewKeyDown(Sender: TObject; var Key: Word;
@@ -1110,7 +1119,6 @@ begin
 
   if Assigned(MatchPos) then
   begin
-
     FirstMatchPos:=MatchPos;
     TheTop:= ARect.Top;
     TextEnd:=ARect.Left;
@@ -1132,23 +1140,22 @@ begin
     while assigned(MatchPos) do begin
       //debugln(['TSearchResultsView.TreeViewAdvancedCustomDrawItem MatchPos.TheText="',MatchPos.TheText,'" MatchPos.MatchStart=',MatchPos.MatchStart,' MatchPos.MatchLen=',MatchPos.MatchLen]);
       // draw normal text
-      CurPart:=SpecialCharsToHex(copy(MatchPos.TheText,DrawnTextLength+1,MatchPos.MatchStart-1-DrawnTextLength));
+      CurPart:=copy(MatchPos.TheText, DrawnTextLength+1, MatchPos.MatchStart-1-DrawnTextLength);
+      CurPart:=Utf8EscapeControlChars(CurPart, emHexPascal);
       DrawnTextLength:=MatchPos.MatchStart-1;
       TV.Canvas.TextOut(TextEnd, TheTop, CurPart);
       TextEnd:= TextEnd + TV.Canvas.TextWidth(CurPart);
-
       // draw found text (matched)
-      CurPart:=SpecialCharsToHex(copy(MatchPos.TheText,DrawnTextLength+1,MatchPos.MatchLen));
+      CurPart:=ShortDotsLine(copy(MatchPos.TheText, DrawnTextLength+1, MatchPos.MatchLen));
       DrawnTextLength:=DrawnTextLength+MatchPos.MatchLen;
-      if UTF8Length(CurPart)>MaxTextLen then
-        CurPart:=UTF8Copy(CurPart,1,MaxTextLen)+'...';
       TV.Canvas.Font.Style:= TV.Canvas.Font.Style + [fsBold];
       TV.Canvas.TextOut(TextEnd, TheTop, CurPart);
       TextEnd:= TextEnd + TV.Canvas.TextWidth(CurPart);
       TV.Canvas.Font.Style:= TV.Canvas.Font.Style - [fsBold];
 
       if MatchPos.NextInThisLine=nil then begin
-        CurPart:=SpecialCharsToHex(copy(MatchPos.TheText, DrawnTextLength+1,Length(MatchPos.TheText)));
+        CurPart:=copy(MatchPos.TheText, DrawnTextLength+1, Length(MatchPos.TheText));
+        CurPart:=Utf8EscapeControlChars(CurPart, emHexPascal);
         TV.Canvas.TextOut(TextEnd, TheTop, CurPart);
       end;
       MatchPos:=MatchPos.NextInThisLine;
@@ -1318,7 +1325,7 @@ begin
   //enter a new file entry
   if not Assigned(Node) then
     begin
-    Node := Items.Add(Node, MatchPos.FileName);
+    Node := Items.Add(Nil, MatchPos.FileName);
     fFilenameToNode.Add(Node);
     end;
 
@@ -1335,28 +1342,26 @@ begin
   inherited Create(AOwner);
   ReadOnly := True;
   fSearchObject:= TLazSearch.Create;
+  fUpdateStrings:= TStringList.Create;
+  fFilenameToNode:=TAvlTree.Create(@CompareTVNodeTextAsFilename);
   fUpdating:= false;
   fUpdateCount:= 0;
-  fUpdateStrings:= TStringList.Create;
   FSearchInListPhrases := '';
   fFiltered := False;
-  fFilenameToNode:=TAvlTree.Create(@CompareTVNodeTextAsFilename);
 end;//Create
 
 Destructor TLazSearchResultTV.Destroy;
 begin
-  fFilenameToNode.Free;
   if Assigned(fSearchObject) then
     FreeAndNil(fSearchObject);
   //if UpdateStrings is empty, the objects are stored in Items due to filtering
   //filtering clears UpdateStrings
   if (fUpdateStrings.Count = 0) then
     FreeObjectsTN(Items);
-  if Assigned(fUpdateStrings) then
-  begin
-    FreeObjects(fUpdateStrings);
-    FreeAndNil(fUpdateStrings);
-  end;
+  fFilenameToNode.Free;
+  Assert(Assigned(fUpdateStrings), 'fUpdateStrings = Nil');
+  FreeObjects(fUpdateStrings);
+  FreeAndNil(fUpdateStrings);
   inherited Destroy;
 end;//Destroy
 
@@ -1384,21 +1389,17 @@ var
 begin
   if (fUpdateCount = 0) then
     RaiseGDBException('TLazSearchResultTV.EndUpdate');
-
   Dec(fUpdateCount);
   if (fUpdateCount = 0) then
   begin
     ShortenPaths;
     fUpdating:= false;
     FreeObjectsTN(Items);
-
     Items.BeginUpdate;
     Items.Clear;
     fFilenameToNode.Clear;
-
     for i := 0 to fUpdateStrings.Count - 1 do
       AddNode(fUpdateStrings[i], TLazSearchMatchPos(fUpdateStrings.Objects[i]));
-
     Items.EndUpdate;
   end;//if
 end;//EndUpdate
@@ -1424,7 +1425,6 @@ begin
     FreeSrcList:=true;
   end;
   try
-
     // find shared path (the path of all filenames, that is the same)
     SharedPath:='';
     for i:=0 to SrcList.Count-1 do begin
@@ -1456,7 +1456,7 @@ begin
         MatchPos:=TLazSearchMatchPos(AnObject);
         MatchPos.ShownFilename:=copy(MatchPos.Filename,SharedLen+1,
                                      length(MatchPos.Filename));
-        ShownText:=BeautifyLine(MatchPos);
+        ShownText:=BeautifyLineAt(MatchPos);
         SrcList[i]:=ShownText;
         SrcList.Objects[i]:=MatchPos;
       end;
@@ -1480,28 +1480,14 @@ var i: Integer;
 begin
   if (slItems.Count <= 0) then Exit;
   for i:=0 to slItems.Count-1 do
-  begin
     if Assigned(slItems.Objects[i]) then
       slItems.Objects[i].Free;
-  end;//End for-loop
 end;
 
-function TLazSearchResultTV.BeautifyLine(const Filename: string; X, Y: integer;
-  const Line: string): string;
+function TLazSearchResultTV.BeautifyLineAt(SearchPos: TLazSearchMatchPos): string;
 begin
-  Result:=SpecialCharsToHex(Line);
-  if UTF8Length(Result)>MaxTextLen then
-    Result:=UTF8Copy(Result,1,MaxTextLen)+'...';
-  Result:=Filename
-          +' ('+IntToStr(Y)
-          +','+IntToStr(X)+')'
-          +' '+Result;
-end;
-
-function TLazSearchResultTV.BeautifyLine(SearchPos: TLazSearchMatchPos): string;
-begin
-  Result:=BeautifyLine(SearchPos.ShownFilename,SearchPos.FileStartPos.X,
-                       SearchPos.FileStartPos.Y,SearchPos.TheText);
+  with SearchPos do
+    Result:=BeautifyLineXY(ShownFilename, TheText, FileStartPos.X, FileStartPos.Y);
 end;
 
 function TLazSearchResultTV.ItemsAsStrings: TStrings;
@@ -1509,7 +1495,6 @@ var
   i: integer;
 begin
   Result := TStringList.Create;
-
   for i := 0 to Items.Count - 1 do
     Result.AddObject(Items[i].Text,TObject(Items[i].Data));
 end;

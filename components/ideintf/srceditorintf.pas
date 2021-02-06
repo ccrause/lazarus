@@ -14,13 +14,15 @@ unit SrcEditorIntf;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes,
   // LCL
   LCLType, Forms, Controls, Graphics,
   // LazUtils
-  FileUtil, Laz2_XMLCfg, LazStringUtils,
+  Laz2_XMLCfg, LazStringUtils,
+  // BuildIntf
+  ProjectIntf,
   // IdeIntf
-  ProjectIntf, IDECommands;
+  IDECommands;
   
 type
   TSourceMarklingType = (
@@ -245,7 +247,7 @@ type
     procedure RemoveUpdateEditorPageCaptionHandler(AEvent: TNotifyEvent); virtual; abstract;
   end;
 
-  TsemChangeReason = (
+  TSemChangeReason = (
     semWindowCreate,    // Called after creation of a Window
     semWindowDestroy,   // Called after removal of a Window
     semWindowActivate,  // Window is now ActiveSourceWindow (does not vave to be focused)
@@ -255,7 +257,9 @@ type
     semEditorCreate,    // Called after a new editor was created and added to list
     semEditorDestroy,   // Called when an Editor is destroyed / after it is removed fron the list of editors
     semEditorActivate,  // Editor is ActiveEditor
-    semEditorStatus     // any status change of the editor (Caret, Selection, topline, ...)
+    semEditorStatus,    // any status change of the editor (Caret, Selection, topline, ...)
+    semEditorMouseDown,
+    semEditorMouseUp
   );
 
   TSemSelectionMode = (
@@ -272,6 +276,11 @@ type
   TSemCopyPasteEvent = procedure(Sender: TSourceEditorInterface;
     var AText: String; var AMode: TSemSelectionMode; ALogStartPos: TPoint;
     var AnAction: TSemCopyPasteAction) of object;
+
+  TSemBeautyFlag = (
+    sembfNotBreakDots
+    );
+  TSemBeautyFlags = set of TSemBeautyFlag;
 
   { TSourceEditorManagerInterface }
 
@@ -322,7 +331,7 @@ type
     // Messages
     procedure ClearErrorLines; virtual; abstract;
     // General source functions
-    function Beautify(const Src: string): string; virtual; abstract;
+    function Beautify(const Src: string; const Flags: TSemBeautyFlags = []): string; virtual; abstract;
   protected
     // Completion Plugins
     function  GetActiveCompletionPlugin: TSourceEditorCompletionPlugin; virtual; abstract;

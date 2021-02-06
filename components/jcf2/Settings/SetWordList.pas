@@ -35,8 +35,9 @@ unit SetWordList;
 interface
 
 uses
-    { delphi }Classes,
-    { local }JcfSetBase, SettingsStream;
+  Classes, SysUtils,
+  { local }
+  JcfSetBase, SettingsStream;
 
 type
 
@@ -69,10 +70,6 @@ type
 
 implementation
 
-uses
-  { delphi }
-  {$IFNDEF FPC}Windows,{$ENDIF} SysUtils;
-
 const
   REG_ENABLED = 'Enabled';
   REG_WORDS   = 'Words';
@@ -86,7 +83,8 @@ begin
 
   SetSection(psSectionName);
 
-  fcWords := TStringList.Create;
+  fcWords := TStringList.Create;         // Will compare with CompareText.
+  {$IF FPC_FULLVERSION>=30200}fcWords.UseLocale := False;{$ENDIF}
   fcWords.Sorted := True;
   fcWords.Duplicates := dupIgnore;
 end;
@@ -103,11 +101,9 @@ begin
   fcWords.Sorted := False;
 
   fbEnabled := pcStream.Read(REG_ENABLED, True);
-
   if not pcStream.Read(REG_WORDS, fcWords) then
     AddDefaultWords;
 
-  fcWords.Sort;
   fcWords.Sorted := True;
 end;
 

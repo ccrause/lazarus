@@ -129,7 +129,7 @@ begin
   inherited Create(AOwner);
   FIpHtml := FOwner.Owner;
   FBlockOwner := TIpHtmlNodeBlock(FOwner);
-  FElementQueue := {$ifdef IP_LAZARUS}TFPList{$else}TList{$endif}.Create;
+  FElementQueue := TFPList.Create;
 end;
 
 destructor TIpNodeBlockLayouter.Destroy;
@@ -169,17 +169,10 @@ begin             // Debug: remove assertions later
   Assert(FCanvas.Font.Name = aProps.FontName, 'UpdPropMetrics: FCanvas.Font.Name <> aProps.FontName');
   Assert(FCanvas.Font.Size = aProps.FontSize, 'UpdPropMetrics: FCanvas.Font.Size <> aProps.FontSize');
   Assert(FCanvas.Font.Style = aProps.FontStyle, 'UpdPropMetrics: FCanvas.Font.Style <> aProps.FontStyle');
-  {$IFDEF IP_LAZARUS}
   FCanvas.GetTextMetrics(TextMetrics);
   aProps.PropA.tmAscent := TextMetrics.Ascender;
   aProps.PropA.tmDescent := TextMetrics.Descender;
   aProps.PropA.tmHeight := TextMetrics.Height;
-  {$ELSE}
-  GetTextMetrics(FCanvas.Handle, TextMetrics);
-  aProps.PropA.tmAscent := TextMetrics.tmAscent;
-  aProps.PropA.tmDescent := TextMetrics.tmDescent;
-  aProps.PropA.tmHeight := TextMetrics.tmHeight;
-  {$ENDIF}
 end;
 
 procedure TIpNodeBlockLayouter.Layout(RenderProps: TIpHtmlProps; TargetRect: TRect);
@@ -256,7 +249,6 @@ begin
 end;
 
 procedure TIpNodeBlockLayouter.InitMetrics;
-{$IFDEF IP_LAZARUS}
 var
   TextMetrics : TLCLTextMetric;
 begin
@@ -265,16 +257,6 @@ begin
   FBlockDescent := TextMetrics.Descender;
   FBlockHeight := TextMetrics.Height;
 end;
-{$ELSE}
-var
-  TextMetrics : TTextMetric;
-begin
-  GetTextMetrics(aCanvas.Handle, TextMetrics);
-  BlockAscent := TextMetrics.tmAscent;
-  BlockDescent := TextMetrics.tmDescent;
-  BlockHeight := TextMetrics.tmHeight;
-end;
-{$ENDIF}
 
 function TIpNodeBlockLayouter.QueueLeadingObjects: Integer;
 // Returns the first element index.
@@ -756,20 +738,17 @@ end;
 procedure TIpNodeBlockLayouter.SetWordInfoLength(NewLength : Integer);
 var
   NewWordInfoSize: Integer;
-  {$IFNDEF IP_LAZARUS}
-  NewWordInfo: PWordList;
-  {$ENDIF}
 begin
   if (FWordInfo = nil) or (NewLength > FWordInfoSize) then begin
     NewWordInfoSize := ((NewLength div 256) + 1) * 256;
-    {$IFDEF IP_LAZARUS code below does not check if FWordInfo<>nil}
+    //code below does not check if FWordInfo<>nil
     ReallocMem(FWordInfo,NewWordInfoSize * sizeof(TWordInfo));
-    {$ELSE}
+    (*
     NewWordInfo := AllocMem(NewWordInfoSize * sizeof(TWordInfo));
     move(WordInfo^, NewWordInfo^, WordInfoSize);
     Freemem(WordInfo);
     WordInfo := NewWordInfo;
-    {$ENDIF}
+    *)
     FWordInfoSize := NewWordInfoSize;
   end;
 end;
@@ -1237,9 +1216,7 @@ end;
 
 procedure TIpNodeBlockLayouter.DoRenderFont(var aCurWord: PIpHtmlElement);
 begin
-  {$IFDEF IP_LAZARUS}
   FCanvas.Font.BeginUpdate; // for speedup
-  {$ENDIF}
   if (FCurProps = nil) or not FCurProps.AIsEqualTo(aCurWord.Props) then
     with aCurWord.Props do begin
       FCanvas.Font.Name := FontName;
@@ -1255,9 +1232,7 @@ begin
     if (FCurProps = nil) or not FCurProps.BIsEqualTo(aCurWord.Props) then
       FCanvas.Font.Color := aCurWord.Props.FontColor;
   FIpHtml.Target.Font.Quality := FIpHtml.FontQuality;
-  {$IFDEF IP_LAZARUS}
   FIpHtml.Target.Font.EndUpdate;
-  {$ENDIF}
   FCurProps := aCurWord.Props;
 end;
 
@@ -1266,7 +1241,7 @@ procedure TIpNodeBlockLayouter.DoRenderElemWord(aCurWord: PIpHtmlElement;
 var
   P : TPoint;
   R : TRect;
-  {$IFDEF IP_LAZARUS}
+  TextStyle: TTextStyle;
   OldBrushcolor: TColor;
   OldFontColor: TColor;
   OldFontStyle: TFontStyles;
@@ -1290,7 +1265,6 @@ var
     FCanvas.Font.Style := OldFontStyle;
     FCanvas.Font.Quality := OldFontQuality;
   end;
-  {$ENDIF}
 
 begin
   P := FIpHtml.PagePtToScreen(aCurWord.WordRect2.TopLeft);
@@ -1301,40 +1275,37 @@ begin
   then
     exit;
 
-  {$IFDEF IP_LAZARUS}
   //if (LastOwner <> aCurWord.Owner) then LastPoint := P;
   saveCanvasProperties;
-  if aCurWord.IsSelected or FIpHtml.AllSelected then begin
-    FCanvas.Font.color := clHighlightText;
-    FCanvas.brush.Style := bsSolid;
-    FCanvas.brush.color := clHighLight;
-    FIpHtml.PageRectToScreen(aCurWord.WordRect2, R);
-    FCanvas.FillRect(R);
-  end
-  else if FCurProps.BgColor > 0 then
-  begin
-    FCanvas.brush.Style := bsSolid;
-    FCanvas.brush.color := FCurProps.BgColor;
-  end
-  else
-  {$ENDIF}
-    FCanvas.Brush.Style := bsClear;
-
+  TextStyle := FCanvas.TextStyle;
   //debugln(['TIpHtmlNodeBlock.RenderQueue ',aCurWord.AnsiWord]);
   FIpHtml.PageRectToScreen(aCurWord.WordRect2, R);
+  if aCurWord.IsSelected or FIpHtml.AllSelected then begin
+    FCanvas.Font.Color := clHighlightText;
+    FCanvas.brush.Style := bsSolid;
+    FCanvas.brush.Color := clHighLight;
+    FCanvas.FillRect(R);
+  end
+  else if FCurProps.BgColor <> clNone then
+  begin
+    FCanvas.brush.Style := bsSolid;
+    FCanvas.brush.Color := FCurProps.BgColor;
+    TextStyle.Opaque := True;
+  end
+  else
+  begin
+    TextStyle.Opaque := False;
+    FCanvas.Brush.Style := bsClear;
+  end;
 
-  {$IFDEF IP_LAZARUS}
   if aCurWord.Owner.ParentNode = aCurTabFocus then
     FCanvas.DrawFocusRect(R);
-  if FCanvas.Font.color = -1 then
-    FCanvas.Font.color := clBlack;
+  if FCanvas.Font.Color = clNone then
+    FCanvas.Font.Color := clBlack;
   FCanvas.Font.Quality := FOwner.Owner.FontQuality;
-  {$ENDIF}
   if aCurWord.AnsiWord <> NAnchorChar then
-    FCanvas.TextRect(R, P.x, P.y, NoBreakToSpace(aCurWord.AnsiWord));
-  {$IFDEF IP_LAZARUS}
+    FCanvas.TextRect(R, P.x, P.y, NoBreakToSpace(aCurWord.AnsiWord), TextStyle);
   RestoreCanvasProperties;
-  {$ENDIF}
 
   FIpHtml.AddRect(aCurWord.WordRect2, aCurWord, FBlockOwner);
 end;
@@ -1352,14 +1323,12 @@ begin
   L0 := FBlockOwner.Level0;
   FCurProps := nil;
   FCanvas := FIpHtml.Target;
-  {$IFDEF IP_LAZARUS}
   // to draw focus rect
   i := FIpHtml.TabList.Index;
   if (FIpHtml.TabList.Count > 0) and (i <> -1) then
     CurTabFocus := TIpHtmlNode(FIpHtml.TabList[i])
   else
     CurTabFocus := nil;
-  {$ENDIF}
 
   for i := 0 to pred(FElementQueue.Count) do begin
     CurWord := PIpHtmlElement(FElementQueue[i]);
@@ -1412,7 +1381,7 @@ end;
 
 procedure TIpNodeBlockLayouter.Render(RenderProps: TIpHtmlProps);
 begin
-  if not RenderProps.IsEqualTo(Props) then
+  if FOwner.Owner.NeedResize and (not RenderProps.IsEqualTo(Props)) then
   begin
     Props.Assign(RenderProps);
     FOwner.LoadAndApplyCSSProps;
@@ -1491,7 +1460,7 @@ begin
     Props.VAlignment := FTableElemOwner.VAlign;
   end;
 
-  if FTableElemOwner.BgColor <> -1 then
+  if FTableElemOwner.BgColor <> clNone then
     Props.BgColor := FTableElemOwner.BgColor;
 
   inherited Layout(Props, TargetRect);
@@ -1522,41 +1491,43 @@ procedure TIpNodeTableElemLayouter.Render(RenderProps: TIpHtmlProps);
 var
   R : TRect;
 begin
-  Props.Assign(RenderProps);
-  Props.DelayCache:=True;
-  {$IFDEF IP_LAZARUS}
-  FOwner.LoadAndApplyCSSProps;
-  {$ENDIF}
-//DebugLn('td :', IntToStr(Integer(Props.Alignment)));
-  if FTableElemOwner.BgColor <> -1 then
-    Props.BgColor := FTableElemOwner.BgColor;
-  if FTableElemOwner.Align <> haDefault then
-    Props.Alignment := FTableElemOwner.Align
-  else if Props.Alignment = haDefault then
+  if FOwner.Owner.NeedResize then
   begin
+    Props.Assign(RenderProps);
+    Props.DelayCache:=True;
+    FOwner.LoadAndApplyCSSProps;
+//DebugLn('td :', IntToStr(Integer(Props.Alignment)));
+    if FTableElemOwner.BgColor <> clNone then
+      Props.BgColor := FTableElemOwner.BgColor;
+    if FTableElemOwner.Align <> haDefault then
+      Props.Alignment := FTableElemOwner.Align
+    else if Props.Alignment = haDefault then
+    begin
+      if FOwner is TIpHtmlNodeTH then
+        Props.Alignment := haCenter
+      else
+        Props.Alignment := haLeft;
+    end;
     if FOwner is TIpHtmlNodeTH then
-      Props.Alignment := haCenter
-    else
-      Props.Alignment := haLeft;
+      Props.FontStyle := Props.FontStyle + [fsBold];
+    Props.VAlignment := FTableElemOwner.VAlign;
+    if FTableElemOwner.NoWrap then
+      Props.NoBreak := True;
   end;
-  if FOwner is TIpHtmlNodeTH then
-    Props.FontStyle := Props.FontStyle + [fsBold];
-  Props.VAlignment := FTableElemOwner.VAlign;
-  if FTableElemOwner.NoWrap then
-    Props.NoBreak := True;
   {$IFDEF IP_LAZARUS_DBG}
   DebugBox(Owner.Target, PadRect, clYellow, True);
   {$ENDIF}
   if FOwner.PageRectToScreen(FTableElemOwner.PadRect, R) then
   begin
-    if (Props.BgColor <> -1) then
+    if (Props.BgColor <> clNone) then
     begin
       FIpHtml.Target.Brush.Color := Props.BGColor;
       FIpHtml.Target.FillRect(R);
     end else
       FIpHtml.Target.Brush.Style := bsClear;
   end;
-  Props.DelayCache:=False;
+  if FOwner.Owner.NeedResize then
+    Props.DelayCache:=False;
   inherited Render(Props);
 end;
 

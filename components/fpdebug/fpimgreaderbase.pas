@@ -11,9 +11,9 @@ uses
   {$ifdef windows}
   Windows, // After LCLType
   {$endif}
-  fgl, lazfglhash,
+  fgl, LazFglHash,
   fpDbgSymTable,
-  Classes, SysUtils, LazUTF8Classes, DbgIntfBaseTypes, contnrs,
+  Classes, SysUtils, DbgIntfBaseTypes, contnrs,
   FpDbgCommon;
 
 type
@@ -89,6 +89,7 @@ type
   TDbgImageReader = class(TObject) // executable parser
   private
     FImageBase: QWord;
+    FImageSize: QWord;
     FLoadedTargetImageAddr: TDBGPtr;
     FReaderErrors: String;
     FUUID: TGuid;
@@ -99,6 +100,7 @@ type
     function GetSection(const AName: String): PDbgImageSection; virtual; abstract;
     procedure SetUUID(AGuid: TGuid);
     procedure SetImageBase(ABase: QWord);
+    procedure SetImageSize(ASize: QWord);
     procedure AddReaderError(AnError: String);
   public
     class function isValid(ASource: TDbgFileLoader): Boolean; virtual; abstract;
@@ -109,6 +111,7 @@ type
     procedure AddSubFilesToLoaderList(ALoaderList: TObject; PrimaryLoader: TObject); virtual;
 
     property ImageBase: QWord read FImageBase;
+    property ImageSize: QWord read FImageSize;
 
     property TargetInfo: TTargetDescriptor read FTargetInfo;
 
@@ -194,14 +197,23 @@ end;
 
 { TDbgFileLoader }
 
+{$ifdef USE_WIN_FILE_MAPPING}
+function CreateFileW(lpFileName:LPCWSTR; dwDesiredAccess:DWORD; dwShareMode:DWORD; lpSecurityAttributes:LPSECURITY_ATTRIBUTES; dwCreationDisposition:DWORD;dwFlagsAndAttributes:DWORD; hTemplateFile:HANDLE):HANDLE; stdcall; external 'kernel32' name 'CreateFileW';
+{$ENDIF}
+
 constructor TDbgFileLoader.Create(AFileName: String);
 {$IFDEF MacOS}
 var
   s: String;
 {$ENDIF}
+{$ifdef USE_WIN_FILE_MAPPING}
+var
+  s: UnicodeString;
+{$ENDIF}
 begin
   {$ifdef USE_WIN_FILE_MAPPING}
-  FFileHandle := CreateFile(PChar(AFileName), GENERIC_READ, FILE_SHARE_READ, nil, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+  s := UTF8Decode(AFileName);
+  FFileHandle := CreateFileW(PWideChar(s), GENERIC_READ, FILE_SHARE_READ, nil, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
   Create(FFileHandle);
   {$else}
   FList := TList.Create;
@@ -213,7 +225,7 @@ begin
   end;
   {$ENDIF}
   FFileName := AFileName;
-  FStream := TFileStreamUTF8.Create(AFileName, fmOpenRead or fmShareDenyNone);
+  FStream := TFileStream.Create(AFileName, fmOpenRead or fmShareDenyNone);
   inherited Create;
   {$endif}
 end;
@@ -280,7 +292,7 @@ begin
   if AMem = nil then
     exit;
   if FStream = nil then
-    FStream := TFileStreamUTF8.Create(FFileName, fmOpenRead or fmShareDenyNone);
+    FStream := TFileStream.Create(FFileName, fmOpenRead or fmShareDenyNone);
   FStream.Position := AOffset;
   Result := FStream.Read(AMem^, ASize);
   {$endif}
@@ -297,7 +309,7 @@ begin
   if AMem = nil then
     exit;
   if FStream = nil then
-    FStream := TFileStreamUTF8.Create(FFileName, fmOpenRead or fmShareDenyNone);
+    FStream := TFileStream.Create(FFileName, fmOpenRead or fmShareDenyNone);
   FList.Add(AMem);
   FStream.Position := AOffset;
   Result := FStream.Read(AMem^, ASize);
@@ -333,6 +345,11 @@ end;
 procedure TDbgImageReader.SetImageBase(ABase: QWord);
 begin
   FImageBase := ABase;
+end;
+
+procedure TDbgImageReader.SetImageSize(ASize: QWord);
+begin
+  FImageSize := ASize;
 end;
 
 procedure TDbgImageReader.AddReaderError(AnError: String);

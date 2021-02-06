@@ -36,11 +36,11 @@ uses
   Classes, SysUtils, Types, TypInfo, Math, CustApp,
   // LCL
   LCLStrConsts, LCLType, LCLProc, LCLIntf, LCLVersion, LCLClasses, InterfaceBase,
-  LResources, GraphType, Graphics, Menus, LMessages, CustomTimer, ActnList,
+  LResources, Graphics, Menus, LMessages, CustomTimer, ActnList,
   ClipBrd, HelpIntfs, Controls, ImgList, Themes,
   // LazUtils
   LazFileUtils, LazUTF8, Maps, IntegerList, LazMethodList, LazLoggerBase,
-  LazUtilities, UITypes
+  LazUtilities, GraphType, UITypes
   {$ifndef wince},gettext{$endif}// remove ifdefs when gettext is fixed and a new fpc is released
   ;
 
@@ -491,8 +491,9 @@ type
     FShowInTaskbar: TShowInTaskbar;
     FWindowState: TWindowState;
     FDelayedEventCtr: Integer;
-    FDelayedWMMove, FDelayedWMSize: Boolean;
+    FDelayedOnChangeBounds, FDelayedOnResize: Boolean;
     FIsFirstOnShow, FIsFirstOnActivate: Boolean;
+    FIsFirstRestore, FWindowStateChanged: Boolean;
     function GetClientHandle: HWND;
     function GetEffectiveShowInTaskBar: TShowInTaskBar;
     function GetMonitor: TMonitor;
@@ -535,7 +536,6 @@ type
     procedure WMActivate(var Message : TLMActivate); message LM_ACTIVATE;
     procedure WMCloseQuery(var message: TLMessage); message LM_CLOSEQUERY;
     procedure WMHelp(var Message: TLMHelp); message LM_HELP;
-    procedure WMMove(var Message: TLMMove); message LM_MOVE;
     procedure WMShowWindow(var message: TLMShowWindow); message LM_SHOWWINDOW;
     procedure WMSize(var message: TLMSize); message LM_Size;
     procedure WMWindowPosChanged(var Message: TLMWindowPosChanged); message LM_WINDOWPOSCHANGED;
@@ -581,6 +581,8 @@ type
     procedure Resizing(State: TWindowState); override;
     procedure CalculatePreferredSize(var PreferredWidth,
            PreferredHeight: integer; WithThemeSpace: Boolean); override;
+    procedure DoOnResize; override;
+    procedure DoOnChangeBounds; override;
     procedure SetZOrder(Topmost: Boolean); override;
     procedure SetParent(NewParent: TWinControl); override;
     procedure MoveToDefaultPosition; virtual;
@@ -1354,6 +1356,8 @@ type
     FCaptureExceptions: boolean;
     FComponentsToRelease: TFPList;
     FComponentsReleasing: TFPList;
+    FComponentsToReleaseSavedByModal: TFPList;
+    FComponentsReleasingSavedByModal: TFPList;
     FCreatingForm: TForm;// currently created form (CreateForm), candidate for MainForm
     FDoubleBuffered: TApplicationDoubleBuffered;
     FExceptionDialog: TApplicationExceptionDlg;
@@ -1395,7 +1399,6 @@ type
     FMouseControl: TControl;
     FNavigation: TApplicationNavigationOptions;
     FOldExceptProc: TExceptProc;
-    FOldExitProc: Pointer;
     FOnActionExecute: TActionEvent;
     FOnActionUpdate: TActionEvent;
     FOnActivate: TNotifyEvent;

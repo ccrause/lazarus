@@ -59,8 +59,8 @@ uses
   CodeToolsStrConsts, ExprEval, DirectoryCacher, BasicCodeTools,
   CodeToolsStructs, KeywordFuncLists, LinkScanner, FileProcs,
   // LazUtils
-  LazStringUtils, LazFileUtils, LazFileCache,
-  LazUTF8, LazUTF8Classes, UTF8Process, LazDbgLog, AvgLvlTree, Laz2_XMLCfg;
+  LazStringUtils, LazFileUtils, FileUtil, LazFileCache,
+  LazUTF8, UTF8Process, LazDbgLog, AvgLvlTree, Laz2_XMLCfg;
 
 const
   ExternalMacroStart = ExprEval.ExternalMacroStart;
@@ -109,7 +109,7 @@ const
   VirtualTempDir='TEMPORARYDIRECTORY';
   
   // FPC operating systems and processor types
-  FPCOperatingSystemNames: array[1..36] of shortstring =(
+  FPCOperatingSystemNames: array[1..38] of shortstring =(
      'linux',
      'win32','win64','wince',
      'darwin','macos',
@@ -122,10 +122,12 @@ const
      'beos',
      'embedded',
      'emx',
+     'freertos',
      'gba',
      'go32v2',
      'haiku',
      'iphonesim',
+     'ios',
      'java',
      'msdos',
      'morphos',
@@ -141,7 +143,7 @@ const
      'wdosx',
      'wii'
     );
-  FPCOperatingSystemCaptions: array[1..36] of shortstring =(
+  FPCOperatingSystemCaptions: array[1..38] of shortstring =(
      'AIX',
      'Amiga',
      'Android',
@@ -153,10 +155,12 @@ const
      'Embedded',
      'emx',
      'FreeBSD',
+     'FreeRTOS',
      'GBA',
      'Go32v2',
      'Haiku',
      'iPhoneSim',
+     'iOS',
      'Java',
      'Linux',
      'MacOS',
@@ -186,7 +190,7 @@ const
   FPCOperatingSystemAlternative2Names: array[1..2] of shortstring =(
       'bsd', 'linux' // see GetDefaultSrcOS2ForTargetOS
     );
-  FPCProcessorNames: array[1..13] of shortstring =(
+  FPCProcessorNames: array[1..14] of shortstring =(
       'aarch64',
       'arm',
       'avr',
@@ -199,7 +203,8 @@ const
       'powerpc',
       'powerpc64',
       'sparc',
-      'x86_64'
+      'x86_64',
+      'xtensa'
     );
   FPCSyntaxModes: array[1..6] of shortstring = (
     'FPC', 'ObjFPC', 'Delphi', 'TP', 'MacPas', 'ISO'
@@ -519,7 +524,11 @@ type
     FOnPrepareTree: TNotifyEvent;
     FOnReadValue: TOnReadValue;
     FVirtualDirCache: TDirectoryDefines;
+    // Used by Calculate.
+    FExpandedDirectory: string;
+    FDirDef: TDirectoryDefines;
     function Calculate(DirDef: TDirectoryDefines): boolean;
+    procedure CalculateTemplate(DefTempl: TDefineTemplate; const CurPath: string);
     procedure IncreaseChangeStep;
     procedure SetDirectoryCachePool(const AValue: TCTDirectoryCachePool);
     procedure RemoveDoubles(Defines: TDirectoryDefines);
@@ -593,7 +602,7 @@ type
     procedure RemoveTemplatesOwnedBy(TheOwner: TObject;
                                const MustFlags, NotFlags: TDefineTemplateFlags);
     procedure ReplaceChild(ParentTemplate, NewDefineTemplate: TDefineTemplate;
-                           const ChildName: string);
+      const ChildName: string);
     procedure ReplaceRootSameName(ADefineTemplate: TDefineTemplate);
     procedure ReplaceRootSameName(const Name: string;
                                   ADefineTemplate: TDefineTemplate);
@@ -1370,8 +1379,7 @@ begin
                       '{*.pas,*.pp,*.p,*.inc,Makefile.fpc}',8,OnProgress);
 end;
 
-function MakeRelativeFileList(Files: TStrings; out BaseDir: string
-  ): TStringList;
+function MakeRelativeFileList(Files: TStrings; out BaseDir: string): TStringList;
 var
   BaseDirLen: Integer;
   i: Integer;
@@ -1517,6 +1525,7 @@ begin
       //debugln(['RunTool Last=',OutputLine]);
       if OutputLine<>'' then
         Result.Add(OutputLine);
+      //debugln(['RunTool Result=',Result[Result.Count-1]]);
       TheProcess.WaitOnExit;
     finally
       TheProcess.Free;
@@ -1570,7 +1579,7 @@ function RunFPCInfo(const CompilerFilename: string;
 var
   Param: String;
   List: TStringList;
-  Params: TStringListUTF8;
+  Params: TStringList;
 begin
   Result:='';
   Param:='';
@@ -1584,7 +1593,7 @@ begin
   if Param='' then exit;
   Param:='-i'+Param;
   List:=nil;
-  Params:=TStringListUTF8.Create;
+  Params:=TStringList.Create;
   try
     Params.Add(Param);
     SplitCmdLineParams(Options,Params);
@@ -1702,7 +1711,6 @@ function ParseFPCVerbose(List: TStrings; const WorkDir: string; out
     Filename: String;
     p: SizeInt;
   begin
-    //DebugLn(['ProcessOutputLine ',Line]);
     Line:=SysToUtf8(Line);
     len := length(Line);
     if len <= 6 then Exit; // shortest match
@@ -1862,11 +1870,11 @@ function RunFPCVerbose(const CompilerFilename, TestFilename: string; out
   UnitPaths: TStrings; out IncludePaths: TStrings; out UnitScopes: TStrings;
   out Defines, Undefines: TStringToStringTree; const Options: string): boolean;
 var
-  Params: TStringListUTF8;
+  Params: TStringList;
   Filename: String;
   WorkDir: String;
   List: TStringList;
-  fs: TFileStreamUTF8;
+  fs: TFileStream;
 begin
   Result:=false;
   ConfigFiles:=nil;
@@ -1877,7 +1885,7 @@ begin
   Defines:=nil;
   Undefines:=nil;
 
-  Params:=TStringListUTF8.Create;
+  Params:=TStringList.Create;
   List:=nil;
   try
     Params.Add('-va');
@@ -1885,7 +1893,7 @@ begin
     if TestFilename<>'' then begin
       // create empty file
       try
-        fs:=TFileStreamUTF8.Create(TestFilename,fmCreate);
+        fs:=TFileStream.Create(TestFilename,fmCreate);
         fs.Free;
       except
         debugln(['Warning: [RunFPCVerbose] unable to create test file "'+TestFilename+'"']);
@@ -1961,7 +1969,7 @@ begin
           if (Ext='.pas') or (Ext='.pp') or (Ext='.p') or (Ext='.ppu') then begin
             File_Name:=ExtractFileNameOnly(Filename);
             if (not Units.Contains(File_Name))
-            or ((Ext<>'.ppu') and (CompareFileExt(Units[File_Name],'ppu',false)=0))
+            or ((Ext<>'.ppu') and (CompareFileExt(Units[File_Name],'ppu',true)=0))
             then
               Units[File_Name]:=Filename;
           end;
@@ -2026,7 +2034,7 @@ var
   S2SItem: PStringToStringItem;
   CurUnitName, Filename, PkgName, FPMFilename, FPMSourcePath, Line: String;
   p, EndPos, FPCTargetEndPos, i, FileCount: Integer;
-  sl: TStringListUTF8;
+  sl: TStringList;
   FPM: TPCFPMFileState;
 begin
   // try to resolve .ppu files via fpmkinst .fpm files
@@ -2044,7 +2052,7 @@ begin
     //if Pos('lazmkunit',Filename)>0 then
       //debugln(['GatherUnitsInFPMSources ===== ',Filename]);
     AVLNode:=Units.Tree.FindSuccessor(AVLNode);
-    if CompareFileExt(Filename,'ppu',false)<>0 then continue;
+    if CompareFileExt(Filename,'ppu',true)<>0 then continue;
     // check if filename has the form
     //                  /something/units/<FPCTarget>/<pkgname>/<unitname>.ppu
     // and if there is  /something/fpmkinst/<FPCTarget>/<pkgname>.fpm
@@ -2077,7 +2085,7 @@ begin
       FPMSourcePath:='';
       if FileExistsCached(FPMFilename) then begin
         //debugln(['GatherUnitsInFPMSources Found .fpm: ',FPMFilename]);
-        sl:=TStringListUTF8.Create;
+        sl:=TStringList.Create;
         try
           try
             sl.LoadFromFile(FPMFilename);
@@ -2250,10 +2258,7 @@ begin
     LastDirScore:=0;
     for i:=0 to Files.Count-1 do begin
       Filename:=Files[i];
-      if (CompareFileExt(Filename,'PAS',false)=0)
-      or (CompareFileExt(Filename,'PP',false)=0)
-      or (CompareFileExt(Filename,'P',false)=0)
-      then begin
+      if FilenameHasPascalExt(Filename) then begin
         if CompareFilenameOnly(PChar(Filename),length(Filename),'fpmake',6,true)=0
         then
           continue; // skip the fpmake.pp files
@@ -2872,7 +2877,7 @@ begin
     Item:=PStringToStringItem(Node.Data);
     Unit_Name:=Item^.Name;
     Filename:=Item^.Value;
-    if CompareFileExt(Filename,'.ppu',false)=0 then begin
+    if CompareFileExt(Filename,'ppu',true)=0 then begin
       SrcFilename:=UnitToSource[Unit_Name];
       if SrcFilename<>'' then begin
         DuplicateFilenames:=UnitToDuplicates[Unit_Name];
@@ -3415,13 +3420,13 @@ end;
 
 procedure ReadMakefileFPC(const Filename: string; List: TStrings);
 var
-  MakefileFPC: TStringListUTF8;
+  MakefileFPC: TStringList;
   i: Integer;
   Line: string;
   p: LongInt;
   NameValue: String;
 begin
-  MakefileFPC:=TStringListUTF8.Create;
+  MakefileFPC:=TStringList.Create;
   MakefileFPC.LoadFromFile(Filename);
   i:=0;
   while i<MakefileFPC.Count do begin
@@ -3633,6 +3638,7 @@ begin
   or (CompareText(TargetOS,'openbsd')=0)
   or (CompareText(TargetOS,'dragonfly')=0)
   or (CompareText(TargetOS,'darwin')=0)
+  or (CompareText(TargetOS,'ios')=0)
   or (CompareText(TargetOS,'solaris')=0)
   or (CompareText(TargetOS,'haiku')=0)
   or (CompareText(TargetOS,'android')=0)
@@ -3742,6 +3748,8 @@ begin
     Result:=Result+'ia64'
   else if SysUtils.CompareText(TargetCPU,'aarch64')=0 then
     Result:=Result+'aarch64'
+  else if SysUtils.CompareText(TargetCPU,'xtensa')=0 then
+    Result:=Result+'xtensa'
   else
     Result:='fpc';
   Result:=Result+ExeExt;
@@ -3853,6 +3861,12 @@ procedure GetTargetProcessors(const TargetCPU: string; aList: TStrings);
     aList.Add('CFV4');
   end;
 
+  procedure Xtensa;
+  begin
+    aList.Add('lx106');
+    aList.Add('lx6');
+  end;
+
 begin
   case TargetCPU of
     'arm'    : Arm;
@@ -3866,6 +3880,7 @@ begin
     'mipsel','mips' : Mips;
     'jvm'    : ;
     'aarch64'  : ;
+    'xtensa' : Xtensa;
   end;
 end;
 
@@ -3942,7 +3957,7 @@ function IsCompilerExecutable(AFilename: string; out ErrorMsg: string; out
   Kind: TPascalCompiler; Run: boolean): boolean;
 var
   ShortFilename, Line: String;
-  Params: TStringListUTF8;
+  Params: TStringList;
   Lines: TStringList;
   i: Integer;
 begin
@@ -3975,7 +3990,7 @@ begin
   if Run then begin
     // run it and check for magics
     debugln(['Note: (lazarus) [IsCompilerExecutable] run "',AFilename,'"']);
-    Params:=TStringListUTF8.Create;
+    Params:=TStringList.Create;
     Lines:=nil;
     try
       Params.Add('-va');
@@ -5209,8 +5224,7 @@ begin
   while Result.Next<>nil do Result:=Result.Next;
 end;
 
-function TDefineTree.FindDirectoryInCache(
-  const Path: string): TDirectoryDefines;
+function TDefineTree.FindDirectoryInCache(const Path: string): TDirectoryDefines;
 var cmp: integer;
   ANode: TAVLTreeNode;
 begin
@@ -5262,7 +5276,9 @@ function TDefineTree.GetDirDefinesForVirtualDirectory: TDirectoryDefines;
 begin
   DoPrepareTree;
   if FVirtualDirCache=nil then begin
-    //DebugLn('################ TDefineTree.GetDirDefinesForVirtualDirectory');
+    {$IFDEF VerboseDefineCache}
+    DebugLn('################ TDefineTree.GetDirDefinesForVirtualDirectory');
+    {$ENDIF}
     FVirtualDirCache:=TDirectoryDefines.Create;
     FVirtualDirCache.Path:=VirtualDirectory;
     if Calculate(FVirtualDirCache) then begin
@@ -5397,8 +5413,7 @@ begin
   end;
 end;
 
-function TDefineTree.GetDCUSrcPathForDirectory(const Directory: string
-  ): string;
+function TDefineTree.GetDCUSrcPathForDirectory(const Directory: string): string;
 var Evaluator: TExpressionEvaluator;
 begin
   Evaluator:=GetDefinesForDirectory(Directory,true);
@@ -5700,7 +5715,7 @@ var
 begin
   LastDefTempl:=GetLastRootTemplate;
   TDefineTemplate.MergeTemplates(nil,FFirstDefineTemplate,LastDefTempl,
-                  SourceTemplate,true,NewNamePrefix);
+                                 SourceTemplate,true,NewNamePrefix);
   ClearCache;
 end;
 
@@ -5708,181 +5723,179 @@ function TDefineTree.Calculate(DirDef: TDirectoryDefines): boolean;
 // calculates the values for a single directory
 // returns false on error
 var
-  ExpandedDirectory, EvalResult, TempValue: string;
-
-  procedure CalculateTemplate(DefTempl: TDefineTemplate; const CurPath: string);
-  
-    procedure CalculateIfChildren;
-    begin
-      // execute children
-      CalculateTemplate(DefTempl.FirstChild,CurPath);
-      // jump to end of else templates
-      while (DefTempl.Next<>nil)
-      and (DefTempl.Next.Action in [da_Else,da_ElseIf])
-      do begin
-        if Assigned(OnCalculate) then
-          OnCalculate(Self,DefTempl,false,'',false,'',false);
-        DefTempl:=DefTempl.Next;
-      end;
-    end;
-
-  // procedure CalculateTemplate(DefTempl: TDefineTemplate; const CurPath: string);
-  var SubPath, TempValue: string;
-    VarName: string;
-  begin
-    while DefTempl<>nil do begin
-      //DebugLn('  [CalculateTemplate] CurPath="',CurPath,'" DefTempl.Name="',DefTempl.Name,'"');
-      case DefTempl.Action of
-      da_Block:
-        // calculate children
-        begin
-          if Assigned(OnCalculate) then
-            OnCalculate(Self,DefTempl,false,'',false,'',true);
-          CalculateTemplate(DefTempl.FirstChild,CurPath);
-        end;
-
-      da_Define:
-        // Define for a single Directory (not SubDirs)
-        begin
-          if FilenameIsMatching(CurPath,ExpandedDirectory,true) then begin
-            ReadValue(DirDef,DefTempl.Value,CurPath,TempValue);
-            if Assigned(OnCalculate) then
-              OnCalculate(Self,DefTempl,true,TempValue,false,'',true);
-            ReadValue(DirDef,DefTempl.Variable,CurPath,VarName);
-            DirDef.Values.Variables[VarName]:=TempValue;
-          end else begin
-            if Assigned(OnCalculate) then
-              OnCalculate(Self,DefTempl,false,'',false,'',false);
-          end;
-        end;
-
-      da_DefineRecurse:
-        // Define for current and sub directories
-        begin
-          ReadValue(DirDef,DefTempl.Value,CurPath,TempValue);
-          if Assigned(OnCalculate) then
-            OnCalculate(Self,DefTempl,true,TempValue,false,'',true);
-          ReadValue(DirDef,DefTempl.Variable,CurPath,VarName);
-          DirDef.Values.Variables[VarName]:=TempValue;
-        end;
-
-      da_Undefine:
-        // Undefine for a single Directory (not SubDirs)
-        if FilenameIsMatching(CurPath,ExpandedDirectory,true) then begin
-          if Assigned(OnCalculate) then
-            OnCalculate(Self,DefTempl,false,'',false,'',true);
-          ReadValue(DirDef,DefTempl.Variable,CurPath,VarName);
-          DirDef.Values.Undefine(VarName);
-        end else begin
-          if Assigned(OnCalculate) then
-            OnCalculate(Self,DefTempl,false,'',false,'',false);
-        end;
-
-      da_UndefineRecurse:
-        // Undefine for current and sub directories
-        begin
-          if Assigned(OnCalculate) then
-            OnCalculate(Self,DefTempl,false,'',false,'',true);
-          ReadValue(DirDef,DefTempl.Variable,CurPath,VarName);
-          DirDef.Values.Undefine(VarName);
-        end;
-
-      da_UndefineAll:
-        // Undefine every value for current and sub directories
-        begin
-          if Assigned(OnCalculate) then
-            OnCalculate(Self,DefTempl,false,'',false,'',true);
-          DirDef.Values.Clear;
-        end;
-
-      da_If, da_ElseIf:
-        begin
-          // test expression in value
-          ReadValue(DirDef,DefTempl.Value,CurPath,TempValue);
-          EvalResult:=DirDef.Values.Eval(TempValue,true);
-          if Assigned(OnCalculate) then
-            OnCalculate(Self,DefTempl,true,TempValue,true,EvalResult,EvalResult='1');
-          //debugln('da_If,da_ElseIf: DefTempl.Value="',DbgStr(DefTempl.Value),'" CurPath="',CurPath,'" TempValue="',TempValue,'" EvalResult=',EvalResult);
-          if DirDef.Values.ErrorPosition>=0 then begin
-            FErrorDescription:=Format(ctsSyntaxErrorInExpr,[TempValue]);
-            FErrorTemplate:=DefTempl;
-            //debugln(['CalculateTemplate "',FErrorDescription,'"']);
-          end else if EvalResult='1' then
-            CalculateIfChildren;
-        end;
-      da_IfDef,da_IfNDef:
-        // test if variable is defined
-        begin
-          //DebugLn('da_IfDef A Name=',DefTempl.Name,
-          //  ' Variable=',DefTempl.Variable,
-          //  ' Is=',dbgs(DirDef.Values.IsDefined(DefTempl.Variable)),
-          //  ' CurPath="',CurPath,'"',
-          //  ' Values.Count=',dbgs(DirDef.Values.Count));
-          ReadValue(DirDef,DefTempl.Variable,CurPath,VarName);
-          if DirDef.Values.IsDefined(VarName)=(DefTempl.Action=da_IfDef) then begin
-            if Assigned(OnCalculate) then
-              OnCalculate(Self,DefTempl,false,'',false,'',true);
-            CalculateIfChildren;
-          end else begin
-            if Assigned(OnCalculate) then
-              OnCalculate(Self,DefTempl,false,'',false,'',false);
-          end;
-        end;
-
-      da_Else:
-        // execute children
-        begin
-          if Assigned(OnCalculate) then
-            OnCalculate(Self,DefTempl,false,'',false,'',true);
-          CalculateTemplate(DefTempl.FirstChild,CurPath);
-        end;
-
-      da_Directory:
-        begin
-          // template for a sub directory
-          ReadValue(DirDef,DefTempl.Value,CurPath,TempValue);
-          // Note: CurPath can be ''
-          SubPath:=AppendPathDelim(CurPath)+TempValue;
-          // test if ExpandedDirectory is part of SubPath
-          if (SubPath<>'') and FilenameIsMatching(SubPath,ExpandedDirectory,false)
-          then begin
-            if Assigned(OnCalculate) then
-              OnCalculate(Self,DefTempl,true,SubPath,false,'',true);
-            CalculateTemplate(DefTempl.FirstChild,SubPath);
-          end else begin
-            if Assigned(OnCalculate) then
-              OnCalculate(Self,DefTempl,true,SubPath,false,'',false);
-          end;
-        end;
-      end;
-      if ErrorTemplate<>nil then exit;
-      if DefTempl<>nil then
-        DefTempl:=DefTempl.Next;
-    end;
-  end;
-
-// function TDefineTree.Calculate(DirDef: TDirectoryDefines): boolean;
+  TempValue: string;
 begin
   {$IFDEF VerboseDefineCache}
   DebugLn('[TDefineTree.Calculate] ++++++ "',DirDef.Path,'"');
   {$ENDIF}
   Result:=true;
   FErrorTemplate:=nil;
-  ExpandedDirectory:=DirDef.Path;
-  if (ExpandedDirectory=VirtualDirectory)
+  FDirDef:=DirDef;
+  FExpandedDirectory:=DirDef.Path;
+  if (FExpandedDirectory=VirtualDirectory)
   and Assigned(OnGetVirtualDirectoryAlias) then
-    OnGetVirtualDirectoryAlias(Self,ExpandedDirectory);
-  if (ExpandedDirectory<>VirtualDirectory) then begin
-    ReadValue(DirDef,ExpandedDirectory,'',TempValue);
-    ExpandedDirectory:=TempValue;
+    OnGetVirtualDirectoryAlias(Self,FExpandedDirectory);
+  if (FExpandedDirectory<>VirtualDirectory) then begin
+    ReadValue(DirDef,FExpandedDirectory,'',TempValue);
+    FExpandedDirectory:=TempValue;
   end;
   DirDef.Values.Clear;
   // compute the result of all matching DefineTemplates
   CalculateTemplate(FFirstDefineTemplate,'');
-  if (ExpandedDirectory=VirtualDirectory)
+  if (FExpandedDirectory=VirtualDirectory)
   and (Assigned(OnGetVirtualDirectoryDefines)) then
     OnGetVirtualDirectoryDefines(Self,DirDef);
   Result:=(ErrorTemplate=nil);
+end;
+
+procedure TDefineTree.CalculateTemplate(DefTempl: TDefineTemplate; const CurPath: string);
+
+  procedure CalculateIfChildren;
+  begin
+    // execute children
+    CalculateTemplate(DefTempl.FirstChild,CurPath);
+    // jump to end of else templates
+    while (DefTempl.Next<>nil)
+    and (DefTempl.Next.Action in [da_Else,da_ElseIf])
+    do begin
+      if Assigned(OnCalculate) then
+        OnCalculate(Self,DefTempl,false,'',false,'',false);
+      DefTempl:=DefTempl.Next;
+    end;
+  end;
+
+var
+  EvalResult, SubPath, TempValue, VarName: string;
+begin
+  while DefTempl<>nil do begin
+    //DebugLn('  [CalculateTemplate] CurPath="',CurPath,'" DefTempl.Name="',DefTempl.Name,'"');
+    case DefTempl.Action of
+    da_Block:
+      // calculate children
+      begin
+        if Assigned(OnCalculate) then
+          OnCalculate(Self,DefTempl,false,'',false,'',true);
+        CalculateTemplate(DefTempl.FirstChild,CurPath);
+      end;
+
+    da_Define:
+      // Define for a single Directory (not SubDirs)
+      begin
+        if FilenameIsMatching(CurPath,FExpandedDirectory,true) then begin
+          ReadValue(FDirDef,DefTempl.Value,CurPath,TempValue);
+          if Assigned(OnCalculate) then
+            OnCalculate(Self,DefTempl,true,TempValue,false,'',true);
+          ReadValue(FDirDef,DefTempl.Variable,CurPath,VarName);
+          FDirDef.Values.Variables[VarName]:=TempValue;
+        end else begin
+          if Assigned(OnCalculate) then
+            OnCalculate(Self,DefTempl,false,'',false,'',false);
+        end;
+      end;
+
+    da_DefineRecurse:
+      // Define for current and sub directories
+      begin
+        ReadValue(FDirDef,DefTempl.Value,CurPath,TempValue);
+        if Assigned(OnCalculate) then
+          OnCalculate(Self,DefTempl,true,TempValue,false,'',true);
+        ReadValue(FDirDef,DefTempl.Variable,CurPath,VarName);
+        FDirDef.Values.Variables[VarName]:=TempValue;
+      end;
+
+    da_Undefine:
+      // Undefine for a single Directory (not SubDirs)
+      if FilenameIsMatching(CurPath,FExpandedDirectory,true) then begin
+        if Assigned(OnCalculate) then
+          OnCalculate(Self,DefTempl,false,'',false,'',true);
+        ReadValue(FDirDef,DefTempl.Variable,CurPath,VarName);
+        FDirDef.Values.Undefine(VarName);
+      end else begin
+        if Assigned(OnCalculate) then
+          OnCalculate(Self,DefTempl,false,'',false,'',false);
+      end;
+
+    da_UndefineRecurse:
+      // Undefine for current and sub directories
+      begin
+        if Assigned(OnCalculate) then
+          OnCalculate(Self,DefTempl,false,'',false,'',true);
+        ReadValue(FDirDef,DefTempl.Variable,CurPath,VarName);
+        FDirDef.Values.Undefine(VarName);
+      end;
+
+    da_UndefineAll:
+      // Undefine every value for current and sub directories
+      begin
+        if Assigned(OnCalculate) then
+          OnCalculate(Self,DefTempl,false,'',false,'',true);
+        FDirDef.Values.Clear;
+      end;
+
+    da_If, da_ElseIf:
+      begin
+        // test expression in value
+        ReadValue(FDirDef,DefTempl.Value,CurPath,TempValue);
+        EvalResult:=FDirDef.Values.Eval(TempValue,true);
+        if Assigned(OnCalculate) then
+          OnCalculate(Self,DefTempl,true,TempValue,true,EvalResult,EvalResult='1');
+        //debugln('da_If,da_ElseIf: DefTempl.Value="',DbgStr(DefTempl.Value),'" CurPath="',CurPath,'" TempValue="',TempValue,'" EvalResult=',EvalResult);
+        if FDirDef.Values.ErrorPosition>=0 then begin
+          FErrorDescription:=Format(ctsSyntaxErrorInExpr,[TempValue]);
+          FErrorTemplate:=DefTempl;
+          //debugln(['CalculateTemplate "',FErrorDescription,'"']);
+        end else if EvalResult='1' then
+          CalculateIfChildren;
+      end;
+    da_IfDef,da_IfNDef:
+      // test if variable is defined
+      begin
+        //DebugLn('da_IfDef A Name=',DefTempl.Name,
+        //  ' Variable=',DefTempl.Variable,
+        //  ' Is=',dbgs(FDirDef.Values.IsDefined(DefTempl.Variable)),
+        //  ' CurPath="',CurPath,'"',
+        //  ' Values.Count=',dbgs(FDirDef.Values.Count));
+        ReadValue(FDirDef,DefTempl.Variable,CurPath,VarName);
+        if FDirDef.Values.IsDefined(VarName)=(DefTempl.Action=da_IfDef) then begin
+          if Assigned(OnCalculate) then
+            OnCalculate(Self,DefTempl,false,'',false,'',true);
+          CalculateIfChildren;
+        end else begin
+          if Assigned(OnCalculate) then
+            OnCalculate(Self,DefTempl,false,'',false,'',false);
+        end;
+      end;
+
+    da_Else:
+      // execute children
+      begin
+        if Assigned(OnCalculate) then
+          OnCalculate(Self,DefTempl,false,'',false,'',true);
+        CalculateTemplate(DefTempl.FirstChild,CurPath);
+      end;
+
+    da_Directory:
+      begin
+        // template for a sub directory
+        ReadValue(FDirDef,DefTempl.Value,CurPath,TempValue);
+        // Note: CurPath can be ''
+        SubPath:=AppendPathDelim(CurPath)+TempValue;
+        // test if FExpandedDirectory is part of SubPath
+        if (SubPath<>'') and FilenameIsMatching(SubPath,FExpandedDirectory,false)
+        then begin
+          if Assigned(OnCalculate) then
+            OnCalculate(Self,DefTempl,true,SubPath,false,'',true);
+          CalculateTemplate(DefTempl.FirstChild,SubPath);
+        end else begin
+          if Assigned(OnCalculate) then
+            OnCalculate(Self,DefTempl,true,SubPath,false,'',false);
+        end;
+      end;
+    end;
+    if ErrorTemplate<>nil then exit;
+    if DefTempl<>nil then
+      DefTempl:=DefTempl.Next;
+  end;
 end;
 
 procedure TDefineTree.IncreaseChangeStep;
@@ -5993,8 +6006,8 @@ begin
   if HadDefines then ClearCache;
 end;
 
-procedure TDefineTree.ReplaceChild(ParentTemplate,
-  NewDefineTemplate: TDefineTemplate; const ChildName: string);
+procedure TDefineTree.ReplaceChild(ParentTemplate, NewDefineTemplate: TDefineTemplate;
+  const ChildName: string);
 // if there is a DefineTemplate with the same name then replace it
 // else add as last
 var OldDefineTemplate: TDefineTemplate;
@@ -6002,9 +6015,8 @@ begin
   if (ChildName='') or (ParentTemplate=nil) then exit;
   OldDefineTemplate:=ParentTemplate.FindChildByName(ChildName);
   if OldDefineTemplate<>nil then begin
-    if not OldDefineTemplate.IsEqual(NewDefineTemplate,true,false) then begin
+    if not OldDefineTemplate.IsEqual(NewDefineTemplate,true,false) then
       ClearCache;
-    end;
     if NewDefineTemplate<>nil then
       NewDefineTemplate.InsertBehind(OldDefineTemplate);
     if OldDefineTemplate=FFirstDefineTemplate then
@@ -6312,7 +6324,7 @@ var
   SrcOS: string;
   SrcOS2: String;
   Step: String;
-  Params: TStringListUTF8;
+  Params: TStringList;
 begin
   Result:=nil;
   //DebugLn('TDefinePool.CreateFPCTemplate PPC386Path="',CompilerPath,'" FPCOptions="',CompilerOptions,'"');
@@ -6330,7 +6342,7 @@ begin
   SetLength(Buf,1024);
   Step:='Init';
   try
-    Params:=TStringListUTF8.Create;
+    Params:=TStringList.Create;
     TheProcess := TProcessUTF8.Create(nil);
     try
       TheProcess.Executable:=CompilerPath;
@@ -6380,7 +6392,7 @@ begin
     //DebugLn('TDefinePool.CreateFPCTemplate First done UnitSearchPath="',UnitSearchPath,'"');
 
     // ask for target operating system -> ask compiler with switch -iTO
-    Params:=TStringListUTF8.Create;
+    Params:=TStringList.Create;
     TheProcess := TProcessUTF8.Create(nil);
     try
       TheProcess.Executable:=CompilerPath;
@@ -6432,7 +6444,7 @@ begin
     end;
     
     // ask for target processor -> ask compiler with switch -iTP
-    Params:=TStringListUTF8.Create;
+    Params:=TStringList.Create;
     TheProcess := TProcessUTF8.Create(nil);
     try
       TheProcess.Executable:=CompilerPath;
@@ -6654,6 +6666,7 @@ begin
        +LazarusSrcDir+'/packager;'
        +LazarusSrcDir+'/packager/registration;'
        +LazarusSrcDir+'/packager/frames;'
+       +LazarusSrcDir+'/components/buildintf;'
        +LazarusSrcDir+'/components/ideintf;'
        +LazarusSrcDir+'/components/lazutils;'
        +LazarusSrcDir+'/components/lazcontrols;'
@@ -6688,6 +6701,7 @@ begin
        +';../lcl'
        +';../lcl/interfaces'
        +';../lcl/interfaces/'+WidgetType
+       +';../components/buildintf'
        +';../components/ideintf'
        +';../components/synedit'
        +';../components/codetools'
@@ -6721,6 +6735,7 @@ begin
       d(LazarusSrcDir+'/debugger;'
        +LazarusSrcDir+'/debugger/frames;'
        +LazarusSrcDir+'/ide;'
+       +LazarusSrcDir+'/components/buildintf;'
        +LazarusSrcDir+'/components/ideintf;'
        +LazarusSrcDir+'/components/lazutils;'
        +LazarusSrcDir+'/components/codetools;'
@@ -6741,6 +6756,7 @@ begin
     Format(ctsAddsDirToSourcePath,['lcl, components']),
     ExternalMacroStart+'SrcPath',
       d('../ide'
+       +';../components/buildintf'
        +';../components/ideintf'
        +';../components/lazutils'
        +';../components/codetools'
@@ -6761,12 +6777,13 @@ begin
   DirTempl:=TDefineTemplate.Create('Packager',ctsDesignerDirectory,
     '','packager',da_Directory);
   DirTempl.AddChild(TDefineTemplate.Create('src path addition',
-    Format(ctsAddsDirToSourcePath,['lcl synedit codetools lazcontrols ideintf']),
+    Format(ctsAddsDirToSourcePath,['lcl synedit codetools lazcontrols ideintf buildintf']),
     SrcPathMacroName,
       d(LazarusSrcDir+'/lcl'
       +';'+LazarusSrcDir+'/lcl/interfaces'
       +';'+LazarusSrcDir+'/lcl/interfaces/'+WidgetType
       +';'+LazarusSrcDir+'/ide'
+      +';'+LazarusSrcDir+'/components/buildintf'
       +';'+LazarusSrcDir+'/components/ideintf'
       +';'+LazarusSrcDir+'/components/synedit'
       +';'+LazarusSrcDir+'/components/lazcontrols'
@@ -7212,7 +7229,7 @@ function TDefinePool.CreateFPCCommandLineDefines(const Name, CmdLine: string;
       controllerunitstr: string[20];
     end;
   const
-    ControllerTypes: array[0..606] of TControllerType =
+    ControllerTypes: array[0..608] of TControllerType =
      ((controllertypestr:'';                  controllerunitstr:''),
       (controllertypestr:'LPC810M021FN8';     controllerunitstr:'LPC8xx'),
       (controllertypestr:'LPC811M001JDH16';   controllerunitstr:'LPC8xx'),
@@ -7822,7 +7839,10 @@ function TDefinePool.CreateFPCCommandLineDefines(const Name, CmdLine: string;
       (controllertypestr:'ATMEGA1284PXPLAINED'; controllerunitstr:'ATMEGA1284P'),
       (controllertypestr:'ATMEGA4809XPRO';    controllerunitstr:'ATMEGA4809'),
       (controllertypestr:'ATTINY817XPRO';     controllerunitstr:'ATTINY817'),
-      (controllertypestr:'ATTINY3217XPRO';    controllerunitstr:'ATTINY3217'));
+      (controllertypestr:'ATTINY3217XPRO';    controllerunitstr:'ATTINY3217'),
+      // xtensa controllers
+      (controllertypestr:'ESP8266';           controllerunitstr:'ESP8266'),
+      (controllertypestr:'ESP32';             controllerunitstr:'ESP32'));
 
   var
     i: integer;
@@ -7854,7 +7874,7 @@ begin
   UnitPath:='';
   IncPath:='';
   Namespaces:='';
-  Params:=TStringListUTF8.Create;
+  Params:=TStringList.Create;
   try
     SplitCmdLineParams(CmdLine,Params);
     for i:=0 to Params.Count-1 do begin
@@ -9049,14 +9069,16 @@ begin
             debugln(['Warning: [TPCTargetConfigCache.Update] cannot determine type of compiler: Compiler="'+Compiler+'" Options="'+ExtraOptions+'"']);
         end;
       end;
-      if Kind=pcFPC then
+      if Kind=pcFPC then begin
         RealTargetCPUCompiler:=FindDefaultTargetCPUCompiler(TargetCPU,true);
+        if RealCompiler='' then RealCompiler:=RealTargetCPUCompiler;
+      end;
       PreparePaths(UnitPaths);
       PreparePaths(IncludePaths);
       // store the real compiler file and date
-      if (RealCompiler<>'') and FileExistsCached(RealCompiler) then begin
-        RealCompilerDate:=FileAgeCached(RealCompiler);
-      end else if Kind=pcFPC then begin
+      if (RealCompiler<>'') and FileExistsCached(RealCompiler) then
+        RealCompilerDate:=FileAgeCached(RealCompiler)
+      else if Kind=pcFPC then begin
         if CTConsoleVerbosity>=-1 then
           debugln(['Warning: [TPCTargetConfigCache.Update] cannot find real compiler for this platform: Compiler="'+Compiler+'" Options="'+ExtraOptions+'" RealCompiler="',RealCompiler,'"']);
       end;
@@ -9091,7 +9113,7 @@ begin
       end;
       // check if the system ppu exists
       HasPPUs:=(Kind=pcFPC) and (Units<>nil)
-          and (CompareFileExt(Units['system'],'ppu',false)=0);
+          and (CompareFileExt(Units['system'],'ppu',true)=0);
       // check compiler version define
       if (CTConsoleVerbosity>=-1) and (Defines<>nil) then begin
         case Kind of
@@ -10397,7 +10419,7 @@ begin
   if (ConfigCache.Units<>nil) then begin
     UnitInFPCPath:=ConfigCache.Units[AnUnitName];
     //if Pos('lazmkunit',AnUnitName)>0 then debugln(['TFPCUnitSetCache.GetUnitSrcFile UnitInFPCPath=',UnitInFPCPath]);
-    if (CompareFileExt(UnitInFPCPath,'ppu',false)=0) then begin
+    if (CompareFileExt(UnitInFPCPath,'ppu',true)=0) then begin
       // there is a ppu
     end else if UnitInFPCPath<>'' then begin
       // there is a pp or pas in the FPC search path
@@ -10449,7 +10471,7 @@ begin
   if ConfigCache.Units=nil then exit;
   Result:=ConfigCache.Units[AUnitName];
   if Result='' then exit;
-  if CompareFileExt(Result,'.ppu',false)<>0 then
+  if CompareFileExt(Result,'ppu',true)<>0 then
     Result:='';
 end;
 

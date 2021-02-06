@@ -1838,35 +1838,39 @@ begin
               and IsValidGDIObject(Src2);
   if not Continue then begin
     DebugLn('WARNING: [TGtk2WidgetSet.CombineRgn] Invalid HRGN');
-    Result := Error;
-  end
-  else begin
-    S1 := S1Obj^.GDIRegionObject;
-    S2 := S2Obj^.GDIRegionObject;
-    //DebugLn('TGtk2WidgetSet.CombineRgn A fnCombineMode=',Dbgs(fnCombineMode));
-    case fnCombineMode of
-      RGN_AND :
-        D := PGDKRegion(gdk_region_intersect(S1, S2));
-      RGN_COPY :
-        D := gdk_region_copy(S1);
-      RGN_DIFF :
-        D := PGDKRegion(gdk_region_subtract(S1, S2));
-      RGN_OR :
-        D := PGDKRegion(gdk_region_union(S1, S2));
-      RGN_XOR :
-        D := PGDKRegion(gdk_region_xor(S1, S2));
-      else begin
-        Result:= ERROR;
-        D := nil;
-      end;
-    end;
-    if Assigned(DObj^.GDIRegionObject) then
-      gdk_region_destroy(DObj^.GDIRegionObject);
-    DObj^.GDIRegionObject := D;
-    Result := RegionType(D);
-    //DebugLn('TGtk2WidgetSet.CombineRgn B Mode=',dbgs(fnCombineMode),
-    //  ' S1=',GDKRegionAsString(S1),' S2=',GDKRegionAsString(S2),' D=',GDKRegionAsString(D),'');
+    exit(Error);
   end;
+  if DObj^.RefCount>1 then
+  begin
+    DebugLn('WARNING: [TGtk2WidgetSet.CombineRgn] Invalid Dest');
+    exit(RegionType(DObj^.GDIRegionObject));
+  end;
+
+  S1 := S1Obj^.GDIRegionObject;
+  S2 := S2Obj^.GDIRegionObject;
+  //DebugLn('TGtk2WidgetSet.CombineRgn A fnCombineMode=',Dbgs(fnCombineMode));
+  case fnCombineMode of
+    RGN_AND :
+      D := PGDKRegion(gdk_region_intersect(S1, S2));
+    RGN_COPY :
+      D := gdk_region_copy(S1);
+    RGN_DIFF :
+      D := PGDKRegion(gdk_region_subtract(S1, S2));
+    RGN_OR :
+      D := PGDKRegion(gdk_region_union(S1, S2));
+    RGN_XOR :
+      D := PGDKRegion(gdk_region_xor(S1, S2));
+    else begin
+      Result:= ERROR;
+      D := nil;
+    end;
+  end;
+  if Assigned(DObj^.GDIRegionObject) then
+    gdk_region_destroy(DObj^.GDIRegionObject);
+  DObj^.GDIRegionObject := D;
+  Result := RegionType(D);
+  //DebugLn('TGtk2WidgetSet.CombineRgn B Mode=',dbgs(fnCombineMode),
+  //  ' S1=',GDKRegionAsString(S1),' S2=',GDKRegionAsString(S2),' D=',GDKRegionAsString(D),'');
 end;
 
 {------------------------------------------------------------------------------
@@ -3772,7 +3776,7 @@ begin
               Clip:=CreateEmptyRegion
             else begin
               GDK_Window_Get_Size(Drawable, @X, @Y);
-              Clip := CreateRectRGN(0, 0, X, Y);
+              Clip := CreateRectRGN(-Offset.X, -Offset.Y, X - Offset.X, Y - Offset.Y);
             end;
             // create target clip
             Tmp := CreateEmptyRegion;
@@ -4359,7 +4363,10 @@ begin
         ARect.Top:=0;
       end;
       CurGDKWindow:=ClientWindow;
-      while (CurGDKWindow<>MainWindow) do begin
+      while (CurGDKWindow<>MainWindow) do
+      begin
+        if not GDK_IS_WINDOW(CurGDKWindow) then
+          break;
         gdk_window_get_position(CurGDKWindow,@ClientOrigin.x,@ClientOrigin.y);
         inc(ARect.Left,ClientOrigin.x);
         inc(ARect.Top,ClientOrigin.y);
@@ -4619,7 +4626,8 @@ begin
     +b(rsgtkOptionSync)
     +b(rsgtkOptionNoXshm)
     +b(rsgtkOptionName)
-    +b(rsgtkOptionClass);
+    +b(rsgtkOptionClass)
+    +b(rsqtOptionDisableAccurateFrame);
 end;
 
 {------------------------------------------------------------------------------
@@ -5880,17 +5888,9 @@ begin
     SM_CYMENU:
       begin
         Result := 24; // default gtk2 menusize inside menubar.
-
         P := GetStyleWidget(lgsMenu);
         if P <> nil then
-        begin
           Result := GTK_Widget(P)^.requisition.Height;
-
-          P := GetStyleWidget(lgsMenuBar);
-          if P <> nil then
-            Result := Result + GTK_Widget(P)^.requisition.Height;
-        end;
-        inc(Result, FCachedBorderSize);
       end;
     SM_CYSMCAPTION:
       begin
@@ -6258,6 +6258,9 @@ var
   Widget: PGTKWidget;
   GRect: TGdkRectangle;
   P: TPoint;
+  AInfo: PWidgetInfo;
+  AForm: TCustomForm;
+  R, AFrame: TRect;
 begin
   Result := 0; // error
   if Handle = 0 then
@@ -6276,6 +6279,25 @@ begin
     Result := 1; // success
   end else
   begin
+    {$IFDEF HASX}
+    AInfo := GetWidgetInfo(Widget);
+    if (AInfo^.LCLObject is TCustomForm) and not AInfo^.FirstPaint then
+    begin
+      AForm := TCustomForm(AInfo^.LCLObject);
+      if not IsFormDesign(AForm) and (AForm.BorderStyle <> bsNone) and
+        not (AForm.FormStyle in [fsMDIChild, fsSplash])
+      and (Gtk2WidgetSet.GetDummyWidgetFrame <> Rect(0, 0, 0, 0)) then
+      begin
+        R := AForm.BoundsRect;
+        AFrame := Gtk2WidgetSet.GetDummyWidgetFrame;
+        // apply frame size to lcl form.
+        R.Right += AFrame.Left + AFrame.Right;
+        R.Bottom += AFrame.Top + AFrame.Bottom;
+        ARect := R; //this is now real size under x11 even on unmapped window :)
+        exit(-1);
+      end;
+    end;
+    {$ENDIF}
     ARect.TopLeft := GetWidgetOrigin(Widget);
     if (ARect.Top <> -1) or (ARect.Left <> -1)
     or (Widget^.allocation.width <> 1) or (Widget^.allocation.height <> 1) then
@@ -6812,13 +6834,11 @@ var
   vlItem : TGtkMessageQueueItem;
 begin
   //TODO Filtering
-  DebugLn('Peek !!!' );
   fMessageQueue.Lock;
   try
     vlItem := fMessageQueue.FirstMessageItem;
     Result := vlItem <> nil;
-
-    if Result  then begin
+    if Result then begin
       lpMsg := vlItem.Msg^;
       if (wRemoveMsg and PM_REMOVE) = PM_REMOVE then
         fMessageQueue.RemoveMessage(vlItem,FPMF_Internal,true);
@@ -7516,28 +7536,20 @@ end;
 function TGtk2WidgetSet.RestoreDC(DC: HDC; SavedDC: Integer): Boolean;
 var
   DevCtx: TGtkDeviceContext absolute DC;
-
   SavedDevCtx: TGtkDeviceContext;
-  ClipRegionChanged: Boolean;
 begin
   if not IsValidDC(DC) then Exit(False);
   if SavedDC <= 0 then Exit(False);
-
   repeat
     SavedDevCtx := DevCtx.SavedContext;
     Dec(SavedDC);
 
     // TODO copy bitmap too
-
-    ClipRegionChanged := DevCtx.ClipRegion <> SavedDevCtx.ClipRegion;
-    
     // clear the GDIObjects in pSavedDC, so they are not freed by DeleteDC
     Result := DevCtx.CopyDataFrom(SavedDevCtx, True, True, True);
     DevCtx.SavedContext := SavedDevCtx.SavedContext;
     SavedDevCtx.SavedContext := nil;
-
-    if ClipRegionChanged then
-      DevCtx.SelectRegion;
+    DevCtx.SelectRegion;
 
     // free saved DC
     DeleteDC(HDC(SavedDevCtx));
@@ -8594,7 +8606,7 @@ begin
         Exit;
       end;
       AForm := TCustomForm(GetLCLObject({%H-}PgtkWidget(hwnd)));
-      if (AForm <> nil) and (AForm is TCustomForm) and (AForm.Parent=nil) then
+      if (AForm is TCustomForm) and (AForm.Parent=nil) then
       begin
         if Screen.CustomFormZIndex(AForm) < Screen.GetCurrentModalFormZIndex then
         begin
@@ -9387,7 +9399,7 @@ begin
   // For normal widgets we should use GetFixedWidget,
   // but for TForm we should apply the region in the raw hWnd
   LCLObject := GetLCLObject({%H-}PGtkWidget(hWnd));
-  if (LCLObject <> nil) and (LCLObject is TCustomForm) then
+  if LCLObject is TCustomForm then
   begin
     Widget := {%H-}PGtkWidget(hWnd);
   end
@@ -9399,6 +9411,9 @@ begin
   end;
   if Widget = nil then
     Exit(0);
+  if GtkWidgetIsA(gtk_widget_get_toplevel(Widget), gtk_window_get_type)
+      and not gtk_widget_realized(Widget) then
+    gtk_widget_realize(Widget); // associate with window
   Window := GetControlWindow(Widget);
   if Window = nil then
     Exit(0);
@@ -9676,11 +9691,21 @@ end;
 
 function TGtk2WidgetSet.SystemParametersInfo(uiAction: DWord; uiParam: DWord;
   pvParam: Pointer; fWinIni: DWord): LongBool;
+{$IFDEF HASX}
+var
+  ax, ay, awidth, aheight: gint;
+{$ENDIF}
 begin
   Result:=True;
   Case uiAction of
     SPI_GETWHEELSCROLLLINES: PDword(pvParam)^ := 3;
-    SPI_GETWORKAREA: begin
+    SPI_GETWORKAREA:
+    begin
+      {$IFDEF HASX}
+      if XGetWorkarea(ax, ay, awidth, aheight) <> -1 then
+        TRect(pvParam^) := Bounds(ax, ay, awidth, aheight)
+      else
+      {$ENDIF}
       TRect(pvParam^):=Bounds(GetSystemMetrics(SM_XVIRTUALSCREEN),
                               GetSystemMetrics(SM_YVIRTUALSCREEN),
                               GetSystemMetrics(SM_CXVIRTUALSCREEN),

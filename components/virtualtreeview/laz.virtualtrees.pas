@@ -60,10 +60,15 @@ interface
 {$I laz.vtconfig.inc}
 
 uses
+  {$ifdef LCLCocoa}
+  MacOSAll, // hack: low-level access to Cocoa drawins is going to be used
+            //       in order to support Cocoa HighDPI implementation
+  {$endif}
   {$ifdef Windows}
   Windows,
   ActiveX,
   CommCtrl,
+  UxTheme,
   {$else}
   laz.FakeActiveX,
   {$endif}
@@ -82,12 +87,26 @@ uses
   SysUtils, Classes, Graphics, Controls, Forms, ImgList, StdCtrls, Menus, Printers,
   SyncObjs,  // Thread support
   Clipbrd // Clipboard support
+  {$ifdef LCLCocoa}
+  ,CocoaGDIObjects // hack: while using buffered drawing, multiply the context
+                   //       by the retina scale to achieve the needed scale for Retina
+                   //       Ideally - not to use Buffered. but Unbuffered drawing
+                   //       seems to need a fix
+  {$endif}
   {$ifdef ThemeSupport}
   , Themes , TmSchema
   {$endif ThemeSupport}
   {$ifdef EnableAccessible}
   , oleacc // for MSAA IAccessible support
   {$endif};
+
+{$ifdef LCLCocoa}
+// WideChar is defined in MacOSAll. This is causing collission
+// with System.WideChar, which is used by the unit below.
+// Redeclearing the type.
+type
+  WideChar = System.WideChar;
+{$endif}
 
 const
   {$I laz.lclconstants.inc}
@@ -244,6 +263,17 @@ const
   DEFAULT_NODE_HEIGHT = 18;
   DEFAULT_SPACING = 3;
 
+  LIS_NORMAL = 1;
+  {$EXTERNALSYM LIS_NORMAL}
+  LIS_HOT = 2;
+  {$EXTERNALSYM LIS_HOT}
+  LIS_SELECTED = 3;
+  {$EXTERNALSYM LIS_SELECTED}
+  LIS_DISABLED = 4;
+  {$EXTERNALSYM LIS_DISABLED}
+  LIS_SELECTEDNOTFOCUS = 5;
+  {$EXTERNALSYM LIS_SELECTEDNOTFOCUS}
+
 var // Clipboard format IDs used in OLE drag'n drop and clipboard transfers.
   CF_VIRTUALTREE,
   CF_VTREFERENCE,
@@ -251,7 +281,7 @@ var // Clipboard format IDs used in OLE drag'n drop and clipboard transfers.
   CF_VRTFNOOBJS,   // Unfortunately CF_RTF* is already defined as being
                    // registration strings so I have to use different identifiers.
   CF_HTML,
-  CF_CSV: Word;
+  CF_CSV: TClipboardFormat;
 
   MMXAvailable: Boolean; // necessary to know because the blend code uses MMX instructions
   IsWinVistaOrAbove: Boolean;
@@ -711,7 +741,7 @@ type
 
   // OLE drag'n drop support
   TFormatEtcArray = array of TFormatEtc;
-  TFormatArray = array of Word;
+  TFormatArray = array of TClipboardFormat;
 
   // IDataObject.SetData support
   TInternalStgMedium = packed record
@@ -1346,10 +1376,13 @@ type
     function AllowFocus(ColumnIndex: TColumnIndex): Boolean;
     procedure Assign(Source: TPersistent); override;
     {$IF LCL_FullVersion >= 1080000}
-    procedure AutoAdjustLayout(const AXProportion, AYProportion: Double);
+    procedure AutoAdjustLayout(const AXProportion, AYProportion: Double); virtual;
     {$IFEND}
     procedure AutoFitColumns(Animated: Boolean = True; SmartAutoFitType: TSmartAutoFitType = smaUseColumnOption;
       RangeStartCol: Integer = NoColumn; RangeEndCol: Integer = NoColumn); virtual;
+    {$IF LCL_FullVersion >= 2010000}
+    procedure FixDesignFontsPPI(const ADesignTimePPI: Integer); virtual;
+    {$IFEND}
     function InHeader(const P: TPoint): Boolean; virtual;
     function InHeaderSplitterArea(P: TPoint): Boolean; virtual;
     procedure Invalidate(Column: TVirtualTreeColumn; ExpandToBorder: Boolean = False);
@@ -3098,6 +3131,9 @@ type
     procedure EnsureNodeSelected(); virtual;
     function ExecuteAction(Action: TBasicAction): Boolean; override;
     procedure FinishCutOrCopy;
+    {$IF LCL_FullVersion >= 2010000}
+    procedure FixDesignFontsPPI(const ADesignTimePPI: Integer); override;
+    {$IFEND}
     procedure FlushClipboard;
     procedure FullCollapse(Node: PVirtualNode = nil);  virtual;
     procedure FullExpand(Node: PVirtualNode = nil); virtual;
@@ -3546,7 +3582,7 @@ type
     destructor Destroy(); override;
     function AddChild(Parent: PVirtualNode; UserData: Pointer = nil): PVirtualNode; override;
     function ComputeNodeHeight(Canvas: TCanvas; Node: PVirtualNode; Column: TColumnIndex; S: String = ''): Integer; virtual;
-    function ContentToClipboard(Format: Word; Source: TVSTTextSourceType): HGLOBAL;
+    function ContentToClipboard(Format: TClipboardFormat; Source: TVSTTextSourceType): HGLOBAL;
     procedure ContentToCustom(Source: TVSTTextSourceType);
     function ContentToHTML(Source: TVSTTextSourceType; const Caption: String = ''): String;
     function ContentToRTF(Source: TVSTTextSourceType): AnsiString;
@@ -4087,8 +4123,8 @@ type
 // OLE Clipboard and drag'n drop helper
 procedure EnumerateVTClipboardFormats(TreeClass: TVirtualTreeClass; const List: TStrings); overload;
 procedure EnumerateVTClipboardFormats(TreeClass: TVirtualTreeClass; var Formats: TFormatEtcArray); overload;
-function GetVTClipboardFormatDescription(AFormat: Word): string;
-procedure RegisterVTClipboardFormat(AFormat: Word; TreeClass: TVirtualTreeClass; Priority: Cardinal); overload;
+function GetVTClipboardFormatDescription(AFormat: TClipboardFormat): string;
+procedure RegisterVTClipboardFormat(AFormat: TClipboardFormat; TreeClass: TVirtualTreeClass; Priority: Cardinal); overload;
 function RegisterVTClipboardFormat(Description: string; TreeClass: TVirtualTreeClass; Priority: Cardinal;
   tymed: Integer = TYMED_HGLOBAL; ptd: PDVTargetDevice = nil; dwAspect: Integer = DVASPECT_CONTENT;
   lindex: Integer = -1): Word; overload;
@@ -4395,8 +4431,8 @@ type
       const AllowedFormats: TClipboardFormats = nil); overload;
     procedure EnumerateFormats(TreeClass: TVirtualTreeClass; const Formats: TStrings); overload;
     function FindFormat(FormatString: string): PClipboardFormatListEntry; overload;
-    function FindFormat(FormatString: string; var Fmt: Word): TVirtualTreeClass; overload;
-    function FindFormat(Fmt: Word; out Description: string): TVirtualTreeClass; overload;
+    function FindFormat(FormatString: string; var Fmt: TClipboardFormat): TVirtualTreeClass; overload;
+    function FindFormat(Fmt: TClipboardFormat; out Description: string): TVirtualTreeClass; overload;
   end;
 
 var
@@ -4577,7 +4613,7 @@ end;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function TClipboardFormatList.FindFormat(FormatString: string; var Fmt: Word): TVirtualTreeClass;
+function TClipboardFormatList.FindFormat(FormatString: string; var Fmt: TClipboardFormat): TVirtualTreeClass;
 
 var
   I: Integer;
@@ -4599,7 +4635,7 @@ end;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function TClipboardFormatList.FindFormat(Fmt: Word; out Description: string): TVirtualTreeClass;
+function TClipboardFormatList.FindFormat(Fmt: TClipboardFormat; out Description: string): TVirtualTreeClass;
 
 var
   I: Integer;
@@ -4672,7 +4708,7 @@ end;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-function GetVTClipboardFormatDescription(AFormat: Word): string;
+function GetVTClipboardFormatDescription(AFormat: TClipboardFormat): string;
 
 begin
   if InternalClipboardFormats = nil then
@@ -4683,7 +4719,7 @@ end;
 
 //----------------------------------------------------------------------------------------------------------------------
 
-procedure RegisterVTClipboardFormat(AFormat: Word; TreeClass: TVirtualTreeClass; Priority: Cardinal);
+procedure RegisterVTClipboardFormat(AFormat: TClipboardFormat; TreeClass: TVirtualTreeClass; Priority: Cardinal);
 
 // Registers the given clipboard format for the given TreeClass.
 
@@ -7424,8 +7460,9 @@ var
   TextSpacing: Integer;
   UseText: Boolean;
   R: TRect;
-  //todo
-  //Theme: HTHEME;
+  {$ifdef Windows}
+  Theme: HTHEME;
+  {$endif}
 
 begin
   UseText := Length(FText) > 0;
@@ -7462,9 +7499,12 @@ begin
       if tsUseExplorerTheme in FHeader.Treeview.FStates then
       begin
         R := Rect(0, 0, 100, 100);
-        //Theme := OpenThemeData(FHeader.Treeview.Handle, 'HEADER');
-        //GetThemePartSize(Theme, DC, HP_HEADERSORTARROW, HSAS_SORTEDUP, @R, TS_TRUE, SortGlyphSize);
-        //CloseThemeData(Theme);
+		
+	{$ifdef Windows}
+        Theme := OpenThemeData(FHeader.Treeview.Handle, 'HEADER');
+        GetThemePartSize(Theme, DC, HP_HEADERSORTARROW, HSAS_SORTEDUP, @R, TS_TRUE, SortGlyphSize);
+        CloseThemeData(Theme);
+	{$endif}
       end
       else
       begin
@@ -9194,6 +9234,9 @@ procedure TVirtualTreeColumns.PaintHeader(DC: HDC; const R: TRect; HOffset: Inte
 var
   VisibleFixedWidth: Integer;
   RTLOffset: Integer;
+  {$ifdef LCLCocoa}
+  sc : Double;
+  {$endif}
 
   procedure PaintFixedArea;
   
@@ -9210,6 +9253,15 @@ begin
   begin
     FHeaderBitmap.Width := Max(Right, R.Right - R.Left);
     FHeaderBitmap.Height := Bottom;
+    {$ifdef LCLCocoa}
+    if Assigned(Header) and Assigned(Header.TreeView) then
+      sc := Header.Treeview.GetCanvasScaleFactor
+    else
+      sc := 1.0;
+    FHeaderBitmap.Width := Round(FHeaderBitmap.Width * sc);
+    FHeaderBitmap.Height := Round(FHeaderBitmap.Height * sc);
+    CGContextScaleCTM(TCocoaBitmapContext(FHeaderBitmap.Canvas.Handle).CGContext, sc, sc);
+    {$endif}
   end;
 
   VisibleFixedWidth := GetVisibleFixedWidth;
@@ -9231,10 +9283,18 @@ begin
   // In case of right-to-left directionality we paint the fixed part last.
   if RTLOffset <> 0 then
     PaintFixedArea;
-  
+
   // Blit the result to target.
   with TWithSafeRect(R) do
+    {$ifdef LCLCocoa}
+    StretchBlt(DC, Left, Top, Right - Left, Bottom - Top,
+      FHeaderBitmap.Canvas.Handle,
+      Left, Top,
+      FHeaderBitmap.Width, FHeaderBitmap.Height,
+      SRCCOPY);
+    {$else}
     BitBlt(DC, Left, Top, Right - Left, Bottom - Top, FHeaderBitmap.Canvas.Handle, Left, Top, SRCCOPY);
+    {$endif}
 end;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -11536,6 +11596,15 @@ end;
 
 //----------------------------------------------------------------------------------------------------------------------
 
+{$IF LCL_FullVersion >= 2010000}
+procedure TVTHeader.FixDesignFontsPPI(const ADesignTimePPI: Integer);
+begin
+  TreeView.DoFixDesignFontPPI(Font, ADesignTimePPI);
+end;
+{$IFEND}
+
+//----------------------------------------------------------------------------------------------------------------------
+
 function TVTHeader.InHeader(const P: TPoint): Boolean;
 
 // Determines whether the given point (client coordinates!) is within the header rectangle (non-client coordinates).
@@ -12247,7 +12316,7 @@ function TClipboardFormats.Add(const S: string): Integer;
 // ancestors.
 
 var
-  Format: Word;
+  Format: TClipboardFormat;
   RegisteredClass: TVirtualTreeClass;
 
 begin
@@ -12266,7 +12335,7 @@ procedure TClipboardFormats.Insert(Index: Integer; const S: string);
 // ancestors.
 
 var
-  Format: Word;
+  Format: TClipboardFormat;
   RegisteredClass: TVirtualTreeClass;
 
 begin
@@ -14267,8 +14336,11 @@ var
   Bits: Pointer;
   Size: TSize;
   {$ifdef ThemeSupport}
-    //Theme: HTHEME;
+  {$ifdef Windows}
+  Theme: HTHEME;
+  {$endif}
   {$EndIf ThemeSupport}
+    R: TRect;
  
   //--------------- local function --------------------------------------------
 
@@ -14320,8 +14392,7 @@ begin
   Size.cy := Size.cx;
 
   {$ifdef ThemeSupport}
-  //todo
-  {
+  {$ifdef Windows}
     if tsUseThemes in FStates then
     begin
       Theme := OpenThemeData(Handle, 'TREEVIEW');
@@ -14333,7 +14404,7 @@ begin
     end
     else
       Theme := 0;
-   }
+  {$endif}
   {$endif ThemeSupport}
 
   if NeedButtons then
@@ -14431,9 +14502,8 @@ begin
     end;
 
     {$ifdef ThemeSupport}
-    //todo
+    {$ifdef Windows}
       // Overwrite glyph images if theme is active.
-      {
       if (tsUseThemes in FStates) and (Theme <> 0) then
       begin
         R := Rect(0, 0, Size.cx, Size.cy);
@@ -14450,7 +14520,7 @@ begin
           FHotMinusBM.Canvas.Draw(0, 0, FMinusBM);
         end;
       end;
-      }
+    {$endif}
     {$endif ThemeSupport}
   end;
 
@@ -14474,9 +14544,11 @@ begin
   end;
 
   {$ifdef ThemeSupport}
-  //  if Theme <> 0 then
-  //    CloseThemeData(Theme);
+  {$ifdef Windows}
+    if tsUseThemes in FStates then
+      CloseThemeData(Theme);
   {$endif}
+  {$endif ThemeSupport}
 end;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -15637,8 +15709,10 @@ procedure TBaseVirtualTree.SetWindowTheme(const Theme: String);
 
 begin
   FChangingTheme := True;
-  //lcl: todo
-  //UxTheme.SetWindowTheme(Handle, PAnsiChar(Theme), nil);
+  
+  {$ifdef Windows}
+  UxTheme.SetWindowTheme(Handle, PWideChar(Theme), nil);
+  {$endif}
 end;
 
 
@@ -21785,6 +21859,16 @@ end;
 
 //----------------------------------------------------------------------------------------------------------------------
 
+{$IF LCL_FullVersion >= 2010000}
+procedure TBaseVirtualTree.FixDesignFontsPPI(const ADesignTimePPI: Integer);
+begin
+  inherited;
+  FHeader.FixDesignFontsPPI(ADesignTimePPI);
+end;
+{$IFEND}
+
+//----------------------------------------------------------------------------------------------------------------------
+
 procedure TBaseVirtualTree.FontChanged(AFont: TObject);
 
 // Little helper function for font changes (as they are not tracked in TBitmap/TCanvas.OnChange).
@@ -24438,10 +24522,12 @@ var
   Bitmap: TBitmap;
   XPos: Integer;
   IsHot: Boolean;
-  //Theme: HTHEME;
-  //Glyph: Integer;
-  //State: Integer;
-  //Pos: TRect;
+  {$ifdef Windows}
+  Theme: HTHEME;
+  Glyph: Integer;
+  State: Integer;
+  Pos: TRect;
+  {$endif}
 
 begin
   IsHot := (toHotTrack in FOptions.FPaintOptions) and (FCurrentHotNode = Node) and FHotNodeButtonHit;
@@ -24454,13 +24540,15 @@ begin
 
   if tsUseExplorerTheme in FStates then
   begin
-    {Glyph := IfThen(IsHot, TVP_HOTGLYPH, TVP_GLYPH);
+    {$ifdef Windows}
+    Glyph := IfThen(IsHot, TVP_HOTGLYPH, TVP_GLYPH);
     State := IfThen(vsExpanded in Node.States, GLPS_OPENED, GLPS_CLOSED);
     Pos := Rect(XPos, R.Top + ButtonY, XPos + FPlusBM.Width, R.Top + ButtonY + FPlusBM.Height);
+    
     Theme := OpenThemeData(Handle, 'TREEVIEW');
     DrawThemeBackground(Theme, Canvas.Handle, Glyph, State, Pos, nil);
     CloseThemeData(Theme);
-    }
+    {$endif}
   end
   else
   begin
@@ -24626,8 +24714,10 @@ var
   FocusRect,
   InnerRect: TRect;
   {$ifdef ThemeSupport}
-    //RowRect: TRect;
-    //Theme: HTHEME;
+  {$ifdef Windows}
+  Theme: HTHEME;
+  RowRect: TRect;
+  {$endif}
   {$endif ThemeSupport}
 
   //--------------- local functions -------------------------------------------
@@ -24653,8 +24743,7 @@ var
   end;
 
   //---------------------------------------------------------------------------
-  //lcl: todo
-  {
+  {$ifdef Windows}
   procedure DrawBackground(State: Integer);
   begin
     // if the full row selection is disabled or toGridExtensions is in the MiscOptions, draw the selection
@@ -24676,24 +24765,23 @@ var
       DrawThemeBackground(Theme, PaintInfo.Canvas.Handle, LVP_LISTDETAIL, State, RowRect, nil);
     CloseThemeData(Theme);
   end;
-  }
+  {$endif}
 
   //--------------- end local functions ---------------------------------------
 
 begin
   {$ifdef ThemeSupport}
-    //todo
-    {
+  {$ifdef Windows}
   if tsUseExplorerTheme in FStates then
   begin
     Theme := OpenThemeData(Application.Handle, 'Explorer::TreeView');
     RowRect := Rect(0, PaintInfo.CellRect.Top, FRangeX, PaintInfo.CellRect.Bottom);
     if (Header.Columns.Count = 0) and (toFullRowSelect in TreeOptions.SelectionOptions) then
       RowRect.Right := Max(ClientWidth, RowRect.Right);
-     if toShowVertGridLines in FOptions.PaintOptions then
-       Dec(RowRect.Right);
+    if toShowVertGridLines in FOptions.PaintOptions then
+      Dec(RowRect.Right);
    end;
-    }
+  {$endif}
   {$endif ThemeSupport}
 
   with PaintInfo, Canvas do
@@ -24752,12 +24840,11 @@ begin
               (toFullRowSelect in FOptions.FSelectionOptions) then
               InnerRect := CellRect;
             if not IsRectEmpty(InnerRect) then
-              //todo
-              {
+              {$ifdef Windows}
               if tsUseExplorerTheme in FStates then
                 DrawBackground(TREIS_SELECTED)
               else
-              }
+              {$endif}
               if MMXAvailable and (toUseBlendedSelection in FOptions.PaintOptions) then
                 AlphaBlendSelection(Brush.Color)
               else
@@ -24788,9 +24875,8 @@ begin
               InnerRect := CellRect;
             if not IsRectEmpty(InnerRect) then
               {$ifdef ThemeSupport}
-                //todo
-                {
-                if Theme <> 0 then
+              {$ifdef Windows}
+                if tsUseExplorerTheme in FStates then
                 begin
                   // If the node is also hot, its background will be drawn later.
                   if not (toHotTrack in FOptions.FPaintOptions) or (Node <> FCurrentHotNode) or
@@ -24798,7 +24884,7 @@ begin
                     DrawBackground(IfThen(Self.Focused, TREIS_SELECTED, TREIS_SELECTEDNOTFOCUS));
                 end
                 else
-                }
+              {$endif}
               {$endif ThemeSupport}
               if MMXAvailable and (toUseBlendedSelection in FOptions.PaintOptions) then
                 AlphaBlendSelection(Brush.Color)
@@ -24810,13 +24896,12 @@ begin
     end;
 
     {$ifdef ThemeSupport}
-    //todo
-    {
-      if (Theme <> 0) and (toHotTrack in FOptions.FPaintOptions) and (Node = FCurrentHotNode) and
+    {$ifdef Windows}
+      if (tsUseExplorerTheme in FStates) and (toHotTrack in FOptions.FPaintOptions) and (Node = FCurrentHotNode) and
          ((Column = FCurrentHotColumn) or (toFullRowSelect in FOptions.FSelectionOptions)) then
         DrawBackground(IfThen((vsSelected in Node.States) and not (toAlwaysHideSelection in FOptions.FPaintOptions),
                               TREIS_HOTSELECTED, TREIS_HOT));
-    }
+    {$endif}
     {$endif ThemeSupport}
 
     if (Column = FFocusedColumn) or (toFullRowSelect in FOptions.FSelectionOptions) then
@@ -24835,13 +24920,12 @@ begin
         SetBkColor(Handle, 0);
 
         {$ifdef ThemeSupport}
-        //todo
-        {
+        {$ifdef Windows}
           if not (toExtendedFocus in FOptions.FSelectionOptions) and (toFullRowSelect in FOptions.FSelectionOptions) and
-            (Theme <> 0) then
+            (tsUseExplorerTheme in FStates) then
             FocusRect := RowRect
           else
-        }
+        {$endif}
         {$endif ThemeSupport}
         if toGridExtensions in FOptions.FMiscOptions then
           FocusRect := CellRect
@@ -24849,23 +24933,21 @@ begin
           FocusRect := InnerRect;
 
         {$ifdef ThemeSupport}
-        //todo
-        {
+        {$ifdef Windows}
         if tsUseExplorerTheme in FStates then
           InflateRect(FocusRect, -1, -1);
-         }
+        {$endif}
         {$endif ThemeSupport}
 
         if (tsUseExplorerTheme in FStates) and IsWinVistaOrAbove then
         begin
           //Draw focused unselected style like Windows 7 Explorer
-          //lcl: todo
-          {
+          {$ifdef Windows}
           if not (vsSelected in Node.States) then
             DrawThemedFocusRect(LIS_NORMAL)
           else
             DrawBackground(TREIS_HOTSELECTED);
-          }
+          {$endif}
         end
         else
           LCLIntf.DrawFocusRect(Handle, FocusRect);
@@ -24875,11 +24957,10 @@ begin
     end;
   end;
   {$ifdef ThemeSupport}
-  //todo
-  {
-  if Theme <> 0 then
+  {$ifdef Windows}
+  if tsUseExplorerTheme in FStates then
     CloseThemeData(Theme);
-  }
+  {$endif}
   {$endif ThemeSupport}
 end;
 
@@ -30582,7 +30663,17 @@ var
   CellIsInLastColumn: Boolean;
   ColumnIsFixed: Boolean;
 
+  {$ifdef LCLCocoa}
+  sc: Double; // the retina scale. 1.0 for no-retina
+  cg: CGContextRef; // tracking the Context of Bitmap
+  cglast: CGContextRef; // the last Context of Bitmap.
+                        // The scale is applied only when the context changes
+  {$endif}
 begin
+  {$ifdef LCLCocoa}
+  cglast := nil;
+  sc := GetCanvasScaleFactor;
+  {$endif}
   {$ifdef DEBUG_VTV}Logger.EnterMethod([lcPaint],'PaintTree');{$endif}
   {$ifdef DEBUG_VTV}Logger.Send([lcPaint, lcHeaderOffset],'Window',Window);{$endif}
   {$ifdef DEBUG_VTV}Logger.Send([lcPaint, lcHeaderOffset],'Target',Target);{$endif}
@@ -30625,7 +30716,12 @@ begin
         else
           NodeBitmap.PixelFormat := PixelFormat;
 
+        {$ifdef LCLCocoa}
+        NodeBitmap.Width := Round(PaintWidth*sc);
+        cg := TCocoaBitmapContext(NodeBitmap.Canvas.Handle).CGContext;
+        {$else}
         NodeBitmap.Width := PaintWidth;
+        {$endif}
 
         // Make sure the buffer bitmap and target bitmap use the same transformation mode.
         {$ifndef Gtk}
@@ -30743,8 +30839,18 @@ begin
                 begin
                   if Height <> PaintInfo.Node.NodeHeight then
                   begin
-                    // Avoid that the VCL copies the bitmap while changing its height.                    
+                    // Avoid that the VCL copies the bitmap while changing its height.
+                    {$ifdef LCLCocoa}
+                    Height := Round(PaintInfo.Node.NodeHeight * sc);
+                    cg := TCocoaBitmapContext(NodeBitmap.Canvas.Handle).CGContext;
+                    if cglast <> cg then
+                    begin
+                      CGContextScaleCTM(cg, sc, sc);
+                      cglast := cg;
+                    end;
+                    {$else}
                     Height := PaintInfo.Node.NodeHeight;
+                    {$endif}
                     {$ifdef UseSetCanvasOrigin}
                     SetCanvasOrigin(Canvas, Window.Left, 0);
                     {$else}
@@ -31064,9 +31170,25 @@ begin
                 // Put the constructed node image onto the target canvas.
                 if not (poUnbuffered in PaintOptions) then
                   with TWithSafeRect(TargetRect), NodeBitmap do
+                  begin
+                    {$ifdef LCLCocoa}
+                    StretchBlt(
+                      TargetCanvas.Handle,
+                      Left,
+                      Top {$ifdef ManualClipNeeded} + YCorrect{$endif},
+                      PaintWidth, PaintInfo.Node.NodeHeight,
+                      Canvas.Handle,
+                      Window.Left,
+                      {$ifdef ManualClipNeeded}YCorrect{$else}0{$endif},
+                      NodeBitmap.Width, NodeBitmap.Height,
+                      SRCCOPY
+                    );
+                    {$else}
                     BitBlt(TargetCanvas.Handle, Left,
                      Top {$ifdef ManualClipNeeded} + YCorrect{$endif}, Width, Height, Canvas.Handle, Window.Left,
                      {$ifdef ManualClipNeeded}YCorrect{$else}0{$endif}, SRCCOPY);
+                    {$endif}
+                  end;
               end;
             end;
 

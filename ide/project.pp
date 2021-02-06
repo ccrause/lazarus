@@ -52,10 +52,10 @@ uses
   LCLProc, Forms, Controls, Dialogs,
   // CodeTools
   CodeToolsConfig, ExprEval, DefineTemplates, BasicCodeTools, CodeToolsCfgScript,
-  LinkScanner, CodeToolManager, CodeCache, CodeTree, FileProcs,
+  LinkScanner, CodeToolManager, CodeCache, CodeTree, FileProcs, StdCodeTools,
   // LazUtils
   FPCAdds, LazUtilities, FileUtil, LazFileUtils, LazFileCache, LazMethodList,
-  LazLoggerBase, LazUTF8, Laz2_XMLCfg, Maps,
+  LazLoggerBase, FileReferenceList, LazUTF8, Laz2_XMLCfg, Maps,
   // IDEIntf
   PropEdits, UnitResources, EditorSyntaxHighlighterDef,
   CompOptsIntf, ProjectIntf, MacroIntf, MacroDefIntf, SrcEditorIntf,
@@ -63,7 +63,7 @@ uses
   // IDE
   CompOptsModes, ProjectResources, LazConf, ProjectIcon,
   IDECmdLine, IDEProcs, CompilerOptions, RunParamsOpts, ModeMatrixOpts,
-  TransferMacros, ProjectDefs, FileReferenceList, EditDefineTree,
+  TransferMacros, ProjectDefs, EditDefineTree,
   LazarusIDEStrConsts, InputHistory, ProjPackCommon, PackageDefs, PackageSystem;
 
 type
@@ -186,10 +186,13 @@ type
     // Todo: FCustomHighlighter is only ever set to false, and not stored in XML
     FCustomHighlighter: boolean; // do not change highlighter on file extension change
     FSyntaxHighlighter: TLazSyntaxHighlighter;
+    procedure SetCursorPos(const AValue: TPoint);
     procedure SetFoldState(AValue: String);
+    procedure SetIsLocked(const AValue: Boolean);
     procedure SetPageIndex(const AValue: Integer);
     procedure SetIsVisibleTab(const AValue: Boolean);
     procedure SetSyntaxHighlighter(AValue: TLazSyntaxHighlighter);
+    procedure SetTopLine(const AValue: Integer);
     procedure SetWindowIndex(const AValue: Integer);
   protected
     procedure Clear;
@@ -205,10 +208,10 @@ type
     property IsVisibleTab: Boolean read FIsVisibleTab write SetIsVisibleTab;
     property PageIndex: Integer read FPageIndex write SetPageIndex;
     property WindowID: Integer read FWindowID write SetWindowIndex;
-    property TopLine: Integer read FTopLine write FTopLine;
-    property CursorPos: TPoint read FCursorPos write FCursorPos;
+    property TopLine: Integer read FTopLine write SetTopLine;
+    property CursorPos: TPoint read FCursorPos write SetCursorPos;
     property FoldState: String read FFoldState write SetFoldState;
-    property IsLocked: Boolean read FIsLocked  write FIsLocked;
+    property IsLocked: Boolean read FIsLocked  write SetIsLocked;
     property CustomHighlighter: Boolean read FCustomHighlighter write FCustomHighlighter; // SetCustomHighlighter
     property SyntaxHighlighter: TLazSyntaxHighlighter read FSyntaxHighlighter write SetSyntaxHighlighter; // SetSyntaxHighlighter
   end;
@@ -263,9 +266,9 @@ type
     FResourceBaseClass: TPFComponentBaseClass;
     fComponentName: string; { classname is always T<ComponentName>
          this attribute contains the component name,
-         even if the unit is not loaded,
-         or the designer form is not created.
+         even if the unit is not loaded, or the designer form is not created.
          A component can be for example a TForm or a TDataModule }
+    fComponentLFMLoadDate: longint;  // Load time of associated LFM form file.
     fComponentResourceName: string;
     FComponentLastBinStreamSize: TStreamSeekType;
     FComponentLastLFMStreamSize: TStreamSeekType;
@@ -293,7 +296,7 @@ type
     FSessionModified: boolean;
     fSource: TCodeBuffer;
     fUsageCount: extended;
-    fUserReadOnly:  Boolean;
+    fUserReadOnly: Boolean;
     fSourceChangeStep: LongInt;
     FSourceDirectoryReferenced: boolean;
     FSourceDirNeedReference: boolean;
@@ -301,6 +304,7 @@ type
     FSetBookmarLock: Integer;
     FUnitResourceFileformat: TUnitResourcefileFormatClass;
 
+    function ComponentLFMOnDiskHasChanged: boolean;
     function GetEditorInfo(Index: Integer): TUnitEditorInfo;
     function GetHasResources: boolean;
     function GetModified: boolean;
@@ -330,6 +334,7 @@ type
     procedure SetRunFileIfActive(const AValue: boolean);
     procedure SetSessionModified(const AValue: boolean);
     procedure SetSource(ABuffer: TCodeBuffer);
+    procedure SetTimeStamps;
     procedure SetUserReadOnly(const NewValue: boolean);
   protected
     function GetFileName: string; override;
@@ -397,8 +402,7 @@ type
     function FindUsedByComponentDependency(MinTypes: TUnitCompDependencyTypes
                                      ): TUnitComponentDependency;
     function FindAncestorUnit: TUnitInfo;
-    procedure ClearUnitComponentDependencies(
-                     ClearTypes: TUnitCompDependencyTypes);
+    procedure ClearUnitComponentDependencies(ClearTypes: TUnitCompDependencyTypes);
     // Bookmarks
     function  AddBookmark(X, Y, ID: integer):integer;
     procedure DeleteBookmark(ID: integer);
@@ -512,9 +516,8 @@ type
     FBuildMode: TProjectBuildMode;
     FProject: TProject;
     FCompileReasons: TCompileReasons;
-    procedure InvalidateOptions;
-    procedure AfterWriteExec(Sender: TObject; Restore: boolean);
     procedure BeforeReadExec(Sender: TObject);
+    procedure AfterWriteExec(Sender: TObject; Restore: boolean);
   protected
     procedure SetTargetCPU(const AValue: string); override;
     procedure SetTargetOS(const AValue: string); override;
@@ -561,7 +564,7 @@ type
     procedure FixTemplateOrder;
   protected
     procedure UpdateMain; override;
-    procedure UpdateSrcDirIfDef; override;
+    function UpdateSrcDirIfDef: Boolean; override;
     procedure UpdateSourceDirectories; override;
     procedure UpdateOutputDirectory; override;
     procedure UpdateDefinesForCustomDefines; override;
@@ -569,7 +572,7 @@ type
   public
     constructor Create(AOwner: IProjPack);
     destructor Destroy; override;
-    procedure AllChanged; override;
+    procedure AllChanged(AActivating: boolean); override;
     procedure UpdateGlobalValues;
   end;
 
@@ -611,7 +614,7 @@ type
     fSavedChangeStamp: int64;
     fItems: TFPList;
     FLazProject: TProject;
-    fOnChanged: TMethodList;
+    fChangedHandlers: TMethodList;
     // Variables used by LoadFromXMLConfig and SaveToXMLConfig
     FXMLConfig: TXMLConfig;
     FGlobalMatrixOptions: TBuildMatrixOptions;
@@ -671,6 +674,8 @@ type
     property SharedMatrixOptions: TBuildMatrixOptions read FSharedMatrixOptions;
     property SessionMatrixOptions: TBuildMatrixOptions read FSessionMatrixOptions;
     property ManyBuildModes: TStringList read FManyBuildModes;
+    property ChangedHandlers: TMethodList read fChangedHandlers;
+
   end;
 
   { TProjectIDEOptions }
@@ -931,7 +936,8 @@ type
     // true if something changed
     function RemoveNonExistingFiles(RemoveFromUsesSection: boolean = true): boolean;
     function CreateProjectFile(const Filename: string): TLazProjectFile; override;
-    procedure UpdateVisibleUnit(AnEditor: TSourceEditorInterface; AWindowID: Integer);
+    function GetAndUpdateVisibleUnit(AnEditor: TSourceEditorInterface;
+                                     AWindowID: Integer): TUnitInfo;
     procedure UpdateAllVisibleUnits;
     // search
     function IndexOf(AUnitInfo: TUnitInfo): integer;
@@ -1259,6 +1265,20 @@ begin
   FUnitInfo.SessionModified := True;
 end;
 
+procedure TUnitEditorInfo.SetIsLocked(const AValue: Boolean);
+begin
+  if FIsLocked=AValue then Exit;
+  FIsLocked:=AValue;
+  FUnitInfo.SessionModified := True;
+end;
+
+procedure TUnitEditorInfo.SetCursorPos(const AValue: TPoint);
+begin
+  if ComparePoints(FCursorPos,AValue)=0 then Exit;
+  FCursorPos:=AValue;
+  FUnitInfo.SessionModified := True;
+end;
+
 procedure TUnitEditorInfo.SetIsVisibleTab(const AValue: Boolean);
 begin
   if FIsVisibleTab = AValue then exit;
@@ -1271,6 +1291,13 @@ begin
   if FSyntaxHighlighter = AValue then Exit;
   FSyntaxHighlighter := AValue;
   FCustomHighlighter := FSyntaxHighlighter <> FUnitInfo.DefaultSyntaxHighlighter;
+  FUnitInfo.SessionModified := True;
+end;
+
+procedure TUnitEditorInfo.SetTopLine(const AValue: Integer);
+begin
+  if FTopLine=AValue then Exit;
+  FTopLine:=AValue;
   FUnitInfo.SessionModified := True;
 end;
 
@@ -1312,13 +1339,13 @@ end;
 procedure TUnitEditorInfo.LoadFromXMLConfig(XMLConfig: TXMLConfig; const Path: string);
 begin
   IsVisibleTab := XMLConfig.GetValue(Path+'IsVisibleTab/Value', False);
-  PageIndex    := XMLConfig.GetValue(Path+'EditorIndex/Value',0);
+  FPageIndex    := XMLConfig.GetValue(Path+'EditorIndex/Value',0);
   WindowID  := XMLConfig.GetValue(Path+'WindowIndex/Value',0);
   // update old data
   if (FPageIndex >= 0) and (FWindowID < 0) then
     WindowID := 1;
   FTopLine  := XMLConfig.GetValue(Path+'TopLine/Value',1);
-  CursorPos := Point(XMLConfig.GetValue(Path+'CursorPos/X',1),
+  FCursorPos := Point(XMLConfig.GetValue(Path+'CursorPos/X',1),
                      XMLConfig.GetValue(Path+'CursorPos/Y',1));
   FFoldState := XMLConfig.GetValue(Path+'FoldState/Value', '');
   FIsLocked := XMLConfig.GetValue(Path+'IsLocked/Value', False);
@@ -1665,13 +1692,15 @@ end;
 
 function TUnitInfo.GetUsesUnitName: string;
 begin
-  if not FilenameIsPascalUnit(Filename) then
-    Result:=''
-  else begin
-    Result:=FUnitName;
-    if (Result='') or (CompareText(Result,ExtractFileNameOnly(Filename))<>0) then
+  if FilenameHasPascalExt(Filename) then
+  begin
+    if FUnitName<>'' then
+      Result:=FUnitName
+    else
       Result:=ExtractFileNameOnly(Filename);
-  end;
+  end
+  else
+    Result:='';
 end;
 
 function TUnitInfo.CreateUnitName: string;
@@ -1777,8 +1806,7 @@ begin
     XMLConfig.SetDeleteValue(Path+'DisableI18NForLFM/Value',FDisableI18NForLFM,false);
 
   // context data (project/session)
-  if (IsPartOfProject and SaveData)
-  or ((not IsPartOfProject) and SaveSession)
+  if (IsPartOfProject and SaveData) or ((not IsPartOfProject) and SaveSession)
   then begin
     XMLConfig.SetDeleteValue(Path+'ComponentName/Value',fComponentName,'');
     XMLConfig.SetDeleteValue(Path+'HasResources/Value',fHasResources,false);
@@ -1888,6 +1916,7 @@ begin
   c := XMLConfig.GetValue(Path+'ExtraEditorCount/Value', 0);
   for i := 1 to c do
     FEditorInfoList.NewEditorInfo.LoadFromXMLConfig(XMLConfig, Path + 'ExtraEditor'+IntToStr(i)+'/');
+  UpdatePageIndex;
 
   Loaded:=XMLConfig.GetValue(Path+'Loaded/Value',false);
   if Loaded then
@@ -2087,9 +2116,9 @@ end;
 procedure TUnitInfo.IncreaseAutoRevertLock;
 begin
   inc(fAutoRevertLockCount);
-  if (fAutoRevertLockCount=1) then begin
+  if fAutoRevertLockCount=1 then begin
     // activate lock
-    if (Source<>nil) then
+    if Source<>nil then
       Source.LockAutoDiskRevert;
     if Project<>nil then
       Project.AddToOrRemoveFromAutoRevertLockedList(Self);
@@ -2099,9 +2128,9 @@ end;
 procedure TUnitInfo.DecreaseAutoRevertLock;
 begin
   dec(fAutoRevertLockCount);
-  if (fAutoRevertLockCount=0) then begin
+  if fAutoRevertLockCount=0 then begin
     // deactivate lock
-    if (Source<>nil) then
+    if Source<>nil then
       Source.LockAutoDiskRevert;
     if Project<>nil then
       Project.AddToOrRemoveFromAutoRevertLockedList(Self);
@@ -2118,20 +2147,47 @@ begin
   Result:=FRevertLockCount>0;
 end;
 
+function TUnitInfo.ComponentLFMOnDiskHasChanged: boolean;
+// Associated LFM resource file on disk has changed since last load/save
+var
+  ResFilename: String;
+begin
+  if fComponentLFMLoadDate=0 then Exit(false);   // 0 means there is no LFM file.
+  ResFilename:=UnitResourceFileformat.GetUnitResourceFilename(Filename,true);
+  Result:=fComponentLFMLoadDate<>FileAgeCached(ResFilename);
+  if Result then
+    DebugLn(['TUnitInfo.ComponentLFMOnDiskHasChanged ', ResFilename, ' changed on disk.']);
+end;
+
+procedure TUnitInfo.SetTimeStamps;
+var
+  ResFilename: String;
+begin
+  if FSource<>nil then
+    fSourceChangeStep:=FSource.ChangeStep  // Indicates any change is source
+  else
+    fSourceChangeStep:=CTInvalidChangeStamp;
+  // Associated LFM resource file timestamp
+  //if Component=nil then exit;  <- Component is here always nil for some reason.
+  if UnitResourceFileformat=nil then exit;   // Happens with LazBuild
+  ResFilename:=UnitResourceFileformat.GetUnitResourceFilename(Filename,true);
+  if FileExistsCached(ResFilename) then
+    fComponentLFMLoadDate:=FileAgeCached(ResFilename);
+end;
+
 function TUnitInfo.ChangedOnDisk(CompareOnlyLoadSaveTime: boolean;
   IgnoreModifiedFlag: boolean): boolean;
 begin
   Result:=(Source<>nil) and Source.FileOnDiskHasChanged(IgnoreModifiedFlag);
-  //if Result then debugln(['TUnitInfo.ChangedOnDisk ',Filename,' FileAgeCached=',FileAgeCached(Source.Filename)]);
+  if not Result then
+    Result:=ComponentLFMOnDiskHasChanged;
   if Result
   and (not CompareOnlyLoadSaveTime)
   and FIgnoreFileDateOnDiskValid
   and (FIgnoreFileDateOnDisk=Source.FileDateOnDisk) then
     Result:=false;
-  if (not IsVirtual) and FileExistsCached(Filename) then
-    FileReadOnly:=not FileIsWritableCached(Filename)
-  else
-    FileReadOnly:=false;
+  FileReadOnly:=(not IsVirtual) and FileExistsCached(Filename)
+                 and not FileIsWritableCached(Filename);
 end;
 
 procedure TUnitInfo.IgnoreCurrentFileDateOnDisk;
@@ -2144,23 +2200,21 @@ end;
 
 function TUnitInfo.ShortFilename: string;
 begin
-  if Project<>nil then begin
-    Result:=Project.RemoveProjectPathFromFilename(Filename);
-  end else begin
+  if Project<>nil then
+    Result:=Project.RemoveProjectPathFromFilename(Filename)
+  else
     Result:=Filename;
-  end;
 end;
 
 function TUnitInfo.NeedsSaveToDisk: boolean;
 begin
   Result:=IsVirtual or Modified or ChangedOnDisk(true);
   //DebugLn(['TUnitInfo.NeedsSaveToDisk ',filename,' Result=',Result,' Modified=',Modified]);
-  if not Result then begin
-    if Source<>nil then
-      Result:=Source.FileOnDiskNeedsUpdate
-    else
-      Result:=not FileExistsUTF8(Filename);
-  end;
+  if Result then Exit;
+  if Source<>nil then
+    Result:=Source.FileOnDiskNeedsUpdate
+  else
+    Result:=not FileExistsUTF8(Filename);
 end;
 
 procedure TUnitInfo.UpdateUsageCount(Min, IfBelowThis, IncIfBelow: extended);
@@ -2169,8 +2223,7 @@ begin
   if fUsageCount<Min then fUsageCount:=Min;
 end;
 
-procedure TUnitInfo.UpdateUsageCount(TheUsage: TUnitUsage;
-  const Factor: TDateTime);
+procedure TUnitInfo.UpdateUsageCount(TheUsage: TUnitUsage; const Factor: TDateTime);
 begin
   case TheUsage of
   uuIsPartOfProject: UpdateUsageCount(20,200,2*Factor);
@@ -2370,7 +2423,7 @@ procedure TUnitInfo.SetSource(ABuffer: TCodeBuffer);
 begin
   if fSource=ABuffer then begin
     if fSource<>nil then
-      fSourceChangeStep:=FSource.ChangeStep;
+      SetTimeStamps;
     exit;
   end;
   if (fSource<>nil) and IsAutoRevertLocked then
@@ -2378,7 +2431,7 @@ begin
   fSource:=ABuffer;
   FIgnoreFileDateOnDiskValid:=false;
   if (fSource<>nil) then begin
-    fSourceChangeStep:=FSource.ChangeStep;
+    SetTimeStamps;
     if IsAutoRevertLocked then
       fSource.LockAutoDiskRevert;
     SetInternalFilename(fSource.FileName);
@@ -2603,7 +2656,7 @@ begin
   {$ENDIF}
   fModified:=AValue;
   if (not fModified) and Assigned(Source) then
-    fSourceChangeStep:=Source.ChangeStep;
+    SetTimeStamps;
 end;
 
 procedure TUnitInfo.SetProject(const AValue: TProject);
@@ -2621,10 +2674,14 @@ begin
   FProject:=AValue;
   if FProject<>nil then begin
     UpdatePageIndex;
-    if Component<>nil then Project.AddToList(Self,uilWithComponent);
-    if Loaded then Project.AddToList(Self,uilLoaded);
-    if IsAutoRevertLocked then Project.AddToList(Self,uilAutoRevertLocked);
-    if IsPartOfProject then Project.AddToList(Self,uilPartOfProject);
+    if Component<>nil then
+      Project.AddToList(Self,uilWithComponent);
+    if Loaded then
+      Project.AddToList(Self,uilLoaded);
+    if IsAutoRevertLocked then
+      Project.AddToList(Self,uilAutoRevertLocked);
+    if IsPartOfProject then
+      Project.AddToList(Self,uilPartOfProject);
     for i := 0 to FEditorInfoList.Count - 1 do
       FProject.EditorInfoAdd(FEditorInfoList[i]);
   end;
@@ -2957,7 +3014,7 @@ begin
   CodeToolBoss.DefineTree.ClearCache;
   // load the dependencies
   LoadPkgDependencyList(FXMLConfig,Path+'RequiredPackages/',
-                        FFirstRequiredDependency,pdlRequires,Self,true,false);
+                        FFirstRequiredDependency,pddRequires,Self,true,false);
   // load the Run and Build parameter Options
   RunParameterOptions.Clear;
   if FFileVersion<11 then
@@ -3291,7 +3348,7 @@ begin
   RunParameterOptions.Save(FXMLConfig,Path+'RunParams/',fCurStorePathDelim,rpsLPI, UseLegacyLists);
   // save dependencies
   SavePkgDependencyList(FXMLConfig,Path+'RequiredPackages/',
-    FFirstRequiredDependency,pdlRequires,fCurStorePathDelim,pfCompatibilityMode in FFlags);
+    FFirstRequiredDependency,pddRequires,fCurStorePathDelim,pfCompatibilityMode in FFlags);
   // save units
   SaveUnits(Path,FSaveSessionInLPI);
 
@@ -3622,7 +3679,7 @@ begin
   begin
     s:=AnUnit.GetUsesUnitName;
     if s<>'' then // add unit to uses section
-      CodeToolBoss.AddUnitToMainUsesSectionIfNeeded(MainUnitInfo.Source,s,'',true);
+      CodeToolBoss.AddUnitToMainUsesSectionIfNeeded(MainUnitInfo.Source,s,'',[aufLast]);
   end;
   EndUpdate;
   UnitModified(AnUnit);
@@ -3686,13 +3743,20 @@ begin
   Result:=AnUnitInfo;
 end;
 
-procedure TProject.UpdateVisibleUnit(AnEditor: TSourceEditorInterface; AWindowID: Integer);
+function TProject.GetAndUpdateVisibleUnit(AnEditor: TSourceEditorInterface;
+  AWindowID: Integer): TUnitInfo;
 var
   i: Integer;
+  AnEditorInfo: TUnitEditorInfo;
 begin
   for i := 0 to AllEditorsInfoCount - 1 do
-    if AllEditorsInfo[i].WindowID = AWindowID then
-      AllEditorsInfo[i].IsVisibleTab := AllEditorsInfo[i].EditorComponent = AnEditor;
+    with AllEditorsInfo[i] do
+      IsVisibleTab := (WindowID = AWindowID) and (EditorComponent = AnEditor);
+  AnEditorInfo := EditorInfoWithEditorComponent(AnEditor);
+  if AnEditorInfo = nil then Exit(nil);
+  Result := AnEditorInfo.UnitInfo;
+  if Assigned(Result) then
+    Result.SetLastUsedEditor(AnEditor);
 end;
 
 procedure TProject.UpdateAllVisibleUnits;
@@ -3894,7 +3958,6 @@ begin
     CTDumpStack;
   end;
   {$ENDIF}
-
   if fDestroying then exit;
   if AValue then
     IncreaseChangeStamp
@@ -4468,7 +4531,8 @@ begin
 end;
 
 function TProject.RemoveProjectPathFromFilename(const AFilename: string): string;
-var ProjectPath:string;
+var
+  ProjectPath:string;
 begin
   ProjectPath:=Directory;
   if ProjectPath='' then ProjectPath:=GetCurrentDirUTF8;
@@ -4476,8 +4540,7 @@ begin
   ForcePathDelims(Result);
   // try making filename relative to project file
   if FilenameIsAbsolute(Result)
-  and (CompareFileNames(copy(Result,1,length(ProjectPath)),ProjectPath)=0)
-  then
+  and (CompareFileNames(copy(Result,1,length(ProjectPath)),ProjectPath)=0) then
     Result:=copy(Result,length(ProjectPath)+1,
          length(Result)-length(ProjectPath));
 end;
@@ -4583,29 +4646,29 @@ end;
 
 function TProject.FindDependencyByName(const PackageName: string): TPkgDependency;
 begin
-  Result:=FindDependencyByNameInList(FFirstRequiredDependency,pdlRequires,
+  Result:=FindDependencyByNameInList(FFirstRequiredDependency,pddRequires,
                                      PackageName);
 end;
 
 function TProject.FindRemovedDependencyByName(const PkgName: string): TPkgDependency;
 begin
-  Result:=FindDependencyByNameInList(FFirstRemovedDependency,pdlRequires,PkgName);
+  Result:=FindDependencyByNameInList(FFirstRemovedDependency,pddRequires,PkgName);
 end;
 
 function TProject.RequiredDepByIndex(Index: integer): TPkgDependency;
 begin
-  Result:=GetDependencyWithIndex(FFirstRequiredDependency,pdlRequires,Index);
+  Result:=GetDependencyWithIndex(FFirstRequiredDependency,pddRequires,Index);
 end;
 
 function TProject.RemovedDepByIndex(Index: integer): TPkgDependency;
 begin
-  Result:=GetDependencyWithIndex(FFirstRemovedDependency,pdlRequires,Index);
+  Result:=GetDependencyWithIndex(FFirstRemovedDependency,pddRequires,Index);
 end;
 
 procedure TProject.AddRequiredDependency(Dependency: TPkgDependency);
 begin
   BeginUpdate(true);
-  Dependency.AddToList(FFirstRequiredDependency,pdlRequires);
+  Dependency.AddToList(FFirstRequiredDependency,pddRequires);
   Dependency.Owner:=Self;
   Dependency.HoldPackage:=true;
   FDefineTemplates.CustomDefinesChanged;
@@ -4623,9 +4686,9 @@ end;
 procedure TProject.RemoveRequiredDependency(Dependency: TPkgDependency);
 begin
   BeginUpdate(true);
-  Dependency.RemoveFromList(FFirstRequiredDependency,pdlRequires);
+  Dependency.RemoveFromList(FFirstRequiredDependency,pddRequires);
   Dependency.RequiredPackage:=nil;
-  Dependency.AddToList(FFirstRemovedDependency,pdlRequires);
+  Dependency.AddToList(FFirstRemovedDependency,pddRequires);
   Dependency.Removed:=true;
   FDefineTemplates.CustomDefinesChanged;
   IncreaseCompilerParseStamp;
@@ -4640,7 +4703,7 @@ procedure TProject.DeleteRequiredDependency(Dependency: TPkgDependency);
 begin
   BeginUpdate(true);
   Dependency.RequiredPackage:=nil;
-  Dependency.RemoveFromList(FFirstRequiredDependency,pdlRequires);
+  Dependency.RemoveFromList(FFirstRequiredDependency,pddRequires);
   Dependency.Free;
   FDefineTemplates.CustomDefinesChanged;
   IncreaseCompilerParseStamp;
@@ -4651,7 +4714,7 @@ procedure TProject.DeleteRemovedDependency(Dependency: TPkgDependency);
 begin
   BeginUpdate(true);
   Dependency.RequiredPackage:=nil;
-  Dependency.RemoveFromList(FFirstRemovedDependency,pdlRequires);
+  Dependency.RemoveFromList(FFirstRemovedDependency,pddRequires);
   Dependency.Free;
   EndUpdate;
 end;
@@ -4659,7 +4722,7 @@ end;
 procedure TProject.RemoveRemovedDependency(Dependency: TPkgDependency);
 begin
   BeginUpdate(true);
-  Dependency.RemoveFromList(FFirstRemovedDependency,pdlRequires);
+  Dependency.RemoveFromList(FFirstRemovedDependency,pddRequires);
   Dependency.Removed:=false;
   EndUpdate;
 end;
@@ -4676,7 +4739,7 @@ procedure TProject.MoveRequiredDependencyUp(Dependency: TPkgDependency);
 begin
   if Dependency.PrevRequiresDependency=nil then exit;
   BeginUpdate(true);
-  Dependency.MoveUpInList(FFirstRequiredDependency,pdlRequires);
+  Dependency.MoveUpInList(FFirstRequiredDependency,pddRequires);
   FDefineTemplates.CustomDefinesChanged;
   IncreaseCompilerParseStamp;
   EndUpdate;
@@ -4686,7 +4749,7 @@ procedure TProject.MoveRequiredDependencyDown(Dependency: TPkgDependency);
 begin
   if Dependency.NextRequiresDependency=nil then exit;
   BeginUpdate(true);
-  Dependency.MoveDownInList(FFirstRequiredDependency,pdlRequires);
+  Dependency.MoveDownInList(FFirstRequiredDependency,pddRequires);
   FDefineTemplates.CustomDefinesChanged;
   IncreaseCompilerParseStamp;
   EndUpdate;
@@ -4698,7 +4761,7 @@ begin
     Result:=PackageGraph.FindDependencyRecursively(FFirstRequiredDependency,
                                                    APackage)<>nil
   else
-    Result:=FindCompatibleDependencyInList(FFirstRequiredDependency,pdlRequires,
+    Result:=FindCompatibleDependencyInList(FFirstRequiredDependency,pddRequires,
                                            APackage)<>nil;
 end;
 
@@ -4717,7 +4780,7 @@ procedure TProject.AddPackageDependency(const PackageName: string);
 var
   PkgDependency: TPkgDependency;
 begin
-  if FindDependencyByNameInList(FirstRequiredDependency,pdlRequires,PackageName)
+  if FindDependencyByNameInList(FirstRequiredDependency,pddRequires,PackageName)
   <>nil then exit;
   PkgDependency:=TPkgDependency.Create;
   PkgDependency.DependencyType:=pdtLazarus;
@@ -4729,7 +4792,7 @@ function TProject.RemovePackageDependency(const PackageName: string): boolean;
 var
   PkgDependency: TPkgDependency;
 begin
-  PkgDependency:=FindDependencyByNameInList(FirstRequiredDependency,pdlRequires,PackageName);
+  PkgDependency:=FindDependencyByNameInList(FirstRequiredDependency,pddRequires,PackageName);
   Result := Assigned(PkgDependency);
   if Result then
     RemoveRequiredDependency(PkgDependency);
@@ -5483,8 +5546,7 @@ begin
     Result:=Result.fNext[uilWithComponent];
 end;
 
-function TProject.UnitWithComponentClassName(const AClassName: string
-  ): TUnitInfo;
+function TProject.UnitWithComponentClassName(const AClassName: string): TUnitInfo;
 begin
   Result := fFirst[uilWithComponent];
   while (Result<>nil)
@@ -5986,8 +6048,8 @@ begin
     while AnUnitInfo<>nil do begin
       if FileExistsCached(AnUnitInfo.Filename) then begin
         if (BestUnitInfo=nil)
-        or (FilenameIsPascalUnit(AnUnitInfo.Filename)
-             and (not FilenameIsPascalUnit(BestUnitInfo.Filename)))
+        or (FilenameHasPascalExt(AnUnitInfo.Filename)
+             and (not FilenameHasPascalExt(BestUnitInfo.Filename)))
         then begin
           BestUnitInfo:=AnUnitInfo;
         end;
@@ -6177,7 +6239,6 @@ end;
 procedure TProjectCompilerOptions.SetCustomOptions(const AValue: string);
 begin
   if CustomOptions=AValue then exit;
-  InvalidateOptions;
   inherited SetCustomOptions(AValue);
   if IsActive then
     LazProject.DefineTemplates.CustomDefinesChanged;
@@ -6186,56 +6247,48 @@ end;
 procedure TProjectCompilerOptions.SetIncludePaths(const AValue: string);
 begin
   if IncludePath=AValue then exit;
-  InvalidateOptions;
   inherited SetIncludePaths(AValue);
 end;
 
 procedure TProjectCompilerOptions.SetLibraryPaths(const AValue: string);
 begin
   if Libraries=AValue then exit;
-  InvalidateOptions;
   inherited SetLibraryPaths(AValue);
 end;
 
 procedure TProjectCompilerOptions.SetLinkerOptions(const AValue: string);
 begin
   if LinkerOptions=AValue then exit;
-  InvalidateOptions;
   inherited SetLinkerOptions(AValue);
 end;
 
 procedure TProjectCompilerOptions.SetNamespaces(const AValue: string);
 begin
   if Namespaces=AValue then exit;
-  InvalidateOptions;
   inherited SetNamespaces(AValue);
 end;
 
 procedure TProjectCompilerOptions.SetObjectPath(const AValue: string);
 begin
   if ObjectPath=AValue then exit;
-  InvalidateOptions;
   inherited SetObjectPath(AValue);
 end;
 
 procedure TProjectCompilerOptions.SetSrcPath(const AValue: string);
 begin
   if SrcPath=AValue then exit;
-  InvalidateOptions;
   inherited SetSrcPath(AValue);
 end;
 
 procedure TProjectCompilerOptions.SetUnitPaths(const AValue: string);
 begin
   if OtherUnitFiles=AValue then exit;
-  InvalidateOptions;
   inherited SetUnitPaths(AValue);
 end;
 
 procedure TProjectCompilerOptions.SetUnitOutputDir(const AValue: string);
 begin
   if UnitOutputDirectory=AValue then exit;
-  InvalidateOptions;
   inherited SetUnitOutputDir(AValue);
   if IsActive then
     LazProject.DefineTemplates.OutputDirectoryChanged;
@@ -6245,7 +6298,6 @@ procedure TProjectCompilerOptions.SetConditionals(AValue: string);
 begin
   AValue:=UTF8Trim(AValue,[]);
   if Conditionals=AValue then exit;
-  InvalidateOptions;
   inherited SetConditionals(AValue);
 end;
 
@@ -6298,21 +6350,16 @@ begin
     Result:=true;
 end;
 
-procedure TProjectCompilerOptions.InvalidateOptions;
+procedure TProjectCompilerOptions.BeforeReadExec(Sender: TObject);
 begin
-  //if (LazProject=nil) then exit;
+  if LazProject<>nil then
+    LazProject.BackupBuildModes;
 end;
 
-procedure TProjectCompilerOptions.AfterWriteExec(Sender:TObject;Restore:boolean);
+procedure TProjectCompilerOptions.AfterWriteExec(Sender: TObject; Restore: boolean);
 begin
- if Restore and (LazProject<>nil) then
-   LazProject.RestoreBuildModes;
-end;
-
-procedure TProjectCompilerOptions.BeforeReadExec(Sender:TObject);
-begin
- if LazProject<>nil then
-   LazProject.BackupBuildModes;
+  if Restore and (LazProject<>nil) then
+    LazProject.RestoreBuildModes;
 end;
 
 procedure TProjectCompilerOptions.SetAlternativeCompile(const Command: string;
@@ -6429,9 +6476,9 @@ begin
   // ClearCache is here unnessary, because it is only a block
 end;
 
-procedure TProjectDefineTemplates.UpdateSrcDirIfDef;
+function TProjectDefineTemplates.UpdateSrcDirIfDef: Boolean;
+// Returns the changed state
 var
-  Changed: Boolean;
   NamespacesDefTempl: TDefineTemplate;
   UnitPathDefTempl: TDefineTemplate;
   IncPathDefTempl: TDefineTemplate;
@@ -6450,7 +6497,7 @@ begin
     FMain.AddChild(FSrcDirectories);
   end;
 
-  Changed:=false;
+  Result:=false;
   IfValue:='defined(#ProjectSrcMark'+Owner.IDAsWord+')';
   if (Owner as TProject) = Project1 then
     IfValue:=IfValue+' or defined('+UseDefaultsFlagName+')';
@@ -6485,15 +6532,13 @@ begin
       da_Define);
     FSrcDirIf.AddChild(SrcPathDefTempl);
 
-    Changed:=true;
+    Result:=true;
   end else begin
     if FSrcDirIf.Value<>IfValue then begin
       FSrcDirIf.Value:=IfValue;
-      Changed:=true;
+      Result:=true;
     end;
   end;
-  if Changed then
-    CodeToolBoss.DefineTree.ClearCache;
 end;
 
 procedure TProjectDefineTemplates.UpdateOutputDirectory;
@@ -6528,8 +6573,7 @@ begin
       da_Define);
     FOutputSrcPath.SetDefineOwner(Proj,false);
     FOutputSrcPath.SetFlags([dtfAutoGenerated],[],false);
-    CodeToolBoss.DefineTree.ReplaceChild(FOutputDir,FOutputSrcPath,
-      FOutputSrcPath.Name);
+    CodeToolBoss.DefineTree.ReplaceChild(FOutputDir,FOutputSrcPath,FOutputSrcPath.Name);
   end;
 end;
 
@@ -6610,7 +6654,6 @@ begin
       FSrcDirectories.AddChild(SrcDirDefTempl);
     end;
     CodeToolBoss.DefineTree.ClearCache;
-
   finally
     NewSourceDirs.Free;
   end;
@@ -6620,31 +6663,25 @@ procedure TProjectDefineTemplates.UpdateDefinesForCustomDefines;
 var
   OptionsDefTempl: TDefineTemplate;
   NewCustomOptions: String;
-  Changed: Boolean;
 begin
   if (not Owner.NeedsDefineTemplates) or (not Active) then exit;
 
   // check if something has changed
   NewCustomOptions:=Owner.BaseCompilerOptions.GetOptionsForCTDefines;
   if (FLastCustomOptions=NewCustomOptions) then exit;
-  Changed:=false;
 
   FLastCustomOptions:=NewCustomOptions;
   OptionsDefTempl:=CodeToolBoss.DefinePool.CreateFPCCommandLineDefines(
                  'Custom Options', FLastCustomOptions, false, Owner as TProject);
   if OptionsDefTempl=nil then begin
     // no custom options -> delete old template
-    if FSrcDirIf<>nil then begin
-      if FSrcDirIf.DeleteChild('Custom Options') then
-        Changed:=true;
-    end;
+    if (FSrcDirIf<>nil) and FSrcDirIf.DeleteChild('Custom Options') then
+      CodeToolBoss.DefineTree.ClearCache;
   end else begin
     UpdateSrcDirIfDef;
     FSrcDirIf.ReplaceChild(OptionsDefTempl);
-    Changed:=true;
-  end;
-  if Changed then
     CodeToolBoss.DefineTree.ClearCache;
+  end;
 end;
 
 procedure TProjectDefineTemplates.FixTemplateOrder;
@@ -6655,16 +6692,15 @@ end;
 
 procedure TProjectDefineTemplates.ClearFlags;
 begin
-  FFlags:=FFlags+[ptfFlagsChanged];
+  FFlags:=FFlags+[ptfCustomDefinesChanged];
 end;
 
-procedure TProjectDefineTemplates.AllChanged;
+procedure TProjectDefineTemplates.AllChanged(AActivating: boolean);
 begin
+  UpdateSrcDirIfDef;
   SourceDirectoriesChanged;
   CustomDefinesChanged;
   UpdateGlobalValues;
-  UpdateSrcDirIfDef;
-  CodeToolBoss.DefineTree.ClearCache;
 end;
 
 procedure TProjectDefineTemplates.UpdateGlobalValues;
@@ -7000,7 +7036,7 @@ end;
 constructor TProjectBuildModes.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
-  fOnChanged:=TMethodList.Create;
+  fChangedHandlers:=TMethodList.Create;
   fItems:=TFPList.Create;
   FChangeStamp:=CTInvalidChangeStamp;
   fSavedChangeStamp:=FChangeStamp;
@@ -7013,7 +7049,7 @@ end;
 
 destructor TProjectBuildModes.Destroy;
 begin
-  FreeAndNil(fOnChanged);
+  FreeAndNil(fChangedHandlers);
   Clear;
   FreeAndNil(FManyBuildModes);
   FreeAndNil(FSharedMatrixOptions);
@@ -7024,9 +7060,11 @@ end;
 
 procedure TProjectBuildModes.Clear;
 begin
-  while Count>0 do Delete(Count-1);
+  while Count>0 do
+    Delete(Count-1);
   SharedMatrixOptions.Clear;
   SessionMatrixOptions.Clear;
+  //fChangedHandlers.Clear;
 end;
 
 function TProjectBuildModes.IsEqual(OtherModes: TProjectBuildModes): boolean;
@@ -7062,6 +7100,7 @@ begin
     SharedMatrixOptions.Assign(OtherModes.SharedMatrixOptions);
     SessionMatrixOptions.Assign(OtherModes.SessionMatrixOptions);
     ManyBuildModes.Assign(OtherModes.ManyBuildModes);
+    ChangedHandlers.Assign(OtherModes.ChangedHandlers);
     if WithModified then
       Modified:=OtherModes.Modified;
     FAssigning:=False;
@@ -7129,17 +7168,17 @@ end;
 procedure TProjectBuildModes.IncreaseChangeStamp;
 begin
   CTIncreaseChangeStamp(FChangeStamp);
-  if fOnChanged<>nil then fOnChanged.CallNotifyEvents(Self);
+  if fChangedHandlers<>nil then fChangedHandlers.CallNotifyEvents(Self);
 end;
 
 procedure TProjectBuildModes.AddOnChangedHandler(const Handler: TNotifyEvent);
 begin
-  fOnChanged.Add(TMethod(Handler));
+  fChangedHandlers.Add(TMethod(Handler));
 end;
 
 procedure TProjectBuildModes.RemoveOnChangedHandler(const Handler: TNotifyEvent);
 begin
-  fOnChanged.Remove(TMethod(Handler));
+  fChangedHandlers.Remove(TMethod(Handler));
 end;
 
 function TProjectBuildModes.IsModified(InSession: boolean): boolean;

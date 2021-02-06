@@ -124,14 +124,16 @@ begin
 
     P.Directory:=ADirectory;
 
+    P.Dependencies.Add('fcl');
+    P.Dependencies.Add('lazutils');
+    P.Dependencies.Add('buildintf');
     P.Dependencies.Add('lcl');
-    P.Dependencies.Add('synedit');
     P.Dependencies.Add('codetools');
     P.Dependencies.Add('lazcontrols');
     P.Dependencies.Add('ideintf');
+    P.Dependencies.Add('synedit');
     P.Dependencies.Add('debuggerintf');
     P.Dependencies.Add('lazdebuggergdbmi');
-    P.Dependencies.Add('fcl');
 
     P.Options.Add('-MObjFPC');
     P.Options.Add('-Scghi');
@@ -360,7 +362,6 @@ begin
     P.Sources.AddSrc('projectinspector.pas');
     P.Sources.AddSrc('projectresources.pas');
     P.Sources.AddSrc('projectwizarddlg.pas');
-    P.Sources.AddSrc('publishmodule.pas');
     P.Sources.AddSrc('publishmoduledlg.pas');
     P.Sources.AddSrc('restrictionbrowser.pas');
     P.Sources.AddSrc('runparamsopts.pas');
@@ -437,8 +438,6 @@ begin
     T:=P.Targets.AddUnit('environmentopts.pp');
     T:=P.Targets.AddUnit('compileroptions.pp');
     T:=P.Targets.AddUnit('../packager/projpackcommon.pas');
-    T.Dependencies.AddUnit('filereferencelist');
-    T:=P.Targets.AddUnit('filereferencelist.pas');
 
     // copy the compiled file, so the IDE knows how the package was compiled
     P.InstallFiles.Add('ide.compiled',AllOSes,'$(unitinstalldir)');

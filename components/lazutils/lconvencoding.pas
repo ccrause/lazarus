@@ -18,17 +18,16 @@ unit LConvEncoding;
 interface
 
 { $Define DisableAsianCodePages}
-//{$if FPC_FULLVERSION >= 30000}
-  {$IFDEF UTF8_RTL}
-    // Windows provides conversion functions.
-    // Unix: unit cwstring provides conversion functions which are used by default UTF-8 encoding system.
-    {$Define UseSystemCPConv} // use system conversions
-  {$ENDIF}
-//{$IFEND}
+{$IFDEF UTF8_RTL}
+  // Windows provides conversion functions.
+  // Unix: unit cwstring provides conversion functions which are used by default UTF-8 encoding system.
+  {$Define UseSystemCPConv} // use system conversions
+{$ENDIF}
 {$ifdef UseLCPConv}{$undef UseSystemCPConv}{$endif}
 
 uses
-  SysUtils, Classes, dos, LazUTF8
+  SysUtils, Classes, dos, LazUTF8, CodepagesCommon
+  {$IFnDEF DisableAsianCodePages},CodepagesAsian{$ENDIF}
   {$IFDEF EnableIconvEnc},iconvenc{$ENDIF};
 
 type
@@ -74,7 +73,9 @@ const
   EncodingCP950 = 'cp950';
 
   EncodingCPMac = 'macintosh';
-  EncodingCPKOI8 = 'koi8';
+  EncodingCPKOI8R = 'koi8r';
+  EncodingCPKOI8U = 'koi8u';
+  EncodingCPKOI8RU = 'koi8ru';
 
   EncodingCPIso1 = 'iso88591';
   EncodingCPIso2 = 'iso88592';
@@ -112,7 +113,7 @@ type
   {$else}
   TConvertUTF8ToEncodingFunc = function(const s: string): string;
   {$endif}
-  TCharToUTF8Table = array[char] of PChar;
+  TCharToUTF8Table = CodepagesCommon.TCharToUTF8Table;
   TUnicodeToCharID = function(Unicode: cardinal): integer;
 var
   ConvertAnsiToUTF8: TConvertEncodingFunction = nil;
@@ -136,7 +137,7 @@ function CP850ToUTF8(const s: string): string;  // DOS western europe
 function CP852ToUTF8(const s: string): string;  // DOS central europe
 function CP866ToUTF8(const s: string): string;  // DOS and Windows console's cyrillic
 function CP874ToUTF8(const s: string): string;  // thai
-function KOI8ToUTF8(const s: string): string;  // russian cyrillic
+function KOI8RToUTF8(const s: string): string;  // russian cyrillic
 function MacintoshToUTF8(const s: string): string;  // Macintosh, alias Mac OS Roman
 function SingleByteToUTF8(const s: string; const Table: TCharToUTF8Table): string;
 function UCS2LEToUTF8(const s: string): string; // UCS2-LE 2byte little endian
@@ -161,7 +162,7 @@ function UTF8ToCP850(const s: string; SetTargetCodePage: boolean = false): RawBy
 function UTF8ToCP852(const s: string; SetTargetCodePage: boolean = false): RawByteString;  // DOS central europe
 function UTF8ToCP866(const s: string; SetTargetCodePage: boolean = false): RawByteString;  // DOS and Windows console's cyrillic
 function UTF8ToCP874(const s: string; SetTargetCodePage: boolean = false): RawByteString;  // thai
-function UTF8ToKOI8(const s: string; SetTargetCodePage: boolean = false): RawByteString;  // russian cyrillic
+function UTF8ToKOI8R(const s: string; SetTargetCodePage: boolean = false): RawByteString;  // russian cyrillic
 function UTF8ToKOI8U(const s: string; SetTargetCodePage: boolean = false): RawByteString;  // ukrainian cyrillic
 function UTF8ToKOI8RU(const s: string; SetTargetCodePage: boolean = false): RawByteString;  // belarussian cyrillic
 function UTF8ToMacintosh(const s: string; SetTargetCodePage: boolean = false): RawByteString;  // Macintosh, alias Mac OS Roman
@@ -183,7 +184,7 @@ function UTF8ToCP850(const s: string): string;  // DOS western europe
 function UTF8ToCP852(const s: string): string;  // DOS central europe
 function UTF8ToCP866(const s: string): string;  // DOS and Windows console's cyrillic
 function UTF8ToCP874(const s: string): string;  // thai
-function UTF8ToKOI8(const s: string): string;  // russian cyrillic
+function UTF8ToKOI8R(const s: string): string;  // russian cyrillic
 function UTF8ToKOI8U(const s: string): string;  // ukrainian cyrillic
 function UTF8ToKOI8RU(const s: string): string;  // belarussian cyrillic
 function UTF8ToMacintosh(const s: string): string;  // Macintosh, alias Mac OS Roman
@@ -228,12 +229,44 @@ var
   EncodingValid: boolean = false;
   DefaultTextEncoding: string = EncodingAnsi;
 
+function SearchTable(CodePageArr: array of word; id: cardinal): word;
+var
+  idMid: integer;
+  idLow, idHigh: integer;
+begin
+  idLow  := 0;
+  idHigh := High(CodePageArr);
+  while (idLow <= idHigh) do
+  begin
+    if idLow = idHigh then
+    begin
+      if CodePageArr[idLow] = id then
+      begin
+        Result := idLow;
+      end
+      else
+      begin
+        Result := 0;
+      end;
+      Exit;
+    end;
+    idMid := (idLow + idHigh) div 2;
+    if CodePageArr[idMid] = id then
+    begin
+      Result := idMid;
+      Exit;
+    end;
+    if CodePageArr[idMid] > id then
+      idHigh := idMid - 1;
+    if CodePageArr[idMid] < id then
+      idLow := idMid + 1;
+  end;
+  Result := 0;
+end;
+
 {$IFnDEF DisableAsianCodePages}
-{$include asiancodepages.inc}
 {$include asiancodepagefunctions.inc}
 {$ENDIF}
-
-{$include commoncodepages.inc}
 
 {$IFDEF Windows}
 // AConsole - If false, it is the general system encoding,
@@ -413,9 +446,19 @@ begin
   Result:=SingleByteToUTF8(s,ArrayCP874ToUTF8);
 end;
 
-function KOI8ToUTF8(const s: string): string;
+function KOI8RToUTF8(const s: string): string;
 begin
-  Result:=SingleByteToUTF8(s,ArrayKOI8ToUTF8);
+  Result:=SingleByteToUTF8(s,ArrayKOI8RToUTF8);
+end;
+
+function KOI8UToUTF8(const s: string): string;
+begin
+  Result:=SingleByteToUTF8(s,ArrayKOI8UToUTF8);
+end;
+
+function KOI8RUToUTF8(const s: string): string;
+begin
+  Result:=SingleByteToUTF8(s,ArrayKOI8RUToUTF8);
 end;
 
 function MacintoshToUTF8(const s: string): string;
@@ -1042,79 +1085,6 @@ begin
   end;
 end;
 
-function UnicodeToKOI8(Unicode: cardinal): integer;
-begin
-  case Unicode of
-  0..127: Result:=Unicode;
-  1040..1041: Result:=Unicode-815;
-  1042: Result:=247;
-  1043: Result:=231;
-  1044..1045: Result:=Unicode-816;
-  1046: Result:=246;
-  1047: Result:=250;
-  1048..1055: Result:=Unicode-815;
-  1056..1059: Result:=Unicode-814;
-  1060: Result:=230;
-  1061: Result:=232;
-  1062: Result:=227;
-  1063: Result:=254;
-  1064: Result:=251;
-  1065: Result:=253;
-  1067: Result:=249;
-  1068: Result:=248;
-  1069: Result:=252;
-  1070: Result:=224;
-  1071: Result:=241;
-  1072..1073: Result:=Unicode-879;
-  1074: Result:=215;
-  1075: Result:=199;
-  1076..1077: Result:=Unicode-880;
-  1078: Result:=214;
-  1079: Result:=218;
-  1080..1087: Result:=Unicode-879;
-  1088..1091: Result:=Unicode-878;
-  1092: Result:=198;
-  1093: Result:=200;
-  1094: Result:=195;
-  1095: Result:=222;
-  1096: Result:=219;
-  1097: Result:=221;
-  1098: Result:=223;
-  1099: Result:=217;
-  1100: Result:=216;
-  1101: Result:=220;
-  1102: Result:=192;
-  1103: Result:=209;
-  else Result:=-1;
-  end;
-end;
-
-function UnicodeToKOI8U(Unicode: cardinal): integer;
-begin
-  case Unicode of
-  1025: Result:=179;
-  1028: Result:=180;
-  1030..1031: Result:=Unicode-848;
-  1105: Result:=163;
-  1108: Result:=164;
-  1110..1111: Result:=Unicode-944;
-  1168: Result:=189;
-  1169: Result:=173;
-  else
-    Result:=UnicodeToKOI8(Unicode);
-  end;
-end;
-
-function UnicodeToKOI8RU(Unicode: cardinal): integer;
-begin
-  case Unicode of
-  1038: Result:=190;
-  1118: Result:=174;
-  else
-    Result:=UnicodeToKOI8U(Unicode);
-  end;
-end;
-
 function UnicodeToISO_8859_1(Unicode: cardinal): integer;
 begin
   case Unicode of
@@ -1350,6 +1320,122 @@ begin
   end;
 end;
 {$endif}
+
+function UnicodeToKOI8R(Unicode: cardinal): integer;
+begin
+  case Unicode of
+  0..127: Result:=Unicode;
+  160: Result:=154;
+  169: Result:=191;
+  176: Result:=156;
+  178: Result:=157;
+  183: Result:=158;
+  247: Result:=159;
+  1025: Result:=179;
+  1040..1041: Result:=Unicode-815;
+  1042: Result:=247;
+  1043: Result:=231;
+  1044..1045: Result:=Unicode-816;
+  1046: Result:=246;
+  1047: Result:=250;
+  1048..1055: Result:=Unicode-815;
+  1056..1059: Result:=Unicode-814;
+  1060: Result:=230;
+  1061: Result:=232;
+  1062: Result:=227;
+  1063: Result:=254;
+  1064: Result:=251;
+  1065: Result:=253;
+  1066: Result:=255;
+  1067: Result:=249;
+  1068: Result:=248;
+  1069: Result:=252;
+  1070: Result:=224;
+  1071: Result:=241;
+  1072..1073: Result:=Unicode-879;
+  1074: Result:=215;
+  1075: Result:=199;
+  1076..1077: Result:=Unicode-880;
+  1078: Result:=214;
+  1079: Result:=218;
+  1080..1087: Result:=Unicode-879;
+  1088..1091: Result:=Unicode-878;
+  1092: Result:=198;
+  1093: Result:=200;
+  1094: Result:=195;
+  1095: Result:=222;
+  1096: Result:=219;
+  1097: Result:=221;
+  1098: Result:=223;
+  1099: Result:=217;
+  1100: Result:=216;
+  1101: Result:=220;
+  1102: Result:=192;
+  1103: Result:=209;
+  1105: Result:=163;
+  8729: Result:=149;
+  8730: Result:=150;
+  8776: Result:=151;
+  8804: Result:=152;
+  8805: Result:=153;
+  8992: Result:=147;
+  8993: Result:=155;
+  9472: Result:=128;
+  9474: Result:=129;
+  9484: Result:=130;
+  9488: Result:=131;
+  9492: Result:=132;
+  9496: Result:=133;
+  9500: Result:=134;
+  9508: Result:=135;
+  9516: Result:=136;
+  9524: Result:=137;
+  9532: Result:=138;
+  9552..9554: Result:=Unicode-9392;
+  9555..9569: Result:=Unicode-9391;
+  9570..9580: Result:=Unicode-9390;
+  9600: Result:=139;
+  9604: Result:=140;
+  9608: Result:=141;
+  9612: Result:=142;
+  9616..9619: Result:=Unicode-9473;
+  9632: Result:=148;
+  else Result:=-1;
+  end;
+end;
+
+function UnicodeToKOI8U(Unicode: cardinal): integer;
+begin
+  case Unicode of
+  1028: Result:=180;
+  1030..1031: Result:=Unicode-848;
+  1108: Result:=164;
+  1110..1111: Result:=Unicode-944;
+  1168: Result:=189;
+  1169: Result:=173;
+  else
+    Result:=UnicodeToKOI8R(Unicode);
+  end;
+end;
+
+function UnicodeToKOI8RU(Unicode: cardinal): integer;
+begin
+  case Unicode of
+  164 : Result:=159;
+  171 : Result:=157;
+  174 : Result:=156;
+  187 : Result:=155;
+  1038: Result:=190;
+  1118: Result:=174;
+  8212: Result:=151;
+  8220: Result:=147;
+  8221: Result:=150;
+  8470: Result:=152;
+  8482: Result:=153;
+  else
+    Result:=UnicodeToKOI8U(Unicode);
+  end;
+end;
 
 function UnicodeToCP1250(Unicode: cardinal): integer;
 begin
@@ -1959,9 +2045,9 @@ begin
   InternalUTF8ToCP(s,874,SetTargetCodePage,@UnicodeToCP874,Result);
 end;
 
-function UTF8ToKOI8(const s: string; SetTargetCodePage: boolean): RawByteString;
+function UTF8ToKOI8R(const s: string; SetTargetCodePage: boolean): RawByteString;
 begin
-  InternalUTF8ToCP(s,20866,SetTargetCodePage,{$IfDef UseSystemCPConv}nil{$else}@UnicodeToKOI8{$endif},Result);
+  InternalUTF8ToCP(s,20866,SetTargetCodePage,{$IfDef UseSystemCPConv}nil{$else}@UnicodeToKOI8R{$endif},Result);
 end;
 
 function UTF8ToKOI8U(const s: string; SetTargetCodePage: boolean): RawByteString;
@@ -1971,7 +2057,8 @@ end;
 
 function UTF8ToKOI8RU(const s: string; SetTargetCodePage: boolean): RawByteString;
 begin
-  InternalUTF8ToCP(s,21866,SetTargetCodePage,{$IfDef UseSystemCPConv}nil{$else}@UnicodeToKOI8RU{$endif},Result);
+  // KOI8-RU dont have code page
+  InternalUTF8ToCP(s,0,SetTargetCodePage,@UnicodeToKOI8RU,Result);
 end;
 
 function UTF8ToMacintosh(const s: string; SetTargetCodePage: boolean): RawByteString;
@@ -2064,9 +2151,9 @@ begin
   Result:=UTF8ToSingleByte(s,@UnicodeToCP874);
 end;
 
-function UTF8ToKOI8(const s: string): string;
+function UTF8ToKOI8R(const s: string): string;
 begin
-  Result:=UTF8ToSingleByte(s,@UnicodeToKOI8);
+  Result:=UTF8ToSingleByte(s,@UnicodeToKOI8R);
 end;
 
 function UTF8ToKOI8U(const s: string): string;
@@ -2239,7 +2326,9 @@ begin
   List.Add('ISO-8859-2');
   List.Add('ISO-8859-15');
 
-  List.Add('KOI-8');
+  List.Add('KOI8-R');
+  List.Add('KOI8-U');
+  List.Add('KOI8-RU');
   List.Add('Macintosh');
 
   // UCS2 are less common, list them last
@@ -2412,7 +2501,9 @@ begin
   if ATo=EncodingCP949 then begin Result:=UTF8ToCP949(s{$ifdef FPC_HAS_CPSTRING},SetTargetCodePage{$endif}); exit; end;
   if ATo=EncodingCP932 then begin Result:=UTF8ToCP932(s{$ifdef FPC_HAS_CPSTRING},SetTargetCodePage{$endif}); exit; end;
   {$ENDIF}
-  if ATo=EncodingCPKOI8 then begin Result:=UTF8ToKOI8(s{$ifdef FPC_HAS_CPSTRING},SetTargetCodePage{$endif}); exit; end;
+  if ATo=EncodingCPKOI8R then begin Result:=UTF8ToKOI8R(s{$ifdef FPC_HAS_CPSTRING},SetTargetCodePage{$endif}); exit; end;
+  if ATo=EncodingCPKOI8U then begin Result:=UTF8ToKOI8U(s{$ifdef FPC_HAS_CPSTRING},SetTargetCodePage{$endif}); exit; end;
+  if ATo=EncodingCPKOI8RU then begin Result:=UTF8ToKOI8RU(s{$ifdef FPC_HAS_CPSTRING},SetTargetCodePage{$endif}); exit; end;
   if ATo=EncodingCPMac then begin Result:=UTF8ToMacintosh(s{$ifdef FPC_HAS_CPSTRING},SetTargetCodePage{$endif}); exit; end;
   if ATo=EncodingUCS2LE then begin {$ifdef FPC_HAS_CPSTRING}CheckKeepCP;{$endif} Result:=UTF8ToUCS2LE(s); exit; end;
   if ATo=EncodingUCS2BE then begin {$ifdef FPC_HAS_CPSTRING}CheckKeepCP;{$endif} Result:=UTF8ToUCS2BE(s); exit; end;
@@ -2457,7 +2548,9 @@ begin
   if AFrom=EncodingCP949 then begin Result:=CP949ToUTF8(s); exit; end;
   if AFrom=EncodingCP932 then begin Result:=CP932ToUTF8(s); exit; end;
   {$ENDIF}
-  if AFrom=EncodingCPKOI8 then begin Result:=KOI8ToUTF8(s); exit; end;
+  if AFrom=EncodingCPKOI8R then begin Result:=KOI8RToUTF8(s); exit; end;
+  if AFrom=EncodingCPKOI8U then begin Result:=KOI8UToUTF8(s); exit; end;
+  if AFrom=EncodingCPKOI8RU then begin Result:=KOI8RUToUTF8(s); exit; end;
   if AFrom=EncodingCPMac then begin Result:=MacintoshToUTF8(s); exit; end;
   if AFrom=EncodingUCS2LE then begin Result:=UCS2LEToUTF8(s); exit; end;
   if AFrom=EncodingUCS2BE then begin Result:=UCS2BEToUTF8(s); exit; end;

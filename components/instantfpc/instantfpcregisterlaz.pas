@@ -33,14 +33,13 @@ type
 
 resourcestring
   rsInstantFPCPr = 'InstantFPC program';
-  rsSingleFileFr = '%s%sSingle file Free Pascal program executed by InstantFPC';
+  rsSingleFileFr = 'Single file Free Pascal program executed by InstantFPC.';
   rsInstantFPCSc = 'InstantFPC script';
-  rsSingleFilePr = '%s%sSingle file program using InstantFPC to compile and '
-    +'execute';
+  rsSingleFilePr = 'Single file program using InstantFPC to compile and execute.';
 
 const
-  FileDescNameInstantFPC : string = rsInstantFPCPr;
-  ProjDescNameInstantFPCProject : string = 'InstantFPC project';
+  FileDescNameInstantFPC : string = 'InstantFPC program'; // do not localize
+  ProjDescNameInstantFPCProject : string = 'InstantFPC project'; // do not localize
 
 procedure Register;
 
@@ -69,11 +68,10 @@ end;
 
 function TProjectInstantFPCDescriptor.GetLocalizedDescription: string;
 begin
-  Result:=Format(rsSingleFileFr, [GetLocalizedName, #13]);
+  Result:=rsSingleFileFr;
 end;
 
-function TProjectInstantFPCDescriptor.InitProject(AProject: TLazProject
-  ): TModalResult;
+function TProjectInstantFPCDescriptor.InitProject(AProject: TLazProject): TModalResult;
 var
   MainFile: TLazProjectFile;
   NewSource: TStringList;
@@ -138,7 +136,7 @@ end;
 
 function TFileDescInstantFPCScript.GetLocalizedDescription: string;
 begin
-  Result:=Format(rsSingleFilePr, [GetLocalizedName, #13]);
+  Result:=rsSingleFilePr;
 end;
 
 function TFileDescInstantFPCScript.CreateSource(const Filename, SourceName,

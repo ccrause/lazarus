@@ -13,8 +13,11 @@ unit ButtonPanel;
 interface
 
 uses
-  Math, Types, SysUtils, Classes, LCLProc,Controls, ExtCtrls, StdCtrls, Buttons,
-  Forms, GraphType, Graphics, LMessages, Themes, LCLType;
+  Math, Types, SysUtils, Classes,
+  // LCL
+  LCLType, LMessages, Controls, ExtCtrls, StdCtrls, Buttons, Forms, Graphics, Themes,
+  // LazUtils
+  GraphType;
 
 type
   TButtonOrder  = (boDefault, boCloseCancelOK, boCloseOKCancel);
@@ -88,6 +91,7 @@ type
       AlignInfo: TAlignInfo); override;
     procedure CalculatePreferredSize(var PreferredWidth,
       PreferredHeight: integer; WithThemeSpace: Boolean); override;
+    procedure Loaded; override;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
     procedure SetAlign(Value: TAlign); override;
     procedure CMAppShowBtnGlyphChanged(var Message: TLMessage); message CM_APPSHOWBTNGLYPHCHANGED;
@@ -236,7 +240,6 @@ begin
       FButtons[btn].Glyph.Assign(FGlyphs[btn]);
     end
     else begin
-      FGlyphs[btn].Assign(FButtons[btn].Glyph);
       FButtons[btn].Glyph.Assign(nil);
     end;
   end;
@@ -482,13 +485,19 @@ begin
   end;
 end;
 
+procedure TCustomButtonPanel.Loaded;
+begin
+  inherited;
+  DoShowGlyphs;
+end;
+
 procedure TCustomButtonPanel.Notification(AComponent: TComponent;
   Operation: TOperation);
 var
   btn: TPanelButton;
 begin
-  if Operation=opRemove
-  then begin
+  if Operation=opRemove then
+  begin
     for btn := Low(btn) to High(btn) do
     begin
       if FButtons[btn] <> AComponent then Continue;
@@ -497,7 +506,8 @@ begin
     end;
   end;
   inherited Notification(AComponent, Operation);
-  UpdateSizes;
+  if AComponent is TPanelBitBtn then
+    UpdateSizes;
 end;
 
 constructor TCustomButtonPanel.Create(AOwner: TComponent);

@@ -19,7 +19,11 @@ unit UnitResources;
 interface
 
 uses
-  Classes, SysUtils, LCLMemManager, Forms, LResources;
+  Classes, SysUtils,
+  // LCL
+  LCLMemManager, Forms, LResources,
+  // LazUtils
+  UITypes;
 
 type
 

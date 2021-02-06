@@ -95,11 +95,13 @@ begin
   g_type_init;
   gtk_init(@argc, @argv);
   AGtkThread := g_thread_self();
+  if not IsLibrary then
+  begin
   AId := 'org.lcl.thread_' + dbgHex(PtrUInt(AGtkThread));
   FGtk3Application := TGtkApplication.new(PgChar(AId), G_APPLICATION_NON_UNIQUE);
   // FGtk3Application^.set_application_id(PgChar(AId));
   FGtk3Application^.register(nil, nil);
-
+  end;
   GTK3WidgetSet := Self;
 end;
 
@@ -615,10 +617,7 @@ begin
   // inherited DCSetAntialiasing(CanvasHandle, AEnabled);
   if IsValidDC(CanvasHandle) then
   begin
-    if AEnabled then
-      cairo_set_antialias(TGtk3DeviceContext(CanvasHandle).Widget, CAIRO_ANTIALIAS_DEFAULT)
-    else
-      cairo_set_antialias(TGtk3DeviceContext(CanvasHandle).Widget, CAIRO_ANTIALIAS_NONE);
+    TGtk3DeviceContext(CanvasHandle).set_antialiasing(AEnabled);
   end;
 end;
 
@@ -727,7 +726,7 @@ end;
 
 function TGtk3WidgetSet.IsValidGDIObject(const AGdiObject: HGDIOBJ): Boolean;
 begin
-  Result := AGdiObject <> 0;
+  Result := (AGdiObject <> 0) and (TObject(AGdiObject) is TGtk3ContextObject);
 end;
 
 function TGtk3WidgetSet.IsValidHandle(const AHandle: HWND): Boolean;

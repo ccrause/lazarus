@@ -372,6 +372,23 @@ var
       ADeclaration := Format('record%s%s%send', [LineEnding, s, GetIndent]);
   end;
 
+  function GetObjectType(out ADeclaration: String): Boolean;
+  var
+    s: String;
+  begin
+    if tdfSkipRecordBody in AFlags then begin
+      Result := True;
+      if GetTypeName(s, ADbgSymbol) then
+        ADeclaration := s + ' {=object}'
+      else
+        ADeclaration := Format('object {...};%s%send', [LineEnding, GetIndent]);
+      exit;
+    end;
+    Result := MembersAsGdbText(s, False);
+    if Result then
+      ADeclaration := Format('object%s%s%send', [LineEnding, s, GetIndent]);
+  end;
+
   function GetEnumType(out ADeclaration: String): Boolean;
   var
     i, j, val: Integer;
@@ -498,9 +515,13 @@ begin
     skProcedure, skProcedureRef: Result := GetProcedureType(ATypeDeclaration);
     skClass:     Result := GetClassType(ATypeDeclaration);
     skRecord:    Result := GetRecordType(ATypeDeclaration);
+    skObject:    Result := GetObjectType(ATypeDeclaration);
+    //skInterface: Result := GetInterfaceType(ATypeDeclaration);
     skEnum:      Result := GetEnumType(ATypeDeclaration);
     skset:       Result := GetSetType(ATypeDeclaration);
     skArray:     Result := GetArrayType(ATypeDeclaration);
+    skNone:      ATypeDeclaration := '<unknown>';
+    else         Result := GetBaseType(ATypeDeclaration);
   end;
 
   if VarName <> '' then
@@ -628,7 +649,7 @@ begin
           RPos^ := c; inc(RPos);
           RPos^ := SPos[1]; inc(RPos);
           RPos^ := SPos[2]; inc(RPos);
-          inc(SPos, 2);
+          inc(SPos, 3);
         end;
         #240..#247: begin
           if ((Byte(SPos[1]) and $C0) <> $80) or ((Byte(SPos[2]) and $C0) <> $80) or
@@ -639,7 +660,7 @@ begin
           RPos^ := SPos[1]; inc(RPos);
           RPos^ := SPos[2]; inc(RPos);
           RPos^ := SPos[3]; inc(RPos);
-          inc(SPos, 3);
+          inc(SPos, 4);
         end;
         #0: begin
           if (SPos < SEnd) then
@@ -656,7 +677,7 @@ begin
       end;
 
       c := SPos^;
-    until False;;
+    until False;
 
     if RPos = QPos then
       dec(RPos)
@@ -739,15 +760,28 @@ function TFpPascalPrettyPrinter.InternalPrintValue(out APrintedValue: String;
         end;
     end;
 
-    if s <> '' then
-      APrintedValue := s + '(' + APrintedValue + ')';
 
-    if ADisplayFormat = wdfPointer then exit; // no data
-    if svfString in AValue.FieldFlags then
-      APrintedValue := APrintedValue + ' ' + QuoteText(AValue.AsString)
+    if ADisplayFormat = wdfPointer then begin
+      if s <> '' then
+        APrintedValue := s + '(' + APrintedValue + ')';
+      exit; // no data
+    end;
+
+    (* In Dwarf 2 Strings are Pchar => do not add the typename.
+       TODO: In Dwarf 3 this should be true pchar, maybe add typename?
+    *)
+    if svfString in AValue.FieldFlags then begin
+      if v <> 0 then
+        APrintedValue := APrintedValue + '^: ' + QuoteText(AValue.AsString);
+    end
     else
-    if svfWideString in AValue.FieldFlags then
-      APrintedValue := APrintedValue + ' ' + QuoteWideText(AValue.AsWideString);
+    if svfWideString in AValue.FieldFlags then begin
+      if v <> 0 then
+        APrintedValue := APrintedValue + '^: ' + QuoteWideText(AValue.AsWideString)
+    end
+    else
+    if s <> '' then
+      APrintedValue := s + '(' + APrintedValue + ')'; // no typeinfo for strings/pchar
 
     Result := True;
   end;
@@ -765,6 +799,7 @@ function TFpPascalPrettyPrinter.InternalPrintValue(out APrintedValue: String;
 
   procedure DoType;
   begin
+    // maybe include tdfIncludeVarName for structure members "TFooClass.SomeField"
     if GetTypeAsDeclaration(APrintedValue, AValue.DbgSymbol) then
       APrintedValue := 'type ' + APrintedValue
     else
@@ -1034,6 +1069,12 @@ function TFpPascalPrettyPrinter.InternalPrintValue(out APrintedValue: String;
       exit;
     end;
 
+    if not MemManager.CheckDataSize(SizeToFullBytes(AValue.DataSize)) then begin
+      APrintedValue := ErrorHandler.ErrorAsString(MemManager.LastError);
+      Result := True;
+      exit;
+    end;
+
     if (MemManager <> nil) and (MemManager.CacheManager <> nil) then
       Cache := MemManager.CacheManager.AddCache(AValue.DataAddress.Address, SizeToFullBytes(AValue.DataSize))
     else
@@ -1050,7 +1091,7 @@ function TFpPascalPrettyPrinter.InternalPrintValue(out APrintedValue: String;
         end;
       end;
 
-      if (ADisplayFormat = wdfPointer) or (ppoStackParam in AOptions) then begin
+      if ((ADisplayFormat = wdfPointer) or (ppoStackParam in AOptions)) and (AValue.Kind in [skClass, skInterface]) then begin
         if not (ppvCreateDbgType in AFlags) then
           s := ResTypeName;
         APrintedValue := '$'+IntToHex(AValue.AsCardinal, AnAddressSize*2);
@@ -1100,7 +1141,10 @@ function TFpPascalPrettyPrinter.InternalPrintValue(out APrintedValue: String;
         InternalPrintValue(MbVal, MemberValue, AnAddressSize, fl, ANestLevel+1, AnIndent, ADisplayFormat, -1, nil, AOptions+[ppoStackParam]);
         if MemberValue.DbgSymbol <> nil then begin
           MbName := MemberValue.DbgSymbol.Name;
-          s := MbName + ' = ' + MbVal;
+          if (ppoStackParam in AOptions) then
+            s := MbVal
+          else
+            s := MbName + ' = ' + MbVal;
         end
         else begin
           MbName := '';
@@ -1149,6 +1193,9 @@ function TFpPascalPrettyPrinter.InternalPrintValue(out APrintedValue: String;
     end;
 
     Cnt := AValue.MemberCount;
+    if (FMemManager.MemLimits.MaxArrayLen > 0) and (Cnt > FMemManager.MemLimits.MaxArrayLen) then
+      Cnt := FMemManager.MemLimits.MaxArrayLen;
+
     FullCnt := Cnt;
     if (Cnt = 0) and (svfOrdinal in AValue.FieldFlags) then begin  // dyn array
       APrintedValue := 'nil';
@@ -1214,7 +1261,10 @@ begin
       if MemSize <= 0 then MemSize := 256;
 
       if IsTargetAddr(MemAddr) then begin
-        SetLength(MemDest, MemSize);
+        if not MemManager.SetLength(MemDest, MemSize) then begin
+          APrintedValue := ErrorHandler.ErrorAsString(MemManager.LastError);
+        end
+        else
         if FMemManager.ReadMemory(MemAddr, SizeVal(MemSize), @MemDest[0]) then begin
           APrintedValue := IntToHex(MemAddr.Address, AnAddressSize*2)+ ':' + LineEnding;
           for i := 0 to high(MemDest) do begin

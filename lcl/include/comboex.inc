@@ -275,7 +275,6 @@ begin
   FAutoCompleteOptions:=cDefAutoCompOpts;
   FItemsEx:=TComboExItems.Create(self, TComboExItem);
   FNeedMeasure:=True;
-  ReadOnly:=True;
   inherited Style:=csOwnerDrawFixed;
   FStyle:=cDefStyle;
   FStyleEx:=[];
@@ -422,7 +421,7 @@ begin  { do not call inherited ! }
     end;
   anyRect.Top:=(ARect.Top+ARect.Bottom-FTextHeight) div 2;
   anyRect.Bottom:=anyRect.Top+FTextHeight;
-  ThemeServices.DrawText(Canvas, aDetail, ItemsEx[Index].Caption, anyRect, aFlags, 0);
+  DrawText(Canvas.Handle, PChar(ItemsEx[Index].Caption), Length(ItemsEx[Index].Caption), anyRect, aFlags);
 end;
 
 procedure TCustomComboBoxEx.FontChanged(Sender: TObject);
@@ -492,7 +491,6 @@ constructor TCustomCheckCombo.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   TStringList(Items).Duplicates:=dupIgnore;
-  ReadOnly:=True;
   Style:=csOwnerDrawFixed;
   FNeedMeasure:=True;
   FRejectToggleOnSelect:=True;
@@ -684,7 +682,7 @@ begin  { do not call inherited ! }
     end;
   anyRect.Top:=(ARect.Top+ARect.Bottom-FTextHeight) div 2;
   anyRect.Bottom:=anyRect.Top+FTextHeight;
-  ThemeServices.DrawText(Canvas, aDetail, Items[Index], anyRect, aFlags, 0);
+  DrawText(Canvas.Handle, PChar(Items[Index]), Length(Items[Index]), anyRect, aFlags);
 end;
 
 procedure TCustomCheckCombo.DropDown;
@@ -807,7 +805,7 @@ begin
   {$ENDIF}
   if not FRejectToggleOnSelect then
     begin
-      if ItemEnabled[ItemIndex] then Toggle(ItemIndex);
+      if (ItemIndex >= 0) and ItemEnabled[ItemIndex] then Toggle(ItemIndex);
       FRejectToggleOnSelect:=True;
     end;
   FDropped:=False;

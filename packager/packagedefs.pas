@@ -40,20 +40,21 @@ uses
   // FCL
   Classes, SysUtils, contnrs, typinfo, Laz_AVL_Tree,
   // LCL
-  LCLType, LResources, Graphics, Controls, Forms, Dialogs,
+  Forms, ImgList,
   // Codetools
-  FileProcs, LazConfigStorage, BasicCodeTools, DefineTemplates, CodeToolManager,
+  LazConfigStorage, DefineTemplates, CodeToolManager,
   CodeCache, CodeToolsCfgScript, CodeToolsStructs,
   // LazUtils
-  FileUtil, LazFileUtils, LazFileCache, LazUTF8, LazTracer, LazUtilities,
-  Laz2_XMLCfg, AvgLvlTree,
+  FileUtil, LazFileUtils, LazUtilities, LazFileCache, LazUTF8, FileReferenceList,
+  LazTracer, LazLoggerBase, UITypes, Laz2_XMLCfg, AvgLvlTree,
+  // BuildIntf
+  MacroIntf, MacroDefIntf, IDEOptionsIntf, PublishModuleIntf,
+  PackageDependencyIntf, PackageIntf, FppkgIntf,
   // IDEIntf
-  PropEdits, LazIDEIntf, MacroIntf, MacroDefIntf, IDEOptionsIntf, IDEOptEditorIntf,
-  PackageDependencyIntf, PackageIntf, IDEDialogs, ComponentReg, IDEImagesIntf,
+  LazIDEIntf, IDEOptEditorIntf, IDEDialogs, ComponentReg, IDEImagesIntf,
   // IDE
   EditDefineTree, CompilerOptions, CompOptsModes, IDEOptionDefs, ProjPackCommon,
-  LazarusIDEStrConsts, IDEProcs, TransferMacros, FileReferenceList,
-  PublishModule, ImgList, FppkgHelper, FppkgIntf;
+  LazarusIDEStrConsts, IDEProcs, TransferMacros, FppkgHelper;
 
 type
   TLazPackage = class;
@@ -228,30 +229,16 @@ type
     );
   TPkgMarkerFlags = set of TPkgMarkerFlag;
   
-  TPkgDependencyList = (
-    pdlRequires,
-    pdlUsedBy
+  TPkgDependencyDirection = (
+    pddRequires,
+    pddUsedBy
     );
-
-  TPkgDependencyType = (
-    pdtLazarus,
-    pdtFPMake
-    );
-
-const
-  PkgDependencyTypeNames: array[TPkgDependencyType] of string = (
-    'Lazarus',
-    'FPMake'
-    );
-
-type
 
   { TPkgDependency }
 
   TPkgDependency = class(TPkgDependencyID)
   private
     FDefaultFilename: string;
-    FDependencyType: TPkgDependencyType;
     FHoldPackage: boolean;
     FMarkerFlags: TPKgMarkerFlags;
     FOwner: TObject;
@@ -262,7 +249,7 @@ type
   protected
     procedure SetPackageName(const AValue: string); override;
   public
-    NextDependency, PrevDependency: array[TPkgDependencyList] of TPkgDependency;
+    NextDependency, PrevDependency: array[TPkgDependencyDirection] of TPkgDependency;
     constructor Create;
     destructor Destroy; override;
     procedure Clear; override;
@@ -277,7 +264,7 @@ type
     procedure ConsistencyCheck;
     function IsCompatible(Pkg: TLazPackageID): boolean; overload;
     procedure MakeCompatible(const PkgName: string; const Version: TPkgVersion);
-    function AsString(WithOwner: boolean = false; WithDefaults: boolean = false): string;
+    function AsString(WithOwner, WithDefaults: boolean): string; overload;
     // API for iterating dependencies.
     function NextUsedByDependency: TPkgDependency; override;
     function PrevUsedByDependency: TPkgDependency; override;
@@ -290,15 +277,15 @@ type
     procedure RemoveRequiresDep(var FirstDependency: TPkgDependencyBase); override;
     // API using ListType.
     procedure AddToList(var FirstDependency: TPkgDependency;
-                        ListType: TPkgDependencyList);
+                        ListType: TPkgDependencyDirection);
     procedure AddToEndOfList(var LastDependency: TPkgDependency;
-                             ListType: TPkgDependencyList);
+                             ListType: TPkgDependencyDirection);
     procedure RemoveFromList(var FirstDependency: TPkgDependency;
-                             ListType: TPkgDependencyList);
+                             ListType: TPkgDependencyDirection);
     function MoveUpInList(var FirstDependency: TPkgDependency;
-                          ListType: TPkgDependencyList): Boolean;
+                          ListType: TPkgDependencyDirection): Boolean;
     function MoveDownInList(var FirstDependency: TPkgDependency;
-      ListType: TPkgDependencyList): Boolean;
+      ListType: TPkgDependencyDirection): Boolean;
     function MakeFilenameRelativeToOwner(const AFilename: string): string;
     function FindDefaultFilename: string;
   public
@@ -308,7 +295,6 @@ type
     property DefaultFilename: string read FDefaultFilename write FDefaultFilename;
     property PreferDefaultFilename: boolean read FPreferDefaultFilename write FPreferDefaultFilename;
     property RequiredPackage: TLazPackage read GetRequiredPackage write SetRequiredPackage;
-    property DependencyType: TPkgDependencyType read FDependencyType write FDependencyType;
   end;
   PPkgDependency = ^TPkgDependency;
 
@@ -419,7 +405,7 @@ type
   private
   protected
     procedure UpdateMain; override;
-    procedure UpdateSrcDirIfDef; override;
+    function UpdateSrcDirIfDef: Boolean; override;
     procedure UpdateSourceDirectories; override;
     procedure UpdateOutputDirectory; override;
     procedure UpdateDefinesForCustomDefines; override;
@@ -427,7 +413,7 @@ type
   public
     constructor Create(AOwner: IProjPack);
     destructor Destroy; override;
-    procedure AllChanged; override;
+    procedure AllChanged(AActivating: boolean); override;
   end;
   
 
@@ -603,6 +589,7 @@ type
     procedure SetAutoInstall(AValue: TPackageInstallType); override;
   public
     constructor Create; override;
+    constructor CreateAndClear;
     destructor Destroy; override;
     procedure AssignOptions(Source: TPersistent); override;
     // IDE options
@@ -756,7 +743,8 @@ type
     property FPDocPaths: string read FFPDocPaths write SetFPDocPaths;
     property FPDocPackageName: string read FFPDocPackageName write SetFPDocPackageName;
     property License: string read FLicense write SetLicense;
-    property LPKSource: TCodeBuffer read FLPKSource write SetLPKSource;// see Missing, can be nil when file on disk was removed or point to a different codebuffer during rename
+    // see Missing, can be nil when file on disk was removed or point to a different codebuffer during rename
+    property LPKSource: TCodeBuffer read FLPKSource write SetLPKSource;
     property LPKSourceChangeStep: integer read FLPKSourceChangeStep write FLPKSourceChangeStep;
     property Macros: TTransferMacroList read FMacros;
     property MainUnit: TPkgFile read FMainUnit;
@@ -831,31 +819,31 @@ function FileNameToPkgFileType(AFilename: string): TPkgFileType;
 
 procedure SortDependencyListAlphabetically(Dependencies: TFPList);
 procedure LoadPkgDependencyList(XMLConfig: TXMLConfig; const ThePath: string;
-  var First: TPkgDependency; ListType: TPkgDependencyList; Owner: TObject;
+  var First: TPkgDependency; ListType: TPkgDependencyDirection; Owner: TObject;
   HoldPackages, SortList: boolean);
 procedure SavePkgDependencyList(XMLConfig: TXMLConfig; const ThePath: string;
-  First: TPkgDependency; ListType: TPkgDependencyList;
+  First: TPkgDependency; ListType: TPkgDependencyDirection;
   UsePathDelim: TPathDelimSwitch;LegacyLists:Boolean);
 procedure ListPkgIDToDependencyList(ListOfTLazPackageID: TObjectList;
-  var First: TPkgDependency; ListType: TPkgDependencyList; Owner: TObject;
+  var First: TPkgDependency; ListType: TPkgDependencyDirection; Owner: TObject;
   HoldPackages: boolean);
 procedure DeleteDependencyInList(ADependency: TPkgDependency;
-  var First: TPkgDependency; ListType: TPkgDependencyList);
+  var First: TPkgDependency; ListType: TPkgDependencyDirection);
 procedure FreeDependencyList(var First: TPkgDependency;
-  ListType: TPkgDependencyList);
+  ListType: TPkgDependencyDirection);
 function DependencyListAsString(First: TPkgDependency;
-  ListType: TPkgDependencyList): string;
+  ListType: TPkgDependencyDirection): string;
 
 function FindDependencyByNameInList(First: TPkgDependency;
-  ListType: TPkgDependencyList; const Name: string): TPkgDependency;
+  ListType: TPkgDependencyDirection; const Name: string): TPkgDependency;
 function FindCompatibleDependencyInList(First: TPkgDependency;
-  ListType: TPkgDependencyList; ComparePackage: TLazPackageID): TPkgDependency;
+  ListType: TPkgDependencyDirection; ComparePackage: TLazPackageID): TPkgDependency;
 function GetDependencyWithIndex(First: TPkgDependency;
-  ListType: TPkgDependencyList; Index: integer): TPkgDependency;
+  ListType: TPkgDependencyDirection; Index: integer): TPkgDependency;
 function IndexOfDependencyInList(First: TPkgDependency;
-  ListType: TPkgDependencyList; FindDependency: TPkgDependency): integer;
+  ListType: TPkgDependencyDirection; FindDependency: TPkgDependency): integer;
 function GetFirstDependency(ListItem: TPkgDependency;
-  ListType: TPkgDependencyList): TPkgDependency;
+  ListType: TPkgDependencyDirection): TPkgDependency;
 
 function FindLowestPkgDependencyWithName(const PkgName: string): TPkgDependency;
 function FindLowestPkgDependencyNodeWithName(const PkgName: string): TAVLTreeNode;
@@ -913,15 +901,15 @@ var
 begin
   HasName:=ExtractFileNameOnly(AFilename)<>'';
   if HasName then begin
-    if CompareFileExt(AFilename,'.lfm',true)=0 then
+    if CompareFileExt(AFilename,'lfm',true)=0 then
       exit(pftLFM)
-    else if CompareFileExt(AFilename,'.lrs',true)=0 then
+    else if CompareFileExt(AFilename,'lrs',true)=0 then
       exit(pftLRS)
-    else if CompareFileExt(AFilename,'.inc',true)=0 then
+    else if CompareFileExtQuick(AFilename,'inc')=0 then
       exit(pftInclude)
-    else if CompareFileExt(AFilename,'.xml',true)=0 then
+    else if CompareFileExtQuick(AFilename,'xml')=0 then
       exit(pftIssues)
-    else if FilenameIsPascalUnit(AFilename) then begin
+    else if FilenameHasPascalExt(AFilename) then begin
       Result:=pftUnit;
       AFilename:=CleanAndExpandFilename(AFilename);
       Code:=CodeToolBoss.LoadFile(aFilename,true,false);
@@ -940,7 +928,7 @@ begin
 end;
 
 procedure LoadPkgDependencyList(XMLConfig: TXMLConfig; const ThePath: string;
-  var First: TPkgDependency; ListType: TPkgDependencyList; Owner: TObject;
+  var First: TPkgDependency; ListType: TPkgDependencyDirection; Owner: TObject;
   HoldPackages, SortList: boolean);
 var
   i: Integer;
@@ -985,7 +973,7 @@ begin
 end;
 
 procedure SavePkgDependencyList(XMLConfig: TXMLConfig; const ThePath: string;
-  First: TPkgDependency; ListType: TPkgDependencyList;
+  First: TPkgDependency; ListType: TPkgDependencyDirection;
   UsePathDelim: TPathDelimSwitch; LegacyLists: Boolean);
 var
   i: Integer;
@@ -1004,7 +992,7 @@ begin
 end;
 
 procedure ListPkgIDToDependencyList(ListOfTLazPackageID: TObjectList;
-  var First: TPkgDependency; ListType: TPkgDependencyList; Owner: TObject;
+  var First: TPkgDependency; ListType: TPkgDependencyDirection; Owner: TObject;
   HoldPackages: boolean);
 var
   NewDependency: TPkgDependency;
@@ -1023,7 +1011,7 @@ begin
 end;
 
 procedure DeleteDependencyInList(ADependency: TPkgDependency;
-  var First: TPkgDependency; ListType: TPkgDependencyList);
+  var First: TPkgDependency; ListType: TPkgDependencyDirection);
 var
   NextDependency, PrevDependency: TPkgDependency;
 begin
@@ -1038,7 +1026,7 @@ begin
 end;
 
 procedure FreeDependencyList(var First: TPkgDependency;
-  ListType: TPkgDependencyList);
+  ListType: TPkgDependencyDirection);
 var
   NextDependency: TPkgDependency;
 begin
@@ -1050,7 +1038,7 @@ begin
 end;
 
 function DependencyListAsString(First: TPkgDependency;
-  ListType: TPkgDependencyList): string;
+  ListType: TPkgDependencyDirection): string;
 begin
   Result:='';
   while First<>nil do begin
@@ -1246,7 +1234,7 @@ begin
 end;
 
 function FindDependencyByNameInList(First: TPkgDependency;
-  ListType: TPkgDependencyList; const Name: string): TPkgDependency;
+  ListType: TPkgDependencyDirection; const Name: string): TPkgDependency;
 begin
   Result:=First;
   while Result<>nil do begin
@@ -1256,7 +1244,7 @@ begin
 end;
 
 function FindCompatibleDependencyInList(First: TPkgDependency;
-  ListType: TPkgDependencyList; ComparePackage: TLazPackageID): TPkgDependency;
+  ListType: TPkgDependencyDirection; ComparePackage: TLazPackageID): TPkgDependency;
 begin
   Result:=First;
   while Result<>nil do begin
@@ -1266,7 +1254,7 @@ begin
 end;
 
 function GetDependencyWithIndex(First: TPkgDependency;
-  ListType: TPkgDependencyList; Index: integer): TPkgDependency;
+  ListType: TPkgDependencyDirection; Index: integer): TPkgDependency;
 begin
   if Index<0 then RaiseGDBException('GetDependencyWithIndex');
   Result:=First;
@@ -1380,7 +1368,7 @@ begin
 end;
 
 function IndexOfDependencyInList(First: TPkgDependency;
-  ListType: TPkgDependencyList; FindDependency: TPkgDependency): integer;
+  ListType: TPkgDependencyDirection; FindDependency: TPkgDependency): integer;
 var
   Dependency: TPkgDependency;
 begin
@@ -1395,7 +1383,7 @@ begin
 end;
 
 function GetFirstDependency(ListItem: TPkgDependency;
-  ListType: TPkgDependencyList): TPkgDependency;
+  ListType: TPkgDependencyDirection): TPkgDependency;
 begin
   Result:=ListItem;
   if Result=nil then exit;
@@ -1425,7 +1413,7 @@ begin
   ForcePathDelims(NewFilename);
   if Filename=NewFilename then exit;
   fFilename:=NewFilename;
-  fFullFilenameStamp:=CTInvalidChangeStamp;
+  fFullFilenameStamp:=LUInvalidChangeStamp;
   OldDirectory:=FDirectory;
   FDirectory:=ExtractFilePath(Filename);
   if OldDirectory<>FDirectory then begin
@@ -1525,7 +1513,7 @@ procedure TPkgFile.UpdateUnitName;
 var
   NewUnitName: String;
 begin
-  if FilenameIsPascalUnit(Filename) then begin
+  if FilenameHasPascalExt(Filename) then begin
     NewUnitName:=ExtractFileNameOnly(Filename);
     if SysUtils.CompareText(NewUnitName,FUnitName)<>0 then
       FUnitName:=NewUnitName;
@@ -1791,7 +1779,7 @@ end;
 
 procedure TPkgDependency.SetRequiredPackage(AValue: TLazPackage);
 begin
-  Assert((FDependencyType=pdtLazarus) or not assigned(AValue), 'Not possible to set a reference to a LazPackage into an FPMake-dependency');
+  Assert((DependencyType=pdtLazarus) or not assigned(AValue), 'Not possible to set a reference to a LazPackage into an FPMake-dependency');
   RequiredIDEPackage := AValue;
 end;
 
@@ -1932,72 +1920,70 @@ begin
   if MaxVersion.Compare(Version)<0 then MaxVersion.Assign(Version);
 end;
 
-function TPkgDependency.AsString(WithOwner: boolean; WithDefaults: boolean): string;
+function TPkgDependency.AsString(WithOwner, WithDefaults: boolean): string;
+var
+  FN: String;
 begin
-  if Self=nil then
-    exit('(nil)');
-  Result:=FPackageName;
-  if pdfMinVersion in FFlags then
-    Result:=Result+' (>='+MinVersion.AsString+')';
-  if pdfMaxVersion in FFlags then
-    Result:=Result+' (<='+MaxVersion.AsString+')';
+  Result:=inherited AsString;
   if WithOwner and (Owner<>nil) then
     Result:=GetDependencyOwnerAsString(Self)+' uses '+Result;
   if WithDefaults then
   begin
-    if DefaultFilename<>'' then begin
-      Result+=', ';
+    if DefaultFilename<>'' then
+    begin
+      FN:=MakeFilenameRelativeToOwner(DefaultFilename);
       if PreferDefaultFilename then
-        Result+='preferred'
+        Result:=Format(lisCEIn, [Result,FN]) // like 'in' keyword in uses section
       else
-        Result+='default';
-      Result+='="'+DefaultFilename+'"';
+        Result:=Format(lisPckEditDefault, [Result,FN]);
     end;
+    if DependencyType=pdtFPMake then
+      Result:=Result+' '+lisPckEditFPMakePackage;
   end;
 end;
 
 function TPkgDependency.NextUsedByDependency: TPkgDependency;
 begin
-  Result:=NextDependency[pdlUsedBy];
+  Result:=NextDependency[pddUsedBy];
 end;
 
 function TPkgDependency.PrevUsedByDependency: TPkgDependency;
 begin
-  Result:=PrevDependency[pdlUsedBy];
+  Result:=PrevDependency[pddUsedBy];
 end;
 
 function TPkgDependency.NextRequiresDependency: TPkgDependency;
 begin
-  Result:=NextDependency[pdlRequires];
+  Result:=NextDependency[pddRequires];
 end;
 
 function TPkgDependency.PrevRequiresDependency: TPkgDependency;
 begin
-  Result:=PrevDependency[pdlRequires];
+  Result:=PrevDependency[pddRequires];
 end;
 
 procedure TPkgDependency.AddUsedByDep(var FirstDependency: TPkgDependencyBase);
 begin
-  AddToList(TPkgDependency(FirstDependency), pdlUsedBy);
+  AddToList(TPkgDependency(FirstDependency), pddUsedBy);
 end;
 
 procedure TPkgDependency.RemoveUsedByDep(var FirstDependency: TPkgDependencyBase);
 begin
-  RemoveFromList(TPkgDependency(FirstDependency), pdlUsedBy);
+  RemoveFromList(TPkgDependency(FirstDependency), pddUsedBy);
 end;
 
 procedure TPkgDependency.AddRequiresDep(var FirstDependency: TPkgDependencyBase);
 begin
-  AddToList(TPkgDependency(FirstDependency), pdlRequires);
+  AddToList(TPkgDependency(FirstDependency), pddRequires);
 end;
 
 procedure TPkgDependency.RemoveRequiresDep(var FirstDependency: TPkgDependencyBase);
 begin
-  RemoveFromList(TPkgDependency(FirstDependency), pdlRequires);
+  RemoveFromList(TPkgDependency(FirstDependency), pddRequires);
 end;
 
 procedure TPkgDependency.AddToList(var FirstDependency: TPkgDependency;
-  ListType: TPkgDependencyList);
+  ListType: TPkgDependencyDirection);
 begin
   NextDependency[ListType]:=FirstDependency;
   FirstDependency:=Self;
@@ -2007,7 +1993,7 @@ begin
 end;
 
 procedure TPkgDependency.AddToEndOfList(var LastDependency: TPkgDependency;
-  ListType: TPkgDependencyList);
+  ListType: TPkgDependencyDirection);
 begin
   PrevDependency[ListType]:=LastDependency;
   LastDependency:=Self;
@@ -2017,7 +2003,7 @@ begin
 end;
 
 procedure TPkgDependency.RemoveFromList(var FirstDependency: TPkgDependency;
-  ListType: TPkgDependencyList);
+  ListType: TPkgDependencyDirection);
 begin
   if FirstDependency=Self then FirstDependency:=NextDependency[ListType];
   if NextDependency[ListType]<>nil then
@@ -2029,7 +2015,7 @@ begin
 end;
 
 function TPkgDependency.MoveUpInList(var FirstDependency: TPkgDependency;
-  ListType: TPkgDependencyList): Boolean;
+  ListType: TPkgDependencyDirection): Boolean;
 var
   OldPrev: TPkgDependency;
 begin
@@ -2048,7 +2034,7 @@ begin
 end;
 
 function TPkgDependency.MoveDownInList(var FirstDependency: TPkgDependency;
-  ListType: TPkgDependencyList): Boolean;
+  ListType: TPkgDependencyDirection): Boolean;
 var
   OldNext: TPkgDependency;
 begin
@@ -2086,7 +2072,7 @@ var
 begin
   Result:='';
   AFilename:=TrimFilename(DefaultFilename);
-  if (CompareFileExt(AFilename,'lpk')<>0)
+  if (CompareFileExt(AFilename,'lpk',true)<>0)
   or (SysUtils.CompareText(ExtractFileNameOnly(AFilename),PackageName)<>0) then
     exit;
   if not FilenameIsAbsolute(AFilename) then begin
@@ -2450,7 +2436,7 @@ begin
     FDirectory:=FFilename
   else
     FDirectory:=ExtractFilePath(FFilename);
-  FDirectoryExpandedChangeStamp:=CTInvalidChangeStamp;
+  FDirectoryExpandedChangeStamp:=LUInvalidChangeStamp;
   FHasDirectory:=(FDirectory<>'') and (FDirectory[length(FDirectory)]=PathDelim);
   FHasStaticDirectory:=FHasDirectory and FilenameIsAbsolute(FDirectory);
   FUsageOptions.BaseDirectory:=FDirectory;
@@ -2465,7 +2451,7 @@ begin
   if FFlags=AValue then exit;
   ChangedFlags:=(FFlags-AValue)+(AValue-FFlags);
   FFlags:=AValue;
-  if ChangedFlags*[lpfAutoIncrementVersionOnBuild]<>[] then
+  if ChangedFlags*[lpfAutoIncrementVersionOnBuild,lpfCompatibilityMode]<>[] then
     Modified:=true;
 end;
 
@@ -2642,8 +2628,13 @@ begin
   FDefineTemplates:=TLazPackageDefineTemplates.Create(Self);
   fPublishOptions:=TPublishPackageOptions.Create(Self);
   FProvides:=TStringList.Create;
-  Clear;
   FUsageOptions.ParsedOpts.InvalidateParseOnChange:=true;
+end;
+
+constructor TLazPackage.CreateAndClear;
+begin
+  Create;
+  Clear;
 end;
 
 destructor TLazPackage.Destroy;
@@ -2718,7 +2709,7 @@ begin
     CompilerOptions.Clear;
     FDescription:='';
     FDirectory:='';
-    FDirectoryExpandedChangeStamp:=CTInvalidChangeStamp;
+    FDirectoryExpandedChangeStamp:=LUInvalidChangeStamp;
     FEnableI18N:=false;
     FEnableI18NForLFM:=false;
     FPOOutputDirectory:='';
@@ -2859,7 +2850,13 @@ var
     if FileVersion<=4 then begin
       // set CompatibilityMode flag for legacy projects (this flag was added in FileVersion=5 that changed
       // item format so that LPK cannot be opened in legacy Lazarus unless lpfCompatibilityMode is set)
-      UseLegacyLists := True;
+      Include(FFlags,lpfCompatibilityMode);
+    end else
+    begin
+      if XMLConfig.GetValue(ThePath+'CompatibilityMode/Value',false) then
+        Include(FFlags,lpfCompatibilityMode)
+      else
+        Exclude(FFlags,lpfCompatibilityMode);
     end;
   end;
 
@@ -2913,7 +2910,7 @@ begin
   LoadFiles(Path+'Files/',FFiles);
   UpdateSourceDirectories;
   LoadPkgDependencyList(XMLConfig,Path+'RequiredPkgs/',
-                        FFirstRequiredDependency,pdlRequires,Self,false,false);
+                        FFirstRequiredDependency,pddRequires,Self,false,false);
   FUsageOptions.LoadFromXMLConfig(XMLConfig,Path+'UsageOptions/',
                                   PathDelimChanged);
   fPublishOptions.LoadFromXMLConfig(XMLConfig,Path+'PublishOptions/',
@@ -2960,6 +2957,8 @@ var
   begin
     XMLConfig.SetDeleteValue(ThePath+'AutoIncrementVersionOnBuild/Value',
       AutoIncrementVersionOnBuild,true);
+    XMLConfig.SetDeleteValue(ThePath+'CompatibilityMode/Value',
+      UseLegacyLists,false);
   end;
 
 begin
@@ -2992,7 +2991,7 @@ begin
   XMLConfig.SetDeleteValue(Path+'i18n/EnableI18NForLFM/Value', EnableI18NForLFM, false);
 
   SavePkgDependencyList(XMLConfig,Path+'RequiredPkgs/',
-                        FFirstRequiredDependency,pdlRequires,UsePathDelim,UseLegacyLists);
+                        FFirstRequiredDependency,pddRequires,UsePathDelim,UseLegacyLists);
   FUsageOptions.SaveToXMLConfig(XMLConfig,Path+'UsageOptions/',UsePathDelim);
   fPublishOptions.SaveToXMLConfig(XMLConfig,Path+'PublishOptions/',UsePathDelim);
   SaveStringList(XMLConfig,FProvides,Path+'Provides/');
@@ -3296,27 +3295,27 @@ end;
 
 function TLazPackage.FindDependencyByName(const PackageName: string): TPkgDependency;
 begin
-  Result:=FindDependencyByNameInList(FFirstRequiredDependency,pdlRequires,PackageName);
+  Result:=FindDependencyByNameInList(FFirstRequiredDependency,pddRequires,PackageName);
 end;
 
 function TLazPackage.FindRemovedDependencyByName(const PkgName: string): TPkgDependency;
 begin
-  Result:=FindDependencyByNameInList(FFirstRemovedDependency,pdlRequires,PkgName);
+  Result:=FindDependencyByNameInList(FFirstRemovedDependency,pddRequires,PkgName);
 end;
 
 function TLazPackage.RequiredDepByIndex(Index: integer): TPkgDependency;
 begin
-  Result:=GetDependencyWithIndex(FFirstRequiredDependency,pdlRequires,Index);
+  Result:=GetDependencyWithIndex(FFirstRequiredDependency,pddRequires,Index);
 end;
 
 function TLazPackage.RemovedDepByIndex(Index: integer): TPkgDependency;
 begin
-  Result:=GetDependencyWithIndex(FFirstRemovedDependency,pdlRequires,Index);
+  Result:=GetDependencyWithIndex(FFirstRemovedDependency,pddRequires,Index);
 end;
 
 function TLazPackage.UsedByDepByIndex(Index: integer): TPkgDependency;
 begin
-  Result:=GetDependencyWithIndex(FFirstUsedByDependency,pdlUsedBy,Index);
+  Result:=GetDependencyWithIndex(FFirstUsedByDependency,pddUsedBy,Index);
 end;
 
 function TLazPackage.FindUsedByDepPrefer(Ignore: TPkgDependency): TPkgDependency;
@@ -3379,7 +3378,6 @@ function TLazPackage.AddFileByName(aFilename: string;
 var
   NewFileType: TPkgFileType;
   NewUnitName: String;
-  HasRegister: Boolean;
   NewFlags: TPkgFileFlags;
   Code: TCodeBuffer;
   CurDir: String;
@@ -3391,17 +3389,15 @@ begin
   if FindPkgFile(aFilename,true,false)<>nil then Exit(False);
   NewFileType:=FileNameToPkgFileType(aFilename);
   NewFlags:=[];
-  HasRegister:=false;
   NewUnitName:='';
   if (NewFileType=pftUnit) then begin
     Code:=CodeToolBoss.LoadFile(aFilename,true,false);
     NewUnitName:=CodeToolBoss.GetSourceName(Code,false);
-    if NewUnitName='' then
-      NewUnitName:=ExtractFileNameOnly(aFilename);
+    Assert(NewUnitName<>'', 'TLazPackage.AddFileByName: NewUnitName is empty.');
+    //if NewUnitName='' then NewUnitName:=ExtractFileNameOnly(aFilename);
     if FindUsedUnit(NewUnitName)=nil then
       Include(NewFlags,pffAddToPkgUsesSection);
-    CodeToolBoss.HasInterfaceRegisterProc(Code,HasRegister);
-    if HasRegister then
+    if CodeToolBoss.HasInterfaceRegisterProc(Code) then
       Include(NewFlags,pffHasRegisterProc);
   end;
   AddFile(aFilename,NewUnitName,NewFileType,NewFlags,cpNormal);
@@ -3630,13 +3626,13 @@ end;
 
 procedure TLazPackage.RemoveRemovedDependency(Dependency: TPkgDependency);
 begin
-  Dependency.RemoveFromList(FFirstRemovedDependency,pdlRequires);
+  Dependency.RemoveFromList(FFirstRemovedDependency,pddRequires);
   Dependency.Removed:=false;
 end;
 
 procedure TLazPackage.AddRequiredDependency(Dependency: TPkgDependency);
 begin
-  Dependency.AddToList(FFirstRequiredDependency,pdlRequires);
+  Dependency.AddToList(FFirstRequiredDependency,pddRequires);
   Dependency.Owner:=Self;
   Modified:=true;
 end;
@@ -3654,9 +3650,9 @@ end;
 procedure TLazPackage.RemoveRequiredDepSilently(Dependency: TPkgDependency);
 // Remove a dependency without setting the Modified flag. Caller must take care of it.
 begin
-  Dependency.RemoveFromList(FFirstRequiredDependency,pdlRequires);
+  Dependency.RemoveFromList(FFirstRequiredDependency,pddRequires);
   Dependency.RequiredPackage:=nil;
-  Dependency.AddToList(FFirstRemovedDependency,pdlRequires);
+  Dependency.AddToList(FFirstRemovedDependency,pddRequires);
   Dependency.Removed:=true;
 end;
 
@@ -3669,25 +3665,25 @@ end;
 procedure TLazPackage.DeleteRequiredDependency(Dependency: TPkgDependency);
 begin
   Dependency.RequiredPackage:=nil;
-  Dependency.RemoveFromList(FFirstRequiredDependency,pdlRequires);
+  Dependency.RemoveFromList(FFirstRequiredDependency,pddRequires);
   Dependency.Free;
 end;
 
 procedure TLazPackage.DeleteRemovedDependency(Dependency: TPkgDependency);
 begin
   Dependency.RequiredPackage:=nil;
-  Dependency.RemoveFromList(FFirstRemovedDependency,pdlRequires);
+  Dependency.RemoveFromList(FFirstRemovedDependency,pddRequires);
   Dependency.Free;
 end;
 
 function TLazPackage.MoveRequiredDependencyUp(Dependency: TPkgDependency): Boolean;
 begin
-  Result := Dependency.MoveUpInList(FFirstRequiredDependency,pdlRequires);
+  Result := Dependency.MoveUpInList(FFirstRequiredDependency,pddRequires);
 end;
 
 function TLazPackage.MoveRequiredDependencyDown(Dependency: TPkgDependency): Boolean;
 begin
-  Result := Dependency.MoveDownInList(FFirstRequiredDependency,pdlRequires);
+  Result := Dependency.MoveDownInList(FFirstRequiredDependency,pddRequires);
 end;
 
 function TLazPackage.CreateDependencyWithOwner(NewOwner: TObject;
@@ -3722,7 +3718,7 @@ end;
 
 function TLazPackage.Requires(APackage: TLazPackage): boolean;
 begin
-  Result:=FindCompatibleDependencyInList(FFirstRequiredDependency,pdlRequires,
+  Result:=FindCompatibleDependencyInList(FFirstRequiredDependency,pddRequires,
                   APackage)<>nil;
 end;
 
@@ -4043,7 +4039,7 @@ begin
   Result:=PkgFile.Unit_Name;
   // compare with RTTI unit name
   if ComponentClass<>nil then begin
-    TIUnitName:=GetClassUnitName(ComponentClass);
+    TIUnitName:=ComponentClass.UnitName;
     if SysUtils.CompareText(TIUnitName,Result)<>0 then
       Result:=TIUnitName;
   end;
@@ -4359,8 +4355,7 @@ begin
   Result:=LazPackage.IDAsString;
 end;
 
-function TPkgAdditionalCompilerOptions.
-  GetBaseCompilerOptions: TBaseCompilerOptions;
+function TPkgAdditionalCompilerOptions.GetBaseCompilerOptions: TBaseCompilerOptions;
 begin
   Result:=LazPackage.CompilerOptions;
 end;
@@ -4371,7 +4366,7 @@ constructor TLazPackageDefineTemplates.Create(AOwner: IProjPack);
 begin
   inherited Create(AOwner);
   Include(FFlags, ptfIsPackageTemplate);
-  fLastSourceDirStamp:=CTInvalidChangeStamp;
+  fLastSourceDirStamp:=LUInvalidChangeStamp;
 end;
 
 destructor TLazPackageDefineTemplates.Destroy;
@@ -4385,13 +4380,14 @@ begin
                   ptfCustomDefinesChanged];
 end;
 
-procedure TLazPackageDefineTemplates.AllChanged;
+procedure TLazPackageDefineTemplates.AllChanged(AActivating: boolean);
 begin
   IDChanged;
-  UpdateSrcDirIfDef;// always create the SrcDirIfDef for IDE add-ons
+  if not AActivating then // Create the SrcDirIfDef for IDE add-ons
+    UpdateSrcDirIfDef;    // (Will be called from other methods during activation)
   SourceDirectoriesChanged;
-  CustomDefinesChanged;
   OutputDirectoryChanged;
+  CustomDefinesChanged;
 end;
 
 procedure TLazPackageDefineTemplates.UpdateMain;
@@ -4408,9 +4404,8 @@ begin
   // ClearCache is here unnessary, because it is only a block
 end;
 
-procedure TLazPackageDefineTemplates.UpdateSrcDirIfDef;
+function TLazPackageDefineTemplates.UpdateSrcDirIfDef: Boolean;
 var
-  Changed: Boolean;
   NewVariable: String;
   UnitPathDefTempl: TDefineTemplate;
   IncPathDefTempl: TDefineTemplate;
@@ -4427,7 +4422,7 @@ begin
       da_Block);
     FMain.AddChild(FSrcDirectories);
   end;
-  Changed:=false;
+  Result:=false;
   if FSrcDirIf=nil then begin
     FSrcDirIf:=TDefineTemplate.Create('Source Directory Additions',
       'Additional defines for package source directories',
@@ -4444,8 +4439,7 @@ begin
       '#IncPath','$(#IncPath);$PkgIncPath('+Owner.IDAsString+')',
       da_Define);
     FSrcDirIf.AddChild(IncPathDefTempl);
-
-    Changed:=true;
+    Result:=true;
   end else begin
     NewVariable:='#PkgSrcMark'+Owner.IDAsWord;
     if NewVariable<>FSrcDirIf.Variable then begin
@@ -4458,12 +4452,9 @@ begin
       IncPathDefTempl:=FSrcDirIf.FindChildByName('IncPath');
       if IncPathDefTempl<>nil then
         IncPathDefTempl.Value:='$(#IncPath);$PkgIncPath('+Owner.IDAsString+')';
-
-      Changed:=true;
+      Result:=true;
     end;
   end;
-  if Changed then
-    CodeToolBoss.DefineTree.ClearCache;
 end;
 
 procedure TLazPackageDefineTemplates.UpdateOutputDirectory;
@@ -4494,8 +4485,7 @@ begin
       da_Define);
     FOutputSrcPath.SetDefineOwner(LazPackage,false);
     FOutputSrcPath.SetFlags([dtfAutoGenerated],[],false);
-    CodeToolBoss.DefineTree.ReplaceChild(FOutputDir,FOutputSrcPath,
-      FOutputSrcPath.Name);
+    CodeToolBoss.DefineTree.ReplaceChild(FOutputDir,FOutputSrcPath,FOutputSrcPath.Name);
   end;
 end;
 
@@ -4539,8 +4529,7 @@ begin
   // build source directory define templates
   FreeAndNil(fLastSourceDirectories);
   fLastSourceDirectories:=SearchPathToList(CurUnitPath);
-  if (fLastSourceDirectories.Count>0)
-  and ((FSrcDirIf=nil) or IDHasChanged) then
+  if (fLastSourceDirectories.Count>0) and ((FSrcDirIf=nil) or IDHasChanged) then
     UpdateSrcDirIfDef;
   for i:=0 to fLastSourceDirectories.Count-1 do begin
     // create directory template
@@ -4577,14 +4566,11 @@ begin
               'Custom Options', FLastCustomOptions, false, Owner as TLazPackage);
   if OptionsDefTempl=nil then begin
     // no custom options -> delete old template
-    if FSrcDirIf<>nil then begin
-      if FSrcDirIf.DeleteChild('Custom Options') then
-        CodeToolBoss.DefineTree.ClearCache;
-    end;
+    if (FSrcDirIf<>nil) and FSrcDirIf.DeleteChild('Custom Options') then
+      CodeToolBoss.DefineTree.ClearCache;
   end else begin
     UpdateSrcDirIfDef;
     FSrcDirIf.ReplaceChild(OptionsDefTempl);
-    CodeToolBoss.DefineTree.ClearCache;
   end;
 end;
 

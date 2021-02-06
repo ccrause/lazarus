@@ -22,10 +22,10 @@ interface
 uses
   Classes, SysUtils,
   // LazUtils,
-  LazFileUtils,
+  LazFileUtils, LazLoggerBase,
   // LCL
-  LCLProc, HelpIntfs, LazHelpIntf, LazHelpHTML,
-  // IdeIntf
+  HelpIntfs, LazHelpIntf, LazHelpHTML,
+  // BuildIntf
   MacroIntf;
 
 type

@@ -2,7 +2,7 @@
 #
 #   Makefile.fpc for LazDebuggerFp 0.9
 #
-#   This file was generated on 08/12/2019
+#   This file was generated on 14-7-20
 
 [package]
 name=lazdebuggerfp
@@ -10,8 +10,8 @@ version=0.9
 
 [compiler]
 unittargetdir=lib/$(CPU_TARGET)-$(OS_TARGET)
-unitdir=../../../packager/units/$(CPU_TARGET)-$(OS_TARGET) ../../lazutils/lib/$(CPU_TARGET)-$(OS_TARGET) ../../../lcl/units/$(CPU_TARGET)-$(OS_TARGET) ../../debuggerintf/lib/$(CPU_TARGET)-$(OS_TARGET) ../../fpdebug/lib/$(CPU_TARGET)-$(OS_TARGET) .
-options= -MObjFPC -Scghi -O1 -g -gl -l -vewnhibq -Si- $(DBG_OPTIONS)
+unitdir=../../../packager/units/$(CPU_TARGET)-$(OS_TARGET) ../../lazutils/lib/$(CPU_TARGET)-$(OS_TARGET) ../../freetype/lib/$(CPU_TARGET)-$(OS_TARGET) ../../../lcl/units/$(CPU_TARGET)-$(OS_TARGET) ../../debuggerintf/lib/$(CPU_TARGET)-$(OS_TARGET) ../../fpdebug/lib/$(CPU_TARGET)-$(OS_TARGET) .
+options= -MObjFPC -Scghi -O1 -g -gl -l -vewnhibq $(DBG_OPTIONS)
 
 [target]
 units=lazdebuggerfp.pas
@@ -35,7 +35,7 @@ ifeq ($(OS_TARGET),win64)
 LCL_PLATFORM=win32
 else
 ifeq ($(OS_TARGET),darwin)
-LCL_PLATFORM=carbon
+LCL_PLATFORM=cocoa
 else
 LCL_PLATFORM=gtk2
 endif

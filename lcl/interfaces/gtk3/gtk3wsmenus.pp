@@ -479,11 +479,20 @@ class function TGtk3WSMenuItem.SetCheck(const AMenuItem: TMenuItem;
 var
   IsRadio: Boolean;
   Group: PGSList;
-  Item: Pointer;
+  Item: TGtk3MenuItem;
 begin
   Result:=false;
   if not WSCheckMenuItem(AMenuItem, 'SetCheck') then
     Exit;
+  if AMenuItem.HandleAllocated then
+  begin
+     Item := TGtk3MenuItem(AMenuItem.Handle);
+     Item.SetCheck(Checked);
+  end else
+  begin
+    AMenuItem.RecreateHandle;
+    Result := True;
+  end;
   (*
   Item := {%H-}Pointer(AMenuItem.Handle);
   IsRadio := gtk_is_radio_menu_item(Item);
@@ -547,8 +556,8 @@ class procedure TGtk3WSMenuItem.UpdateMenuIcon(const AMenuItem: TMenuItem;
 begin
   if not WSCheckMenuItem(AMenuItem, 'UpdateMenuIcon') then
     Exit;
-  // if gtk_is_check_menu_item({%H-}Pointer(AMenuItem.Handle)) <> HasIcon then
-  AMenuItem.RecreateHandle;
+  if HasIcon then
+    AMenuItem.RecreateHandle;
 end;
 
 { TGtk3WSMenu }

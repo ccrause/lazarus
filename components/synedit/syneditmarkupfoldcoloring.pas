@@ -51,9 +51,14 @@ interface
 uses
   Classes, SysUtils, Graphics, SynEditMarkup, SynEditMiscClasses, Controls,
   LCLProc, LCLType, SynEditHighlighter,
-  SynEditHighlighterFoldBase, LazSynEditText, SynEditTextBase, SynEditTypes
-  {$IFDEF WithSynMarkupFoldColorDebugGutter}, SynGutterBase, SynTextDrawer{$ENDIF}
-;
+  SynEditHighlighterFoldBase, LazSynEditText, SynEditTextBase, SynEditTypes,
+  {$IFDEF WithSynMarkupFoldColorDebugGutter}SynGutterBase, SynTextDrawer,{$ENDIF}
+  SynEditMiscProcs,
+  {$IFDEF SynEditMarkupFoldColoringDebug}
+  SynHighlighterPas,
+  strutils,
+  {$endif}
+  Dialogs;
 
 type
 
@@ -172,7 +177,7 @@ type
   protected
     // Notifications about Changes to the text
     procedure DoTextChanged({%H-}pStartLine, pEndLine, {%H-}pCountDiff: Integer); override; // 1 based
-    procedure SetLines(const pValue: TSynEditStrings); override;
+    procedure SetLines(const pValue: TSynEditStringsLinked); override;
     procedure HighlightChanged(pSender: TSynEditStrings; pIndex, pCount: Integer);
     procedure DoEnabledChanged(pSender: TObject); override;
     procedure ColorChanged(pMarkup: TObject);
@@ -197,14 +202,6 @@ type
   end;
 
 implementation
-uses
-  SynEdit,
-  SynEditMiscProcs,
-  {$IFDEF SynEditMarkupFoldColoringDebug}
-  SynHighlighterPas,
-  strutils,
-  {$endif}
-  Dialogs;
 
 { TMarkupFoldColorsLineColor }
 
@@ -325,15 +322,15 @@ begin
   TextDrawer.BeginDrawing(dc);
   try
     TextDrawer.SetBackColor(Gutter.Color);
-    TextDrawer.SetForeColor(TCustomSynEdit(SynEdit).Font.Color);
+    TextDrawer.SetForeColor(SynEdit.Font.Color);
     TextDrawer.SetFrameColor(clNone);
     with AClip do
       TextDrawer.ExtTextOut(Left, Top, ETO_OPAQUE, AClip, nil, 0);
 
     rcLine := AClip;
     rcLine.Bottom := AClip.Top;
-    LineHeight := TCustomSynEdit(SynEdit).LineHeight;
-    c := TCustomSynEdit(SynEdit).Lines.Count;
+    LineHeight := SynEdit.LineHeight;
+    c := SynEdit.Lines.Count;
     for i := FirstLine to LastLine do
     begin
       iLine := FoldView.DisplayNumber[i];
@@ -385,13 +382,13 @@ begin
   inherited Create(pSynEdit);
 
   {$IFDEF WithSynMarkupFoldColorDebugGutter}
-  FDebugGutter := TIDESynMarkupFoldColorDebugGutter.Create(TSynEdit(pSynEdit).RightGutter.Parts);
+  FDebugGutter := TIDESynMarkupFoldColorDebugGutter.Create(pSynEdit.RightGutter.Parts);
   FDebugGutter.FOwner := Self;
   {$ENDIF}
 
   FColumnCache := TSynEditMarkupFoldColorsColumnCache.Create;
 
-  fHighlighter := TSynCustomFoldHighlighter(TCustomSynEdit(SynEdit).Highlighter);
+  fHighlighter := TSynCustomFoldHighlighter(SynEdit.Highlighter);
   if Assigned(fHighlighter)
   and not (fHighlighter  is TSynCustomFoldHighlighter) then
     fHighlighter := nil;
@@ -555,7 +552,7 @@ begin
   and (l[p] in [#9, #32]) do inc(p);
   if p > s then
     exit(high(Result));
-  Result := TCustomSynEdit(SynEdit).LogicalToPhysicalPos(Point(p, toPos(pIndex))).x;
+  Result := SynEdit.LogicalToPhysicalPos(Point(p, toPos(pIndex))).x;
 end;
 
 procedure TSynEditMarkupFoldColors.TextBufferChanged(pSender: TObject);
@@ -768,8 +765,8 @@ var
     // or at least has less characters as vertical line is on
     if not(sfaCloseForNextLine in lCurNode.FoldAction) then begin
       Result := True;
-      lPhysX := TCustomSynEdit(SynEdit).LogicalToPhysicalPos(Point(ToPos(lCurNode.LogXStart), ToPos(lCurNode.LineIndex))).x;
-      lPhysX2 := TCustomSynEdit(SynEdit).LogicalToPhysicalPos(Point(ToPos(lCurNode.LogXEnd), ToPos(lCurNode.LineIndex))).x;
+      lPhysX := SynEdit.LogicalToPhysicalPos(Point(ToPos(lCurNode.LogXStart), ToPos(lCurNode.LineIndex))).x;
+      lPhysX2 := SynEdit.LogicalToPhysicalPos(Point(ToPos(lCurNode.LogXEnd), ToPos(lCurNode.LineIndex))).x;
       if lCurNode.LogXStart < lCurNode.LogXEnd then begin
         {$IFDEF SynEditMarkupFoldColoringDebug}
         //DebugLn('    %d < %d', [lCurNode.LogXStart, lCurNode.LogXEnd]);
@@ -988,7 +985,7 @@ var
 
 begin
   if not Assigned(fHighlighter)
-  and not (TCustomSynEdit(Self.SynEdit).Highlighter is TSynCustomFoldHighlighter) then
+  and not (SynEdit.Highlighter is TSynCustomFoldHighlighter) then
     exit;
 
   {$IFDEF SynEditMarkupFoldColoringDebug}
@@ -1100,11 +1097,11 @@ begin
     pEndLine := pStartLine
   else
     // pEndLine seems to be the first line after the change
-    pEndLine := pEndLine - 1;
+    pEndLine := Max(1, pEndLine - 1);
   lEndLine := pEndLine;
   FColumnCache[ToIdx(lEndLine)] := FirstCharacterColumn[ToIdx(lEndLine)];
   x := FColumnCache[ToIdx(lEndLine)];
-  lBottomLine := TCustomSynEdit(SynEdit).TopLine + TCustomSynEdit(SynEdit).LinesInWindow;
+  lBottomLine := SynEdit.TopLine + SynEdit.LinesInWindow;
 
   fNestList.Clear;
   fNestList2.Clear;
@@ -1175,9 +1172,10 @@ begin
 
 end;
 
-procedure TSynEditMarkupFoldColors.SetLines(const pValue: TSynEditStrings);
+procedure TSynEditMarkupFoldColors.SetLines(const pValue: TSynEditStringsLinked
+  );
 var
-  old: TSynEditStrings;
+  old: TSynEditStringsLinked;
 begin
   if Lines <> nil then
     Lines.Ranges[Self] := nil;
@@ -1221,7 +1219,7 @@ end;
 procedure TSynEditMarkupFoldColors.HighlightChanged(pSender: TSynEditStrings;
   pIndex, pCount: Integer);
 var
-  newHighlighter: TSynCustomHighlighter;
+  newHighlighter: TSynCustomFoldHighlighter;
 begin
   {$IFDEF SynEditMarkupFoldColoringDebug}
   //DebugLn('   HighlightChanged: aIndex=%d aCount=%d', [aIndex, aCount]);
@@ -1231,9 +1229,9 @@ begin
   or (pCount <> -1) then
     exit;
 
-  newHighlighter := TCustomSynEdit(self.SynEdit).Highlighter;
-  if Assigned(newHighlighter)
-  and not (newHighlighter is TSynCustomFoldHighlighter) then
+  if SynEdit.Highlighter is TSynCustomFoldHighlighter then
+    newHighlighter := TSynCustomFoldHighlighter(SynEdit.Highlighter)
+  else
     newHighlighter := nil;
 
   if (newHighlighter = fHighlighter) then

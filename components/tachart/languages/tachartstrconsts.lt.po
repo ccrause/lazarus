@@ -214,6 +214,10 @@ msgstr ""
 msgid "Expression result type must be integer or float. Got \"%s\"."
 msgstr ""
 
+#: tachartstrconsts.rserrnumericaloverflow
+msgid "Numerical overflow."
+msgstr ""
+
 #: tachartstrconsts.rsexpressioncolormapseries
 msgid "Math expression color map series"
 msgstr ""
@@ -272,6 +276,10 @@ msgstr ""
 
 #: tachartstrconsts.rsfittotalsumofsquares
 msgid "Total sum of squares (SST)"
+msgstr ""
+
+#: tachartstrconsts.rsfittvalue
+msgid "t value"
 msgstr ""
 
 #: tachartstrconsts.rsfitvarianceratio
@@ -412,6 +420,10 @@ msgstr "Taškas"
 #: tachartstrconsts.rspolarseries
 msgid "Polar series"
 msgstr "Polinės sekos"
+
+#: tachartstrconsts.rspolygonseries
+msgid "Polygon series"
+msgstr ""
 
 #: tachartstrconsts.rspsclear
 msgctxt "tachartstrconsts.rspsclear"

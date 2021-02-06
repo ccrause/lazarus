@@ -222,6 +222,7 @@ type
     procedure Delete(AIndex: Integer); virtual;
     procedure EndUpdate;
     function Extent: TDoubleRect; virtual;
+    procedure FindYRange(AXMin, AXMax: Double; var AYMin, AYMax: Double); virtual;
     function FormattedMark(
       AIndex: Integer; AFormat: String = ''; AYIndex: Integer = 0): String;
     function IsEmpty: Boolean; override;
@@ -303,7 +304,7 @@ type
     function GetLabelDataPoint(AIndex, AYIndex: Integer): TDoublePoint; virtual;
     function GetLabelDirection(AValue: Double;
       const ACenterLevel: Double): TLabelDirection;
-    procedure GetLegendItemsRect(AItems: TChartLegendItems; ABrush: TBrush);
+    procedure GetLegendItemsRect(AItems: TChartLegendItems; ABrush: TBrush; APen: TPen);
     function GetXRange(AX: Double; AIndex: Integer): Double;
     function GetZeroLevel: Double; virtual;
     function HasMissingYValue(AIndex: Integer; AMaxYIndex: Integer = MaxInt): Boolean;
@@ -347,6 +348,7 @@ type
   public
     procedure Assign(ASource: TPersistent); override;
     function Extent: TDoubleRect; override;
+    procedure FindYRange(AXMin, AXMax: Double; var AYMin, AYMax: Double); override;
     function GetNearestPoint(
       const AParams: TNearestPointParams;
       out AResults: TNearestPointResults): Boolean; override;
@@ -874,6 +876,12 @@ end;
 function TChartSeries.Extent: TDoubleRect;
 begin
   Result := Source.ExtentCumulative;
+end;
+
+procedure TChartSeries.FindYRange(AXMin, AXMax: Double;
+  var AYMin, AYMax: Double);
+begin
+  Source.FindYRange(AXMin, AXMax, false, AYMin, AYMax);
 end;
 
 function TChartSeries.FormattedMark(
@@ -1440,6 +1448,7 @@ var
   ps, saved_ps: TSeriesPointerStyle;
   brushAlreadySet: boolean;
   c: TColor;
+  style: TChartStyle;
 begin
   Assert(Pointer <> nil, 'Series pointer');
   if (not Pointer.Visible) or (Length(FGraphPoints) = 0) then exit;
@@ -1457,7 +1466,12 @@ begin
         Pointer.SetOwner(nil);   // avoid recursion
         Pointer.Style := ps;
       end;
-      brushAlreadySet := (Styles <> nil) and Styles.StyleByIndex(AStyleIndex).UseBrush;
+      brushAlreadySet := false;
+      if (Styles <> nil) then
+      begin
+        style := Styles.StyleByIndex(AStyleIndex);
+        if style <> nil then brushAlreadySet := style.UseBrush;
+      end;
       if brushAlreadySet then
         Styles.Apply(ADrawer, AStyleIndex);
       if UseDataColors then c := Source[i]^.Color else c := clTAColor;
@@ -1491,13 +1505,18 @@ begin
   if AFilterByExtent then begin
     with AExtent do
       if IsRotated then
-        axisExtent := DoubleInterval(GraphToAxisY(a.Y), GraphToAxisY(b.Y))
+        axisExtent := DoubleInterval(GraphToAxisX(a.Y), GraphToAxisX(b.Y))
       else
         axisExtent := DoubleInterval(GraphToAxisX(a.X), GraphToAxisX(b.X));
     Source.FindBounds(axisExtent.FStart, axisExtent.FEnd, FLoBound, FUpBound);
     FLoBound := Max(FLoBound - 1, 0);
     FUpBound := Min(FUpBound + 1, Count - 1);
   end;
+end;
+
+procedure TBasicPointSeries.FindYRange(AXMin, AXMax: Double; var AYMin, AYMax: Double);
+begin
+  Source.FindYRange(AXMin, AXMax, FStacked, AYMin, AYMax);
 end;
 
 function TBasicPointSeries.GetErrorBars(AIndex: Integer): TChartErrorBar;
@@ -1547,22 +1566,22 @@ begin
 end;
 
 procedure TBasicPointSeries.GetLegendItemsRect(
-  AItems: TChartLegendItems; ABrush: TBrush);
+  AItems: TChartLegendItems; ABrush: TBrush; APen: TPen);
 var
   i: Integer;
-  li: TLegendItemBrushRect;
+  li: TLegendItemBrushPenRect;
   s: TChartStyle;
 begin
   case Legend.Multiplicity of
     lmSingle:
       begin
-        li := TLegendItemBrushRect.Create(ABrush, LegendTextSingle);
+        li := TLegendItemBrushPenRect.Create(ABrush, APen, LegendTextSingle);
         li.TextFormat := Legend.TextFormat;
         AItems.Add(li);
       end;
     lmPoint:
       for i := 0 to Count - 1 do begin
-        li := TLegendItemBrushRect.Create(ABrush, LegendTextPoint(i));
+        li := TLegendItemBrushPenRect.Create(ABrush, APen, LegendTextPoint(i));
         li.Color := GetColor(i);
         li.TextFormat := Legend.TextFormat;
         AItems.Add(li);
@@ -1570,8 +1589,10 @@ begin
     lmStyle:
       if Styles <> nil then
         for s in Styles.Styles do
-          AItems.Add(TLegendItemBrushRect.Create(
-            IfThen(s.UseBrush, s.Brush, ABrush) as TBrush, LegendTextStyle(s)
+          AItems.Add(TLegendItemBrushPenRect.Create(
+            IfThen(s.UseBrush, s.Brush, ABrush) as TBrush,
+            IfThen(s.UsePen, s.Pen, APen) as TPen,
+            LegendTextStyle(s)
           ));
   end;
 end;

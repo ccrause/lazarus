@@ -63,6 +63,9 @@ type
     SuppressTabDown: Boolean; // all tabs should be suppressed, so Cocoa would not switch focus
     ForceReturnKeyDown: Boolean; // send keyDown/LM_KEYDOWN for Return even if handled by IntfUTF8KeyPress/CN_CHAR
 
+    lastMouseDownUp: NSTimeInterval; // the last processed mouse Event
+    lastMouseWithForce: Boolean;
+
     class constructor Create;
     constructor Create(AOwner: NSObject; ATarget: TWinControl; AHandleFrame: NSView = nil); virtual;
     destructor Destroy; override;
@@ -100,6 +103,8 @@ type
     procedure DrawOverlay(ControlContext: NSGraphicsContext; const bounds, dirty: NSRect); virtual;
     function ResetCursorRects: Boolean; virtual;
     procedure RemoveTarget; virtual;
+
+    procedure InputClientInsertText(const utf8: string);
 
     property HasCaret: Boolean read GetHasCaret write SetHasCaret;
     property Target: TWinControl read FTarget;
@@ -139,6 +144,7 @@ type
     class procedure SetChildZPosition(const AWinControl, AChild: TWinControl; const AOldPos, ANewPos: Integer; const AChildren: TFPList); override;
     class procedure ShowHide(const AWinControl: TWinControl); override;
     class procedure Invalidate(const AWinControl: TWinControl); override;
+    class procedure PaintTo(const AWinControl: TWinControl; ADC: HDC; X, Y: Integer); override;
   end;
 
   { TCocoaWSCustomControl }
@@ -505,6 +511,7 @@ var
   cb    : ICommonCallback;
   obj   : TObject;
   cbobj : TLCLCommonCallback;
+  ed : NSText;
 begin
   ContextMenuHandled := false;
   FillChar(MsgContext, SizeOf(MsgContext), #0);
@@ -522,6 +529,19 @@ begin
     begin
       Trg := cb.GetTarget;
       Res := LCLMessageGlue.DeliverMessage(Trg, MsgContext);
+      if (Res = 0) and (Rcp.isKindOfClass(NSView)) then
+      begin
+        if Assigned(NSView(Rcp).menuForEvent(Event)) then
+          Break; // Cocoa has it's own menu for the control
+
+        if Rcp.isKindOfClass(NSControl) then
+        begin
+          ed := NSControl(Rcp).currentEditor;
+          if Assigned(ed) and Assigned(ed.menuForEvent(Event)) then
+            Break; // Cocoa has it's own menu for the editor of the control
+        end;
+      end;
+
       // not processed, need to find parent
       if Res = 0 then
       begin
@@ -944,6 +964,19 @@ begin
     exit;
   end;
 
+  // The following check prevents the same event to be handled twice
+  // Because of the compositive nature of cocoa.
+  // For example NSTextField (TEdit) may contains NSTextView and BOTH
+  // will signal mouseDown when the field is selected by mouse the first time.
+  // In this case only 1 mouseDown should be passed to LCL
+  if (lastMouseDownUp = Event.timestamp) then begin
+    if not AForceAsMouseUp then Exit; // the same mouse event from a composite child
+    if lastMouseWithForce then Exit; // the same forced mouseUp event from a composite child
+  end;
+  lastMouseDownUp := Event.timestamp;
+  lastMouseWithForce := AForceAsMouseUp;
+
+
   FillChar(Msg, SizeOf(Msg), #0);
 
   MousePos := Event.locationInWindow;
@@ -1150,6 +1183,7 @@ var
   MButton: NSInteger;
   bndPt, clPt, srchPt: TPoint;
   dx,dy: double;
+  isPrecise: Boolean;
 const
   WheelDeltaToLCLY = 1200; // the basic (one wheel-click) is 0.1 on cocoa
   WheelDeltaToLCLX = 1200; // the basic (one wheel-click) is 0.1 on cocoa
@@ -1178,10 +1212,12 @@ begin
 
   if NSAppKitVersionNumber >= NSAppKitVersionNumber10_7 then
   begin
+    isPrecise := event.hasPreciseScrollingDeltas;
     dx := event.scrollingDeltaX;
     dy := event.scrollingDeltaY;
   end else
   begin
+    isPrecise := false;
     dx := event.deltaX;
     dy := event.deltaY;
   end;
@@ -1192,7 +1228,10 @@ begin
   if dy <> 0 then
   begin
     Msg.Msg := LM_MOUSEWHEEL;
-    Msg.WheelDelta := sign(dy) * LCLStep;
+    if isPrecise then
+      Msg.WheelDelta := Round(dy * LCLStep)
+    else
+      Msg.WheelDelta := sign(dy) * LCLStep;
   end
   else
   if dx <> 0 then
@@ -1201,7 +1240,10 @@ begin
     // see "deltaX" documentation.
     // on macOS: -1 = right, +1 = left
     // on LCL:   -1 = left,  +1 = right
-    Msg.WheelDelta := sign(-dx) * LCLStep;
+    if isPrecise then
+      Msg.WheelDelta := Round(-dx * LCLStep)
+    else
+      Msg.WheelDelta := sign(-dx) * LCLStep;
   end
   else
     // Filter out empty events - See bug 28491
@@ -1491,6 +1533,24 @@ begin
   FTarget := nil;
 end;
 
+procedure TLCLCommonCallback.InputClientInsertText(const utf8: string);
+var
+  i : integer;
+  c : integer;
+  ch : TUTF8Char;
+begin
+  if (utf8 = '') then Exit;
+  i:=1;
+  while (i<=length(utf8)) do
+  begin
+    c := Utf8CodePointLen(@utf8[i], length(utf8)-i+1, false);
+    ch := Copy(utf8, 1, c);
+    FTarget.IntfUTF8KeyPress(ch, 1, false);
+    inc(i, c);
+  end;
+
+end;
+
 function TLCLCommonCallback.GetIsOpaque: Boolean;
 begin
   Result:= FIsOpaque;
@@ -1736,7 +1796,7 @@ begin
   if Obj.respondsToSelector(ObjCSelector('setTextColor:')) then
   begin
     if AFont.Color = clDefault then
-      Obj.setTextColor(nil)
+      Obj.setTextColor(NSColor.controlTextColor)
     else
       Obj.setTextColor(ColorToNSColor(ColorToRGB(AFont.Color)));
   end;
@@ -1848,6 +1908,31 @@ class procedure TCocoaWSWinControl.Invalidate(const AWinControl: TWinControl);
 begin
   if AWinControl.HandleAllocated then
      NSObject(AWinControl.Handle).lclInvalidate;
+end;
+
+class procedure TCocoaWSWinControl.PaintTo(const AWinControl: TWinControl;
+  ADC: HDC; X, Y: Integer);
+var
+  bc : TCocoaBitmapContext;
+  v  : NSView;
+  b  : NSBitmapImageRep;
+  obj : NSObject;
+  f  : NSRect;
+begin
+  if not (TObject(ADC) is TCocoaBitmapContext) then Exit;
+  if not NSObject(AWinControl.Handle).isKindOfClass(NSView) then Exit;
+  bc := TCocoaBitmapContext(ADC);
+  v := NSView(AWinControl.Handle);
+  f := v.frame;
+  f.origin.x := 0;
+  f.origin.y := 0;
+
+  b := v.bitmapImageRepForCachingDisplayInRect(f);
+
+  v.cacheDisplayInRect_toBitmapImageRep(f, b);
+  bc.DrawImageRep(
+    NSMakeRect(0,0, f.size.width, f.size.height),
+    f, b);
 end;
 
 { TCocoaWSCustomControl }

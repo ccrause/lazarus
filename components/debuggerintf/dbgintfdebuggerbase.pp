@@ -48,9 +48,9 @@ uses
   // LCL
   LCLProc,
   // LazUtils
-  LazClasses, LazLoggerBase, LazFileUtils, LazStringUtils, Maps, LazMethodList,
+  LazClasses, LazLoggerBase, LazFileUtils, LazStringUtils, Maps, LazMethodList, LazUTF8,
   // DebuggerIntf
-  DbgIntfBaseTypes, DbgIntfMiscClasses, DbgIntfPseudoTerminal;
+  DbgIntfBaseTypes, DbgIntfMiscClasses, DbgIntfPseudoTerminal, DbgIntfCommonStrings;
 
 const
   DebuggerIntfVersion = 0;
@@ -66,6 +66,7 @@ type
     dcStepOver,
     dcStepInto,
     dcStepOut,
+    dcStepTo,
     dcRunTo,
     dcJumpto,
     dcAttach,
@@ -1075,7 +1076,7 @@ type
 
   { TCallStackEntryBase }
 
-  TCallStackEntry = class(TObject)
+  TCallStackEntry = class(TFreeNotifyingObject)
   private
     FValidity: TDebuggerDataState;
     FIndex: Integer;
@@ -1481,6 +1482,13 @@ type
                        const AThreadId: Integer; const AThreadName: String;
                        const AThreadState: String;
                        AState: TDebuggerDataState = ddsValid);
+    procedure Init(const AnAdress: TDbgPtr;
+                       const AnArguments: TStrings; const AFunctionName: String;
+                       const FileName, FullName: String;
+                       const ALine: Integer;
+                       const AThreadId: Integer; const AThreadName: String;
+                       const AThreadState: String;
+                       AState: TDebuggerDataState = ddsValid);
     function CreateCopy: TThreadEntry; virtual;
     destructor Destroy; override;
     procedure Assign(AnOther: TThreadEntry); virtual;
@@ -1837,6 +1845,7 @@ type
     FRegisters: TRegisterSupplier;
     FShowConsole: Boolean;
     FSignals: TDBGSignals;
+    FSkipStopMessage: Boolean;
     FState: TDBGState;
     FCallStack: TCallStackSupplier;
     FWatches: TWatchesSupplier;
@@ -1854,6 +1863,7 @@ type
     FReleaseLock: Integer;
     procedure DebuggerEnvironmentChanged(Sender: TObject);
     procedure EnvironmentChanged(Sender: TObject);
+    function GetRunErrorText(ARunError: Integer): string;
     //function GetUnitInfoProvider: TDebuggerUnitInfoProvider;
     function  GetState: TDBGState;
     function  ReqCmd(const ACommand: TDBGCommand;
@@ -1890,7 +1900,7 @@ type
     procedure DoState(const OldState: TDBGState); virtual;
     function  ChangeFileName: Boolean; virtual;
     function  GetCommands: TDBGCommands; virtual;
-    function  GetSupportedCommands: TDBGCommands; virtual;
+    class function  GetSupportedCommands: TDBGCommands; virtual;
     function  GetTargetWidth: Byte; virtual;
     function  GetWaiting: Boolean; virtual;
     function  GetIsIdle: Boolean; virtual;
@@ -1944,6 +1954,7 @@ type
     procedure StepOverInstr;
     procedure StepIntoInstr;
     procedure StepOut;
+    procedure StepTo(const ASource: String; const ALine: Integer);                // Executes til a certain point
     procedure RunTo(const ASource: String; const ALine: Integer);                // Executes til a certain point
     procedure JumpTo(const ASource: String; const ALine: Integer);               // No execute, only set exec point
     procedure Attach(AProcessID: String);
@@ -1963,6 +1974,7 @@ type
     property  IsInReset: Boolean read FIsInReset;
     procedure AddNotifyEvent(AReason: TDebuggerNotifyReason; AnEvent: TNotifyEvent);
     procedure RemoveNotifyEvent(AReason: TDebuggerNotifyReason; AnEvent: TNotifyEvent);
+    procedure SetSkipStopMessage;
   public
     property Arguments: String read FArguments write FArguments;                 // Arguments feed to the program
     property BreakPoints: TDBGBreakPoints read FBreakPoints;                     // list of all breakpoints
@@ -1973,6 +1985,7 @@ type
                                            write SetDebuggerEnvironment;         // The environment passed to the debugger process
     property Environment: TStrings read FEnvironment write SetEnvironment;       // The environment passed to the debuggee
     property Exceptions: TBaseExceptions read FExceptions write FExceptions;      // A list of exceptions we should ignore
+    property RunErrorText [ARunError: Integer]: string read GetRunErrorText;
     property ExitCode: Integer read FExitCode;
     property ExternalDebugger: String read FExternalDebugger;                    // The name of the debugger executable
     property FileName: String read FFileName write SetFileName;                  // The name of the exe to be debugged
@@ -1984,6 +1997,7 @@ type
     property PseudoTerminal: TPseudoTerminal read GetPseudoTerminal; experimental; // 'may be replaced with a more general API';
     property State: TDBGState read FState;                                       // The current state of the debugger
     property SupportedCommands: TDBGCommands read GetSupportedCommands;          // All available commands of the debugger
+    class function SupportedCommandsFor(AState: TDBGState): TDBGCommands; virtual;
     property TargetWidth: Byte read GetTargetWidth;                              // Currently only 32 or 64
     //property Waiting: Boolean read GetWaiting;                                   // Set when the debugger is wating for a command to complete
     property Watches: TWatchesSupplier read FWatches;                                 // list of all watches etc
@@ -1992,6 +2006,7 @@ type
     property IsIdle: Boolean read GetIsIdle;                                     // Nothing queued
     property ErrorStateMessage: String read FErrorStateMessage;
     property ErrorStateInfo: String read FErrorStateInfo;
+    property SkipStopMessage: Boolean read FSkipStopMessage;
     //property UnitInfoProvider: TDebuggerUnitInfoProvider                        // Provided by DebugBoss, to map files to packages or project
     //         read GetUnitInfoProvider write FUnitInfoProvider;
     // Events
@@ -2068,12 +2083,13 @@ var
 const
   COMMANDMAP: array[TDBGState] of TDBGCommands = (
   {dsNone } [],
-  {dsIdle } [dcEnvironment],
-  {dsStop } [dcRun, dcStepOver, dcStepInto, dcStepOverInstr, dcStepIntoInstr,
-             dcAttach, dcBreak, dcWatch, dcEvaluate, dcEnvironment,
+  {dsIdle } [dcRun, dcStepOver, dcStepInto, dcStepOverInstr, dcStepIntoInstr, dcRunTo,
+             dcAttach, dcBreak, dcWatch, {dcEvaluate,} dcEnvironment],
+  {dsStop } [dcRun, dcStepOver, dcStepInto, dcStepOverInstr, dcStepIntoInstr, dcRunTo,
+             dcAttach, dcBreak, dcWatch, {dcEvaluate,} dcEnvironment,
              dcSendConsoleInput],
   {dsPause} [dcRun, dcStop, dcStepOver, dcStepInto, dcStepOverInstr, dcStepIntoInstr,
-             dcStepOut, dcRunTo, dcJumpto, dcDetach, dcBreak, dcWatch, dcLocal, dcEvaluate, dcModify,
+             dcStepOut, dcStepTo, dcRunTo, dcJumpto, dcDetach, dcBreak, dcWatch, dcLocal, dcEvaluate, dcModify,
              dcEnvironment, dcSetStackFrame, dcDisassemble, dcSendConsoleInput {, dcSendSignal}],
   {dsInternalPause} // same as run, so not really used
             [dcStop, dcBreak, dcWatch, dcEnvironment, dcSendConsoleInput{, dcSendSignal}],
@@ -2491,6 +2507,18 @@ begin
   FThreadState := AThreadState;
 end;
 
+procedure TThreadEntry.Init(const AnAdress: TDbgPtr;
+  const AnArguments: TStrings; const AFunctionName: String; const FileName,
+  FullName: String; const ALine: Integer; const AThreadId: Integer;
+  const AThreadName: String; const AThreadState: String;
+  AState: TDebuggerDataState);
+begin
+  TopFrame.Init(AnAdress, AnArguments, AFunctionName, FileName, FullName, ALine, AState);
+  FThreadId    := AThreadId;
+  FThreadName  := AThreadName;
+  FThreadState := AThreadState;
+end;
+
 function TThreadEntry.CreateCopy: TThreadEntry;
 begin
   Result := TThreadEntry.Create;
@@ -2506,7 +2534,8 @@ end;
 procedure TThreadEntry.Assign(AnOther: TThreadEntry);
 begin
   FTopFrame.Free;
-  FTopFrame    := AnOther.TopFrame.CreateCopy;
+  FTopFrame    := CreateStackEntry;  //   .CreateCopy;
+  FTopFrame.Assign(AnOther.TopFrame);
   FThreadId    := AnOther.FThreadId;
   FThreadName  := AnOther.FThreadName;
   FThreadState := AnOther.FThreadState;
@@ -3104,7 +3133,7 @@ end;
 
 function TRegisterDisplayValue.GetValue(ADispFormat: TRegisterDisplayFormat): String;
 const Digits = '01234567';
-  function IntToBase(Val, Base: Integer): String;
+  function IntToBase(Val, Base: QWord): String;
   var
     M: Integer;
   begin
@@ -5951,6 +5980,16 @@ begin
   FDestroyNotificationList[AReason].Remove(TMethod(AnEvent));
 end;
 
+procedure TDebuggerIntf.SetSkipStopMessage;
+begin
+  FSkipStopMessage := True;
+end;
+
+class function TDebuggerIntf.SupportedCommandsFor(AState: TDBGState): TDBGCommands;
+begin
+  Result := COMMANDMAP[AState] * GetSupportedCommands;
+end;
+
 procedure TDebuggerIntf.Done;
 begin
   SetState(dsNone);
@@ -6030,12 +6069,12 @@ procedure TDebuggerIntf.EnvironmentChanged(Sender: TObject);
 var
   n, idx: integer;
   S: String;
-  Env: TStringList;
+  Env: TStringListUTF8Fast;
 begin
   // Createe local copy
   if FState <> dsNone then
   begin
-    Env := TStringList.Create;
+    Env := TStringListUTF8Fast.Create;
     try
       Env.Assign(Environment);
 
@@ -6065,6 +6104,68 @@ begin
     end;
   end;
   FCurEnvironment.Assign(FEnvironment);
+end;
+
+function TDebuggerIntf.GetRunErrorText(ARunError: Integer): string;
+begin
+  Result := '';
+  case ARunError of
+      1: Result := rsRunErrorInvalidFunctionNumber;
+      2: Result := rsRunErrorFileNotFound;
+      3: Result := rsRunErrorPathNotFound;
+      4: Result := rsRunErrorTooManyOpenFiles;
+      5: Result := rsRunErrorFileAccessDenied;
+      6: Result := rsRunErrorInvalidFileHandle;
+     12: Result := rsRunErrorInvalidFileAccessCode;
+     15: Result := rsRunErrorInvalidDriveNumber;
+     16: Result := rsRunErrorCannotRemoveCurrentDirect;
+     17: Result := rsRunErrorCannotRenameAcrossDrives;
+    100: Result := rsRunErrorDiskReadError;
+    101: Result := rsRunErrorDiskWriteError;
+    102: Result := rsRunErrorFileNotAssigned;
+    103: Result := rsRunErrorFileNotOpen;
+    104: Result := rsRunErrorFileNotOpenForInput;
+    105: Result := rsRunErrorFileNotOpenForOutput;
+    106: Result := rsRunErrorInvalidNumericFormat;
+    107: Result := rsRunErrorInvalidEnumeration;
+    150: Result := rsRunErrorDiskIsWriteProtected;
+    151: Result := rsRunErrorBadDriveRequestStructLeng;
+    152: Result := rsRunErrorDriveNotReady;
+    154: Result := rsRunErrorCRCErrorInData;
+    156: Result := rsRunErrorDiskSeekError;
+    157: Result := rsRunErrorUnknownMediaType;
+    158: Result := rsRunErrorSectorNotFound;
+    159: Result := rsRunErrorPrinterOutOfPaper;
+    160: Result := rsRunErrorDeviceWriteFault;
+    161: Result := rsRunErrorDeviceReadFault;
+    162: Result := rsRunErrorHardwareFailure;
+    200: Result := rsRunErrorDivisionByZero;
+    201: Result := rsRunErrorRangeCheckError;
+    202: Result := rsRunErrorStackOverflowError;
+    203: Result := rsRunErrorHeapOverflowError;
+    204: Result := rsRunErrorInvalidPointerOperation;
+    205: Result := rsRunErrorFloatingPointOverflow;
+    206: Result := rsRunErrorFloatingPointUnderflow;
+    207: Result := rsRunErrorInvalidFloatingPointOpera;
+    210: Result := rsRunErrorObjectNotInitialized;
+    211: Result := rsRunErrorCallToAbstractMethod;
+    212: Result := rsRunErrorStreamRegistrationError;
+    213: Result := rsRunErrorCollectionIndexOutOfRange;
+    214: Result := rsRunErrorCollectionOverflowError;
+    215: Result := rsRunErrorArithmeticOverflowError;
+    216: Result := rsRunErrorGeneralProtectionFault;
+    217: Result := rsRunErrorUnhandledExceptionOccurre;
+    218: Result := rsRunErrorInvalidValueSpecified;
+    219: Result := rsRunErrorInvalidTypecast;
+    222: Result := rsRunErrorVariantDispatchError;
+    223: Result := rsRunErrorVariantArrayCreate;
+    224: Result := rsRunErrorVariantIsNotAnArray;
+    225: Result := rsRunErrorVarArrayBoundsCheckError;
+    227: Result := rsRunErrorAssertionFailedError;
+    229: Result := rsRunErrorSafecallErrorCheck;
+    231: Result := rsRunErrorExceptionStackCorrupted;
+    232: Result := rsRunErrorThreadsNotSupported;
+  end;
 end;
 
 function TDebuggerIntf.GetPseudoTerminal: TPseudoTerminal;
@@ -6130,7 +6231,7 @@ var
   idx: Integer;
 begin
   if MDebuggerPropertiesList = nil
-  then MDebuggerPropertiesList := TStringList.Create;
+  then MDebuggerPropertiesList := TStringListUTF8Fast.Create;
   idx := MDebuggerPropertiesList.IndexOf(ClassName);
   if idx = -1
   then begin
@@ -6157,7 +6258,7 @@ begin
   ReqCmd(ACommand, AParams, dummy);
 end;
 
-function TDebuggerIntf.GetSupportedCommands: TDBGCommands;
+class function TDebuggerIntf.GetSupportedCommands: TDBGCommands;
 begin
   Result := [];
 end;
@@ -6234,6 +6335,11 @@ begin
   ReqCmd(dcRun, []);
 end;
 
+procedure TDebuggerIntf.StepTo(const ASource: String; const ALine: Integer);
+begin
+  ReqCmd(dcStepTo, [ASource, ALine]);
+end;
+
 procedure TDebuggerIntf.RunTo(const ASource: String; const ALine: Integer);
 begin
   ReqCmd(dcRunTo, [ASource, ALine]);
@@ -6287,6 +6393,7 @@ end;
 
 procedure TDebuggerIntf.ResetStateToIdle;
 begin
+  FExitCode := 0;
   SetState(dsIdle);
 end;
 
@@ -6329,6 +6436,8 @@ begin
 
   if AValue <> FState
   then begin
+    if AValue <> dsStop then
+      FSkipStopMessage := False;
     DebugLnEnter(DBG_STATE, ['DebuggerState: Setting to ', dbgs(AValue),', from ', dbgs(FState)]);
     OldState := FState;
     FState := AValue;
@@ -6426,7 +6535,7 @@ constructor TBaseDebugManagerIntf.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
-  FValueFormatterList := TStringList.Create;
+  FValueFormatterList := TStringListUTF8Fast.Create;
   FValueFormatterList.Sorted := True;
   FValueFormatterList.Duplicates := dupError;
 end;
@@ -6520,7 +6629,7 @@ initialization
   DBG_DATA_MONITORS := DebugLogger.FindOrRegisterLogGroup('DBG_DATA_MONITORS' {$IFDEF DBG_DATA_MONITORS} , True {$ENDIF} );
   DBG_DISASSEMBLER := DebugLogger.FindOrRegisterLogGroup('DBG_DISASSEMBLER' {$IFDEF DBG_DISASSEMBLER} , True {$ENDIF} );
 
-  MDebuggerClasses := TStringList.Create;
+  MDebuggerClasses := TStringListUTF8Fast.Create;
   MDebuggerClasses.Sorted := True;
   MDebuggerClasses.Duplicates := dupError;
 

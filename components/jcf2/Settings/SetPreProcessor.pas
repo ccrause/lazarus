@@ -33,8 +33,7 @@ interface
 }
 
 uses
-  { delphi }
-  Classes,
+  Classes, SysUtils,
   { local }
   JcfSetBase, SettingsStream;
 
@@ -66,8 +65,6 @@ type
 
 implementation
 
-uses SysUtils;
-
 const
   REG_ENABLED = 'Enabled';
   REG_DEFINED_SYMBOLS = 'DefinedSymbols';
@@ -80,11 +77,13 @@ begin
   inherited;
   SetSection('PreProcessor');
 
-  fcDefinedSymbols := TStringList.Create;
+  fcDefinedSymbols := TStringList.Create;     // Will compare with CompareText.
+  {$IF FPC_FULLVERSION>=30200}fcDefinedSymbols.UseLocale := False;{$ENDIF}
   //fcDefinedSymbols.Sorted := True;
   fcDefinedSymbols.Duplicates := dupIgnore;
 
   fcDefinedOptions := TStringList.Create;
+  {$IF FPC_FULLVERSION>=30200}fcDefinedOptions.UseLocale := False;{$ENDIF}
   //fcDefinedOptions.Sorted := True;
   fcDefinedOptions.Duplicates := dupIgnore;
 end;
@@ -117,16 +116,11 @@ begin
   fcDefinedSymbols.Sorted := False;
   if not pcStream.Read(REG_DEFINED_SYMBOLS, fcDefinedSymbols) then
     AddDefaultSymbols;
-
-  fcDefinedSymbols.Sort;
   fcDefinedSymbols.Sorted := True;
-
 
   fcDefinedOptions.Sorted := False;
   if not pcStream.Read(REG_DEFINED_OPTIONS, fcDefinedOptions) then
     AddDefaultOptions;
-
-  fcDefinedOptions.Sort;
   fcDefinedOptions.Sorted := True;
 end;
 

@@ -56,7 +56,10 @@ function CommentText(const s: string; CommentType: TCommentType): string;
 function SimpleSyntaxToRegExpr(const Src: string): string;
 function BinaryStrToText(const s: string): string;
 function SpecialCharsToSpaces(const s: string; FixUTF8: boolean): string;
-function SpecialCharsToHex(const s: string): string;
+// Deprecated in 2.1 / 04.11.2020 / Remove in 2.3
+function SpecialCharsToHex(const s: string): string; inline; deprecated 'Use LazUtf8.Utf8EscapeControlChars';
+function ShortDotsLine(const Line: string): string;
+function BeautifyLineXY(const Filename, Line: string; X, Y: integer): string;
 function BreakString(const s: string; MaxLineLength, Indent: integer): string;
 
 // Conversions to and from a StringList
@@ -89,6 +92,8 @@ function GetPart(const ASkipTo, AnEnd: array of String; var ASource: String;
   const AnIgnoreCase: Boolean = False; const AnUpdateSource: Boolean = True): String; overload;
 function TextToSingleLine(const AText: string): string;
 function SwapCase(Const S: String): String;
+procedure ReplaceSubstring(var s: string; StartPos, Count: SizeInt;
+                           const Insertion: string);
 // case..of utility
 function StringCase(const AString: String; const ACase: array of String {; const AIgnoreCase = False, APartial = false: Boolean}): Integer; overload;
 function StringCase(const AString: String; const ACase: array of String; const AIgnoreCase, APartial: Boolean): Integer; overload;
@@ -100,6 +105,9 @@ function StrLScan(P: PChar; c: Char; MaxLen: Cardinal): PChar;
 // Like IsValidIdent() in FPC 3.1.
 function LazIsValidIdent(const Ident: string; AllowDots: Boolean = False;
                          StrictDots: Boolean = False): Boolean;
+
+const
+  MaxTextLen = 80;
 
 implementation
 
@@ -713,16 +721,20 @@ begin
 end;
 
 function SpecialCharsToHex(const s: string): string;
-var
-  i: Integer;
 begin
-  Result:=s;
-  if Result='' then exit;
-  for i:=length(Result) downto 1 do
-    if Result[i]<' ' then
-      Result:=copy(Result,1,i-1)
-              +'#'+Format('%d',[ord(Result[i])])
-              +copy(Result,i+1,length(Result));
+  Result:=Utf8EscapeControlChars(s, emHexPascal);
+end;
+
+function ShortDotsLine(const Line: string): string;
+begin
+  Result:=Utf8EscapeControlChars(Line, emHexPascal);
+  if UTF8Length(Result)>MaxTextLen then
+    Result:=UTF8Copy(Result,1,MaxTextLen)+'...';
+end;
+
+function BeautifyLineXY(const Filename, Line: string; X, Y: integer): string;
+begin
+  Result:=Filename+' ('+IntToStr(Y)+','+IntToStr(X)+')'+' '+ShortDotsLine(Line);
 end;
 
 function BreakString(const s: string; MaxLineLength, Indent: integer): string;
@@ -1206,6 +1218,56 @@ begin
       P^ := char(byte(p^) + 32);
     Inc(P);
   end;
+end;
+
+procedure ReplaceSubstring(var s: string; StartPos, Count: SizeInt;
+  const Insertion: string);
+var
+  MaxCount: SizeInt;
+  InsertionLen: SizeInt;
+  SLen: SizeInt;
+  RestLen: SizeInt;
+  p: PByte;
+begin
+  SLen:=length(s);
+  if StartPos>SLen then begin
+    s:=s+Insertion;
+    exit;
+  end;
+  if StartPos<1 then StartPos:=1;
+  if Count<0 then Count:=0;
+  MaxCount:=SLen-StartPos+1;
+  if Count>MaxCount then
+    Count:=MaxCount;
+  InsertionLen:=length(Insertion);
+  if (Count=0) and (InsertionLen=0) then
+    exit; // nothing to do
+  if (Count=InsertionLen) then begin
+    if CompareMem(PByte(s)+StartPos-1,Pointer(Insertion),Count) then
+      // already the same content
+      exit;
+    UniqueString(s);
+  end else begin
+    RestLen:=SLen-StartPos-Count+1;
+    if InsertionLen<Count then begin
+      // shorten
+      if RestLen>0 then begin
+        UniqueString(s);
+        p:=PByte(s)+StartPos-1;
+        System.Move((p+Count)^,(p+InsertionLen)^,RestLen);
+      end;
+      Setlength(s,SLen-Count+InsertionLen);
+    end else begin
+      // longen
+      Setlength(s,SLen-Count+InsertionLen);
+      if RestLen>0 then begin
+        p:=PByte(s)+StartPos-1;
+        System.Move((p+Count)^,(p+InsertionLen)^,RestLen);
+      end;
+    end;
+  end;
+  if InsertionLen>0 then
+    System.Move(PByte(Insertion)^,(PByte(s)+StartPos-1)^,InsertionLen);
 end;
 
 function StringCase(const AString: String; const ACase: array of String {; const AIgnoreCase = False, APartial = false: Boolean}): Integer;

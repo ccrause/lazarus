@@ -54,7 +54,8 @@ type
     estWhileDoBeginEnd,
     estRepeatUntil,
     estWith,
-    estPascalComment
+    estPascalComment,
+    estRegionArea
     );
     
   { TEncloseSelectionDialog }
@@ -94,6 +95,7 @@ begin
     estRepeatUntil: Result:='Repeat..Until |';
     estWith: Result:='With | do begin..end';
     estPascalComment: Result:='{..}';
+    estRegionArea: Result:='{$REGION ''|''}..{$ENDREGION}';
   else
     RaiseGDBException('EncloseSelectionTypeDescription');
   end;
@@ -159,6 +161,11 @@ begin
       Template:='{'+LineEnding
                +'  |<selection>'+LineEnding
                +'}'+LineEnding;
+
+    estRegionArea:
+      Template:='{$REGION ''|''}'+LineEnding
+               +'  <selection>'+LineEnding
+               +'{$ENDREGION}'+LineEnding;
 
   else
     RaiseGDBException('GetEnclosedSelectionParams');
@@ -429,8 +436,8 @@ var
 begin
   i:=TypeRadiogroup.ItemIndex;
   for Result:=Low(TEncloseSelectionType) to High(TEncloseSelectionType) do
-    if UTF8CompareText(TypeRadiogroup.Items[i],
-                       EncloseSelectionTypeDescription(Result))=0
+    if UTF8CompareLatinTextFast(TypeRadiogroup.Items[i],
+                                EncloseSelectionTypeDescription(Result))=0
     then
       exit;
   RaiseGDBException('TEncloseSelectionDialog.GetEncloseType');

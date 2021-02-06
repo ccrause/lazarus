@@ -49,6 +49,9 @@ unit Tokens;
 
 interface
 
+uses
+  SysUtils;
+
 type
   TWordType = (wtNotAWord,
     wtReservedWord, wtReservedWordDirective, wtBuiltInConstant, wtBuiltInType,
@@ -63,9 +66,9 @@ type
     ttUnknown, // default category used for unrecognised input
 
     // spacing
-    ttReturn, // CR & LF chars
+    ttReturn,     // CR & LF chars
     ttWhiteSpace, // spaces & tabs
-    ttComment, // one of these
+    ttComment,    // one of these
     ttConditionalCompilationRemoved,
 
 
@@ -73,13 +76,13 @@ type
     ttQuotedLiteralString, // 'This is a string'
     ttSemicolon,     // ;
     ttColon,         // :
-    ttComma,
-    ttOpenBracket,
-    ttCloseBracket,
-    ttOpenSquareBracket,
-    ttCloseSquareBracket,
-    ttDot,
-    ttHash,
+    ttComma,         // ,
+    ttOpenBracket,       // (
+    ttCloseBracket,      // )
+    ttOpenSquareBracket, // [
+    ttCloseSquareBracket,// ]
+    ttDot,       // .
+    ttHash,      // #
     ttDoubleDot, // '..' as in '[1 .. 2]'
     ttAssign,    // :=
     ttAmpersand, // '&' is used in Asm
@@ -178,6 +181,7 @@ type
     ttWriteOnly,
     ttDispId,
     ttNear,
+    ttHuge,
     ttReadOnly,
     ttDynamic,
     ttNodefault,
@@ -247,6 +251,18 @@ type
     ttAnsiString,
     ttWidestring,
     ttPchar,
+    ttShortString,
+    ttPShortString,
+    ttAnsiChar,
+    ttPAnsiChar,
+    ttPWideChar,
+    ttUnicodeChar,
+    ttUnicodeString,
+    ttPUnicodeChar,
+    ttUtf8String,
+    ttUtf16String,
+    ttRawByteString,
+    ttPByte,
     ttSingle,
     ttDouble,
     ttExtended,
@@ -254,6 +270,15 @@ type
     ttReal48,
     ttComp,
     ttCurrency,
+    ttNativeInt,
+    ttNativeUInt,
+    ttInt8,
+    ttInt16,
+    ttInt32,
+    ttUInt8,
+    ttUInt16,
+    ttUInt32,
+    ttUInt64,
 
     ttVariant,
     ttOleVariant,
@@ -285,13 +310,16 @@ type
     ttGreaterThanOrEqual,
     ttLessThanOrEqual,
     ttNotEqual,
+    ttSetSymDif,
     ttBackSlash, { legal in char literals }
 
     // FreePascal c-style operators
     ttPlusAssign,     // +=
     ttMinusAssign,    // -=
     ttTimesAssign,    // *=
-    ttFloatDivAssign  // /=
+    ttFloatDivAssign, // /=
+    ttShl_ll,         // <<
+    ttShr_gg          // >>
     );
 
   TTokenTypeSet = set of TTokenType;
@@ -367,11 +395,11 @@ const
     ttOverload, ttReintroduce,
     ttDeprecated, ttLibrary, ttPlatform, ttExperimental, ttUnimplemented,
     ttStatic, ttFinal, ttVarArgs, ttUnsafe, ttEnumerator, ttNostackframe, ttInterrupt,
-    ttPublic, ttVectorcall];
+    ttPublic, ttVectorcall,ttHuge];
 
   ClassDirectives: TTokenTypeSet =
     [ttPrivate, ttProtected, ttPublic, ttPublished, ttAutomated, ttStrict];
-  HintDirectives: TTokenTypeSet  = [ttDeprecated, ttLibrary, ttPlatform,
+  HintDirectives: TTokenTypeSet  = [ttDeprecated, ttLibrary, ttPlatform, ttCVar,
                                     ttExperimental, ttUnimplemented, ttStatic];
 
   AllDirectives: TTokenTypeSet =
@@ -383,7 +411,7 @@ const
     ttNear, ttReadOnly, ttDynamic, ttNoDefault, ttRegister,
     ttExport, ttOverride, ttOverload, ttResident, ttLocal,
     ttImplements, ttReintroduce,
-    ttLibrary, ttPlatform, ttStatic, ttFinal, ttVarArgs, ttCVar, ttVectorcall];    
+    ttLibrary, ttPlatform, ttStatic, ttFinal, ttVarArgs, ttCVar, ttVectorcall,ttHuge];
 
   ProcedureWords: TTokenTypeSet = [ttProcedure, ttFunction, ttConstructor, ttDestructor, ttOperator];
 
@@ -400,7 +428,7 @@ const
 
   VariantTypes: TTokenTypeSet = [ttVariant, ttOleVariant];
 
-  Operators: TTokenTypeSet = [ttAnd .. ttNotEqual, ttEnumerator];
+  Operators: TTokenTypeSet = [ttAnd .. ttSetSymDif, ttEnumerator];
 
   { these words are
   - operators
@@ -410,11 +438,12 @@ const
 
   RelationalOperators: TTokenTypeSet = [
     ttIn, ttIs, ttAs, ttGreaterThan,
-    ttLessThan, ttGreaterThanOrEqual, ttLessThanOrEqual, ttEquals, ttNotEqual];
+    ttLessThan, ttGreaterThanOrEqual, ttLessThanOrEqual, ttEquals,
+    ttNotEqual, ttSetSymDif];
 
   AddOperators: TTokenTypeSet = [ttPlus, ttMinus, ttOr, ttXor];
 
-  MulOperators: TTokenTypeSet = [ttTimes, ttFloatDiv, ttDiv, ttMod, ttAnd, ttShl, ttShr, ttExponent];
+  MulOperators: TTokenTypeSet = [ttTimes, ttFloatDiv, ttDiv, ttMod, ttAnd, ttShl, ttShr, ttExponent, ttShl_ll,ttShr_gg];
 
   SingleSpaceOperators = [
     // some unary operators
@@ -422,9 +451,10 @@ const
     // all operators that are always binary
     ttAnd, ttAs, ttDiv, ttIn, ttIs, ttMod, ttOr, ttShl, ttShr, ttXor,
     ttTimes, ttFloatDiv, ttExponent, ttEquals, ttGreaterThan, ttLessThan,
-    ttGreaterThanOrEqual, ttLessThanOrEqual, ttNotEqual];
+    ttGreaterThanOrEqual, ttLessThanOrEqual, ttNotEqual, ttSetSymDif, ttShl_ll, ttShr_gg];
 
-  StringWords: TTokenTypeSet = [ttString, ttAnsiString, ttWideString];
+  StringWords: TTokenTypeSet = [ttString, ttAnsiString, ttWideString, ttShortString,
+    ttUnicodeString, ttUtf8String, ttUtf16String, ttRawByteString];
 
   RealTypes: TTokenTypeSet =
     [ttReal48, ttReal, ttSingle, ttDouble, ttExtended, ttCurrency, ttComp];
@@ -433,7 +463,9 @@ const
     [ttShortInt, ttSmallInt, ttInteger, ttByte,
     ttLongInt, ttInt64, ttWord,
     ttBoolean, ttByteBool, ttWordBool, ttLongBool,
-    ttChar, ttWideChar, ttLongWord, ttPChar];
+    ttChar, ttWideChar, ttLongWord, ttPChar, ttCardinal, ttNativeInt, ttNativeUInt,
+    ttInt8, ttInt16, ttInt32, ttUInt8, ttUInt16, ttUInt32, ttUInt64, ttAnsiChar,
+    ttUnicodeChar, ttPAnsiChar, ttPUnicodeChar, ttPWideChar, ttPByte, ttPShortString];
 
   UsesWords: TTokenTypeSet = [ttUses, ttRequires, ttContains];
 
@@ -490,11 +522,6 @@ function PreProcSymbolTypeSetToString(
 implementation
 
 uses
-  { system }
-{$IFNDEF FPC}
-  Windows,
-{$ENDIF}
-  SysUtils,
   { local }
   JcfStringUtils;
 
@@ -518,7 +545,7 @@ const
 
   { a value larger than the number of keywords,
     used as an initial size for the dynamic array }
-  INITIAL_MAX_KEYWORDS = 200;
+  INITIAL_MAX_KEYWORDS = 230;
 
 var
   { final number of keywords added }
@@ -788,6 +815,9 @@ begin
   AddKeyword('>=', wtOperator, ttGreaterThanOrEqual);
   AddKeyword('<=', wtOperator, ttLessThanOrEqual);
   AddKeyword('<>', wtOperator, ttNotEqual);
+  AddKeyword('><', wtOperator, ttSetSymDif);
+  AddKeyword('<<', wtOperator, ttShl_ll);  // in FreePascal
+  AddKeyword('>>', wtOperator, ttShr_gg);  // in FreePascal
   // these must come after the above as they are shorter
   AddKeyword('>', wtOperator, ttGreaterThan);
   AddKeyword('<', wtOperator, ttLessThan);
@@ -798,6 +828,29 @@ begin
   AddKeyword('-=', wtNotAWord, ttMinusAssign);
   AddKeyword('*=', wtNotAWord, ttTimesAssign);
   AddKeyword('/=', wtNotAWord, ttFloatDivAssign);
+
+  AddKeyword('nativeint', wtBuiltInType, ttNativeInt);
+  AddKeyword('nativeuint', wtBuiltInType, ttNativeUInt);
+  AddKeyword('int8', wtBuiltInType, ttInt8);
+  AddKeyword('int16', wtBuiltInType, ttInt16);
+  AddKeyword('int32', wtBuiltInType, ttInt32);
+  AddKeyword('uint8', wtBuiltInType, ttUInt8);
+  AddKeyword('uint16', wtBuiltInType, ttUInt16);
+  AddKeyword('uint32', wtBuiltInType, ttUInt32);
+  AddKeyword('uint64', wtBuiltInType, ttUInt64);
+  AddKeyword('shortstring', wtBuiltInType, ttShortString);
+  AddKeyword('pshortstring', wtBuiltInType, ttPShortString);
+  AddKeyword('ansichar', wtBuiltInType, ttAnsiChar);
+  AddKeyword('pansichar', wtBuiltInType, ttPAnsiChar);
+  AddKeyword('pwidechar', wtBuiltInType, ttPWideChar);
+  AddKeyword('unicodechar', wtBuiltInType, ttUnicodeChar);
+  AddKeyword('unicodestring', wtBuiltInType, ttUnicodeString);
+  AddKeyword('punicodechar', wtBuiltInType, ttPUnicodeChar);
+  AddKeyword('utf8string', wtBuiltInType, ttUtf8String);
+  AddKeyword('utf16string', wtBuiltInType, ttUtf16String);
+  AddKeyword('rawbytestring', wtBuiltInType, ttRawByteString);
+  AddKeyword('pbyte', wtBuiltInType, ttPByte);
+  AddKeyword('huge', wtReservedWordDirective, ttHuge);
 
   {Now that we know how many keywords were added,
     we can set the actual size of the array }

@@ -6,9 +6,19 @@ interface
 
 uses
   Classes, SysUtils, Graphics, LCLType, LCLIntf, SynGutterBase,
-  SynEditMiscProcs, SynTextDrawer, SynEditMouseCmds, SynEditTextBuffer, LazSynEditText;
+  SynEditMiscProcs, SynTextDrawer, SynEditMouseCmds,
+  LazSynEditText, SynEditTypes;
 
 type
+
+  TSynGutterLineNumber = class;
+
+  TSynEditGutterLineInfo = record
+    ShowDot: boolean;
+    ViewLine: Integer;
+    LineRange: TLineRange;
+  end;
+  TSynEditGetGutterLineTextEvent = procedure(Sender: TSynGutterLineNumber; ALine: integer; out AText: string; const ALineInfo: TSynEditGutterLineInfo) of object;
 
   TSynEditMouseActionsLineNum = class(TSynEditMouseInternalActions)
   public  // empty by default
@@ -25,12 +35,12 @@ type
     FShowOnlyLineNumbersMultiplesOf: integer;
     FLeadingZeros: boolean;
     FZeroStart: boolean;
+    FOnFormatLineNumber: TSynEditGetGutterLineTextEvent;
 
     procedure SetDigitCount(AValue : integer);
     procedure SetLeadingZeros(const AValue : boolean);
     procedure SetShowOnlyLineNumbersMultiplesOf(const AValue : integer);
     procedure SetZeroStart(const AValue : boolean);
-    function FormatLineNumber(Line: integer; IsDot: boolean): string;
   protected
     procedure Init; override;
     function  PreferedWidthAtCurrentPPI: Integer; override;
@@ -44,7 +54,7 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Assign(Source: TPersistent); override;
-
+    function FormatLineNumber(Line: integer; IsDot: boolean): string;
     procedure Paint(Canvas: TCanvas; AClip: TRect; FirstLine, LastLine: integer);
       override;
   published
@@ -54,11 +64,10 @@ type
              read FShowOnlyLineNumbersMultiplesOf write SetShowOnlyLineNumbersMultiplesOf;
     property ZeroStart: boolean read FZeroStart write SetZeroStart;
     property LeadingZeros: boolean read FLeadingZeros write SetLeadingZeros;
+    property OnFormatLineNumber: TSynEditGetGutterLineTextEvent read FOnFormatLineNumber write FOnFormatLineNumber;
   end;
 
 implementation
-uses
-  SynEdit;
 
 { TSynGutterLineNumber }
 
@@ -76,15 +85,15 @@ procedure TSynGutterLineNumber.Init;
 begin
   inherited Init;
   FTextDrawer := Gutter.TextDrawer;
-  TSynEditStringList(TextBuffer).AddChangeHandler(senrLineCount, @LineCountChanged);
-  TSynEditStringList(TextBuffer).AddNotifyHandler(senrTextBufferChanged, @BufferChanged);
+  ViewedTextBuffer.AddChangeHandler(senrLineCount, @LineCountChanged);
+  ViewedTextBuffer.AddNotifyHandler(senrTextBufferChanged, @BufferChanged);
   FTextDrawer.RegisterOnFontChangeHandler(@FontChanged);
   LineCountchanged(nil, 0, 0);
 end;
 
 destructor TSynGutterLineNumber.Destroy;
 begin
-  TSynEditStringList(TextBuffer).RemoveHanlders(self);
+  ViewedTextBuffer.RemoveHanlders(self);
   FTextDrawer.UnRegisterOnFontChangeHandler(@FontChanged);
   inherited Destroy;
 end;
@@ -195,9 +204,6 @@ end;
 
 procedure TSynGutterLineNumber.BufferChanged(Sender: TObject);
 begin
-  TSynEditStringList(Sender).RemoveHanlders(self);
-  TSynEditStringList(TextBuffer).AddChangeHandler(senrLineCount, @LineCountChanged);
-  TSynEditStringList(TextBuffer).AddNotifyHandler(senrTextBufferChanged, @BufferChanged);
   LineCountChanged(nil, 0, 0);
 end;
 
@@ -229,14 +235,16 @@ var
   rcLine: TRect;
   s: string;
   dc: HDC;
-  ShowDot: boolean;
+  LineInfo: TSynEditGutterLineInfo;
   LineHeight: Integer;
+  t: TLinePos;
 
 begin
   if not Visible then exit;
 
-  LineHeight := TCustomSynEdit(SynEdit).LineHeight;
-  c := TCustomSynEdit(SynEdit).Lines.Count;
+  LineHeight := SynEdit.LineHeight;
+  c := SynEdit.Lines.Count;
+  t := ToIdx(GutterArea.TextArea.TopLine);
   // Changed to use fTextDrawer.BeginDrawing and fTextDrawer.EndDrawing only
   // when absolutely necessary.  Note: Never change brush / pen / font of the
   // canvas inside of this block (only through methods of fTextDrawer)!
@@ -255,27 +263,35 @@ begin
     if MarkupInfo.Foreground <> clNone then
       fTextDrawer.SetForeColor(MarkupInfo.Foreground)
     else
-      fTextDrawer.SetForeColor(TCustomSynEdit(SynEdit).Font.Color);
+      fTextDrawer.SetForeColor(SynEdit.Font.Color);
     fTextDrawer.SetFrameColor(MarkupInfo.FrameColor);
     fTextDrawer.Style := MarkupInfo.Style;
     // prepare the rect initially
     rcLine := AClip;
     rcLine.Bottom := AClip.Top;
-    for i := FirstLine to LastLine do
+    for i := t + FirstLine to t + LastLine do
     begin
-      iLine := FoldView.DisplayNumber[i];
-      if (iLine < 0) or (iLine > c) then break;
+      iLine := ToPos(ViewedTextBuffer.DisplayView.ViewToTextIndexEx(i, LineInfo.LineRange));
+      if (iLine < 1) or (iLine > c) then break;
       // next line rect
       rcLine.Top := rcLine.Bottom;
       // Must show a dot instead of line number if
       // line number is not the first, the last, the current line
       // or a multiple of ShowOnlyLineNumbersMultiplesOf
-      ShowDot := ((iLine mod ShowOnlyLineNumbersMultiplesOf) <> 0)
-          and (iLine <> TCustomSynEdit(SynEdit).CaretY) and (iLine <> 1)
+      LineInfo.ShowDot := ((iLine mod ShowOnlyLineNumbersMultiplesOf) <> 0)
+          and (iLine <> SynEdit.CaretY) and (iLine <> 1)
           and (iLine <> SynEdit.Lines.Count);
       // Get the formatted line number or dot
-      s := FormatLineNumber(iLine, ShowDot);
+      if Assigned(FOnFormatLineNumber) then begin
+        LineInfo.ViewLine := i;
+        FOnFormatLineNumber(Self, iLine, s, LineInfo);
+      end
+      else begin
+        s := FormatLineNumber(iLine, LineInfo.ShowDot);
+      end;
       Inc(rcLine.Bottom, LineHeight);
+      if i <> LineInfo.LineRange.Top then
+        s := '';
       // erase the background and draw the line number string in one go
       fTextDrawer.ExtTextOut(rcLine.Left, rcLine.Top, ETO_OPAQUE or ETO_CLIPPED, rcLine,
         PChar(Pointer(S)),Length(S));

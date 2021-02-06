@@ -27,16 +27,16 @@ uses
   // Libs
   MacOSAll, CocoaAll;
 
-{$if (FPC_VERSION>3) or ((FPC_VERSION=3) and (FPC_RELEASE>=2))}
-{$define HASBOOLEAN8}
+{$if FPC_FULLVERSION>=30200}
+{$define HASObjCBOOL}
 {$endif}
 
 type
   // Due to backwards incompatible changes in FPC sources
   // (switching from Boolean to Boolean8), LCL has to adopt
   // either type, depending on FPC version
-  LCLObjCBoolean = {$ifdef HASBOOLEAN8}
-                   Boolean8  // FPC 3.2.0 and earlier are using "boolean8" type
+  LCLObjCBoolean = {$ifdef HASObjCBOOL}
+                   ObjCBOOL
                    {$else}
                    Boolean   // FPC 3.0.4 and earlier are using "boolean" type
                    {$endif};
@@ -60,6 +60,7 @@ type
                        // even though it's trying to resolve the same problem
                        // for FPC3.0.4. ObjCBool should be removed after the officail
                        // fpc3.2+ release
+  {$endif}
 
   NSMenuItemFix = objccategory external (NSMenuItem)
     procedure setEnabled_(aenabled: ObjCBool); message 'setEnabled:';
@@ -74,7 +75,7 @@ type
     procedure setEnabled_(aenabled: ObjCBool); message 'setEnabled:';
   end;
 
-{$if FPC_FULLVERSION < 30301}
+{$if FPC_FULLVERSION < 30200}
   NSAppearance = objcclass external(NSObject)
     function name: NSString; message 'name';
     class function currentAppearance: NSAppearance; message 'currentAppearance';
@@ -82,14 +83,17 @@ type
 {$endif}
 
   NSApplicationFix = objccategory external (NSApplication)
+    {$ifdef BOOLFIX}
     procedure activateIgnoringOtherApps_(flag: ObjCBool); message 'activateIgnoringOtherApps:';
     function nextEventMatchingMask_untilDate_inMode_dequeue_(mask: NSUInteger; expiration: NSDate; mode: NSString; deqFlag: ObjCBool): NSEvent; message 'nextEventMatchingMask:untilDate:inMode:dequeue:';
     procedure postEvent_atStart_(event: NSEvent; flag: ObjCBool); message 'postEvent:atStart:';
+    {$endif}
 
     function appearance: NSAppearance; message 'appearance'; // 10.14 (10.13)
     function effectiveAppearance: NSAppearance; message 'effectiveAppearance'; // 10.14 (10.13)
   end;
 
+  {$ifdef BOOLFIX}
   NSButtonFix = objccategory external(NSButton)
     procedure setBordered_(flag: ObjCBool); message 'setBordered:';
     procedure setAllowsMixedState_(flag: ObjCBool); message 'setAllowsMixedState:';
@@ -101,6 +105,7 @@ type
     procedure setBezeled_(flag: ObjCBool); message 'setBezeled:';
     procedure setEditable_(flag: ObjCBool); message 'setEditable:';
     procedure setSelectable_(flag: ObjCBool); message 'setSelectable:';
+    procedure setPlaceholderString(str: NSString); message 'setPlaceholderString:';
   end;
   {$endif}
 
@@ -193,6 +198,7 @@ type
     {$endif}
     // 10.14
     function appearance: NSAppearance; message 'appearance'; // 10.14 (10.13)
+    function effectiveAppearance: NSAppearance; message 'effectiveAppearance'; // 10.14 (10.13)
   end;
 
   NSTableColumnFix = objccategory external (NSTableColumn)
@@ -243,6 +249,7 @@ const
   NSAppKitVersionNumber10_13 = 1561;
   //NSAppKitVersionNumber10_14 = 1641.10; // Mojave's beta?
   NSAppKitVersionNumber10_14 = 1671;
+  NSAppKitVersionNumber11_0  = 2022; // 2000 starts with beta?
 
 
 
@@ -298,6 +305,21 @@ const
   NSTableViewAnimationSlideDown  = $20; // Animates a row in or out by sliding downward.
   NSTableViewAnimationSlideLeft  = $30; // Animates a row in by sliding from the left. Animates a row out by sliding towards the left.
   NSTableViewAnimationSlideRight = $40; // Animates a row in by sliding from the right. Animates a row out by sliding towards the right.
+
+
+{$if FPC_FULLVERSION >= 30200}
+// all of the sudden those are gone! in FPC 3.2.0rc
+const
+  NSVariableStatusItemLength = -1;
+  NSSquareStatusItemLength = -2;
+{$endif}
+
+type
+  NSSavePanelFix = objccategory external (NSSavePanel)
+    // available in 10.9+
+    procedure setShowsTagField(AShow: LCLObjCBoolean); message 'setShowsTagField:';
+    function showsTagField: LCLObjCBoolean; message 'showsTagField';
+  end;
 
 implementation
 

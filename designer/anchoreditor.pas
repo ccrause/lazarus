@@ -35,9 +35,15 @@ unit AnchorEditor;
 interface
 
 uses
-  Classes, SysUtils, LCLProc, Forms, Controls, Dialogs, StdCtrls, Buttons, Spin,
-  ExtCtrls, Graphics, IDECommands, PropEdits, IDEDialogs, LazarusIDEStrConsts,
-  IDEOptionDefs, IDEImagesIntf, EnvironmentOpts;
+  Classes, SysUtils,
+  // LCL
+  Forms, Controls, Dialogs, StdCtrls, Buttons, Spin, ExtCtrls, Graphics,
+  // LazUtils
+  LazUtilities, LazUTF8,
+  // IdeIntf
+  IDECommands, PropEdits, IDEDialogs, IDEImagesIntf,
+  // IDE
+  LazarusIDEStrConsts, IDEOptionDefs, EnvironmentOpts;
 
 type
 
@@ -403,7 +409,7 @@ begin
 end;
 
 procedure TAnchorDesigner.FormDestroy(Sender: TObject);
-  var
+var
   i: TAnchorKind;
 begin
   FreeAndNil(Values);
@@ -758,8 +764,8 @@ begin
           akRight: SelectedControls.Sort(@compareControlRight);
           akBottom: SelectedControls.Sort(@compareControlBottom);
         end;
-        setlength(OldPositions,SelectedControls.Count);
-        setlength(OldPositions2,SelectedControls.Count);
+        setlength(OldPositions{%H-},SelectedControls.Count);
+        setlength(OldPositions2{%H-},SelectedControls.Count);
         for i:=0 to SelectedControls.Count-1 do begin
           OldPositions[i]:=NeighbourPosition(TControl(SelectedControls[i]));
           case CurNeighbour of
@@ -931,7 +937,7 @@ end;
 
 procedure TAnchorDesigner.FillComboBoxWithSiblings(AComboBox: TComboBox);
 var
-  sl: TStringList;
+  sl: TStringListUTF8Fast;
   i: Integer;
   CurControl: TControl;
   j: Integer;
@@ -955,7 +961,7 @@ var
   end;
   
 begin
-  sl:=TStringList.Create;
+  sl:=TStringListUTF8Fast.Create;
   sl.Add(AnchorDesignerNoSiblingText);
   HasSelectedSiblings:=false;
   SelectedControls:=GetSelectedControls;
@@ -1161,8 +1167,7 @@ begin
   end;
 end;
 
-procedure TAnchorDesigner.OnSetSelection(
-  const ASelection: TPersistentSelectionList);
+procedure TAnchorDesigner.OnSetSelection(const ASelection: TPersistentSelectionList);
 begin
   if FSelection.IsEqual(ASelection) then exit;
   Refresh;
@@ -1170,8 +1175,7 @@ end;
 
 { TAnchorDesignerValues }
 
-function TAnchorDesignerValues.GetSides(Kind: TAnchorKind
-  ): TAnchorDesignerSideValues;
+function TAnchorDesignerValues.GetSides(Kind: TAnchorKind): TAnchorDesignerSideValues;
 begin
   Result:=FSides[Kind];
 end;

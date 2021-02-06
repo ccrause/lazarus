@@ -8,11 +8,11 @@ interface
 uses
   Classes, SysUtils,
   // LazUtils
-  LazTracer,
+  LazTracer, FileReferenceList,
   // Codetools
   DefineTemplates, CodeToolManager,
   // IDE
-  CompilerOptions, FileReferenceList;
+  CompilerOptions;
 
 type
 
@@ -44,8 +44,8 @@ type
   { TProjPackDefineTemplates }
 
   TProjPackDefineTemplatesFlag = (
+    ptfLoading,
     ptfIsPackageTemplate,
-    ptfFlagsChanged,
     ptfIDChanged,
     ptfSourceDirsChanged,
     ptfOutputDirChanged,
@@ -56,6 +56,7 @@ type
   TProjPackDefineTemplates = class
   private
     FOwner: IProjPack;
+    procedure InternalIDChanged;
   protected
     FActive: boolean;
     FSrcDirectories: TDefineTemplate;
@@ -73,7 +74,7 @@ type
     fLastUnitPath: string;
     procedure SetActive(const AValue: boolean);
     procedure UpdateMain; virtual; abstract;
-    procedure UpdateSrcDirIfDef; virtual; abstract;
+    function UpdateSrcDirIfDef: Boolean; virtual; abstract;
     procedure UpdateSourceDirectories; virtual; abstract;
     procedure UpdateOutputDirectory; virtual; abstract;
     procedure UpdateDefinesForCustomDefines; virtual; abstract;
@@ -84,11 +85,11 @@ type
     procedure Clear;
     procedure BeginUpdate;
     procedure EndUpdate;
-    procedure AllChanged; virtual; abstract;
+    procedure AllChanged(AActivating: boolean); virtual; abstract;
     procedure IDChanged;
     procedure SourceDirectoriesChanged;// a source directory was added/deleted
-    procedure CustomDefinesChanged;    // the defines of the source dirs changed
     procedure OutputDirectoryChanged;// the path or the defines of the output dir changed
+    procedure CustomDefinesChanged;    // the defines of the source dirs changed
   public
     property Owner: IProjPack read FOwner;
     property Main: TDefineTemplate read FMain;
@@ -145,10 +146,9 @@ begin
   if FUpdateLock=0 then RaiseGDBException('TProjPackDefineTemplates.EndUpdate');
   dec(FUpdateLock);
   if FUpdateLock=0 then begin
-    if ptfIsPackageTemplate in FFlags then begin
-      if ptfIDChanged in FFlags then IDChanged;
-    end;
-    if ptfFlagsChanged in FFlags then CustomDefinesChanged;
+    if FFlags * [ptfIsPackageTemplate,ptfIDChanged]  // AND
+              = [ptfIsPackageTemplate,ptfIDChanged] then
+      InternalIDChanged;
     if ptfSourceDirsChanged in FFlags then SourceDirectoriesChanged;
     if ptfOutputDirChanged in FFlags then OutputDirectoryChanged;
     if ptfCustomDefinesChanged in FFlags then CustomDefinesChanged;
@@ -160,22 +160,30 @@ begin
   if FActive=AValue then exit;
   FActive:=AValue;
   if FActive then
-    AllChanged
+    AllChanged(true)
   else
     Clear;
+end;
+
+procedure TProjPackDefineTemplates.InternalIDChanged;
+// Called only from EndUpdate.
+begin
+  Exclude(FFlags,ptfIDChanged);
+  UpdateMain;
 end;
 
 procedure TProjPackDefineTemplates.IDChanged;
 begin
   if FUpdateLock>0 then begin
-    Include(FFlags,ptfIDChanged);
+    FFlags:=FFlags+[ptfIDChanged, ptfSourceDirsChanged, ptfOutputDirChanged,
+                    ptfCustomDefinesChanged];
     exit;
   end;
   Exclude(FFlags,ptfIDChanged);
   UpdateMain;
-  UpdateOutputDirectory;
-  UpdateSourceDirectories;
-  UpdateDefinesForCustomDefines;
+  SourceDirectoriesChanged;
+  OutputDirectoryChanged;
+  CustomDefinesChanged;
 end;
 
 procedure TProjPackDefineTemplates.SourceDirectoriesChanged;
@@ -186,7 +194,6 @@ begin
   end;
   Exclude(FFlags,ptfSourceDirsChanged);
   UpdateSourceDirectories;
-  CodeToolBoss.DefineTree.ClearCache;
 end;
 
 procedure TProjPackDefineTemplates.OutputDirectoryChanged;
@@ -197,7 +204,6 @@ begin
   end;
   Exclude(FFlags,ptfOutputDirChanged);
   UpdateOutputDirectory;
-  CodeToolBoss.DefineTree.ClearCache;
 end;
 
 procedure TProjPackDefineTemplates.CustomDefinesChanged;
@@ -208,8 +214,6 @@ begin
   end;
   Exclude(FFlags,ptfCustomDefinesChanged);
   UpdateDefinesForCustomDefines; // maybe custom defines changed
-  if ptfIsPackageTemplate in FFlags then
-    CodeToolBoss.DefineTree.ClearCache;
 end;
 
 

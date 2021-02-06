@@ -121,7 +121,7 @@
           Name of the file where stream content is read or written
         </short>
         <descr>
-          FileName is a read-only String property that contains the name of the file where stream content is read or 
+          FileName is a read-only String property that contains the name of the file where stream content is read or
 written. FileName can contain UTF-8-encoded characters.
         </descr>
         <seealso></seealso>
@@ -137,6 +137,9 @@ written. FileName can contain UTF-8-encoded characters.
             TStringListUTF8 is a TStringList descendant that implements a string list that can store data which uses UTF-8 encoding. TStringListUTF8 provides an overridden method used to sort items in the list using UTF-8 string comparisons. TStringListUTF8 can also load and save files which have UTF-8-encoded file names.
           </p>
         </descr>
+        <remark>
+          TStringListUTF8 has been marked as deprecated. Use TStringList instead.
+        </remark>
         <seealso></seealso>
       </element>
 
@@ -193,7 +196,7 @@ written. FileName can contain UTF-8-encoded characters.
         </short>
         <descr>
           <p>
-            SaveToFile is a procedure used to save the content in the string list to the specified file name. FileName can 
+            SaveToFile is a procedure used to save the content in the string list to the specified file name. FileName can
 contain UTF-8-encoded characters. SaveToFile uses a TFileStreamUTF8 instance to create the file specified in FileName, and calls the SaveToStream method to store values from the string list.
           </p>
         </descr>
@@ -215,6 +218,9 @@ contain UTF-8-encoded characters. SaveToFile uses a TFileStreamUTF8 instance to 
             TMemoryStreamUTF8 is a TMemoryStream descendant that stores its data in memory. TMemoryStreamUTF8 extends the ancestor to include methods used to load and save its memory content using files names that may contain UTF-8-encoded characters.
           </p>
         </descr>
+        <remark>
+          TMemoryStreamUTF8 has been marked as deprecated. Use TMemoryStream instead.
+        </remark>
         <seealso></seealso>
       </element>
 
@@ -261,10 +267,18 @@ contain UTF-8-encoded characters. SaveToFile uses a TFileStreamUTF8 instance to 
         </short>
         <descr>
           <p>
-            LoadStringsFromFileUTF8 is a procedure used to load the content for a string list from the specified file name. 
-List is the TStrings decendant where the content from FileName is stored. FileName can contain UTF-8-encoded characters. LoadStringsFromFileUTF8 creates an internal TStringListUTF8 instance (when needed) that is used to load the content in FileName, and calls the Assign method in List to store the values.
+            LoadStringsFromFileUTF8 is a procedure used to load the content for a string list from the specified file name.
+          </p>
+          <p>
+            List is the TStrings decendant where the content from FileName is stored. FileName can contain UTF-8-encoded characters.
+          </p>
+          <p>
+            LoadStringsFromFileUTF8 creates an internal TStringListUTF8 instance (when needed) that is used to load the content in FileName, and calls the Assign method in List to store the values.
           </p>
         </descr>
+        <remark>
+          LoadStringsFromFileUTF8 has been marked as deprecated. Use the LoadFromFile method in TStrings instead.
+        </remark>
         <seealso></seealso>
       </element>
 
@@ -288,6 +302,9 @@ List is the TStrings decendant where the content from FileName is stored. FileNa
             SaveStringsToFileUTF8 is a procedure used to save the content in the List to the specified file name. List is a TStrings desccendant with the content to store in the specified file name. FileName can contain UTF-8-encoded character values. SaveStringsToFileUTF8 uses a TStringListUTF8 (when needed) to store the content in the string list to the specified FileName.
           </p>
         </descr>
+        <remark>
+          SaveStringsToFileUTF8 has been marked as deprecated. Use the SaveToFile method in TStrings instead.
+        </remark>
         <seealsao></seealsao>
       </element>
 
@@ -299,51 +316,6 @@ List is the TStrings decendant where the content from FileName is stored. FileNa
       <!-- argument Visibility: default -->
       <element name="SaveStringsToFileUTF8.FileName">
         <short>Name of the file where the content is stored</short>
-      </element>
-
-      <!-- function Visibility: default -->
-      <element name="CompareStringListItemsUTF8LowerCase">
-        <short>
-          Performs lowercase comparison of values in a string list
-        </short>
-        <descr>
-          <p>
-            CompareStringListItemsUTF8LowerCase is an Integer function used to perform  lowercase comparison of string values in a string list. List is the TStrings descendant with values for the comparison. Index1 and Index2 specify the ordinal positions in List for strings used in the comparison.
-          </p>
-          <p>
-            CompareStringListItemsUTF8LowerCase converts the string values to lowercase using UTF8LowerCase, and calls the CompareStr function to perform the comparison. The return value is in the following ranges:
-          </p>
-          <dl>
-            <dt><code> &lt;0 </code></dt>
-            <dd>String at Index1 comes before String at Index2</dd>
-            <dt><code> 0 </code></dt>
-            <dd>Strings have the same value</dd>
-            <dt><code> &gt;0 </code> </dt>
-            <dd>String at Index1 comes after String at Index2</dd>
-          </dl>
-        </descr>
-        <seealso></seealso>
-      </element>
-
-      <!-- function result  Visibility: default -->
-      <element name="CompareStringListItemsUTF8LowerCase.Result">
-        <short>Relative order for the compared values</short>
-      </element>
-
-      <!-- argument Visibility: default -->
-      <element name="CompareStringListItemsUTF8LowerCase.List">
-        <short>String list with values for the comparison</short>
-      </element>
-
-
-      <!-- argument Visibility: default -->
-      <element name="CompareStringListItemsUTF8LowerCase.Index1">
-        <short>Ordinal position for the first string value</short>
-      </element>
-
-      <!-- argument Visibility: default -->
-      <element name="CompareStringListItemsUTF8LowerCase.Index2">
-        <short>Ordinal position for the second string value</short>
       </element>
 
     </module>

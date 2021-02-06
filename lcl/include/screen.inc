@@ -39,7 +39,7 @@ var
   L: TStrings;
   S: String;
 begin
-  L := TStrings(PtrInt(Data));
+  L := TStrings(Data);
   S := LogFont.elfLogFont.lfFaceName;
   if L.IndexOf(S) < 0 then
     L.Add(S);
@@ -61,10 +61,10 @@ end;
 constructor TScreen.Create(AOwner : TComponent);
 begin
   inherited Create(AOwner);
-  FFonts := TStringlist.Create;
+  FFonts := TStringListUTF8Fast.Create;
   FCursorMap := TMap.Create(its4, SizeOf(HCursor));
   FMonitors := TMonitorList.Create;
-  TStringlist(FFonts).Sorted := True;
+  //TStringlist(FFonts).Sorted := True;  Will be sorted in GetFonts
   FCustomForms := TFPList.Create;
   FCustomFormsZOrdered := TFPList.Create;
   FFormList := TFPList.Create;

@@ -10,13 +10,17 @@ interface
 uses
   PJSDsgnRegister, PJSDsgnOptsFrame, frmpas2jsbrowserprojectoptions, 
   PJSDsgnOptions, frmpas2jsnodejsprojectoptions, pjscontroller, 
-  frmpas2jswebservers, strpas2jsdesign, pjsprojectoptions, LazarusPackageIntf;
+  frmpas2jswebservers, strpas2jsdesign, pjsprojectoptions, 
+  frmPas2jsAtomPackageSettings, regpas2jsatom, regpas2jsvscode, 
+  frmPas2jsVSCodeExtensionSettings, LazarusPackageIntf;
 
 implementation
 
 procedure Register;
 begin
   RegisterUnit('PJSDsgnRegister', @PJSDsgnRegister.Register);
+  RegisterUnit('regpas2jsatom', @regpas2jsatom.Register);
+  RegisterUnit('regpas2jsvscode', @regpas2jsvscode.Register);
 end;
 
 initialization

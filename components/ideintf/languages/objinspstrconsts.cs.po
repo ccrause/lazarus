@@ -298,15 +298,41 @@ msgstr "IfNDef"
 msgid "Set value"
 msgstr "Nastavit hodnotu"
 
-#: objinspstrconsts.lisunabletofindparserfortool
-#, object-pascal-format
-msgid "Unable to find parser for tool \"%s\""
-msgstr "Nelze najít parser pro nástroj \"%s\""
+#: objinspstrconsts.lrsbufdsfilters
+msgid "XML data files|*.xml;Binary data files|*.dat"
+msgstr ""
 
-#: objinspstrconsts.lisunabletofindparserwithname
-#, object-pascal-format
-msgid "Unable to find parser with name \"%s\""
-msgstr "Nelze najít parser se jménem \"%s\""
+#: objinspstrconsts.lrscopyfromdataset
+msgid "Copy data from other dataset"
+msgstr ""
+
+#: objinspstrconsts.lrscreatedataset
+msgid "Create dataset"
+msgstr ""
+
+#: objinspstrconsts.lrsdatasetactive
+msgid "Dataset is already active, close it first."
+msgstr ""
+
+#: objinspstrconsts.lrsloadfromfile
+msgid "Load data from file"
+msgstr ""
+
+#: objinspstrconsts.lrsnodatasetsavailableforcopy
+msgid "No dataset available to copy data from."
+msgstr ""
+
+#: objinspstrconsts.lrsprovidedatafilename
+msgid "Select a data file to save data to"
+msgstr ""
+
+#: objinspstrconsts.lrssavetofile
+msgid "Save data to file"
+msgstr ""
+
+#: objinspstrconsts.lrsselectdatafilename
+msgid "Select a file with data to load into dataset"
+msgstr ""
 
 #: objinspstrconsts.nbcesaddpage
 msgctxt "objinspstrconsts.nbcesaddpage"
@@ -482,10 +508,6 @@ msgstr "Potvrdit smazání"
 msgctxt "objinspstrconsts.oiscopycomponents"
 msgid "&Copy"
 msgstr "&Kopírovat"
-
-#: objinspstrconsts.oiscreateanewpascalunit
-msgid "Create a new pascal unit."
-msgstr "Vytvořit novou pascalovskou jednotku."
 
 #: objinspstrconsts.oiscreatedefaultevent
 msgid "Create default event"
@@ -867,10 +889,6 @@ msgstr "Nastavit na výchozí: %s"
 #: objinspstrconsts.oissettodefaulthint
 msgid "Set property value to Default"
 msgstr "Natavit hodnotu vlastnosti jako Výchozí"
-
-#: objinspstrconsts.oisshowalloutputlines
-msgid "Show all output lines"
-msgstr "Ukázat všechny výstupní řádky"
 
 #: objinspstrconsts.oisshowclasses
 msgid "Show classes"
@@ -1280,10 +1298,6 @@ msgstr "Editor filtru"
 #: objinspstrconsts.pefiltername
 msgid "Filter name"
 msgstr "Jméno filtru"
-
-#: objinspstrconsts.pirsunit
-msgid "Pascal unit"
-msgstr "Jednotka pascal"
 
 #: objinspstrconsts.rscdalignment
 msgid "Alignment"

@@ -119,7 +119,7 @@ uses
   FpDbgLoader, FpDbgDisasX86,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
   LazLoggerBase, UTF8Process,
-  FpDbgCommon;
+  FpDbgCommon, FpdMemoryTools, FpErrorMessages;
 
 type
 
@@ -152,6 +152,7 @@ type
     function ResetInstructionPointerAfterBreakpoint: boolean; override;
     function ReadThreadState: boolean;
 
+    procedure SetRegisterValue(AName: string; AValue: QWord); override;
     function GetInstructionPointerRegisterValue: TDbgPtr; override;
     function GetStackBasePointerRegisterValue: TDbgPtr; override;
     function GetStackPointerRegisterValue: TDbgPtr; override;
@@ -171,25 +172,29 @@ type
     function GetProcFilename(AProcess: TDbgProcess; lpImageName: LPVOID; fUnicode: word; hFile: handle): string;
     procedure LogLastError;
   protected
-    procedure AfterChangingInstructionCode(const ALocation: TDBGPtr); override;
+    procedure AfterChangingInstructionCode(const ALocation: TDBGPtr; ACount: Integer); override;
     function GetHandle: THandle; override;
     function GetLastEventProcessIdentifier: THandle; override;
     procedure InitializeLoaders; override;
     function CreateWatchPointData: TFpWatchPointData; override;
   public
-    constructor Create(const AFileName: string; const AProcessID, AThreadID: Integer; AnOsClasses: TOSDbgClasses); override;
+    constructor Create(const AFileName: string; const AProcessID, AThreadID: Integer; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager); override;
     destructor Destroy; override;
 
     function ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean; override;
     function WriteData(const AAdress: TDbgPtr; const ASize: Cardinal; const AData): Boolean; override;
     function ReadString(const AAdress: TDbgPtr; const AMaxSize: Cardinal; out AData: String): Boolean; override;
     function ReadWString(const AAdress: TDbgPtr; const AMaxSize: Cardinal; out AData: WideString): Boolean; override;
+    function CallParamDefaultLocation(AParamIdx: Integer): TFpDbgMemLocation; override;
 
     procedure Interrupt; // required by app/fpd
     function  HandleDebugEvent(const ADebugEvent: TDebugEvent): Boolean;
 
-    class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses): TDbgProcess; override;
-    class function AttachToInstance(AFileName: string; APid: Integer; AnOsClasses: TOSDbgClasses): TDbgProcess; override;
+    class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings;
+      AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses;
+      AMemManager: TFpDbgMemManager; out AnError: TFpError): TDbgProcess; override;
+    class function AttachToInstance(AFileName: string; APid: Integer;
+      AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager; out AnError: TFpError): TDbgProcess; override;
 
     class function isSupported(ATargetInfo: TTargetDescriptor): boolean; override;
 
@@ -344,9 +349,10 @@ begin
     DebugLn(DBG_WARNINGS, 'FpDbg-ERROR: %s', [GetLastErrorText]);
 end;
 
-procedure TDbgWinProcess.AfterChangingInstructionCode(const ALocation: TDBGPtr);
+procedure TDbgWinProcess.AfterChangingInstructionCode(const ALocation: TDBGPtr;
+  ACount: Integer);
 begin
-  inherited AfterChangingInstructionCode(ALocation);
+  inherited AfterChangingInstructionCode(ALocation, ACount);
   FlushInstructionCache(Handle, Pointer(PtrUInt(ALocation)), 1);
 end;
 
@@ -477,14 +483,15 @@ begin
 end;
 
 constructor TDbgWinProcess.Create(const AFileName: string; const AProcessID,
-  AThreadID: Integer; AnOsClasses: TOSDbgClasses);
+  AThreadID: Integer; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager
+  );
 begin
   {$ifdef cpui386}
   FBitness := b32;
   {$else}
   FBitness := b64;
   {$endif}
-  inherited Create(AFileName, AProcessID, AThreadID, AnOsClasses);
+  inherited Create(AFileName, AProcessID, AThreadID, AnOsClasses, AMemManager);
 end;
 
 destructor TDbgWinProcess.Destroy;
@@ -542,6 +549,24 @@ begin
   then Buf[BytesRead] := #0
   else Buf[AMaxSize] := #0;
   AData := PWChar(@Buf[0]);
+end;
+
+function TDbgWinProcess.CallParamDefaultLocation(AParamIdx: Integer
+  ): TFpDbgMemLocation;
+begin
+  Result := InvalidLoc;
+  case Mode of
+    dm32: case AParamIdx of
+        0: Result := RegisterLoc(0); // EAX
+        1: Result := RegisterLoc(2); // EDX
+        2: Result := RegisterLoc(1); // ECX
+      end;
+    dm64: case AParamIdx of
+        0: Result := RegisterLoc(2); // RCX
+        1: Result := RegisterLoc(1); // RDX
+        2: Result := RegisterLoc(8); // R8
+      end;
+  end;
 end;
 
 procedure TDbgWinProcess.Interrupt;
@@ -613,9 +638,11 @@ end;
 
 class function TDbgWinProcess.StartInstance(AFileName: string; AParams,
   AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string;
-  AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses): TDbgProcess;
+  AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses;
+  AMemManager: TFpDbgMemManager; out AnError: TFpError): TDbgProcess;
 var
   AProcess: TProcessUTF8;
+  LastErr: Integer;
 begin
   result := nil;
   AProcess := TProcessUTF8.Create(nil);
@@ -629,34 +656,44 @@ begin
     AProcess.CurrentDirectory:=AWorkingDirectory;
     AProcess.Execute;
 
-    result := TDbgWinProcess.Create(AFileName, AProcess.ProcessID, AProcess.ThreadID, AnOsClasses);
+    result := TDbgWinProcess.Create(AFileName, AProcess.ProcessID, AProcess.ThreadID, AnOsClasses, AMemManager);
     TDbgWinProcess(result).FProcProcess := AProcess;
   except
     on E: Exception do
     begin
+      LastErr := Integer(GetLastError);
+      DebugLn(DBG_WARNINGS, 'Failed to start process "%s". Errormessage: "%s %d".',[AFileName, E.Message, LastErr]);
       {$ifdef cpui386}
       if (E is EProcess) and (GetLastError=50) then
       begin
-        DebugLn(DBG_WARNINGS, 'Failed to start process "%s". Note that on Windows it is not possible to debug a 64-bit application with a 32-bit debugger.'+sLineBreak+'Errormessage: "%s".',[AFileName, E.Message]);
+        AnError := CreateError(fpErrCreateProcess, [AFileName, LastErr, E.Message, 'Note that on Windows it is not possible to debug a 64-bit application with a 32-bit debugger.'])
       end
       else
       {$endif i386}
-        DebugLn(DBG_WARNINGS, 'Failed to start process "%s". Errormessage: "%s".',[AFileName, E.Message]);
+      AnError := CreateError(fpErrCreateProcess, [AFileName, LastErr, E.Message, '']);
       AProcess.Free;
     end;
   end;
 end;
 
 class function TDbgWinProcess.AttachToInstance(AFileName: string;
-  APid: Integer; AnOsClasses: TOSDbgClasses): TDbgProcess;
+  APid: Integer; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager; out
+  AnError: TFpError): TDbgProcess;
+var
+  LastErr: Integer;
 begin
   Result := nil;
-  if _DebugActiveProcess = nil then
+  if _DebugActiveProcess = nil then begin
+    AnError := CreateError(fpErrAttachProcess, [AFileName, 0, 'API unavailable', '']);
     exit;
-  if not _DebugActiveProcess(APid) then
+  end;
+  if not _DebugActiveProcess(APid) then begin
+    LastErr := Integer(GetLastError);
+    AnError := CreateError(fpErrAttachProcess, [AFileName, LastErr, GetLastErrorText(LastErr), '']);
     exit;
+  end;
 
-  result := TDbgWinProcess.Create(AFileName, APid, 0, AnOsClasses);
+  result := TDbgWinProcess.Create(AFileName, APid, 0, AnOsClasses, AMemManager);
   // TODO: change the filename to the actual exe-filename. Load the correct dwarf info
 end;
 
@@ -756,13 +793,14 @@ if AThread<>nil then debugln(['## ath.iss ',AThread.NextIsSingleStep]);
     case MDebugEvent.Exception.ExceptionRecord.ExceptionCode of
      EXCEPTION_BREAKPOINT, STATUS_WX86_BREAKPOINT,
      EXCEPTION_SINGLE_STEP, STATUS_WX86_SINGLE_STEP: begin
-       Windows.ContinueDebugEvent(MDebugEvent.dwProcessId, MDebugEvent.dwThreadId, DBG_CONTINUE);
+       result := Windows.ContinueDebugEvent(MDebugEvent.dwProcessId, MDebugEvent.dwThreadId, DBG_CONTINUE);
      end
     else
-      Windows.ContinueDebugEvent(MDebugEvent.dwProcessId, MDebugEvent.dwThreadId, DBG_EXCEPTION_NOT_HANDLED);
+      result := Windows.ContinueDebugEvent(MDebugEvent.dwProcessId, MDebugEvent.dwThreadId, DBG_EXCEPTION_NOT_HANDLED);
     end
   else
-    Windows.ContinueDebugEvent(MDebugEvent.dwProcessId, MDebugEvent.dwThreadId, DBG_CONTINUE);
+    result := Windows.ContinueDebugEvent(MDebugEvent.dwProcessId, MDebugEvent.dwThreadId, DBG_CONTINUE);
+  DebugLn(not Result, 'ContinueDebugEvent failed: %d', [Windows.GetLastError]);
   result := true;
 end;
 
@@ -826,6 +864,7 @@ begin
   repeat
     Done := True;
     result := Windows.WaitForDebugEvent(MDebugEvent, INFINITE);
+    DebugLn(not Result, 'WaitForDebugEvent failed: %d', [Windows.GetLastError]);
 
     if Result and FTerminated and (MDebugEvent.dwDebugEventCode <> EXIT_PROCESS_DEBUG_EVENT)
        and (MDebugEvent.dwDebugEventCode <> EXIT_THREAD_DEBUG_EVENT)
@@ -1636,46 +1675,33 @@ begin
   if FThreadContextChanged then
   begin
     Assert(FCurrentContext <> nil, 'TDbgWinThread.BeforeContinue: none existing context was changed');
-    if SetFpThreadContext(FCurrentContext) then
-      FThreadContextChanged:=false;
+    if not SetFpThreadContext(FCurrentContext) then
+      debugln(['Failed to SetFpThreadContext()']);
   end;
   FThreadContextChanged := False;
   FCurrentContext := nil;
 end;
 
 function TDbgWinThread.ResetInstructionPointerAfterBreakpoint: boolean;
-var
-  _UC: TFpContext;
-  Context: PFpContext;
 begin
   Result := False;
   assert(MDebugEvent.Exception.ExceptionRecord.ExceptionCode <> EXCEPTION_SINGLE_STEP, 'dec(IP) EXCEPTION_SINGLE_STEP');
 
-  if not GetFpThreadContext(_UC, Context, cfControl) then
+  if not ReadThreadState then
     exit;
 
-  if FCurrentContext = nil then
-    if not ReadThreadState then
-      exit;
-
   {$ifdef cpui386}
-  Dec(Context^.def.Eip);
   dec(FCurrentContext^.def.Eip);
   {$else}
   if (TDbgWinProcess(Process).FBitness = b32) then begin
-    Dec(Context^.WOW.Eip);
     dec(FCurrentContext^.WOW.Eip);
   end
   else begin
-    Dec(Context^.def.Rip);
     dec(FCurrentContext^.def.Rip);
   end;
   {$endif}
 
-  if not SetFpThreadContext(Context, cfControl) then
-    exit;
-  // TODO: only changed FCurrentContext, and write back in BeforeContinue;
-  FThreadContextChanged:=false;
+  FThreadContextChanged := True;
   Result := True;
 end;
 
@@ -1686,8 +1712,45 @@ begin
     exit(False);
   end;
 
+  Result := True;
+  if FCurrentContext <> nil then
+    exit;
+
   Result := GetFpThreadContext(_UnAligendContext, FCurrentContext, cfFull);
   FRegisterValueListValid:=False;
+end;
+
+procedure TDbgWinThread.SetRegisterValue(AName: string; AValue: QWord);
+begin
+  if ReadThreadState then
+    exit;
+
+  {$ifdef cpui386}
+    case AName of
+      'eip': FCurrentContext^.def.Eip := AValue;
+      'eax': FCurrentContext^.def.Eax := AValue;
+    else
+      raise Exception.CreateFmt('Setting the [%s] register is not supported', [AName]);
+    end;
+  {$else}
+  if (TDbgWinProcess(Process).FBitness = b32) then begin
+    case AName of
+      'eip': FCurrentContext^.WOW.Eip := AValue;
+      'eax': FCurrentContext^.WOW.Eax := AValue;
+    else
+      raise Exception.CreateFmt('Setting the [%s] register is not supported', [AName]);
+    end;
+  end
+  else begin
+    case AName of
+      'eip': FCurrentContext^.def.Rip := AValue;
+      'eax': FCurrentContext^.def.Rax := AValue;
+    else
+      raise Exception.CreateFmt('Setting the [%s] register is not supported', [AName]);
+    end;
+  end;
+  {$endif}
+  FThreadContextChanged:=True;
 end;
 
 function TDbgWinThread.GetInstructionPointerRegisterValue: TDbgPtr;

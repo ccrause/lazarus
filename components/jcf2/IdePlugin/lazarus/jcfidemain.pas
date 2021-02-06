@@ -36,11 +36,16 @@ See http://www.gnu.org/licenses/gpl.html
 interface
 
 uses
-  { freepascal }SysUtils, Classes,
-  { lazarus design time }
-  LazIDEIntf, SrcEditorIntf, IDEMsgIntf, ProjectIntf, IDEExternToolIntf,
-  { local}
-  EditorConverter, FileConverter, ConvertTypes, jcfuiconsts;
+  SysUtils, Classes,
+  // BuildIntf
+  ProjectIntf, IDEExternToolIntf,
+  // IdeIntf
+  LazIDEIntf, SrcEditorIntf, IDEMsgIntf,
+  // LCL
+  Menus, Dialogs, Controls,
+  // local
+  EditorConverter, FileConverter, Converter, ConvertTypes,
+  JcfUIConsts, JcfStringUtils, JcfSettings, fAbout, frFiles;
 
 type
 
@@ -61,12 +66,11 @@ type
     procedure ClearToolMessages;
     procedure ConvertEditor(const pciEditor: TSourceEditorInterface);
     function CanFormat(const AMsg: String): Boolean;
-
-  protected
   public
     constructor Create;
     destructor Destroy; override;
 
+    procedure DoFormatSelection(Sender: TObject);
     procedure DoFormatCurrentIDEWindow(Sender: TObject);
     procedure DoFormatProject(Sender: TObject);
     procedure DoFormatOpen(Sender: TObject);
@@ -79,13 +83,7 @@ type
 implementation
 
 uses
-  { lazarus }
-  Menus, Dialogs, Controls,
-  { jcf }
-  JcfStringUtils,
-  { local }
-  fAbout, frFiles, JcfSettings;
-
+  diffmerge;
 
 function FileIsAllowedType(const psFileName: string): boolean;
 const
@@ -130,11 +128,15 @@ begin
   if (SourceEditorManagerIntf= nil) or (SourceEditorManagerIntf.ActiveEditor = nil) then
     LogIdeMessage('', 'No current window', mtInputError, -1, -1)
   else begin
-    lsMsg := Format(lisJEDICodeFormatOfStartFormatting, [SourceEditorManagerIntf
-      .ActiveEditor.FileName
-            + NativeLineBreak]);
-    if CanFormat(lsMsg) then
-      ConvertEditor(SourceEditorManagerIntf.ActiveEditor)
+    if SourceEditorManagerIntf.ActiveEditor.SelectionAvailable then
+      DoFormatSelection(Sender)
+    else
+    begin
+      lsMsg := Format(lisJEDICodeFormatOfStartFormatting,
+                [SourceEditorManagerIntf.ActiveEditor.FileName + NativeLineBreak]);
+      if CanFormat(lsMsg) then
+        ConvertEditor(SourceEditorManagerIntf.ActiveEditor)
+    end;
   end;
 end;
 
@@ -159,9 +161,8 @@ begin
   lazProject := GetCurrentProject;
   if lazProject = nil then
     exit;
-  lsMsg := Format(lisJEDICodeFormatOfAreYouSureThatYouWantToFormatAllFi, [
-    lazProject.MainFile.FileName + NativeLineBreak, IntToStr(lazProject.
-    FileCount)]);
+  lsMsg := Format(lisJEDICodeFormatOfAreYouSureThatYouWantToFormatAllFi,
+    [lazProject.MainFile.FileName + NativeLineBreak, IntToStr(lazProject.FileCount)]);
   if CanFormat(lsMsg) then
   begin
     ClearToolMessages;
@@ -229,6 +230,77 @@ begin
   LazarusIDE.DoOpenIDEOptions(TfFiles);
 end;
 
+procedure TJcfIdeMain.DoFormatSelection(Sender: TObject);
+var
+  srcEditor: TSourceEditorInterface;
+
+  procedure GetSelectedBlockFullLines(out p1: TPoint; out p2: TPoint);
+  begin
+    p1 := srcEditor.BlockBegin;
+    p2 := srcEditor.BlockEnd;
+    if p1.y > p2.y then
+    begin
+      p1 := srcEditor.BlockEnd;
+      p2 := srcEditor.BlockBegin;
+    end;
+    if (p2.x <= 1) and (p2.y > 1) then
+      p2.y := p2.y-1;
+  end;
+
+var
+  sourceCode: string;
+  BlockBegin, BlockEnd: TPoint;
+  fcConverter: TConverter;
+  lineStartOffset,lineEndOffset: integer;
+  wi: integer;
+  outputstr: string;
+begin
+  if (SourceEditorManagerIntf = nil) or (SourceEditorManagerIntf.ActiveEditor = nil) then
+  begin
+    LogIdeMessage('', 'No current window', mtInputError, -1, -1);
+    exit;
+  end;
+  srcEditor := SourceEditorManagerIntf.ActiveEditor;
+  if not srcEditor.SelectionAvailable or srcEditor.ReadOnly then
+    Exit;
+  sourceCode := srcEditor.GetText(False);   //get ALL editor text.
+  GetSelectedBlockFullLines(BlockBegin,BlockEnd);
+  fcConverter := TConverter.Create;
+  try
+    fcConverter.OnStatusMessage := LogIDEMessage;
+    fcConverter.InputCode := sourceCode;
+    fcConverter.GuiMessages := false; //true;
+    FindLineOffsets(sourceCode,BlockBegin.Y,BlockEnd.Y,lineStartOffset,lineEndOffset);
+    fcConverter.ConvertPart(lineStartOffset, lineEndOffset, True);
+    if not fcConverter.ConvertError then
+    begin
+      wI := length(fcConverter.OutputCode);
+      while (wI > 1) and (fcConverter.OutputCode[wI] in [#10, #13, ' ']) do
+        Dec(wI);
+      outputstr := Copy(fcConverter.OutputCode, 1, wI);
+      DiffMergeEditor(srcEditor,outputstr,BlockBegin.Y,BlockEnd.Y);
+    end
+    else
+    begin    //try formating wrapping selected code in fake unit.
+      ClearToolMessages;
+      BlockBegin := srcEditor.BlockBegin;
+      BlockBegin.X := 1;     // full lines.
+      BlockEnd := srcEditor.BlockEnd;
+      if BlockEnd.X > 1 then
+        BlockEnd.Y := BlockEnd.Y + 1;
+      BlockEnd.X := 1;
+      srcEditor.SelectText(BlockBegin, BlockEnd); //extend selection to full lines.
+      fcConverter.InputCode := srcEditor.GetText(True);  // only selected text.
+      fcConverter.GuiMessages := true;
+      fcConverter.ConvertUsingFakeUnit;
+      if not fcConverter.ConvertError then
+        DiffMergeEditor(srcEditor,fcConverter.OutputCode,BlockBegin.Y,BlockEnd.Y);
+    end;
+  finally
+    fcConverter.Free;
+  end;
+end;
+
 procedure TJcfIdeMain.DoAbout(Sender: TObject);
 var
   lcAbout: TfrmAboutBox;
@@ -292,7 +364,6 @@ begin
     fcEditorConverter := TEditorConverter.Create;
     fcEditorConverter.OnStatusMessage := LogIDEMessage;
   end;
-
   Assert(fcEditorConverter <> nil);
 end;
 
@@ -303,7 +374,6 @@ begin
   lazMessages := IDEMessagesWindow;
   if lazMessages = nil then
     exit;
-
   lazMessages.Clear;
 end;
 

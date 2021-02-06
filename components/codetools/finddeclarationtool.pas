@@ -271,7 +271,8 @@ type
     xtCompilerFunc,// SUCC, PREC, LOW, HIGH, ORD, LENGTH, COPY (1.1), ...
     xtVariant,     // variant
     xtJSValue,     // jsvalue only in Pas2JS, similar to variant
-    xtNil          // nil  = pointer, class, procedure, method, ...
+    xtNil,         // nil  = pointer, class, procedure, method, ...
+    xtSizeInt      // SizeInt for Length intrinsic
     );
   // Do not define: TExpressionTypeDescs = set of TExpressionTypeDesc;
   // There are too many enums, so the set would be big and slow
@@ -322,7 +323,8 @@ var
     'CompilerFunc',
     'Variant',
     'JSValue',
-    'Nil'
+    'Nil',
+    'SizeInt'
   );
 
 const
@@ -334,7 +336,7 @@ const
   xtAllIdentPredefinedTypes = xtAllIdentTypes - [xtContext];
   xtAllIntegerTypes = [xtInt64, xtQWord, xtConstOrdInteger, xtLongint,
                        xtLongWord, xtWord, xtCardinal, xtSmallInt, xtShortInt,
-                       xtByte,xtNativeInt,xtNativeUInt];
+                       xtByte,xtNativeInt,xtNativeUInt,xtSizeInt];
   xtAllBooleanTypes = [xtBoolean, xtByteBool, xtWordBool, xtLongBool,xtQWordBool];
   xtAllRealTypes = [xtReal, xtConstReal, xtSingle, xtDouble,
                     xtExtended, xtCExtended, xtCurrency, xtComp];
@@ -537,6 +539,25 @@ type
     property Tree: TAVLTree read FTree;
   end;
 
+  { TGenericParamValueMapping }
+
+  TGenericParamValueMapping = packed class
+    NextBrother: TGenericParamValueMapping;
+    GenericParamNode,
+    SpecializeValueNode: TCodeTreeNode;
+    constructor Create(pPrevBrother: TGenericParamValueMapping; pParam, pValue: TCodeTreeNode);
+    destructor Destroy; override;
+  end;
+
+  { TGenericParamValueMappings }
+
+  TGenericParamValueMappings = record
+    SpecializeParamsTool: TFindDeclarationTool;
+    SpecializeParamsNode: TCodeTreeNode;
+    SpecializeValuesTool: TFindDeclarationTool;
+    FirstParamValueMapping: TGenericParamValueMapping;
+  end;
+
   { TGenericParams }
 
   TGenericParams = record
@@ -582,6 +603,7 @@ type
     FHelpers: array[TFDHelpersListKind] of TFDHelpersList;
     FFreeHelpers: array[TFDHelpersListKind] of Boolean;
     FNeedHelpers: Boolean;
+    GenParamValueMappings: TGenericParamValueMappings;
     procedure ClearFoundProc;
     procedure FreeFoundProc(aFoundProc: PFoundProc; FreeNext: boolean);
     procedure RemoveFoundProcFromList(aFoundProc: PFoundProc);
@@ -593,6 +615,9 @@ type
   private
     procedure SetGenericParamValues(SpecializeParamsTool: TFindDeclarationTool;
                 SpecializeNode: TCodeTreeNode);
+    procedure UpdateGenericParamMapping(SpecializeParamsTool: TFindDeclarationTool;
+                SpecializeParamsNode: TCodeTreeNode; GenericParamsNode: TCodeTreeNode);
+    procedure UpdateContexWithGenParamValue(var SpecializeParamContext: TFindContext);
     function FindGenericParamType: Boolean;
     procedure AddOperandPart(aPart: string);
     property ExtractedOperand: string read FExtractedOperand;
@@ -821,7 +846,8 @@ type
     function FindEnumerationTypeOfSetType(SetTypeNode: TCodeTreeNode;
       out Context: TFindContext): boolean;
     function FindElementTypeOfArrayType(ArrayNode: TCodeTreeNode;
-      out ExprType: TExpressionType; AliasType: PFindContext): boolean;
+      out ExprType: TExpressionType; AliasType: PFindContext;
+      ParentParams: TFindDeclarationParams = nil): boolean;
     function CheckOperatorEnumerator(Params: TFindDeclarationParams;
       const FoundContext: TFindContext): TIdentifierFoundResult;
     function CheckModifierEnumeratorCurrent({%H-}Params: TFindDeclarationParams;
@@ -1525,13 +1551,31 @@ begin
   ListOfPFindContext:=nil;
 end;
 
+{ TGenericParamValueMapping }
+
+constructor TGenericParamValueMapping.Create(pPrevBrother: TGenericParamValueMapping; pParam, pValue: TCodeTreeNode);
+begin
+  if pPrevBrother <> nil then
+    pPrevBrother.NextBrother := Self;
+  GenericParamNode := pParam;
+  SpecializeValueNode := pValue;
+end;
+
+destructor TGenericParamValueMapping.Destroy;
+begin
+  if NextBrother <> nil then
+    NextBrother.Free;
+  inherited Destroy;
+end;
+
 { TFindIdentifierInUsesSection_FindMissingFPCUnit }
 
 constructor TFindIdentifierInUsesSection_FindMissingFPCUnit.Create;
 begin
   inherited;
   FResults := TStringList.Create;
-  FResults.CaseSensitive := True;
+  FResults.CaseSensitive := True;  // Why CaseSensitive?
+  {$IF FPC_FULLVERSION>=30200}FResults.UseLocale := False;{$ENDIF}
   FResults.Duplicates := dupIgnore;
   FResults.Sorted := True;
 end;
@@ -1777,7 +1821,7 @@ procedure TFDHelpersList.AddFromList(const Tool: TFindDeclarationTool;
     FromNode: TFDHelpersListItem;
   begin
     FromNode := TFDHelpersListItem(ANode.Data);
-    if (Kind=fdhlkDelphiHelper) and not (msMultiHelpers in Tool.Scanner.CompilerModeSwitches) then
+    if (Kind=fdhlkDelphiHelper) and not (cmsMultiHelpers in Tool.Scanner.CompilerModeSwitches) then
       if FTree.FindKey(FromNode, @CompareHelpersList) <> nil then
         Exit(nil); //FPC & Delphi don't support duplicate class helpers!
     Result := TFDHelpersListItem.Create;
@@ -1841,7 +1885,7 @@ begin
 
   if ExprType.Desc in xtAllIdentTypes then
   begin
-    if (Kind=fdhlkDelphiHelper) and not (msMultiHelpers in Tool.Scanner.CompilerModeSwitches) then begin
+    if (Kind=fdhlkDelphiHelper) and not (cmsMultiHelpers in Tool.Scanner.CompilerModeSwitches) then begin
       // class/type/record helpers only allow one helper per class
       OldKey := FTree.FindKey(@ExprType, @CompareHelpersListExprType);
       if OldKey <> nil then
@@ -4520,8 +4564,10 @@ var
       finally
         Params.Flags := OldFlags;
       end;
-    until ((HelperKind=fdhlkDelphiHelper) and not (msMultiHelpers in Params.StartTool.Scanner.CompilerModeSwitches))
-     or (not Helpers.GetNext(HelperContext,HelperIterator));
+    until ((HelperKind=fdhlkDelphiHelper)
+      and (Params.StartTool<>nil)
+      and not (cmsMultiHelpers in Params.StartTool.Scanner.CompilerModeSwitches))
+      or (not Helpers.GetNext(HelperContext,HelperIterator));
     //debugln(['SearchInHelpers END']);
   end;
 
@@ -5567,6 +5613,7 @@ begin
         Result.Node:=NameNode;
         if Result.Node=nil then break;
         Params.SetGenericParamValues(Self, SpecializeNode);
+        Params.UpdateGenericParamMapping(Self, SpecializeNode.FirstChild.NextBrother, Nil);
         SearchIdentifier(SpecializeNode,NameNode.StartPos,IsPredefined,Result);
         if (Result.Node=nil) or (Result.Node.Desc<>ctnGenericType) then begin
           // not a generic
@@ -7492,7 +7539,7 @@ function TFindDeclarationTool.FindAncestorOfClassInheritance(
 var
   InheritanceNode: TCodeTreeNode;
   ClassNode: TCodeTreeNode;
-  SpecializeNode : TCodeTreeNode;
+  SpecializeNode , GenericParamsNode: TCodeTreeNode;
   AncestorContext: TFindContext;
   AncestorStartPos: LongInt;
   ExprType: TExpressionType;
@@ -7535,7 +7582,7 @@ begin
   AncestorStartPos:=CurPos.StartPos;
   ReadNextAtom;
 
-  Params:=TFindDeclarationParams.Create;
+  Params:=TFindDeclarationParams.Create(ResultParams);
   try
     Params.Flags:=fdfDefaultForExpressions;
     Params.ContextNode:=IdentifierNode;
@@ -7575,6 +7622,13 @@ begin
       if IdentifierNode.Desc=ctnSpecialize then begin
          SpecializeNode:=IdentifierNode;
          Params.SetGenericParamValues(Self, SpecializeNode);
+         if (ClassNode <> nil) then begin
+           GenericParamsNode := nil;
+           if (ClassNode.Parent <> nil)
+           and (ClassNode.Parent.Desc = ctnGenericType) then
+             GenericParamsNode:=ClassNode.Parent.FirstChild.NextBrother;
+           ResultParams.UpdateGenericParamMapping(Self, SpecializeNode.FirstChild.NextBrother, GenericParamsNode);
+         end;
       end;
       try
         Params.Flags:=fdfDefaultForExpressions+[fdfFindChildren];
@@ -8745,7 +8799,7 @@ begin
         Result:=EndPos;
       end else begin
         // the next atom is the start of the variable
-        if (not (NextAtomType in [vatSpace,vatIdentifier,vatPreDefIdentifier,
+        if (not (NextAtomType in [vatSpace,vatIdentifier,vatPreDefIdentifier,vatStringConstant,
           vatRoundBracketClose,vatEdgedBracketClose,vatAddrOp])) then
         begin
           MoveCursorToCleanPos(NextAtom.StartPos);
@@ -10135,7 +10189,8 @@ begin
     ResolveChildren;
 
   Result:=ExprType;
-  if (Result.Desc=xtContext) and (not (fdfFindVariable in StartFlags)) then
+  if (Result.Desc=xtContext) and (not (fdfFindVariable in StartFlags))
+  and (not (Result.Context.Node.Desc = ctnSpecialize)) then
     Result:=Result.Context.Tool.ConvertNodeToExpressionType(
                  Result.Context.Node,Params);
   {$IFDEF ShowExprEval}
@@ -10547,7 +10602,7 @@ begin
         else if (CompareIdentifiers(IdentPos,'LENGTH')=0) then
         begin
           if ParamList.Count<>1 then exit;
-          Result.Desc:=xtConstOrdInteger;
+          Result.Desc:=xtSizeInt;
         end
         else if (CompareIdentifiers(IdentPos,'COPY')=0) then
         begin
@@ -12653,13 +12708,17 @@ function TFindDeclarationTool.FindForInTypeAsString(TermPos: TAtomPosition;
       xtContext:
         begin
           case SubExprType.Context.Node.Desc of
-          ctnClass, ctnRecordType, ctnClassHelper, ctnRecordHelper, ctnTypeHelper, ctnClassInterface:
+          ctnSpecialize, ctnClass, ctnRecordType, ctnClassHelper, ctnRecordHelper, ctnTypeHelper, ctnClassInterface:
             begin
               AliasType:=CleanFindContext;
               if not SubExprType.Context.Tool.FindEnumeratorOfClass(
                 SubExprType.Context.Node,true,ExprType,@AliasType, Params)
               then
                 RaiseTermHasNoIterator(20170421211210,SubExprType);
+              if (ExprType.Desc = xtContext)
+              and (ExprType.Context.Node.Desc = ctnGenericParameter) then begin
+                Params.UpdateContexWithGenParamValue(ExprType.Context);
+              end;
               Result:=FindExprTypeAsString(ExprType,TermPos.StartPos,@AliasType);
             end;
           ctnEnumerationType:
@@ -12679,7 +12738,7 @@ function TFindDeclarationTool.FindForInTypeAsString(TermPos: TAtomPosition;
             begin
               AliasType:=CleanFindContext;
               if SubExprType.Context.Tool.FindElementTypeOfArrayType(
-                                      SubExprType.Context.Node,ExprType,@AliasType)
+                                    SubExprType.Context.Node,ExprType,@AliasType,Params)
               then begin
                 Result:=FindExprTypeAsString(ExprType,TermPos.StartPos,@AliasType);
               end;
@@ -12800,6 +12859,8 @@ function TFindDeclarationTool.FindEnumeratorOfClass(ClassNode: TCodeTreeNode;
   AliasType: PFindContext; ParentParams: TFindDeclarationParams): boolean;
 var
   Params: TFindDeclarationParams;
+  ClassTool: TFindDeclarationTool;
+  ClassContext: TFindContext;
   ProcTool: TFindDeclarationTool;
   ProcNode: TCodeTreeNode;
   EnumeratorContext: TFindContext;
@@ -12813,6 +12874,23 @@ begin
   ExprType:=CleanExpressionType;
   Params:=TFindDeclarationParams.Create(ParentParams);
   try
+    if ClassNode.Desc = ctnSpecialize then begin
+      Params.ContextNode:=ClassNode;
+      Params.Flags:=[fdfEnumIdentifier,fdfTopLvlResolving];
+      ClassContext := FindBaseTypeOfNode(Params, ClassNode, AliasType);
+      if (ClassContext.Node = nil)
+      or not (ClassContext.Node.Desc in [ctnClass,ctnClassInterface,ctnRecordType]) then begin
+        if ExceptionOnNotFound then begin
+          MoveCursorToCleanPos(ClassNode.StartPos);
+          RaiseExceptionFmt(20200505081501,ctsBaseTypeOfNotFound,[GetIdentifier(@Src[ClassNode.StartPos])]);
+        end else
+          exit;
+      end;
+      ClassTool := ClassContext.Tool;
+      ClassNode := ClassContext.Node;
+    end else begin
+      ClassTool := Self;
+    end;
     // search function 'GetEnumerator'
     Params.ContextNode:=ClassNode;
     Params.Flags:=[fdfSearchInAncestors,fdfSearchInHelpers];
@@ -12820,7 +12898,7 @@ begin
     {$IFDEF ShowForInEval}
     DebugLn(['TFindDeclarationTool.FindEnumeratorOfClass searching GetEnumerator for ',ExtractClassName(ClassNode,false),' ...']);
     {$ENDIF}
-    if not FindIdentifierInContext(Params) then begin
+    if not ClassTool.FindIdentifierInContext(Params) then begin
       if ExceptionOnNotFound then begin
         MoveCursorToCleanPos(ClassNode.StartPos);
         RaiseException(20170421200638,ctsFunctionGetEnumeratorNotFoundInThisClass);
@@ -13057,7 +13135,7 @@ end;
 
 function TFindDeclarationTool.FindElementTypeOfArrayType(
   ArrayNode: TCodeTreeNode; out ExprType: TExpressionType;
-  AliasType: PFindContext): boolean;
+  AliasType: PFindContext; ParentParams: TFindDeclarationParams): boolean;
 var
   Params: TFindDeclarationParams;
   p: LongInt;
@@ -13068,27 +13146,36 @@ begin
   if (ArrayNode=nil) then exit;
   if (ArrayNode.Desc<>ctnOpenArrayType) and (ArrayNode.Desc<>ctnRangedArrayType)
   then exit;
-  MoveCursorToNodeStart(ArrayNode);
-  ReadNextAtom; // array
-  if not UpAtomIs('ARRAY') then exit;
-  ReadNextAtom; // of
-  if CurPos.Flag=cafEdgedBracketOpen then begin
-    ReadTilBracketClose(true);
-    ReadNextAtom;
-  end;
-  if not UpAtomIs('OF') then exit;
-  ReadNextAtom;
-  if not AtomIsIdentifier then exit;
-  Params:=TFindDeclarationParams.Create;
-  try
-    Params.Flags:=fdfDefaultForExpressions;
-    Params.ContextNode:=ArrayNode;
-    p:=CurPos.StartPos;
-    Params.SetIdentifier(Self,@Src[p],nil);
-    ExprType:=FindExpressionResultType(Params,p,-1,AliasType);
+  if (ArrayNode.Parent <> nil)
+  and (ArrayNode.Parent.Desc = ctnGenericType)
+  and (ParentParams <> nil) then begin
+    ExprType.Desc := xtContext;
+    ExprType.Context.Node := ParentParams.GenParamValueMappings.SpecializeParamsNode.FirstChild;
+    ExprType.Context.Tool := ParentParams.GenParamValueMappings.SpecializeParamsTool;
     Result:=true;
-  finally
-    Params.Free;
+  end else begin
+    MoveCursorToNodeStart(ArrayNode);
+    ReadNextAtom; // array
+    if not UpAtomIs('ARRAY') then exit;
+    ReadNextAtom; // of
+    if CurPos.Flag=cafEdgedBracketOpen then begin
+      ReadTilBracketClose(true);
+      ReadNextAtom;
+    end;
+    if not UpAtomIs('OF') then exit;
+    ReadNextAtom;
+    if not AtomIsIdentifier then exit;
+    Params:=TFindDeclarationParams.Create;
+    try
+      Params.Flags:=fdfDefaultForExpressions;
+      Params.ContextNode:=ArrayNode;
+      p:=CurPos.StartPos;
+      Params.SetIdentifier(Self,@Src[p],nil);
+      ExprType:=FindExpressionResultType(Params,p,-1,AliasType);
+      Result:=true;
+    finally
+      Params.Free;
+    end;
   end;
 end;
 
@@ -13496,7 +13583,8 @@ begin
     xtShortInt,
     xtByte,
     xtNativeInt,
-    xtNativeUInt:
+    xtNativeUInt,
+    xtSizeInt:
       Result:=ExpressionTypeDescNames[ExprType.Desc];
 
     xtBoolean,
@@ -13672,6 +13760,7 @@ begin
   for HelperKind in TFDHelpersListKind do
     if FFreeHelpers[HelperKind] then
       FreeAndNil(FHelpers[HelperKind]);
+  GenParamValueMappings.FirstParamValueMapping.Free;
   inherited Destroy;
 end;
 
@@ -13883,6 +13972,117 @@ procedure TFindDeclarationParams.SetGenericParamValues(
 begin
   GenParams.ParamValuesTool := SpecializeParamsTool;
   GenParams.SpecializeParamsNode := SpecializeNode.FirstChild.NextBrother;
+end;
+
+procedure TFindDeclarationParams.UpdateGenericParamMapping(SpecializeParamsTool: TFindDeclarationTool;
+  SpecializeParamsNode: TCodeTreeNode; GenericParamsNode: TCodeTreeNode);
+
+  procedure ForwardParamMapping;
+  var
+    lGenericParamNode,
+    lSpecializeParamNode,
+    lGenericParamValueNode: TCodeTreeNode;
+    lFirstMapping,
+    lMapping,
+    lLoopMapping: TGenericParamValueMapping;
+    lFound: Boolean;
+  begin
+    lFirstMapping := nil;
+    lMapping := nil;
+    // GenericParams: GObject1<V1, V2> = class(GObject2<V2, V1>)
+    //                         ^^^^^^
+    // SpecializeParams: GObject1<V1, V2> = class(GObject2<V2, V1>)
+    //                                                     ^^^^^^
+    if GenParamValueMappings.FirstParamValueMapping = nil then begin
+      // first mapping: values from GenParamValueMappings.SpecializeParamsNode
+      lSpecializeParamNode := SpecializeParamsNode.FirstChild;
+      while lSpecializeParamNode <> nil do begin
+        //find generic param / generic param value
+        lGenericParamNode := GenericParamsNode.FirstChild;
+        lGenericParamValueNode := GenParamValueMappings.SpecializeParamsNode.FirstChild;
+        lFound := false;
+        while (lGenericParamNode <> nil)
+        and (lGenericParamValueNode <> nil) do begin
+          if SpecializeParamsTool.CompareSrcIdentifiers(lSpecializeParamNode.StartPos, lGenericParamNode.StartPos) then begin
+            // found generic param
+            lMapping := TGenericParamValueMapping.Create(lMapping, lSpecializeParamNode, lGenericParamValueNode);
+            if lFirstMapping = nil then
+              lFirstMapping := lMapping;
+            lFound := true;
+            break;
+          end;
+          lGenericParamNode := lGenericParamNode.NextBrother;
+          lGenericParamValueNode := lGenericParamValueNode.NextBrother;
+        end;
+        if not lFound then begin
+
+        end;
+        lSpecializeParamNode := lSpecializeParamNode.NextBrother;
+      end;
+      GenParamValueMappings.FirstParamValueMapping := lFirstMapping;
+      GenParamValueMappings.SpecializeValuesTool := GenParamValueMappings.SpecializeParamsTool;
+    end else begin
+      // further mapping: values from GenParamValueMappings.FirstParamValueMapping
+      lSpecializeParamNode := SpecializeParamsNode.FirstChild;
+      while lSpecializeParamNode <> nil do begin
+        //find generic param / generic param value
+        lLoopMapping := GenParamValueMappings.FirstParamValueMapping;
+        lGenericParamNode := GenericParamsNode.FirstChild;
+        lFound := false;
+        while (lLoopMapping <> nil) do begin
+          lGenericParamValueNode := lLoopMapping.SpecializeValueNode;
+          if SpecializeParamsTool.CompareSrcIdentifiers(lSpecializeParamNode.StartPos, lGenericParamNode.StartPos) then begin
+            // found generic param
+            lMapping := TGenericParamValueMapping.Create(lMapping, lSpecializeParamNode, lGenericParamValueNode);
+            if lFirstMapping = nil then
+              lFirstMapping := lMapping;
+            lFound := true;
+            break;
+          end;
+          lGenericParamNode := lGenericParamNode.NextBrother;
+          lLoopMapping := lLoopMapping.NextBrother;
+        end;
+        if not lFound then begin
+
+        end;
+        lSpecializeParamNode := lSpecializeParamNode.NextBrother;
+      end;
+      GenParamValueMappings.FirstParamValueMapping.Free;
+      GenParamValueMappings.FirstParamValueMapping := lFirstMapping;
+    end;
+  end;
+
+begin
+  if Parent <> nil then begin
+    Parent.UpdateGenericParamMapping(SpecializeParamsTool, SpecializeParamsNode, GenericParamsNode);
+    exit;
+  end;
+  if (GenericParamsNode <> nil)
+  and (GenParamValueMappings.SpecializeParamsNode <> nil) then
+    ForwardParamMapping;
+  GenParamValueMappings.SpecializeParamsTool := SpecializeParamsTool;
+  GenParamValueMappings.SpecializeParamsNode := SpecializeParamsNode;
+end;
+
+procedure TFindDeclarationParams.UpdateContexWithGenParamValue(var SpecializeParamContext: TFindContext);
+var
+  lMapping: TGenericParamValueMapping;
+  lPNode, lVNode: TCodeTreeNode;
+  lPTool, lVTool: TFindDeclarationTool;
+begin
+  lMapping := GenParamValueMappings.FirstParamValueMapping;
+  while lMapping <> nil do begin
+    lPNode := lMapping.GenericParamNode;
+    lPTool := GenParamValueMappings.SpecializeParamsTool;
+    lVNode := lMapping.SpecializeValueNode;
+    lVTool := GenParamValueMappings.SpecializeValuesTool;
+    if SpecializeParamContext.Tool.CompareSrcIdentifiers(SpecializeParamContext.Node.StartPos, @lPTool.Src[lPNode.StartPos]) then begin
+      SpecializeParamContext.Node := lVNode;
+      SpecializeParamContext.Tool := lVTool;
+      exit;
+    end;
+    lMapping := lMapping.NextBrother;
+  end;
 end;
 
 function TFindDeclarationParams.FindGenericParamType: Boolean;

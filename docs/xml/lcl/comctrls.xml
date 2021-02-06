@@ -9,7 +9,25 @@
     <module name="ComCtrls">
       <short>Common controls used in Lazarus forms</short>
       <descr>
-        <file>comctrls.pp</file> contains classes and types like those found in the Delphi <file>comctrls</file> unit.
+        <p>
+          <file>comctrls.pp</file> contains classes and types like those found in the Delphi <file>comctrls</file> unit.
+        </p>
+        <p>
+          <b>Components on the Common Controls Tab</b>
+        </p>
+        <ul>
+          <li>TTrackbar</li>
+          <li>TProgressBar</li>
+          <li>TTreeView</li>
+          <li>TListView</li>
+          <li>TStatusBar</li>
+          <li>TToolBar</li>
+          <li>TCoolBar</li>
+          <li>TUpDown</li>
+          <li>TPageControl</li>
+          <li>TTabControl</li>
+          <li>THeaderControl</li>
+        </ul>
       </descr>
 
       <!-- unresolved type references Visibility: default -->
@@ -18,19 +36,14 @@
       <element name="Classes"/>
       <element name="Math"/>
       <element name="Laz_AVL_Tree"/>
-      <element name="LazUTF8"/>
-      <element name="LazUTF8Classes"/>
-      <element name="LazLoggerBase"/>
-      <element name="LazUtilities"/>
       <element name="LCLStrConsts"/>
       <element name="LResources"/>
       <element name="LCLIntf"/>
       <element name="LCLType"/>
+      <element name="LCLProc"/>
       <element name="LMessages"/>
       <element name="WSLCLClasses"/>
       <element name="WSReferences"/>
-      <element name="LCLProc"/>
-      <element name="GraphType"/>
       <element name="Graphics"/>
       <element name="ImgList"/>
       <element name="ActnList"/>
@@ -42,6 +55,10 @@
       <element name="ExtCtrls"/>
       <element name="ToolWin"/>
       <element name="Buttons"/>
+      <element name="GraphType"/>
+      <element name="LazUTF8"/>
+      <element name="LazLoggerBase"/>
+      <element name="LazUtilities"/>
 
       <element name="THitTest">
         <short>Represents permissible results for a hit test</short>
@@ -268,7 +285,7 @@
           <var>GetDisplayName</var> is an overridden String function which returns the value displayed as the name of the collection item. The value in the Text property is used as the return value when it is not an empty string (''). Otherwise, the inherited GetDisplayName method is called to get the return value.
         </descr>
         <seealso>
-          <link id="#rtl.Classes.TCollectionItem.GetDisplayName"/>
+          <link id="#rtl.classes.TCollectionItem.DisplayName">TCollectionItem.DisplayName</link>
         </seealso>
       </element>
       <element name="TStatusPanel.GetDisplayName.Result">
@@ -292,7 +309,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TCollectionItem.SetIndex">TCollectionItem.SetIndex</link>
+          <link id="#rtl.classes.TCollectionItem.Index">TCollectionItem.Index</link>
         </seealso>
       </element>
       <element name="TStatusPanel.SetIndex.Value">
@@ -408,7 +425,7 @@
         <descr/>
         <seealso>
           <link id="TStatusPanels.Items"/>
-          <link id="#RTL.Classes.TCollection.GetItem"/>
+          <link id="#RTL.Classes.TCollection.GetItem">TCollection.GetItem</link>
         </seealso>
       </element>
       <element name="TStatusPanels.GetItem.Result">
@@ -436,7 +453,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.GetOwner">TPersistent.GetOwner</link>
+          <link id="#rtl.classes.TPersistent.GetOwner">TPersistent.GetOwner</link>
         </seealso>
       </element>
       <element name="TStatusPanels.GetOwner.Result">
@@ -616,7 +633,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.CreateWnd">TWinControl.CreateWnd</link>
+          <link id="#lcl.controls.TWinControl.CreateWnd">TWinControl.CreateWnd</link>
         </seealso>
       </element>
 
@@ -626,7 +643,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.DestroyWnd">TWinControl.DestroyWnd</link>
+          <link id="#lcl.controls.TWinControl.DestroyWnd">TWinControl.DestroyWnd</link>
         </seealso>
       </element>
 
@@ -636,7 +653,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.Loaded">TWinControl.Loaded</link>
+          <link id="#lcl.controls.TWinControl.Loaded">TWinControl.Loaded</link>
         </seealso>
       </element>
 
@@ -657,7 +674,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TControl.CalculatePreferredSize"/>
+          <link id="#lcl.controls.TControl.CalculatePreferredSize">TControl.CalculatePreferredSize</link>
         </seealso>
       </element>
 
@@ -671,7 +688,7 @@
         <seealso>
           <link id="TStatusBar.Panels"/>
           <link id="TStatusBar.UpdateHandleObject"/>
-          <link id="#LCL.Controls.TControl.BiDiMode"/>
+          <link id="#lcl.controls.TControl.BiDiMode">TControl.BiDiMode</link>
         </seealso>
       </element>
       <element name="TStatusBar.SetBiDiMode.AValue">
@@ -752,7 +769,7 @@
             Calls <var>BeginUpdate</var> to reduce the number of refreshes needed when updating panels in the status bar. Adjusts the width of all items in the <var>Panels</var> collection using the factor in <var>AXProportion</var>. The value in <var>AYProportion</var> is ignored in the method. Calls <var>EndUpdate</var> prior to exit from the method.
           </p>
         <remark>
-          Please note: No actions are performed in the method when <var>AMode</var> contains a <var>TLayoutAdjustmentPolicy</var> value other than <var>lapAutoAdjustWithoutHorizontalScrolling</var> or      <var>lapAutoAdjustForDPI</var>.
+          No actions are performed in the method when <var>AMode</var> contains a <var>TLayoutAdjustmentPolicy</var> value other than <var>lapAutoAdjustWithoutHorizontalScrolling</var> or <var>lapAutoAdjustForDPI</var>.
         </remark>
         </descr>
         <seealso/>
@@ -784,8 +801,8 @@
           </ul>
         </descr>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Create"/>
-          <link id="#lcl.Controls.TWinControl.Create"/>
+          <link id="#rtl.classes.TComponent.Create">TComponent.Create</link>
+          <link id="#lcl.controls.TWinControl.Create">TWinControl.Create</link>
         </seealso>
       </element>
       <element name="TStatusBar.Create.TheOwner">
@@ -798,8 +815,8 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Destroy">TComponent.Destroy</link>
-          <link id="#lcl.Controls.TWinControl.Destroy">TWinControl.Destroy</link>
+          <link id="#lcl.controls.TWinControl.Destroy">TWinControl.Destroy</link>
+          <link id="#rtl.classes.TComponent.Destroy">TComponent.Destroy</link>
         </seealso>
       </element>
 
@@ -812,7 +829,7 @@
             <var>InvalidatePanel</var> renders the panel with specified index non-valid. Calls <var>UpdateHandleObject</var> to ensure that the widget set class is notified of the change to the specified panel.
           </p>
           <remark>
-            Please note: No actions are performed in the method when the PanelParts argument is an empty set ([]).
+            No actions are performed in the method when the PanelParts argument is an empty set (<b>[]</b>).
           </remark>
         </descr>
         <seealso/>
@@ -843,7 +860,7 @@
           <var>ExecuteAction</var>: if required action is a Hint-related, sets the Hint in place, otherwise calls inherited method
         </short>
         <seealso>
-          <link id="#rtl.Classes.TComponent.ExecuteAction"/>
+          <link id="#rtl.classes.TComponent.ExecuteAction">TComponent.ExecuteAction</link>
         </seealso>
       </element>
 
@@ -1004,8 +1021,8 @@
         <short>Event handler signalled to draw a panel in the status bar</short>
         <descr>
           <p>
+            <var>OnDrawPanel</var> is an event handler used to draw the specified panel on the status bar. OnDrawPanel is signalled (when assigned) from the DrawPanel method. Assign an object procedure using the signature in TDrawPanelEvent to render the  specified panel to the desired rectangle in the status bar.
           </p>
-          <var>OnDrawPanel</var> is an event handler used to draw the specified panel on the status bar. OnDrawPanel is signalled (when assigned) from the DrawPanel method. Assign an object procedure using the signature in TDrawPanelEvent to render the  specified panel to the desired rectangle in the status bar.
         </descr>
         <seealso/>
       </element>
@@ -1066,14 +1083,18 @@
       </element>
 
       <element name="TCustomPage">
-        <short>
-          <var>TCustomPage</var>: The base type for <var>Page</var>
-        </short>
+        <short>The base class for TTabSheet</short>
         <descr>
-          <var>TCustomPage</var>: The base type for the tabbed pages found in notebooks.
+          <p>
+            <var>TCustomPage</var> is a <var>TWinControl</var> descendant which implements the base class for the tabbed pages found in notebooks. TCustomPage provides properties used to maintain the order and visibility of the page, and event handlers signalled when the page is hidden or displayed.
+          </p>
         </descr>
         <seealso>
-          <link id="#lcl.ExtCtrls.Multi-PageControls">Multi-PageControls</link>
+          <link id="TTabSheet"/>
+          <link id="TPageControl"/>
+          <link id="TCustomTabControl.Page"/>
+          <link id="TCustomTabControl.ActivePageComponent"/>
+          <link id="#lcl.extctrls.MultiPage-Controls">Using Multi-Page Controls</link>
         </seealso>
       </element>
 
@@ -1135,8 +1156,15 @@
         <short>
           Contains flag values that represent the status or state for the handle in the custom page control
         </short>
-        <descr/>
-        <seealso/>
+        <descr>
+          <p>
+            Values in <var>Flags</var> are normally added or removed when changes are performed in a control which uses the page control class instance. See <var>TPageFlag</var> for more information about enumeration values and their meanings.
+          </p>
+        </descr>
+        <seealso>
+          <link id="TPageFlags"/>
+          <link id="TPageFlag"/>
+        </seealso>
       </element>
 
       <element name="TCustomPage.CMHitTest" link="#LCL.Controls.TControl.CMHitTest">
@@ -1148,7 +1176,7 @@
         <short/>
       </element>
 
-      <element name="TCustomPage.CMVisibleChanged">
+      <element name="TCustomPage.CMVisibleChanged" link="#lcl.controls.TWinControl.CMVisibleChanged">
         <short/>
         <descr/>
         <seealso/>
@@ -1158,23 +1186,25 @@
       </element>
 
       <element name="TCustomPage.GetPageIndex">
-        <short>
-          <var>GetPageIndex</var> - returns the index of the current page</short>
+        <short>Gets the value for the PageIndex property</short>
         <descr/>
-        <seealso/>
+        <seealso>
+          <link id="TCustomPage.PageIndex"/>
+        </seealso>
       </element>
       <element name="TCustomPage.GetPageIndex.Result">
-        <short/>
+        <short>Value for the property</short>
       </element>
 
       <element name="TCustomPage.SetPageIndex">
-        <short>
-          <var>SetPageIndex</var> - specifies an index for the current page</short>
+        <short>Sets the value for the PageIndex property</short>
         <descr/>
-        <seealso/>
+        <seealso>
+          <link id="TCustomPage.PageIndex"/>
+        </seealso>
       </element>
       <element name="TCustomPage.SetPageIndex.AValue">
-        <short/>
+        <short>New value for the property</short>
       </element>
 
       <element name="TCustomPage.GetTabVisible">
@@ -1193,7 +1223,9 @@
           Provides support for TCustomTabControl as parent when handling dialog accelerator keys
         </short>
         <descr>
-          Calls the inherited DoalogChar method when Parent is not derived from TCustomTabControl.
+          <p>
+            Calls the inherited DialogChar method when Parent is not derived from TCustomTabControl.
+          </p>
         </descr>
         <seealso/>
       </element>
@@ -1219,9 +1251,7 @@
       </element>
 
       <element name="TCustomPage.DestroyHandle" link="#LCL.Controls.TWinControl.DestroyHandle">
-        <short>
-          Removes values in the Flags property when the handle for the control is freed
-          </short>
+        <short>Updates the Flags property when the handle for the control is freed</short>
         <descr/>
         <seealso/>
       </element>
@@ -1236,24 +1266,30 @@
       </element>
 
       <element name="TCustomPage.Create">
-        <short>
-          <var>Create</var> - constructor for <var>TCustomPage</var>: calls inherited <var>Create</var> then initializes style, visibility, alignment and caption</short>
-        <descr/>
+        <short>Constructor for the class instance</short>
+        <descr>
+          <p>
+            <var>Create</var> is the overridden constructor for <var>TCustomPage</var>.
+          </p>
+          <p>
+            Create calls the inherited constructor on entry and sets the default value for the style, visibility, alignment and caption in the class instance.
+          </p>
+        </descr>
         <seealso>
-          <link id="#lcl.Controls.TControl.Create">TControl.Create</link>
+          <link id="#lcl.controls.TWinControl.Create">TWinControl.Create</link>
         </seealso>
       </element>
       <element name="TCustomPage.Create.TheOwner">
         <short>Owner of the class instance</short>
       </element>
 
-      <element name="TCustomPage.CanTab" link="#LCL.Controls.TControl.CanTab"/>
+      <element name="TCustomPage.CanTab" link="#lcl.controls.TWinControl.CanTab"/>
       <element name="TCustomPage.CanTab.Result"/>
 
       <element name="TCustomPage.IsControlVisible" link="#lcl.Controls.TControl.IsControlVisible"/>
       <element name="TCustomPage.IsControlVisible.Result"/>
 
-      <element name="TCustomPage.HandleObjectShouldBeVisible" link="#LCL.Controls.TControl.HandleObjectShouldBeVisible">
+      <element name="TCustomPage.HandleObjectShouldBeVisible" link="#lcl.controls.TControl.HandleObjectShouldBeVisible">
         <short/>
         <descr/>
         <seealso/>
@@ -1268,7 +1304,7 @@
         </short>
         <descr>
           <p>
-            Gets the ordinal position in the Parent (tab control) where the current page is displayed. Returns -1 if the page is not present in the notebook or has its TabVisible property set to False.
+            Gets the ordinal position in the Parent (tab control) where the current page is displayed. Returns <b>-1</b> if the page is not present in the notebook or has its TabVisible property set to False.
           </p>
         </descr>
       </element>
@@ -1286,7 +1322,7 @@
         </errors>
         <seealso>
           <link id="TCustomPage"/>
-          <link id="#LCL.Controls.TControl.CheckNewParent"/>
+          <link id="#lcl.controls.TControl.CheckNewParent">TControl.CheckNewParent</link>
         </seealso>
       </element>
       <element name="TCustomPage.CheckNewParent.AParent">
@@ -1294,14 +1330,19 @@
       </element>
 
       <element name="TCustomPage.PageIndex">
-        <short>
-          <var>PageIndex </var>- integer index value for this page in the notebook</short>
+        <short>Ordinal position for the page in the parent control</short>
+        <descr>
+          <p>
+            <var>PageIndex</var> is an Integer property which contains the ordinal position for the page control in a <var>Parent</var> control. Setting a new value for the property causes the Parent control to call its <var>MoveTab</var> method to reorder the pages on the control. This action is performed when Parent is descended from <var>TCustomTabControl</var>.
+          </p>
+        </descr>
+        <seealso>
+          <link id="TCustomTabControl"/>
+        </seealso>
       </element>
 
       <element name="TCustomPage.TabVisible">
-        <short>
-        Indicates if the tab in the Parent control should be visible
-        </short>
+        <short>Indicates if the tab in the Parent control should be visible</short>
         <descr>
           <p>
             <var>TabVisible</var> indicates if the Tab in the <var>Parent</var> control is visible.
@@ -1491,7 +1532,7 @@
         <short/>
       </element>
 
-      <element name="TNBPages.Get" link="#rtl.Classes.TStrings.Get">
+      <element name="TNBPages.Get" link="#rtl.Classes.TStringList.Get">
         <short/>
         <descr/>
         <seealso/>
@@ -1503,7 +1544,7 @@
         <short/>
       </element>
 
-      <element name="TNBPages.GetCount" link="#rtl.Classes.TStrings.GetCount">
+      <element name="TNBPages.GetCount" link="#rtl.Classes.TStringList.GetCount">
         <short/>
         <descr/>
         <seealso/>
@@ -1512,7 +1553,7 @@
         <short/>
       </element>
 
-      <element name="TNBPages.GetObject" link="#rtl.Classes.TStrings.GetObject">
+      <element name="TNBPages.GetObject" link="#rtl.Classes.TStringList.GetObject">
         <short/>
         <descr/>
         <seealso/>
@@ -1524,7 +1565,7 @@
         <short/>
       </element>
 
-      <element name="TNBPages.Put" link="#rtl.Classes.TStrings.Put">
+      <element name="TNBPages.Put" link="#rtl.Classes.TStringList.Put">
         <short/>
         <descr/>
         <seealso/>
@@ -1599,7 +1640,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.System.TObject.Create">TObject.Create</link>
+          <link id="#rtl.system.TObject.Create">TObject.Create</link>
         </seealso>
       </element>
       <element name="TNBPages.Create.thePageList">
@@ -1870,7 +1911,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#lcl.ExtCtrls.Multi-PageControls">Multi-PageControls</link>
+          <link id="#lcl.extctrls.Multi-PageControls">Using Multi-Page Controls</link>
         </seealso>
       </element>
 
@@ -2176,7 +2217,17 @@
 
       <element name="TCustomTabControl.ShowCurrentPage">
         <short>Ensures that the current page has its Visible property set to True</short>
-        <descr/>
+        <descr>
+          <p>
+            <var>ShowCurrentPage</var> checks the value in <var>PageIndex</var> to determine if a valid page index has been specified. No actions are performed in the method when PageIndex is less than <b>0</b> or greater than <b>PageCount - 1</b>.
+          </p>
+          <p>
+            ShowCurrentPage gets the <var>TCustomPage</var> instance in <var>Page</var> at the position in <var>PageIndex</var>, and sets its <var>Visible</var> property to <b>True</b>. If the Page is Enabled, it <var>SetFocus</var> method is called.
+          </p>
+          <p>
+            ShowCurrentPage sets the Visible property in the previously selected Page to <b>False</b>.
+          </p>
+        </descr>
         <seealso/>
       </element>
 
@@ -2206,7 +2257,7 @@
         <descr/>
         <seealso>
           <link id="TCustomTabControl.SetImageListAsync"/>
-          <link id="#LCL.Forms.TApplication.QueueAsyncCall"/>
+          <link id="#LCL.forms.TApplication.QueueAsyncCall">TApplication.QueueAsyncCall</link>
         </seealso>
       </element>
       <element name="TCustomTabControl.DoImageListDestroyResolutionHandle.Sender">
@@ -2450,7 +2501,7 @@
           <var>GetControlClassDefaultSize</var> returns its own defaults, overriding inherited values
         </short>
         <seealso>
-          <link id="#LCL.Controls.TControl.GetControlClassDefaultSize">TControl.GetControlClassDefaultSize</link>
+          <link id="#lcl.controls.TControl.GetControlClassDefaultSize">TControl.GetControlClassDefaultSize</link>
         </seealso>
       </element>
       <element name="TCustomTabControl.GetControlClassDefaultSize.Result">
@@ -2581,7 +2632,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.Create">TWinControl.Create</link>
+          <link id="#lcl.controls.TWinControl.Create">TWinControl.Create</link>
         </seealso>
       </element>
       <element name="TCustomTabControl.Create.TheOwner">
@@ -2594,9 +2645,9 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.Destroy">TWinControl.Destroy</link>
-          <link id="#LCL.Controls.TCustomControl.Destroy">TCustomControl.Destroy</link>
-          <link id="#rtl.Classes.TComponent.Destroy">TComponent.Destroy</link>
+          <link id="#lcl.controls.TWinControl.Destroy">TWinControl.Destroy</link>
+          <link id="#lcl.controls.TCustomControl.Destroy">TCustomControl.Destroy</link>
+          <link id="#rtl.classes.TComponent.Destroy">TComponent.Destroy</link>
         </seealso>
       </element>
 
@@ -2695,8 +2746,18 @@
       </element>
 
       <element name="TCustomTabControl.TabToPageIndex">
-        <short/>
-        <descr/>
+        <short>Gets the real page index for the specified tab</short>
+        <descr>
+          <p>
+            <var>TabToPageIndex</var> is an <var>Integer</var> function used to get the page index for the tab at the specified position.  The tab index value in <var>AIndex</var> does not include any non-visible tabs. TabToPageIndex adjusts the index value to include any <var>TCustomPage</var> instances in <var>Page</var> with its <var>TabVisible</var> property set to <b>False</b>.
+          </p>
+          <p>
+            The return value contains the value specified in AIndex after adding any non-visible pages proper to the requested position.
+          </p>
+          <p>
+            No actions are performed in the method at design-time; all pages are visible on the designer surface.
+          </p>
+        </descr>
         <seealso/>
       </element>
       <element name="TCustomTabControl.TabToPageIndex.Result">
@@ -2735,7 +2796,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#lcl.ComCtrls.TCustomListView.HotTrack">TCustomListView.HotTrack</link>
+          <link id="TCustomListView.HotTrack"/>
         </seealso>
       </element>
 
@@ -2758,8 +2819,9 @@
         </descr>
         <seealso>
           <link id="TCustomTabControl.Images"/>
-          <link id="TCustomTabControl.DoImageListChange"/>
+          <link id="TCustomTabControl.ImagesWidth"/>
           <link id="TCustomTabControl.UpdateTabProperties"/>
+          <link id="TChangeLink.OnChange"/>
         </seealso>
       </element>
 
@@ -2847,7 +2909,7 @@
       </element>
 
       <element name="TCustomTabControl.Pages">
-        <short>The contents of the <var>Pages</var> in the Notebook (as Strings)</short>
+        <short>The list of page names in the control</short>
         <descr/>
         <seealso/>
       </element>
@@ -2933,8 +2995,8 @@
           </ul>
         </descr>
         <seealso>
-          <link id="#lcl.ExtCtrls.Multi-PageControls">Multi-PageControls</link>
-          <link id="#lcl.stdctrls.HowToUseStdCtrls">HowToUseStdCtrls</link>
+          <link id="#lcl.extctrls.Multi-PageControls">Using Multi-Page Controls</link>
+          <link id="#lcl.stdctrls.HowToUseStdCtrls">How To Use Standard Controls</link>
         </seealso>
       </element>
 
@@ -2978,7 +3040,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Create">TComponent.Create</link>
+          <link id="#rtl.classes.TComponent.Create">TComponent.Create</link>
         </seealso>
       </element>
       <element name="TTabSheet.Create.TheOwner">
@@ -2991,7 +3053,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Destroy">TComponent.Destroy</link>
+          <link id="#rtl.classes.TComponent.Destroy">TComponent.Destroy</link>
         </seealso>
       </element>
 
@@ -3017,7 +3079,7 @@
       <element name="TTabSheet.Enabled" link="#LCL.Controls.TControl.Enabled"/>
       <element name="TTabSheet.Font" link="#LCL.Controls.TControl.Font"/>
       <element name="TTabSheet.Height" link="#LCL.Controls.TControl.Height"/>
-      <element name="TTabSheet.ImageIndex" link="TCustomPage.ImageIndex"/>
+      <element name="TTabSheet.ImageIndex" link="#lcl.comctrls.TCustomPage.ImageIndex"/>
       <element name="TTabSheet.Left" link="#LCL.Controls.TControl.Left"/>
       <element name="TTabSheet.OnContextPopup" link="#LCL.Controls.TControl.OnContextPopup"/>
       <element name="TTabSheet.OnDragDrop" link="#LCL.Controls.TControl.OnDragDrop"/>
@@ -3025,7 +3087,7 @@
       <element name="TTabSheet.OnEndDrag" link="#LCL.Controls.TControl.OnEndDrag"/>
       <element name="TTabSheet.OnEnter" link="#LCL.Controls.TWinControl.OnEnter"/>
       <element name="TTabSheet.OnExit" link="#LCL.Controls.TWinControl.OnExit"/>
-      <element name="TTabSheet.OnHide" link="TCustomPage.OnHide"/>
+      <element name="TTabSheet.OnHide" link="#lcl.comctrls.TCustomPage.OnHide"/>
       <element name="TTabSheet.OnMouseDown" link="#LCL.Controls.TControl.OnMouseDown"/>
       <element name="TTabSheet.OnMouseEnter" link="#LCL.Controls.TControl.OnMouseEnter"/>
       <element name="TTabSheet.OnMouseLeave" link="#LCL.Controls.TControl.OnMouseLeave"/>
@@ -3035,15 +3097,15 @@
       <element name="TTabSheet.OnMouseWheelDown" link="#LCL.Controls.TControl.OnMouseWheelDown"/>
       <element name="TTabSheet.OnMouseWheelUp" link="#LCL.Controls.TControl.OnMouseWheelUp"/>
       <element name="TTabSheet.OnResize" link="#LCL.Controls.TControl.OnResize"/>
-      <element name="TTabSheet.OnShow" link="TCustomPage.OnShow"/>
+      <element name="TTabSheet.OnShow" link="#lcl.comctrls.TCustomPage.OnShow"/>
       <element name="TTabSheet.OnStartDrag" link="#LCL.Controls.TControl.OnStartDrag"/>
-      <element name="TTabSheet.PageIndex" link="TCustomPage.PageIndex"/>
+      <element name="TTabSheet.PageIndex" link="#lcl.comctrls.TCustomPage.PageIndex"/>
       <element name="TTabSheet.ParentBiDiMode" link="#LCL.Controls.TControl.ParentBiDiMode"/>
       <element name="TTabSheet.ParentFont" link="#LCL.Controls.TControl.ParentFont"/>
       <element name="TTabSheet.ParentShowHint" link="#LCL.Controls.TControl.ParentShowHint"/>
       <element name="TTabSheet.PopupMenu" link="#LCL.Controls.TControl.PopupMenu"/>
       <element name="TTabSheet.ShowHint" link="#LCL.Controls.TControl.ShowHint"/>
-      <element name="TTabSheet.TabVisible" link="TCustomPage.TabVisible"/>
+      <element name="TTabSheet.TabVisible" link="#lcl.comctrls.TCustomPage.TabVisible"/>
       <element name="TTabSheet.Top" link="#LCL.Controls.TControl.Top"/>
       <element name="TTabSheet.Width" link="#LCL.Controls.TControl.Width"/>
 
@@ -3065,11 +3127,11 @@
             While a given page is selected, it is also possible to drop other controls (such as buttons, memo boxes etc) on to the page from the Component Palette.
           </p>
           <p>
-            Inherits most of its properties from <link id="#lcl.ComCtrls.TCustomTabControl">TCustomTabControl</link>
+            Inherits most of its properties from <link id="#lcl.comctrls.TCustomTabControl">TCustomTabControl</link>
           </p>
         </descr>
         <seealso>
-          <link id="#lcl.ExtCtrls.Multi-PageControls">Multi-PageControls</link>
+          <link id="#lcl.extctrls.Multi-PageControls">Using Multi-Page Controls</link>
         </seealso>
       </element>
 
@@ -3168,7 +3230,7 @@
           Client cannot be added to TPageControl itself but new TabSheet should be added and client placed onto it.
         </descr>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.DoAddDockClient">TWinControl.DoAddDockClient</link>
+          <link id="#lcl.controls.TWinControl.DoAddDockClient">TWinControl.DoAddDockClient</link>
         </seealso>
       </element>
 
@@ -3199,7 +3261,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.DoRemoveDockClient"/>
+          <link id="#lcl.controls.TWinControl.DoRemoveDockClient">TWinControl.DoRemoveDockClient</link>
         </seealso>
       </element>
 
@@ -3255,13 +3317,13 @@
         <short/>
       </element>
 
-      <element name="TPageControl.IndexOfTabAt" link="TCustomTabControl.IndexOfTabAt"/>
+      <element name="TPageControl.IndexOfTabAt" link="#lcl.comctrls.TCustomTabControl.IndexOfTabAt"/>
       <element name="TPageControl.IndexOfTabAt.Result"/>
       <element name="TPageControl.IndexOfTabAt.X"/>
       <element name="TPageControl.IndexOfTabAt.Y"/>
       <element name="TPageControl.IndexOfTabAt.P"/>
 
-      <element name="TPageControl.IndexOfPageAt" link="TCustomTabControl.IndexOfPageAt"/>
+      <element name="TPageControl.IndexOfPageAt" link="#lcl.comctrls.TCustomTabControl.IndexOfPageAt"/>
       <element name="TPageControl.IndexOfPageAt.Result"/>
       <element name="TPageControl.IndexOfPageAt.X"/>
       <element name="TPageControl.IndexOfPageAt.Y"/>
@@ -3271,9 +3333,10 @@
         <short>Convenience routine used to make the TPageControl more intuitive to use</short>
         <descr/>
         <seealso>
+          <link id="TTabSheet.PageControl"/>
+          <link id="TPageControl.Pages"/>
+          <link id="TPageControl.ActivePage"/>
           <link id="TPageControl.GetPageClass"/>
-          <link id="TPageControl.PageControl"/>
-          <link id="TTabSheet"/>
         </seealso>
       </element>
       <element name="TPageControl.AddTabSheet.Result">
@@ -3329,26 +3392,26 @@
       <element name="TPageControl.DragMode" link="#LCL.Controls.TControl.DragMode"/>
       <element name="TPageControl.Enabled" link="#LCL.Controls.TControl.Enabled"/>
       <element name="TPageControl.Font" link="#LCL.Controls.TControl.Font"/>
-      <element name="TPageControl.HotTrack" link="TCustomTabControl.HotTrack"/>
-      <element name="TPageControl.Images" link="TCustomTabControl.Images"/>
-      <element name="TPageControl.ImagesWidth" link="TCustomTabControl.ImagesWidth"/>
-      <element name="TPageControl.MultiLine" link="TCustomTabControl.MultiLine"/>
+      <element name="TPageControl.HotTrack" link="#lcl.comctrls.TCustomTabControl.HotTrack"/>
+      <element name="TPageControl.Images" link="#lcl.comctrls.TCustomTabControl.Images"/>
+      <element name="TPageControl.ImagesWidth" link="#lcl.comctrls.TCustomTabControl.ImagesWidth"/>
+      <element name="TPageControl.MultiLine" link="#lcl.comctrls.TCustomTabControl.MultiLine"/>
       <element name="TPageControl.ParentBidiMode" link="#LCL.Controls.TControl.ParentBiDiMode"/>
       <element name="TPageControl.ParentFont" link="#LCL.Controls.TControl.ParentFont"/>
       <element name="TPageControl.ParentShowHint" link="#LCL.Controls.TControl.ParentShowHint"/>
       <element name="TPageControl.PopupMenu" link="#LCL.Controls.TControl.PopupMenu"/>
-      <element name="TPageControl.RaggedRight" link="TCustomTabControl.RaggedRight"/>
-      <element name="TPageControl.ScrollOpposite" link="TCustomTabControl.ScrollOpposite"/>
+      <element name="TPageControl.RaggedRight" link="#lcl.comctrls.TCustomTabControl.RaggedRight"/>
+      <element name="TPageControl.ScrollOpposite" link="#lcl.comctrls.TCustomTabControl.ScrollOpposite"/>
       <element name="TPageControl.ShowHint" link="#LCL.Controls.TControl.ShowHint"/>
-      <element name="TPageControl.ShowTabs" link="TCustomTabControl.ShowTabs"/>
-      <element name="TPageControl.Style" link="TCustomTabControl.Style"/>
-      <element name="TPageControl.TabHeight" link="TCustomTabControl.TabHeight"/>
-      <element name="TPageControl.TabIndex" link="TCustomTabControl.TabIndex"/>
+      <element name="TPageControl.ShowTabs" link="#lcl.comctrls.TCustomTabControl.ShowTabs"/>
+      <element name="TPageControl.Style" link="#lcl.comctrls.TCustomTabControl.Style"/>
+      <element name="TPageControl.TabHeight" link="#lcl.comctrls.TCustomTabControl.TabHeight"/>
+      <element name="TPageControl.TabIndex" link="#lcl.comctrls.TCustomTabControl.TabIndex"/>
 
       <element name="TPageControl.TabOrder" link="#LCL.Controls.TWinControl.TabOrder"/>
-      <element name="TPageControl.TabPosition" link="TCustomTabControl.TabPosition"/>
+      <element name="TPageControl.TabPosition" link="#lcl.comctrls.TCustomTabControl.TabPosition"/>
       <element name="TPageControl.TabStop" link="#LCL.Controls.TWinControl.TabStop"/>
-      <element name="TPageControl.TabWidth" link="TCustomTabControl.TabWidth"/>
+      <element name="TPageControl.TabWidth" link="#lcl.comctrls.TCustomTabControl.TabWidth"/>
       <element name="TPageControl.Visible" link="#LCL.Controls.TControl.Visible"/>
 
       <element name="TPageControl.OnChange">
@@ -3357,8 +3420,8 @@
         <seealso/>
       </element>
 
-      <element name="TPageControl.OnChanging" link="TCustomTabControl.OnChanging"/>
-      <element name="TPageControl.OnCloseTabClicked" link="TCustomTabControl.OnCloseTabClicked"/>
+      <element name="TPageControl.OnChanging" link="#lcl.comctrls.TCustomTabControl.OnChanging"/>
+      <element name="TPageControl.OnCloseTabClicked" link="#lcl.comctrls.TCustomTabControl.OnCloseTabClicked"/>
       <element name="TPageControl.OnContextPopup" link="#LCL.Controls.TControl.OnContextPopup"/>
       <element name="TPageControl.OnDockDrop" link="#LCL.Controls.TWinControl.OnDockDrop"/>
       <element name="TPageControl.OnDockOver" link="#LCL.Controls.TWinControl.OnDockOver"/>
@@ -3368,7 +3431,7 @@
       <element name="TPageControl.OnEndDrag" link="#LCL.Controls.TControl.OnEndDrag"/>
       <element name="TPageControl.OnEnter" link="#LCL.Controls.TWinControl.OnEnter"/>
       <element name="TPageControl.OnExit" link="#LCL.Controls.TWinControl.OnExit"/>
-      <element name="TPageControl.OnGetImageIndex" link="TCustomTabControl.OnGetImageIndex"/>
+      <element name="TPageControl.OnGetImageIndex" link="#lcl.comctrls.TCustomTabControl.OnGetImageIndex"/>
       <element name="TPageControl.OnGetSiteInfo" link="#LCL.Controls.TWinControl.OnGetSiteInfo"/>
       <element name="TPageControl.OnMouseDown" link="#LCL.Controls.TControl.OnMouseDown"/>
       <element name="TPageControl.OnMouseEnter" link="#LCL.Controls.TControl.OnMouseEnter"/>
@@ -3382,7 +3445,7 @@
       <element name="TPageControl.OnStartDock" link="#LCL.Controls.TControl.OnStartDock"/>
       <element name="TPageControl.OnStartDrag" link="#LCL.Controls.TControl.OnStartDrag"/>
       <element name="TPageControl.OnUnDock" link="#LCL.Controls.TWinControl.OnUnDock"/>
-      <element name="TPageControl.Options" link="TCustomTabControl.Options"/>
+      <element name="TPageControl.Options" link="#lcl.comctrls.TCustomTabControl.Options"/>
 
       <element name="TTabControlStrings">
         <short>
@@ -3505,7 +3568,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#rtl.System.TObject.Create"/>
+          <link id="#rtl.system.TObject.Create">TObject.Create</link>
         </seealso>
       </element>
       <element name="TTabControlStrings.Create.TheTabControl">
@@ -3632,7 +3695,7 @@
         <descr/>
         <errors>An exception is raised if the Update count is zero</errors>
         <seealso>
-          <link id="#rtl.Classes.TStrings.EndUpdate">TStrings.EndUpdate</link>
+          <link id="#rtl.classes.TStrings.EndUpdate">TStrings.EndUpdate</link>
         </seealso>
       </element>
 
@@ -3667,7 +3730,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#lcl.ComCtrls.TCustomListView.HotTrack">TCustomListView.HotTrack</link>
+          <link id="#lcl.comctrls.TCustomListView.HotTrack">TCustomListView.HotTrack</link>
         </seealso>
       </element>
 
@@ -3839,6 +3902,28 @@
         <seealso/>
       </element>
 
+      <element name="TNoteBookStringsTabControl.GetPopupMenu" link="#LCL.Controls.TControl.PopupMenu">
+        <short>
+          Gets the value for the PopupMenu property
+        </short>
+        <descr>
+          <p>
+            <var>GetPopupMenu</var> is an overridden <var>TPopupMenu</var> function which implements the read access specifier for the <var>PopupMenu</var> property. The return value contains the TPopupMenu instance from the <var>Parent</var> control when it is derived from TTabControl and <var>Options</var> contains the value <var>nboHidePageListPopup</var>. Otherwise, the inherited method in <var>TControl</var> is called to get the popup menu instance for the control.
+          </p>
+        </descr>
+        <seealso>
+          <link id="TTabControl"/>
+          <link id="TPageControl.Options"/>
+          <link id="#lcl.menus.TPopupMenu">TPopupMenu</link>
+          <link id="#lcl.controls.TControl.GetPopupMenu">TControl.GetPopupMenu</link>
+          <link id="#lcl.controls.TControl.PopupMenu">TControl.PopupMenu</link>
+          <link id="#lcl.controls.TControl.Parent">TControl.Parent</link>
+        </seealso>
+      </element>
+      <element name="TNoteBookStringsTabControl.GetPopupMenu.Result">
+        <short>Value for the property</short>
+      </element>
+
       <element name="TNoteBookStringsTabControl.WSRegisterClass">
         <short/>
         <descr/>
@@ -3895,7 +3980,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TStrings.Get">TStrings.Get</link>
+          <link id="#rtl.classes.TStringList.Get">TStringList.Get</link>
         </seealso>
       </element>
       <element name="TTabControlNoteBookStrings.Get.Result">
@@ -3905,7 +3990,7 @@
         <short/>
       </element>
 
-      <element name="TTabControlNoteBookStrings.GetCount" link="#rtl.Classes.TStrings.GetCount">
+      <element name="TTabControlNoteBookStrings.GetCount" link="#rtl.Classes.TStringList.GetCount">
         <short/>
         <descr/>
         <seealso/>
@@ -3920,7 +4005,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TStrings.GetObject"/>
+          <link id="#rtl.classes.TStringList.GetObject">TStringList.GetObject</link>
         </seealso>
       </element>
       <element name="TTabControlNoteBookStrings.GetObject.Result">
@@ -4005,7 +4090,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TStrings.Put"/>
+          <link id="#rtl.classes.TStringList.Put">TStringList.Put</link>
         </seealso>
       </element>
       <element name="TTabControlNoteBookStrings.Put.Index">
@@ -4021,7 +4106,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TStrings.PutObject"/>
+          <link id="#rtl.classes.TStringList.PutObject">TStringList.PutObject</link>
         </seealso>
       </element>
       <element name="TTabControlNoteBookStrings.PutObject.Index">
@@ -4067,7 +4152,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TStrings.SetUpdateState"/>
+          <link id="#rtl.classes.TStringList.SetUpdateState">TStringList.SetUpdateState</link>
         </seealso>
       </element>
       <element name="TTabControlNoteBookStrings.SetUpdateState.Updating">
@@ -4087,8 +4172,8 @@
           </p>
         </descr>
         <seealso>
-          <link id="#rtl.System.TObject.Create"/>
           <link id="TTabControlStrings.Create"/>
+          <link id="#rtl.system.TObject.Create">TObject.Create</link>
         </seealso>
       </element>
       <element name="TTabControlNoteBookStrings.Create.TheTabControl">
@@ -4101,7 +4186,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TStrings.Destroy"/>
+          <link id="#rtl.classes.TStrings.Destroy">TStrings.Destroy</link>
         </seealso>
       </element>
 
@@ -4111,7 +4196,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TStrings.Clear"/>
+          <link id="#rtl.Classes.TStrings.Clear">TStrings.Clear</link>
         </seealso>
       </element>
 
@@ -4121,7 +4206,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TStrings.Delete"/>
+          <link id="#rtl.Classes.TStrings.Delete">TStrings.Delete</link>
         </seealso>
       </element>
       <element name="TTabControlNoteBookStrings.Delete.Index">
@@ -4144,7 +4229,7 @@
         <short/>
       </element>
 
-      <element name="TTabControlNoteBookStrings.GetSize" link="TTabControlStrings.GetSize"/>
+      <element name="TTabControlNoteBookStrings.GetSize" link="#lcl.comctrls.TTabControlStrings.GetSize"/>
       <element name="TTabControlNoteBookStrings.GetSize.Result"/>
 
       <element name="TTabControlNoteBookStrings.TabControlBoundsChange" link="#LCL.ComCtrls.TTabControlStrings.TabControlBoundsChange">
@@ -4153,7 +4238,7 @@
         <seealso/>
       </element>
 
-      <element name="TTabControlNoteBookStrings.IndexOfTabAt" link="TTabControlStrings.IndexOfTabAt"/>
+      <element name="TTabControlNoteBookStrings.IndexOfTabAt" link="#lcl.comctrls.TTabControlStrings.IndexOfTabAt"/>
       <element name="TTabControlNoteBookStrings.IndexOfTabAt.Result"/>
       <element name="TTabControlNoteBookStrings.IndexOfTabAt.X"/>
       <element name="TTabControlNoteBookStrings.IndexOfTabAt.Y"/>
@@ -4194,7 +4279,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#lcl.ExtCtrls.Multi-PageControls">Multi-PageControls</link>
+          <link id="#lcl.extctrls.Multi-PageControls">Using Multi-Page Controls</link>
         </seealso>
       </element>
 
@@ -4492,7 +4577,7 @@
         <short>Sets the value for the Options property</short>
         <descr/>
         <seealso>
-          <link id="TTabControl.Options"/>
+          <link id="TCustomTabControl.Options"/>
           <link id="TCustomTabControl.SetOptions"/>
         </seealso>
       </element>
@@ -4577,7 +4662,7 @@
         <short>Sets the value for the TabIndex property</short>
         <descr/>
         <seealso>
-          <link id="TTabControl.TabIndex"/>
+          <link id="TCustomTabControl.TabIndex"/>
         </seealso>
       </element>
       <element name="TTabControl.SetTabIndex.Value">
@@ -4832,22 +4917,22 @@
 
       <element name="TTabControl.HotTrack" link="#LCL.ComCtrls.TCustomTabControl.HotTrack"/>
       <element name="TTabControl.Images" link="#LCL.ComCtrls.TCustomTabControl.Images"/>
-      <element name="TTabControl.ImagesWidth" link="TCustomTabControl.ImagesWidth"/>
-      <element name="TTabControl.MultiLine" link="TCustomTabControl.MultiLine"/>
-      <element name="TTabControl.MultiSelect" link="TCustomTabControl.MultiSelect"/>
-      <element name="TTabControl.OnChange" link="TCustomTabControl.OnChange"/>
-      <element name="TTabControl.OnChanging" link="TCustomTabControl.OnChanging"/>
-      <element name="TTabControl.OnGetImageIndex" link="TCustomTabControl.OnGetImageIndex"/>
-      <element name="TTabControl.OwnerDraw" link="TCustomTabControl.OwnerDraw"/>
-      <element name="TTabControl.RaggedRight" link="TCustomTabControl.RaggedRight"/>
-      <element name="TTabControl.ScrollOpposite" link="TCustomTabControl.ScrollOpposite"/>
-      <element name="TTabControl.Style" link="TCustomTabControl.Style"/>
-      <element name="TTabControl.TabPosition" link="TCustomTabControl.TabPosition"/>
-      <element name="TTabControl.TabHeight" link="TCustomTabControl.TabHeight"/>
-      <element name="TTabControl.TabIndex" link="TCustomTabControl.TabIndex"/>
-      <element name="TTabControl.Tabs" link="TCustomTabControl.Tabs"/>
+      <element name="TTabControl.ImagesWidth" link="#lcl.comctrls.TCustomTabControl.ImagesWidth"/>
+      <element name="TTabControl.MultiLine" link="#lcl.comctrls.TCustomTabControl.MultiLine"/>
+      <element name="TTabControl.MultiSelect" link="#lcl.comctrls.TCustomTabControl.MultiSelect"/>
+      <element name="TTabControl.OnChange" link="#lcl.comctrls.TCustomTabControl.OnChange"/>
+      <element name="TTabControl.OnChanging" link="#lcl.comctrls.TCustomTabControl.OnChanging"/>
+      <element name="TTabControl.OnGetImageIndex" link="#lcl.comctrls.TCustomTabControl.OnGetImageIndex"/>
+      <element name="TTabControl.OwnerDraw" link="#lcl.comctrls.TCustomTabControl.OwnerDraw"/>
+      <element name="TTabControl.RaggedRight" link="#lcl.comctrls.TCustomTabControl.RaggedRight"/>
+      <element name="TTabControl.ScrollOpposite" link="#lcl.comctrls.TCustomTabControl.ScrollOpposite"/>
+      <element name="TTabControl.Style" link="#lcl.comctrls.TCustomTabControl.Style"/>
+      <element name="TTabControl.TabPosition" link="#lcl.comctrls.TCustomTabControl.TabPosition"/>
+      <element name="TTabControl.TabHeight" link="#lcl.comctrls.TCustomTabControl.TabHeight"/>
+      <element name="TTabControl.TabIndex" link="#lcl.comctrls.TCustomTabControl.TabIndex"/>
+      <element name="TTabControl.Tabs" link="#lcl.comctrls.TCustomTabControl.Tabs"/>
       <element name="TTabControl.TabStop" link="#LCL.Controls.TWinControl.TabStop"/>
-      <element name="TTabControl.TabWidth" link="TCustomTabControl.TabWidth"/>
+      <element name="TTabControl.TabWidth" link="#lcl.comctrls.TCustomTabControl.TabWidth"/>
       <element name="TTabControl.Align" link="#LCL.Controls.TControl.Align"/>
       <element name="TTabControl.Anchors" link="#LCL.Controls.TControl.Anchors"/>
       <element name="TTabControl.BIdiMode" link="#LCL.Controls.TControl.BiDiMode"/>
@@ -5254,8 +5339,8 @@
           </p>
         </descr>
         <seealso>
-          <link id="#rtl.Classes.TPersistent"/>
-          <link id="#rtl.Objects.TObject"/>
+          <link id="#rtl.classes.TPersistent">TPersistent</link>
+          <link id="#rtl.objects.TObject">TObject</link>
         </seealso>
       </element>
 
@@ -5574,7 +5659,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.Assign"/>
+          <link id="#rtl.classes.TPersistent.Assign">TPersistent.Assign</link>
         </seealso>
       </element>
       <element name="TListItem.Assign.ASource">
@@ -5587,7 +5672,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.System.TObject.Create"/>
+          <link id="#rtl.system.TObject.Create">TObject.Create</link>
         </seealso>
       </element>
       <element name="TListItem.Create.AOwner">
@@ -5600,7 +5685,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.Destroy">TPersistent.Destroy</link>
+          <link id="#rtl.classes.TPersistent.Destroy">TPersistent.Destroy</link>
         </seealso>
       </element>
 
@@ -6056,7 +6141,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.DefineProperties"/>
+          <link id="#rtl.classes.TPersistent.DefineProperties">TPersistent.DefineProperties</link>
         </seealso>
       </element>
       <element name="TListItems.DefineProperties.Filer">
@@ -6190,7 +6275,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.System.TObject.Create">TObject.Create</link>
+          <link id="#rtl.system.TObject.Create">TObject.Create</link>
         </seealso>
       </element>
       <element name="TListItems.Create.AOwner">
@@ -6203,7 +6288,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.Destroy"/>
+          <link id="#rtl.classes.TPersistent.Destroy">TPersistent.Destroy</link>
         </seealso>
       </element>
 
@@ -6592,7 +6677,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TCollectionItem.SetIndex"/>
+          <link id="#rtl.classes.TCollectionItem.Index">TCollectionItem.Index</link>
         </seealso>
       </element>
       <element name="TListColumn.SetIndex.AValue">
@@ -6605,7 +6690,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TCollectionItem.GetDisplayName"/>
+          <link id="#rtl.classes.TCollectionItem.DisplayName">TCollectionItem.DisplayName</link>
         </seealso>
       </element>
       <element name="TListColumn.GetDisplayName.Result">
@@ -6627,7 +6712,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TCollectionItem.Create"/>
+          <link id="#rtl.classes.TCollectionItem.Create">TCollectionItem.Create</link>
         </seealso>
       </element>
       <element name="TListColumn.Create.ACollection">
@@ -6640,7 +6725,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TCollectionItem.Destroy"/>
+          <link id="#rtl.classes.TCollectionItem.Destroy">TCollectionItem.Destroy</link>
         </seealso>
       </element>
 
@@ -6650,7 +6735,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.Assign"/>
+          <link id="#rtl.classes.TPersistent.Assign">TPersistent.Assign</link>
         </seealso>
       </element>
       <element name="TListColumn.Assign.ASource">
@@ -6792,7 +6877,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TCollection.Create"/>
+          <link id="#rtl.classes.TCollection.Create">TCollection.Create</link>
         </seealso>
       </element>
       <element name="TListColumns.Create.TheOwner">
@@ -6805,7 +6890,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TCollection.Destroy"/>
+          <link id="#rtl.classes.TCollection.Destroy">TCollection.Destroy</link>
         </seealso>
       </element>
 
@@ -6815,7 +6900,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TCollection.Update">TCollection.Update</link>
+          <link id="#rtl.classes.TCollection.Update">TCollection.Update</link>
         </seealso>
       </element>
 
@@ -6829,7 +6914,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TCollection.Add"/>
+          <link id="#rtl.classes.TCollection.Add">TCollection.Add</link>
         </seealso>
       </element>
       <element name="TListColumns.Add.Result">
@@ -6857,7 +6942,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TCollection.Assign"/>
+          <link id="#rtl.classes.TCollection.Assign">TCollection.Assign</link>
         </seealso>
       </element>
       <element name="TListColumns.Assign.Source">
@@ -8130,7 +8215,7 @@
           <var>InitializeWnd</var> - calls inherited method, then sets style, adds columns, sets imagelists and item depending properties (scroll bars, sorting etc), adds items and sets other miscellaneous properties (default item height, hot track styles, hover time etc)
         </descr>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.InitializeWnd"/>
+          <link id="#lcl.controls.TWinControl.InitializeWnd">TWinControl.InitializeWnd</link>
         </seealso>
       </element>
 
@@ -8139,7 +8224,7 @@
           <var>FinalizeWnd</var> stores the list origin then calls inherited method
         </short>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.FinalizeWnd"/>
+          <link id="#lcl.controls.TWinControl.FinalizeWnd">TWinControl.FinalizeWnd</link>
         </seealso>
       </element>
 
@@ -8214,7 +8299,7 @@
         <descr/>
         <seealso/>
       </element>
-      <element name="TCustomListView.Delete.Item">
+      <element name="TCustomListView.Delete.AItem">
         <short/>
       </element>
 
@@ -8275,7 +8360,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#LCL.Controls.TControl.DoAutoAdjustLayout"/>
+          <link id="#lcl.controls.TControl.DoAutoAdjustLayout">TControl.DoAutoAdjustLayout</link>
         </seealso>
       </element>
       <element name="TCustomListView.DoAutoAdjustLayout.AMode">
@@ -8318,13 +8403,34 @@
         <short/>
       </element>
 
-      <element name="TCustomListView.InsertItem">
-        <short>Insert an Item into the List</short>
+      <element name="TCustomListView.Edit">
+        <short/>
         <descr/>
         <seealso/>
       </element>
-      <element name="TCustomListView.InsertItem.Item">
+      <element name="TCustomListView.Edit.AItem">
         <short/>
+      </element>
+
+      <element name="TCustomListView.InsertItem">
+        <short>Inserts an Item into the List</short>
+        <descr>
+          <p>
+            Signals the OnInsert event handler (when assigned) using the value in AItem as an argument.
+          </p>
+          <p>
+            InsertItem is called from the DoInsert method when an overridden method has been implemented in a descendent class and called from ItemInserted.
+          </p>
+        </descr>
+        <seealso>
+          <link id="TCustomListView.OnInsert"/>
+          <link id="TCustomListView.DoInsert"/>
+          <link id="TCustomListView.ItemInserted"/>
+          <link id="TListItem"/>
+        </seealso>
+      </element>
+      <element name="TCustomListView.InsertItem.AItem">
+        <short>Item with the values inserted into the Items for the control</short>
       </element>
 
       <element name="TCustomListView.ImageChanged">
@@ -8536,7 +8642,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#LCL.Controls.TControl.DblClick"/>
+          <link id="#lcl.controls.TControl.DblClick">TControl.DblClick</link>
         </seealso>
       </element>
 
@@ -8551,7 +8657,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.KeyDown"/>
+          <link id="#lcl.controls.TWinControl.KeyDown">TWinControl.KeyDown</link>
         </seealso>
       </element>
       <element name="TCustomListView.KeyDown.Key">
@@ -8651,7 +8757,7 @@
       <element name="TCustomListView.LargeImagesWidth">
         <short/>
         <descr>
-          LargeImagesWidth is an Integer property used to access the width for large images in the list view. Reading and writing a value to the property accesses an internal array with width values for the image list using the TListViewImageList enumeration value. The default value for the property is zero (0).
+          LargeImagesWidth is an Integer property used to access the width for large images in the list view. Reading and writing a value to the property accesses an internal array with width values for the image list using the TListViewImageList enumeration value. The default value for the property is zero (<b>0</b>).
         </descr>
         <seealso/>
       </element>
@@ -8873,12 +8979,12 @@
         <short>event handler signalled to render an owner drawn item</short>
         <descr>
           <p>
-            OnDrawItem is a TLVDrawItemEvent  property which is the event handler signalled to render an owner drawn item. The event is triggered (when assigned) in the DrawItem method only when OwnerDraw is set to True and ListStyle contains vsReport.
+            OnDrawItem is a TLVDrawItemEvent  property which is the event handler signalled to render an owner drawn item. The event is triggered (when assigned) in the DrawItem method only when OwnerDraw is set to True and ViewStyle contains vsReport.
           </p>
         </descr>
         <seealso>
           <link id="TCustomListView.OwnerDraw"/>
-          <link id="TCustomListView.ListStyle"/>
+          <link id="TCustomListView.ViewStyle"/>
           <link id="TCustomListView.DrawItem"/>
         </seealso>
       </element>
@@ -8907,8 +9013,8 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Create"/>
-          <link id="#LCL.Controls.TWinControl.Create"/>
+          <link id="#rtl.classes.TComponent.Create">TComponent.Create</link>
+          <link id="#lcl.controls.TWinControl.Create">TWinControl.Create</link>
         </seealso>
       </element>
       <element name="TCustomListView.Create.AOwner">
@@ -8921,8 +9027,8 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Destroy"/>
-          <link id="#LCL.Controls.TWinControl.Destroy"/>
+          <link id="#lcl.controls.TWinControl.Destroy">TWinControl.Destroy</link>
+          <link id="#rtl.classes.TComponent.Destroy">TComponent.Destroy</link>
         </seealso>
       </element>
 
@@ -9241,7 +9347,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#lcl.ComCtrls.TCustomListView.HotTrack"/>
+          <link id="TCustomListView.HotTrack"/>
         </seealso>
       </element>
 
@@ -9369,10 +9475,10 @@
             <var>TListView </var>- a window showing a list of items which may or may not have associated icons.
           </p>
           <p>
-            At first this control looks very like <link id="#lcl.StdCtrls.TListBox">TListBox</link> but it has a much higher degree of complexity. It is capable of displaying Items in <var>Columns</var> of <var>Rows</var> and it can have images associated with the list <var>Items</var>.
+            At first this control looks very like <link id="#lcl.stdctrls.TListBox">TListBox</link> but it has a much higher degree of complexity. It is capable of displaying Items in <var>Columns</var> of <var>Rows</var> and it can have images associated with the list <var>Items</var>.
           </p>
           <p>
-            The important information is held in <var>Items</var>, a string-list that can be created using the string-list editor obtained by right-clicking on the ListView in the Form Editor or by clicking on the ellipsis (...) next to the <var>Items</var> entry in the Object Inspector.
+            The important information is held in <var>Items</var>, a string-list that can be created using the string-list editor obtained by right-clicking on the ListView in the Form Editor or by clicking on the ellipsis (<b>...</b>) next to the <var>Items</var> entry in the Object Inspector.
           </p>
           <p>
             A typical application might have two ImageLists: one of<var>LargeImages</var> and one of <var>SmallImages</var>, containing two versions of the same collection of images, in large and small format; the index numbers of the first list would correspond with those in the second list.
@@ -9387,83 +9493,83 @@
       </element>
 
       <element name="TListView.Align" link="#LCL.Controls.TControl.Align"/>
-      <element name="TListView.AllocBy" link="TCustomListView.AllocBy"/>
+      <element name="TListView.AllocBy" link="#lcl.comctrls.TCustomListView.AllocBy"/>
       <element name="TListView.Anchors" link="#LCL.Controls.TControl.Anchors"/>
-      <element name="TListView.AutoSort" link="TCustomListView.AutoSort"/>
-      <element name="TListView.AutoSortIndicator" link="TCustomListView.AutoSortIndicator"/>
-      <element name="TListView.AutoWidthLastColumn" link="TCustomListView.AutoWidthLastColumn"/>
+      <element name="TListView.AutoSort" link="#lcl.comctrls.TCustomListView.AutoSort"/>
+      <element name="TListView.AutoSortIndicator" link="#lcl.comctrls.TCustomListView.AutoSortIndicator"/>
+      <element name="TListView.AutoWidthLastColumn" link="#lcl.comctrls.TCustomListView.AutoWidthLastColumn"/>
       <element name="TListView.BorderSpacing" link="#LCL.Controls.TControl.BorderSpacing"/>
       <element name="TListView.BorderStyle" link="#LCL.Controls.TWinControl.BorderStyle"/>
       <element name="TListView.BorderWidth" link="#LCL.Controls.TWinControl.BorderWidth"/>
-      <element name="TListView.Checkboxes" link="TCustomListView.Checkboxes"/>
+      <element name="TListView.Checkboxes" link="#lcl.comctrls.TCustomListView.Checkboxes"/>
       <element name="TListView.Color" link="#LCL.Controls.TControl.Color"/>
-      <element name="TListView.Columns" link="TCustomListView.Columns"/>
-      <element name="TListView.ColumnClick" link="TCustomListView.ColumnClick"/>
+      <element name="TListView.Columns" link="#lcl.comctrls.TCustomListView.Columns"/>
+      <element name="TListView.ColumnClick" link="#lcl.comctrls.TCustomListView.ColumnClick"/>
       <element name="TListView.Constraints" link="#LCL.Controls.TControl.Constraints"/>
       <element name="TListView.DragCursor" link="#LCL.Controls.TControl.DragCursor"/>
       <element name="TListView.DragKind" link="#LCL.Controls.TControl.DragKind"/>
       <element name="TListView.DragMode" link="#LCL.Controls.TControl.DragMode"/>
       <element name="TListView.Enabled" link="#LCL.Controls.TControl.Enabled"/>
       <element name="TListView.Font" link="#LCL.Controls.TControl.Font"/>
-      <element name="TListView.GridLines" link="TCustomListView.GridLines"/>
-      <element name="TListView.HideSelection" link="TCustomListView.HideSelection"/>
-      <element name="TListView.IconOptions" link="TCustomListView.IconOptions"/>
-      <element name="TListView.Items" link="TCustomListView.Items"/>
-      <element name="TListView.LargeImages" link="TCustomListView.LargeImages"/>
-      <element name="TListView.LargeImagesWidth" link="TCustomListView.LargeImagesWidth"/>
-      <element name="TListView.MultiSelect" link="TCustomListView.MultiSelect"/>
-      <element name="TListView.OwnerData" link="TCustomListView.OwnerData"/>
-      <element name="TListView.OwnerDraw" link="TCustomListView.OwnerDraw"/>
+      <element name="TListView.GridLines" link="#lcl.comctrls.TCustomListView.GridLines"/>
+      <element name="TListView.HideSelection" link="#lcl.comctrls.TCustomListView.HideSelection"/>
+      <element name="TListView.IconOptions" link="#lcl.comctrls.TCustomListView.IconOptions"/>
+      <element name="TListView.Items" link="#lcl.comctrls.TCustomListView.Items"/>
+      <element name="TListView.LargeImages" link="#lcl.comctrls.TCustomListView.LargeImages"/>
+      <element name="TListView.LargeImagesWidth" link="#lcl.comctrls.TCustomListView.LargeImagesWidth"/>
+      <element name="TListView.MultiSelect" link="#lcl.comctrls.TCustomListView.MultiSelect"/>
+      <element name="TListView.OwnerData" link="#lcl.comctrls.TCustomListView.OwnerData"/>
+      <element name="TListView.OwnerDraw" link="#lcl.comctrls.TCustomListView.OwnerDraw"/>
       <element name="TListView.ParentColor" link="#LCL.Controls.TControl.ParentColor"/>
       <element name="TListView.ParentFont" link="#LCL.Controls.TControl.ParentFont"/>
       <element name="TListView.ParentShowHint" link="#LCL.Controls.TControl.ParentShowHint"/>
       <element name="TListView.PopupMenu" link="#LCL.Controls.TControl.PopupMenu"/>
-      <element name="TListView.ReadOnly" link="TCustomListView.ReadOnly"/>
-      <element name="TListView.RowSelect" link="TCustomListView.RowSelect"/>
-      <element name="TListView.ScrollBars"  link="TCustomListView.ScrollBars"/>
-      <element name="TListView.ShowColumnHeaders"  link="TCustomListView.ShowColumnHeaders"/>
+      <element name="TListView.ReadOnly" link="#lcl.comctrls.TCustomListView.ReadOnly"/>
+      <element name="TListView.RowSelect" link="#lcl.comctrls.TCustomListView.RowSelect"/>
+      <element name="TListView.ScrollBars"  link="#lcl.comctrls.TCustomListView.ScrollBars"/>
+      <element name="TListView.ShowColumnHeaders"  link="#lcl.comctrls.TCustomListView.ShowColumnHeaders"/>
       <element name="TListView.ShowHint" link="#LCL.Controls.TControl.ShowHint"/>
-      <element name="TListView.SmallImages"  link="TCustomListView.SmallImages"/>
-      <element name="TListView.SmallImagesWidth" link="TCustomListView.SmallImagesWidth"/>
-      <element name="TListView.SortColumn" link="TCustomListView.SortColumn"/>
-      <element name="TListView.SortDirection" link="TCustomListView.SortDirection"/>
-      <element name="TListView.SortType" link="TCustomListView.SortType"/>
-      <element name="TListView.StateImages" link="TCustomListView.StateImages"/>
-      <element name="TListView.StateImagesWidth" link="TCustomListView.StateImagesWidth"/>
+      <element name="TListView.SmallImages"  link="#lcl.comctrls.TCustomListView.SmallImages"/>
+      <element name="TListView.SmallImagesWidth" link="#lcl.comctrls.TCustomListView.SmallImagesWidth"/>
+      <element name="TListView.SortColumn" link="#lcl.comctrls.TCustomListView.SortColumn"/>
+      <element name="TListView.SortDirection" link="#lcl.comctrls.TCustomListView.SortDirection"/>
+      <element name="TListView.SortType" link="#lcl.comctrls.TCustomListView.SortType"/>
+      <element name="TListView.StateImages" link="#lcl.comctrls.TCustomListView.StateImages"/>
+      <element name="TListView.StateImagesWidth" link="#lcl.comctrls.TCustomListView.StateImagesWidth"/>
       <element name="TListView.TabStop" link="#LCL.Controls.TWinControl.TabStop"/>
       <element name="TListView.TabOrder" link="#LCL.Controls.TWinControl.TabOrder"/>
-      <element name="TListView.ToolTips" link="TCustomListView.ToolTips"/>
+      <element name="TListView.ToolTips" link="#lcl.comctrls.TCustomListView.ToolTips"/>
       <element name="TListView.Visible" link="#LCL.Controls.TControl.Visible"/>
-      <element name="TListView.ViewStyle" link="TCustomListView.ViewStyle"/>
-      <element name="TListView.OnAdvancedCustomDraw" link="TCustomListView.OnAdvancedCustomDraw"/>
-      <element name="TListView.OnAdvancedCustomDrawItem" link="TCustomListView.OnAdvancedCustomDrawItem"/>
-      <element name="TListView.OnAdvancedCustomDrawSubItem" link="TCustomListView.OnAdvancedCustomDrawSubItem"/>
-      <element name="TListView.OnChange" link="TCustomListView.OnChange"/>
+      <element name="TListView.ViewStyle" link="#lcl.comctrls.TCustomListView.ViewStyle"/>
+      <element name="TListView.OnAdvancedCustomDraw" link="#lcl.comctrls.TCustomListView.OnAdvancedCustomDraw"/>
+      <element name="TListView.OnAdvancedCustomDrawItem" link="#lcl.comctrls.TCustomListView.OnAdvancedCustomDrawItem"/>
+      <element name="TListView.OnAdvancedCustomDrawSubItem" link="#lcl.comctrls.TCustomListView.OnAdvancedCustomDrawSubItem"/>
+      <element name="TListView.OnChange" link="#lcl.comctrls.TCustomListView.OnChange"/>
       <element name="TListView.OnClick" link="#LCL.Controls.TControl.OnClick"/>
-      <element name="TListView.OnColumnClick" link="TCustomListView.OnColumnClick"/>
-      <element name="TListView.OnCompare" link="TCustomListView.OnCompare"/>
+      <element name="TListView.OnColumnClick" link="#lcl.comctrls.TCustomListView.OnColumnClick"/>
+      <element name="TListView.OnCompare" link="#lcl.comctrls.TCustomListView.OnCompare"/>
       <element name="TListView.OnContextPopup" link="#LCL.Controls.TControl.OnContextPopup"/>
-      <element name="TListView.OnCreateItemClass" link="TCustomListView.OnCreateItemClass"/>
-      <element name="TListView.OnCustomDraw" link="TCustomListView.OnCustomDraw"/>
-      <element name="TListView.OnCustomDrawItem" link="TCustomListView.OnCustomDrawItem"/>
-      <element name="TListView.OnCustomDrawSubItem" link="TCustomListView.OnCustomDrawSubItem"/>
-      <element name="TListView.OnData" link="TCustomListView.OnData"/>
-      <element name="TListView.OnDataFind" link="TCustomListView.OnDataFind"/>
-      <element name="TListView.OnDataHint" link="TCustomListView.OnDataHint"/>
-      <element name="TListView.OnDataStateChange" link="TCustomListView.OnDataStateChange"/>
+      <element name="TListView.OnCreateItemClass" link="#lcl.comctrls.TCustomListView.OnCreateItemClass"/>
+      <element name="TListView.OnCustomDraw" link="#lcl.comctrls.TCustomListView.OnCustomDraw"/>
+      <element name="TListView.OnCustomDrawItem" link="#lcl.comctrls.TCustomListView.OnCustomDrawItem"/>
+      <element name="TListView.OnCustomDrawSubItem" link="#lcl.comctrls.TCustomListView.OnCustomDrawSubItem"/>
+      <element name="TListView.OnData" link="#lcl.comctrls.TCustomListView.OnData"/>
+      <element name="TListView.OnDataFind" link="#lcl.comctrls.TCustomListView.OnDataFind"/>
+      <element name="TListView.OnDataHint" link="#lcl.comctrls.TCustomListView.OnDataHint"/>
+      <element name="TListView.OnDataStateChange" link="#lcl.comctrls.TCustomListView.OnDataStateChange"/>
       <element name="TListView.OnDblClick" link="#LCL.Controls.TControl.OnDblClick"/>
-      <element name="TListView.OnDeletion" link="TCustomListView.OnDeletion"/>
+      <element name="TListView.OnDeletion" link="#lcl.comctrls.TCustomListView.OnDeletion"/>
       <element name="TListView.OnDragDrop" link="#LCL.Controls.TControl.OnDragDrop"/>
       <element name="TListView.OnDragOver" link="#LCL.Controls.TControl.OnDragOver"/>
-      <element name="TListView.OnDrawItem" link="TCustomListView.OnDrawItem"/>
-      <element name="TListView.OnEdited" link="TCustomListView.OnEdited"/>
-      <element name="TListView.OnEditing" link="TCustomListView.OnEditing"/>
+      <element name="TListView.OnDrawItem" link="#lcl.comctrls.TCustomListView.OnDrawItem"/>
+      <element name="TListView.OnEdited" link="#lcl.comctrls.TCustomListView.OnEdited"/>
+      <element name="TListView.OnEditing" link="#lcl.comctrls.TCustomListView.OnEditing"/>
       <element name="TListView.OnEndDock" link="#LCL.Controls.TControl.OnEndDock"/>
       <element name="TListView.OnEndDrag" link="#LCL.Controls.TControl.OnEndDrag"/>
       <element name="TListView.OnEnter" link="#LCL.Controls.TWinControl.OnEnter"/>
       <element name="TListView.OnExit" link="#LCL.Controls.TWinControl.OnExit"/>
-      <element name="TListView.OnInsert" link="TCustomListView.OnInsert"/>
-      <element name="TListView.OnItemChecked" link="TCustomListView.OnItemChecked"/>
+      <element name="TListView.OnInsert" link="#lcl.comctrls.TCustomListView.OnInsert"/>
+      <element name="TListView.OnItemChecked" link="#lcl.comctrls.TCustomListView.OnItemChecked"/>
       <element name="TListView.OnKeyDown" link="#LCL.Controls.TWinControl.OnKeyDown"/>
       <element name="TListView.OnKeyPress" link="#LCL.Controls.TWinControl.OnKeyPress"/>
       <element name="TListView.OnKeyUp" link="#LCL.Controls.TWinControl.OnKeyUp"/>
@@ -9479,7 +9585,7 @@
       <element name="TListView.OnMouseWheelLeft" link="#LCL.Controls.TControl.OnMouseWheelLeft"/>
       <element name="TListView.OnMouseWheelRight" link="#LCL.Controls.TControl.OnMouseWheelRight"/>
       <element name="TListView.OnResize" link="#LCL.Controls.TControl.OnResize"/>
-      <element name="TListView.OnSelectItem" link="TCustomListView.OnSelectItem"/>
+      <element name="TListView.OnSelectItem" link="#lcl.comctrls.TCustomListView.OnSelectItem"/>
       <element name="TListView.OnShowHint" link="#LCL.Controls.TControl.OnShowHint"/>
       <element name="TListView.OnStartDock" link="#LCL.Controls.TControl.OnStartDock"/>
       <element name="TListView.OnStartDrag" link="#LCL.Controls.TControl.OnStartDrag"/>
@@ -9665,7 +9771,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.InitializeWnd">TWinControl.InitializeWnd</link>
+          <link id="#lcl.controls.TWinControl.InitializeWnd">TWinControl.InitializeWnd</link>
         </seealso>
       </element>
 
@@ -9675,7 +9781,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.Loaded"/>
+          <link id="#lcl.controls.TWinControl.Loaded">TWinControl.Loaded</link>
         </seealso>
       </element>
 
@@ -9684,7 +9790,7 @@
           <var>GetControlClassDefaultSize</var> returns its own defaults, overriding inherited values
         </short>
         <seealso>
-          <link id="#LCL.Controls.TControl.GetControlClassDefaultSize"/>
+          <link id="#lcl.controls.TControl.GetControlClassDefaultSize">TControl.GetControlClassDefaultSize</link>
         </seealso>
       </element>
 
@@ -9694,8 +9800,8 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Create"/>
-          <link id="#LCL.Controls.TWinControl.Create"/>
+          <link id="#rtl.classes.TComponent.Create">TComponent.Create</link>
+          <link id="#lcl.controls.TWinControl.Create">TWinControl.Create</link>
         </seealso>
       </element>
       <element name="TCustomProgressBar.Create.AOwner">
@@ -9793,7 +9899,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#lcl.stdctrls.HowToUseStdCtrls">HowToUseStdCtrls</link>
+          <link id="#lcl.stdctrls.HowToUseStdCtrls">How To Use Standard Controls</link>
         </seealso>
       </element>
 
@@ -9985,6 +10091,7 @@
       <element name="TCustomUpDown.FMinRepeatInterval"/>
       <element name="TCustomUpDown.FMouseDownBounds"/>
       <element name="TCustomUpDown.FMouseTimerEvent"/>
+      <element name="TCustomUpDown.FMouseInsideComp"/>
       <element name="TCustomUpDown.FOnChanging"/>
       <element name="TCustomUpDown.FOnChangingEx"/>
       <element name="TCustomUpDown.FOnClick"/>
@@ -10014,6 +10121,24 @@
         </descr>
         <version>Introduced in LCL version 2.1.0.</version>
         <seealso/>
+      </element>
+
+      <element name="TCustomUpDown.CheckMouseEntering">
+        <short>Indicates if the mouse pointer has entered the control</short>
+        <descr/>
+        <seealso/>
+      </element>
+      <element name="TCustomUpDown.CheckMouseEntering.Result">
+        <short>True when the mouse pointer in within the bounds for the control</short>
+      </element>
+
+      <element name="TCustomUpDown.CheckMouseLeaving">
+        <short>Indicates if the mouse pointer has exited the control</short>
+        <descr/>
+        <seealso/>
+      </element>
+      <element name="TCustomUpDown.CheckMouseLeaving.Result">
+        <short>True when the mouse pointer is not in the client rectangle for the control</short>
       </element>
 
       <element name="TCustomUpDown.GetPosition">
@@ -10330,6 +10455,18 @@
         <short/>
       </element>
 
+      <element name="TCustomUpDown.MouseEnter">
+        <short/>
+        <descr/>
+        <seealso/>
+      </element>
+
+      <element name="TCustomUpDown.MouseLeave">
+        <short/>
+        <descr/>
+        <seealso/>
+      </element>
+
       <element name="TCustomUpDown.DoSetBounds">
         <short/>
         <descr/>
@@ -10362,7 +10499,7 @@
           <var>GetControlClassDefaultSize</var> returns its own defaults, overriding inherited values
         </short>
         <seealso>
-          <link id="#LCL.Controls.TControl.GetControlClassDefaultSize">TControl.GetControlClassDefaultSize</link>
+          <link id="#LCL.controls.TControl.GetControlClassDefaultSize">TControl.GetControlClassDefaultSize</link>
         </seealso>
       </element>
       <element name="TCustomUpDown.GetControlClassDefaultSize.Result">
@@ -10401,7 +10538,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TControl.Notification">TControl.Notification</link>
+          <link id="#lcl.controls.TControl.Notification">TControl.Notification</link>
         </seealso>
       </element>
       <element name="TCustomUpDown.Notification.AComponent">
@@ -10417,7 +10554,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TControl.Click">TControl.Click</link>
+          <link id="#lcl.controls.TControl.Click">TControl.Click</link>
         </seealso>
       </element>
       <element name="TCustomUpDown.Click.Button">
@@ -10548,8 +10685,8 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Create">TComponent.Create</link>
-          <link id="#lcl.Controls.TCustomControl.Create">TCustomControl.Create</link>
+          <link id="#rtl.classes.TComponent.Create">TComponent.Create</link>
+          <link id="#lcl.controls.TCustomControl.Create">TCustomControl.Create</link>
         </seealso>
       </element>
       <element name="TCustomUpDown.Create.AOwner">
@@ -10562,8 +10699,8 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Destroy">TComponent.Destroy</link>
-          <link id="#LCL.Controls.TCustomControl.Destroy">TCustomControl.Destroy</link>
+          <link id="#lcl.controls.TCustomControl.Destroy">TCustomControl.Destroy</link>
+          <link id="#rtl.classes.TComponent.Destroy">TComponent.Destroy</link>
         </seealso>
       </element>
 
@@ -10601,9 +10738,9 @@
       <element name="TUpDown.Increment" link="#LCL.ComCtrls.TCustomUpDown.Increment"/>
       <element name="TUpDown.Max" link="#LCL.ComCtrls.TCustomUpDown.Max"/>
       <element name="TUpDown.Min" link="#LCL.ComCtrls.TCustomUpDown.Min"/>
-      <element name="TUpDown.MinRepeatInterval" link="TCustomUpDown.MinRepeatInterval"/>
-      <element name="TUpDown.OnChanging" link="TCustomUpDown.OnChanging"/>
-      <element name="TUpDown.OnChangingEx" link="TCustomUpDown.OnChangingEx"/>
+      <element name="TUpDown.MinRepeatInterval" link="#lcl.comctrls.TCustomUpDown.MinRepeatInterval"/>
+      <element name="TUpDown.OnChanging" link="#lcl.comctrls.TCustomUpDown.OnChanging"/>
+      <element name="TUpDown.OnChangingEx" link="#lcl.comctrls.TCustomUpDown.OnChangingEx"/>
       <element name="TUpDown.OnClick" link="#LCL.ComCtrls.TCustomUpDown.OnClick"/>
       <element name="TUpDown.OnContextPopup" link="#LCL.Controls.TControl.OnContextPopup"/>
       <element name="TUpDown.OnEnter" link="#LCL.Controls.TWinControl.OnEnter"/>
@@ -10663,7 +10800,7 @@
           </ul>
         </descr>
         <seealso>
-          <link id="#LCL.ComCtrls.TToolButton"/>
+          <link id="TToolButton"/>
         </seealso>
         <example file="comctrls/ttoolbutton.pas"/>
       </element>
@@ -10719,7 +10856,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TBasicActionLink.AssignClient">TBasicActionLink.AssignClient</link>
+          <link id="#rtl.classes.TBasicActionLink.AssignClient">TBasicActionLink.AssignClient</link>
         </seealso>
       </element>
       <element name="TToolButtonActionLink.AssignClient.AClient">
@@ -10789,8 +10926,8 @@
         <seealso>
           <link id="TToolBar"/>
           <link id="#lcl.stdctrls.TButton">TButton</link>
-          <link id="#lcl.Buttons.TSpeedButton">TSpeedButton</link>
-          <link id="#lcl.stdctrls.HowToUseStdCtrls">HowToUseStdCtrls</link>
+          <link id="#lcl.buttons.TSpeedButton">TSpeedButton</link>
+          <link id="#lcl.stdctrls.HowToUseStdCtrls">How To Use Standard Controls</link>
         </seealso>
         <example file="comctrls/ttoolbutton.pas"/>
       </element>
@@ -11042,7 +11179,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TControl.GetActionLinkClass"/>
+          <link id="#lcl.controls.TControl.GetActionLinkClass">TControl.GetActionLinkClass</link>
         </seealso>
       </element>
       <element name="TToolButton.GetActionLinkClass.Result">
@@ -11055,7 +11192,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TControl.ActionChange"/>
+          <link id="#lcl.controls.TControl.ActionChange">TControl.ActionChange</link>
         </seealso>
       </element>
       <element name="TToolButton.ActionChange.Sender">
@@ -11071,8 +11208,9 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.AssignTo">TPersistent.AssignTo</link>
-          <link id="#LCL.Controls.TControl.AssignTo">TControl.AssignTo</link>
+          <!-- Protected method excluded in RTL docs.... for some reason.-->
+          <link id="#rtl.classes.TPersistent.AssignTo">TPersistent.AssignTo</link>
+          <link id="#lcl.controls.TControl.AssignTo">TControl.AssignTo</link>
         </seealso>
       </element>
       <element name="TToolButton.AssignTo.Dest">
@@ -11099,7 +11237,7 @@
           <short/>
           <descr/>
           <seealso>
-            <link id="#LCL.Controls.TControl.MouseMove"/>
+            <link id="#lcl.controls.TControl.MouseMove">TControl.MouseMove</link>
           </seealso>
         </element>
       <element name="TToolButton.MouseMove.Shift"/>
@@ -11189,7 +11327,7 @@
           <var>GetControlClassDefaultSize</var> returns its own defaults, overriding inherited values
         </short>
         <seealso>
-          <link id="#LCL.Controls.TControl.GetControlClassDefaultSize"/>
+          <link id="#lcl.controls.TControl.GetControlClassDefaultSize">TControl.GetControlClassDefaultSize</link>
         </seealso>
       </element>
 
@@ -11197,7 +11335,7 @@
         <short/>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Loaded"/>
+          <link id="#rtl.classes.TComponent.Loaded">TComponent.Loaded</link>
         </seealso>
       </element>
 
@@ -11292,8 +11430,8 @@
           </p>
         </descr>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Create"/>
-          <link id="#LCL.Controls.TGraphicControl.Create"/>
+          <link id="#lcl.controls.TGraphicControl.Create">TGraphicControl.Create</link>
+          <link id="#rtl.classes.TComponent.Create">TComponent.Create</link>
         </seealso>
       </element>
       <element name="TToolButton.Create.TheOwner">
@@ -11367,12 +11505,12 @@
         </short>
         <descr>
           <p>
-            <var>Index</var> is a read-only <var>Integer</var> property with the sequence number for the current button in the list of buttons. When the internal toolbar has been assigned, its <var>IndexOf</var> method is called to get the position for the current class instance in the toolbar control. When the internal toolbar is unassigned (contains <b>Nil</b>), the value <b>-1</b> is used as the return value.
+            <var>Index</var> is a read-only <var>Integer</var> property with the sequence number for the current button in the list of buttons. When the internal toolbar button list has been assigned, its <var>IndexOf</var> method is called to get the position for the current class instance in the toolbar control. When the internal toolbar is unassigned (contains <b>Nil</b>), the value <b>-1</b> is used as the return value.
           </p>
         </descr>
         <seealso>
-          <link id="TToolButton.Parent"/>
-          <link id="TToolBar.IndexOf"/>
+          <link id="TToolBar.Buttons"/>
+          <link id="TToolBar.ButtonList"/>
         </seealso>
       </element>
 
@@ -11449,7 +11587,7 @@
             A <var>DropDownMenu</var> that appears when this button is selected.
           </p>
           <p>
-            It uses the same code as a <link id="#lcl.Menus.TPopupMenu">TPopupMenu</link> and offers a series of additional menu choices.
+            It uses the same code as a <link id="#lcl.menus.TPopupMenu">TPopupMenu</link> and offers a series of additional menu choices.
         </p>
         </descr>
       </element>
@@ -11465,7 +11603,7 @@
         <descr>
           <p>Is this button a member of a group?</p>
           <p>
-            This would mean behavior similar to the radio buttons in a <link id="#lcl.ExtCtrls.TRadioGroup">TRadioGroup</link> where only one button in the group can be selected, or the check boxes in a <link id="#lcl.ExtCtrls.TCheckGroup">TCheckGroup</link> where more than one item can be selected but the members of the group interact in some way.
+            This would mean behavior similar to the radio buttons in a <link id="#lcl.extctrls.TRadioGroup">TRadioGroup</link> where only one button in the group can be selected, or the check boxes in a <link id="#lcl.extctrls.TCheckGroup">TCheckGroup</link> where more than one item can be selected but the members of the group interact in some way.
           </p>
         </descr>
       </element>
@@ -11500,8 +11638,8 @@
       <element name="TToolButton.MenuItem">
         <short>The item on the Main Menu with which this tool button is associated</short>
         <descr>
-          <p>The item on the Main Menu with which this tool button is associated</p>
-          <p>Typically the buttons on the toolbar would each point to an entry on the menu action list which could also be accessed by using the Main Menu</p>
+          <p>The item on the Main Menu with which this tool button is associated.</p>
+          <p>Typically the buttons on the toolbar would each point to an entry on the menu action list which could also be accessed by using the Main Menu.</p>
         </descr>
       </element>
 
@@ -11546,7 +11684,7 @@
         <short>Determines the style of the tool button.</short>
         <descr>See TToolButtonStyle for the possible Style values.</descr>
         <seealso>
-          <link id="#LCL.ComCtrls.TToolButtonStyle"/>
+          <link id="TToolButtonStyle"/>
         </seealso>
         <example file="comctrls/ttoolbutton.pas"/>
       </element>
@@ -12007,7 +12145,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.Controls.TControl.GetControlClassDefaultSize"/>
+          <link id="#lcl.controls.TControl.GetControlClassDefaultSize">TControl.GetControlClassDefaultSize</link>
         </seealso>
       </element>
 
@@ -12204,7 +12342,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Create"/>
+          <link id="#rtl.classes.TComponent.Create">TComponent.Create</link>
         </seealso>
       </element>
       <element name="TToolBar.Create.TheOwner">
@@ -12217,8 +12355,8 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Destroy">TComponent.Destroy</link>
-          <link id="#LCL.Controls.TCustomControl.Destroy">TCustomControl.Destroy</link>
+          <link id="#lcl.controls.TCustomControl.Destroy">TCustomControl.Destroy</link>
+          <link id="#rtl.classes.TComponent.Destroy">TComponent.Destroy</link>
         </seealso>
       </element>
 
@@ -12288,7 +12426,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#LCL.ComCtrls.TToolButton.Style"/>
+          <link id="TToolButton.Style"/>
         </seealso>
         <example file="comctrls/ttoolbutton.pas"/>
       </element>
@@ -12329,9 +12467,9 @@
           <var>ButtonHeight</var> - the height of the buttons
         </short>
         <descr>
-          <p>Use 0 for auto-sized value</p>
+          <p>Use 0 for auto-sized value.</p>
           <p>
-            Use <link id="TToolBar.GetRealButtonHeight">GetRealButtonHeight</link> to get the real value.
+            An internal member with the real height for buttons is maintained when reading or writing the value for the property.
           </p>
         </descr>
         <seealso/>
@@ -12344,7 +12482,7 @@
         <descr>
           <p>Use 0 for auto-sized value</p>
           <p>
-            Use <link id="TToolBar.GetRealButtonWidth">GetRealButtonWidth</link> ti get the real value.
+            An internal member is maintained when reading or writing the value for the property.
           </p>
         </descr>
         <seealso/>
@@ -12368,10 +12506,7 @@
       <element name="TToolBar.DropDownWidth">
         <short>Width of the drop down arrow button.</short>
         <descr>
-          <p>Use 0 for auto-sized value</p>
-          <p>
-            Use <link id="TToolBar.GetRealDropDownWidth">GetRealDropDownWidth</link> to get the real value.
-          </p>
+          <p>Use 0 for auto-sized value.</p>
         </descr>
       </element>
 
@@ -12418,7 +12553,7 @@
          </p>
         </descr>
         <seealso>
-          <link id="#LCL.Controls.TWinControl.Invalidate"/>
+          <link id="#lcl.Controls.TWinControl.Invalidate">TWinControl.Invalidate</link>
         </seealso>
       </element>
 
@@ -12453,7 +12588,6 @@
           </p>
         </descr>
         <seealso>
-          <link id="TToolBar.UpdateVisibleBar"/>
           <link id="TToolBar.Buttons"/>
           <link id="TToolButton"/>
         </seealso>
@@ -14299,7 +14433,7 @@
           <var>GetControlClassDefaultSize</var> - returns its own defaults, overriding the inherited values
         </short>
         <seealso>
-          <link id="#LCL.Controls.TControl.GetControlClassDefaultSize">TControl.GetControlClassDefaultSize</link>
+          <link id="#lcl.controls.TControl.GetControlClassDefaultSize">TControl.GetControlClassDefaultSize</link>
         </seealso>
       </element>
       <element name="TCustomTrackBar.GetControlClassDefaultSize.Result">
@@ -14336,8 +14470,8 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Create">TComponent.Create</link>
-          <link id="#LCL.Controls.TWinControl.Create">TWinControl.Create</link>
+          <link id="#lcl.controls.TWinControl.Create">TWinControl.Create</link>
+          <link id="#rtl.classes.TComponent.Create">TComponent.Create</link>
         </seealso>
       </element>
       <element name="TCustomTrackBar.Create.AOwner">
@@ -14467,11 +14601,11 @@
             The <var>Position</var> property indicates the distance along the bar that the slider has been placed, either by the program or by mouse capture and movement.
           </p>
           <p>
-            In the example, movement of the slider is detected and shown in the associated <link id="#lcl.ComCtrls.TProgressBar">TProgressBar</link>.
+            In the example, movement of the slider is detected and shown in the associated <link id="#lcl.comctrls.TProgressBar">TProgressBar</link>.
           </p>
         </descr>
         <seealso>
-          <link id="#lcl.stdctrls.HowToUseStdCtrls">HowToUseStdCtrls</link>
+          <link id="#lcl.stdctrls.HowToUseStdCtrls">How To Use Standard Controls</link>
         </seealso>
         <example file="comctrls/TrackBarEx.pas"/>
       </element>
@@ -15438,7 +15572,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#lcl.stdctrls.HowToUseStdCtrls"/>
+          <link id="#lcl.stdctrls.HowToUseStdCtrls">How To Use Standard Controls</link>
         </seealso>
       </element>
 
@@ -15988,7 +16122,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.System.TObject.Create">TObject.Create</link>
+          <link id="#rtl.system.TObject.Create">TObject.Create</link>
         </seealso>
       </element>
       <element name="TTreeNode.Create.AnOwner">
@@ -16001,7 +16135,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.Destroy">TPersistent.Destroy</link>
+          <link id="#rtl.classes.TPersistent.Destroy">TPersistent.Destroy</link>
         </seealso>
       </element>
 
@@ -16212,6 +16346,26 @@
       </element>
       <element name="TTreeNode.GetFirstChild.Result">
         <short/>
+      </element>
+
+      <element name="TTreeNode.GetFirstSibling">
+        <short>Gets the first tree node at the same level in the tree</short>
+        <descr>
+          <p>
+            <var>GetFirstSibling</var> is a <var>TTreeNode</var> function which returns the first tree node at the same <var>Level</var> in the tree node hierarchy. The return value may be the same as the current class instance when it is the first (or only) node at the current Level.
+          </p>
+          <p>
+            When a <var>Parent</var> node has been assigned, its <var>GetFirstChild</var> method is used to get the return value. Otherwise, the internal linked list for the sub-tree is used to get the previous tree node as the return value.
+          </p>
+        </descr>
+        <seealso>
+          <link id="TTreeNode.Level"/>
+          <link id="TTreeNode.Parent"/>
+          <link id="TTreeNode.GetFirstChild"/>
+        </seealso>
+      </element>
+      <element name="TTreeNode.GetFirstSibling.Result">
+        <short>First tree node at the same level</short>
       </element>
 
       <element name="TTreeNode.GetFirstVisibleChild">
@@ -16511,7 +16665,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.Assign">TPersistent.Assign</link>
+          <link id="#rtl.classes.TPersistent.Assign">TPersistent.Assign</link>
         </seealso>
       </element>
       <element name="TTreeNode.Assign.Source">
@@ -16608,14 +16762,20 @@
           <p>
             Definition of the modes of attachment:
           </p>
-          <pre>
-    naAdd,           // add as last sibling of Destination
-    naAddFirst,      // add as first sibling of Destination
-    naAddChild,      // add as last child of Destination
-    naAddChildFirst, // add as first child of Destination
-    naInsert,        // insert in front of Destination
-    naInsertBehind   // insert behind Destination
-        </pre>
+          <dl>
+            <dt>naAdd</dt>
+            <dd>Add as last sibling of Destination</dd>
+            <dt>naAddFirst</dt>
+            <dd>Add as first sibling of Destination</dd>
+            <dt>naAddChild</dt>
+            <dd>Add as last child of Destination</dd>
+            <dt>naAddChildFirst</dt>
+            <dd>Add as first child of Destination</dd>
+            <dt>naInsert</dt>
+            <dd>Insert in front of Destination</dd>
+            <dt>naInsertBehind</dt>
+            <dd>Insert behind Destination</dd>
+          </dl>
         </descr>
         <seealso/>
       </element>
@@ -16752,7 +16912,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.ComCtrls.TTreeNode.SelectedIndex">TTreeNode.SelectedIndex</link>
+          <link id="#lcl.comctrls.TTreeNode.SelectedIndex">TTreeNode.SelectedIndex</link>
         </seealso>
       </element>
 
@@ -16847,7 +17007,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#LCL.ComCtrls.TTreeNode.ImageIndex">TTreeNode.ImageIndex</link>
+          <link id="TTreeNode.ImageIndex"/>
         </seealso>
       </element>
 
@@ -17217,14 +17377,31 @@
       </element>
 
       <element name="TTreeNodes.SetUpdateState">
-        <short>
-          <var>SetUpdateState</var> - records status of update process
-        </short>
-        <descr/>
-        <seealso/>
+        <short>Sets the update state in the TreeView which owns the node tree</short>
+        <descr>
+          <p>
+            <var>SetUpdateState</var> is a procedure used to set the update state in the TreeView which owns the class instance. <var>Updating</var> indicates the <var>TTreeViewState</var> value(s) that are included in or excluded from the States property in the <var>Owner</var>.
+          </p>
+          <p>
+            When <var>Updating</var> is <b>True</b>, the value <var>tvsUpdating</var> is included in the <var>States</var> property in Owner.
+          </p>
+          <p>
+            When Updating is <b>False</b>, <var>tvsUpdating</var> is excluded from and <var>tvsScrollbarChanged</var> is included in the States property in Owner. This also causes the TreeView to update its scrollbars and repaint the control .
+          </p>
+          <p>
+            SetUpdateState is used to implement the <var>BeginUpdate</var> and <var>EndUpdate</var> methods.
+          </p>
+        </descr>
+        <seealso>
+          <link id="TTreeNodes.Owner"/>
+          <link id="TTreeNodes.BeginUpdate"/>
+          <link id="TTreeNodes.EndUpdate"/>
+          <link id="TCustomTreeView.States"/>
+          <link id="TTreeViewState"/>
+        </seealso>
       </element>
       <element name="TTreeNodes.SetUpdateState.Updating">
-        <short/>
+        <short>True when the tree nodes are being updated, False when the update has been completed</short>
       </element>
 
       <element name="TTreeNodes.Create">
@@ -17233,7 +17410,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.System.TObject.Create">TObject.Create</link>
+          <link id="#rtl.system.TObject.Create">TObject.Create</link>
         </seealso>
       </element>
       <element name="TTreeNodes.Create.AnOwner">
@@ -17246,7 +17423,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.Destroy">TPersistent.Destroy</link>
+          <link id="#rtl.classes.TPersistent.Destroy">TPersistent.Destroy</link>
         </seealso>
       </element>
 
@@ -17650,7 +17827,7 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.Assign">TPersistent.Assign</link>
+          <link id="#rtl.classes.TPersistent.Assign">TPersistent.Assign</link>
         </seealso>
       </element>
       <element name="TTreeNodes.Assign.Source">
@@ -17834,28 +18011,8 @@
         </short>
         <descr>
           <p>
-            <var>TTreeViewState</var> - enumerated type containing the permissible values for state of a <var>TTreeView</var>
+            <var>TTreeViewState</var> is an enumerated type containing the permissible state values for <var>TTreeView</var>.
           </p>
-          <pre>tvsScrollbarChanged,
-            tvsMaxRightNeedsUpdate,
-            tvsTopsNeedsUpdate,
-            tvsMaxLvlNeedsUpdate,
-            tvsTopItemNeedsUpdate,
-            tvsBottomItemNeedsUpdate,
-            tvsCanvasChanged,
-            tvsDragged,
-            tvsIsEditing,
-            tvsStateChanging,
-            tvsManualNotify,
-            tvsUpdating,
-            tvsPainting,
-            tvsMouseCapture,
-            tvsWaitForDragging,
-            tvsDblClicked,
-            tvsTripleClicked,
-            tvsQuadClicked,
-            tvsSelectionChanged
-          </pre>
         </descr>
         <seealso/>
       </element>
@@ -17933,24 +18090,6 @@
           <p>
             <var>TTreeViewOption</var> - enumerated type containing the permissible values for Options in TreeViews.
           </p>
-          <pre>
-            tvoAllowMultiselect,
-            tvoAutoExpand,
-            tvoAutoInsertMark,
-            tvoAutoItemHeight,
-            tvoHideSelection,
-            tvoHotTrack,
-            tvoKeepCollapsedNodes,
-            tvoReadOnly,
-            tvoRightClickSelect,
-            tvoRowSelect,
-            tvoShowButtons,
-            tvoShowLines,
-            tvoShowRoot,
-            tvoShowSeparators,
-            tvoToolTips,
-            tvoNoDoubleClickExpand
-          </pre>
         </descr>
         <seealso/>
       </element>
@@ -18024,6 +18163,15 @@
           Show tooltip (hint) for a tree-item when the item is too long to fit by width and mouse is over it. Same as ToolTips property.
         </short>
       </element>
+      <element name="TTreeViewOption.tvoNoDoubleClickExpand">
+        <short>Prevents toggling the expanded state for the treeview item when it is double clicked</short>
+      </element>
+      <element name="TTreeViewOption.tvoThemedDraw">
+        <short>Treeview item is drawn using settings from theme services</short>
+      </element>
+      <element name="TTreeViewOption.tvoEmptySpaceUnselect">
+        <short>Indicates if empty space can be be drawn below unselected items in the treeview</short>
+      </element>
 
       <element name="TTreeViewOptions">
         <short>
@@ -18039,19 +18187,22 @@
           <p>
             A series of defaults used to set the options of a TreeView object when first placed on a form. This set consists of the following items:
           </p>
-          <pre>
-            tvoShowRoot,
-            tvoShowLines,
-            tvoShowButtons,
-            tvoHideSelection,
-            tvoToolTips,
-            tvoKeepCollapsedNodes,
-            tvoAutoItemHeight
-          </pre>
+          <ul>
+            <li>tvoShowRoot</li>
+            <li>tvoShowLines</li>
+            <li>tvoShowButtons</li>
+            <li>tvoHideSelection</li>
+            <li>tvoToolTips</li>
+            <li>tvoKeepCollapsedNodes</li>
+            <li>tvoAutoItemHeight</li>
+          </ul>
           <p>
             For the meaning of these options, see the documentation of <var>TTreeView</var>.
           </p>
         </descr>
+        <seealso>
+          <link id="TTreeView"/>
+        </seealso>
       </element>
 
       <element name="DefaultMultiSelectStyle">
@@ -18112,25 +18263,19 @@
 
       <element name="TCustomTreeView">
         <short>
-          <var>TCustomTreeView</var> - ancestor class for <var>TTreeView</var>
+          Ancestor class for <var>TTreeView</var>
         </short>
         <descr>
           <p>
-            <var>TCustomTreeView</var> - ancestor class for <var>TTreeView</var>,
-            which displays a collection of items in a hierarchical tree form.
-            This class defines many properties which are inherited by children classes,
-            including loading the data from files or streams, saving to files or streams,
-            updating, sorting alphabetically, editing, making visible or invisible, expanding
-            or collapsing the tree display, and many more.
+            <var>TCustomTreeView</var> - ancestor class for <var>TTreeView</var>, which displays a collection of items in a hierarchical tree form. This class defines many properties which are inherited by descendent classes, including loading the data from files or streams, saving to files or streams, updating, sorting alphabetically, editing, making visible or invisible, expanding or collapsing the tree display, and many more.
           </p>
           <p>
-            Please note that Accessibility support in TCustomTreeView might make this control
-            slower if there is a very large number of items, for example, 10.000+ items.
-            If the performance impact is unacceptable it is possible to turn accessibility
-            off for tree view items by setting TCustomTreeView.AccessibilityOn to false.
-            The default value is true.
+            Please note that Accessibility support in TCustomTreeView might make this control slower if there are a very large number of items, for example: 10,000+ items. If the performance impact is unacceptable, it is possible to turn accessibility off for tree view items by setting the <var>AccessibilityOn</var> property to <b>False</b>. The default value is <b>True</b>.
           </p>
         </descr>
+        <seealso>
+          <link id="TTreeView"/>
+        </seealso>
       </element>
 
       <element name="TCustomTreeView.FAccessibilityOn"/>
@@ -18456,6 +18601,18 @@
         <seealso/>
       </element>
       <element name="TCustomTreeView.ImageListChange.Sender">
+        <short/>
+      </element>
+
+      <element name="TCustomTreeView.NodeIsSelected">
+        <short/>
+        <descr/>
+        <seealso/>
+      </element>
+      <element name="TCustomTreeView.NodeIsSelected.Result">
+        <short/>
+      </element>
+      <element name="TCustomTreeView.NodeIsSelected.ANode">
         <short/>
       </element>
 
@@ -19092,7 +19249,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#lcl.Graphics.Progress">Progress</link>
+          <link id="#lcl.graphics.Progress">Progress</link>
         </seealso>
       </element>
       <element name="TCustomTreeView.CustomDraw.Result">
@@ -19226,6 +19383,21 @@
         <short/>
       </element>
 
+      <element name="TCustomTreeView.GetNodeWithExpandSign">
+        <short/>
+        <descr/>
+        <seealso/>
+      </element>
+      <element name="TCustomTreeView.GetNodeWithExpandSign.Result">
+        <short/>
+      </element>
+      <element name="TCustomTreeView.GetNodeWithExpandSign.X">
+        <short/>
+      </element>
+      <element name="TCustomTreeView.GetNodeWithExpandSign.Y">
+        <short/>
+      </element>
+
       <element name="TCustomTreeView.GetNodeDrawAreaHeight">
         <short>
           <var>GetNodeDrawAreaHeight</var> - returns the height for the area in which node is drawn
@@ -19351,6 +19523,44 @@
         <short/>
         <descr/>
         <seealso/>
+      </element>
+
+      <element name="TCustomTreeView.Click" link="#LCL.Controls.TControl.Click">
+        <descr>
+          <p>
+            <var>Click</var> is an overridden method in <var>TCustomTreeView</var>. It calls the inherited method when a tree node has been selected using a mouse down event. No actions are performed in the method when a tree node has not been selected using the mouse.
+          </p>
+        </descr>
+        <seealso>
+          <link id="#lcl.controls.TControl.Click">TControl.Click</link>
+        </seealso>
+      </element>
+
+      <element name="TCustomTreeView.DblClick" link="#LCL.Controls.TControl.DblClick">
+        <descr>
+          <p>
+            <var>DblClick</var> is an overridden method in <var>TCustomTreeView</var>. It calls the inherited method when a tree node has been double clicked using the mouse. No actions are performed in the method when a tree node has not been selected and a double click event occurs.
+          </p>
+        </descr>
+        <seealso>
+          <link id="#lcl.controls.TControl.DblClick">TControl.DblClick</link>
+        </seealso>
+      </element>
+
+      <element name="TCustomTreeView.TripleClick" link="#LCL.Controls.TControl.TripleClick">
+        <short></short>
+        <descr></descr>
+        <seealso>
+          <link id="#lcl.controls.TControl.TripleClick">TControl.TripleClick</link>
+        </seealso>
+      </element>
+
+      <element name="TCustomTreeView.QuadClick" link="#LCL.Controls.TControl.QuadClick">
+        <short></short>
+        <descr></descr>
+        <seealso>
+          <link id="#lcl.controls.TControl.QuadClick">TControl.QuadClick</link>
+        </seealso>
       </element>
 
       <element name="TCustomTreeView.Delete">
@@ -19822,7 +20032,7 @@
         <short>Additionally highlight/underline tree-item when mouse is over it.</short>
         <descr/>
         <seealso>
-          <link id="#lcl.ComCtrls.TCustomListview.HotTrack">TCustomListView.HotTrack</link>
+          <link id="#lcl.comctrls.TCustomListview.HotTrack">TCustomListView.HotTrack</link>
         </seealso>
       </element>
 
@@ -19843,9 +20053,6 @@
         <descr>
           <p>
             Use 0 for auto-sized value.
-          </p>
-          <p>
-            Use <link id="TCustomTreeView.GetRealIndent">GetRealIndent</link> for real value.
           </p>
         </descr>
         <seealso/>
@@ -20128,8 +20335,8 @@
           </p>
         </descr>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Create">TComponent.Create</link>
-          <link id="#LCL.Controls.TCustomControl.Create">TCustomControl.Create</link>
+          <link id="#lcl.controls.TCustomControl.Create">TCustomControl.Create</link>
+          <link id="#rtl.classes.TComponent.Create">TComponent.Create</link>
         </seealso>
       </element>
       <element name="TCustomTreeView.Create.AnOwner">
@@ -20142,8 +20349,8 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Destroy">TComponent.Destroy</link>
-          <link id="#LCL.Controls.TCustomControl.Destroy">TCustomControl.Destroy</link>
+          <link id="#lcl.controls.TCustomControl.Destroy">TCustomControl.Destroy</link>
+          <link id="#rtl.classes.TComponent.Destroy">TComponent.Destroy</link>
         </seealso>
       </element>
 
@@ -20614,9 +20821,6 @@
         <short>Size of expand/collapse (fold/unfold) symbol.</short>
         <descr>
           <p>Use 0 for auto-sized value.</p>
-          <p>
-            Use <link id="TCustomTreeView.GetRealExpandSignSize">GetRealExpandSignSize</link> for real value.
-          </p>
         </descr>
       </element>
 
@@ -20794,90 +20998,90 @@
           </p>
         </descr>
         <seealso>
-          <link id="#lcl.stdctrls.HowToUseStdCtrls"/>
-          <link id="#LCL.ComCtrls.TCustomTreeView"/>
+          <link id="TCustomTreeView"/>
+          <link id="#lcl.stdctrls.HowToUseStdCtrls">How To Use Standard Controls</link>
         </seealso>
       </element>
 
       <element name="TTreeView.Align" link="#LCL.Controls.TControl.Align"/>
       <element name="TTreeView.Anchors" link="#LCL.Controls.TControl.Anchors"/>
-      <element name="TTreeView.AutoExpand" link="TCustomTreeView.AutoExpand"/>
+      <element name="TTreeView.AutoExpand" link="#lcl.comctrls.TCustomTreeView.AutoExpand"/>
       <element name="TTreeView.BorderSpacing" link="#LCL.Controls.TControl.BorderSpacing"/>
-      <element name="TTreeView.BackgroundColor" link="TCustomTreeView.BackgroundColor"/>
+      <element name="TTreeView.BackgroundColor" link="#lcl.comctrls.TCustomTreeView.BackgroundColor"/>
       <element name="TTreeView.BorderStyle" link="#LCL.Controls.TWinControl.BorderStyle"/>
       <element name="TTreeView.BorderWidth" link="#LCL.Controls.TWinControl.BorderWidth"/>
       <element name="TTreeView.Color" link="#LCL.Controls.TControl.Color"/>
       <element name="TTreeView.Constraints" link="#LCL.Controls.TControl.Constraints"/>
-      <element name="TTreeView.DefaultItemHeight" link="TCustomTreeView.DefaultItemHeight"/>
-      <element name="TTreeView.DisabledFontColor" link="TCustomTreeView.DisabledFontColor"/>
+      <element name="TTreeView.DefaultItemHeight" link="#lcl.comctrls.TCustomTreeView.DefaultItemHeight"/>
+      <element name="TTreeView.DisabledFontColor" link="#lcl.comctrls.TCustomTreeView.DisabledFontColor"/>
       <element name="TTreeView.DragKind" link="#LCL.Controls.TControl.DragKind"/>
       <element name="TTreeView.DragCursor" link="#LCL.Controls.TControl.DragCursor"/>
       <element name="TTreeView.DragMode" link="#LCL.Controls.TControl.DragMode"/>
       <element name="TTreeView.Enabled" link="#LCL.Controls.TControl.Enabled"/>
-      <element name="TTreeView.ExpandSignColor" link="TCustomTreeView.ExpandSignColor"/>
-      <element name="TTreeView.ExpandSignSize" link="TCustomTreeView.ExpandSignSize"/>
-      <element name="TTreeView.ExpandSignType" link="TCustomTreeView.ExpandSignType"/>
+      <element name="TTreeView.ExpandSignColor" link="#lcl.comctrls.TCustomTreeView.ExpandSignColor"/>
+      <element name="TTreeView.ExpandSignSize" link="#lcl.comctrls.TCustomTreeView.ExpandSignSize"/>
+      <element name="TTreeView.ExpandSignType" link="#lcl.comctrls.TCustomTreeView.ExpandSignType"/>
       <element name="TTreeView.Font" link="#LCL.Controls.TControl.Font"/>
-      <element name="TTreeView.HideSelection" link="TCustomTreeView.HideSelection"/>
-      <element name="TTreeView.HotTrack" link="TCustomTreeView.HotTrack"/>
-      <element name="TTreeView.Images" link="TCustomTreeView.Images"/>
-      <element name="TTreeView.ImagesWidth" link="TCustomTreeView.ImagesWidth"/>
-      <element name="TTreeView.Indent" link="TCustomTreeView.Indent"/>
-      <element name="TTreeView.MultiSelect" link="TCustomTreeView.MultiSelect"/>
-      <element name="TTreeView.MultiSelectStyle" link="TCustomTreeView.MultiSelectStyle"/>
+      <element name="TTreeView.HideSelection" link="#lcl.comctrls.TCustomTreeView.HideSelection"/>
+      <element name="TTreeView.HotTrack" link="#lcl.comctrls.TCustomTreeView.HotTrack"/>
+      <element name="TTreeView.Images" link="#lcl.comctrls.TCustomTreeView.Images"/>
+      <element name="TTreeView.ImagesWidth" link="#lcl.comctrls.TCustomTreeView.ImagesWidth"/>
+      <element name="TTreeView.Indent" link="#lcl.comctrls.TCustomTreeView.Indent"/>
+      <element name="TTreeView.MultiSelect" link="#lcl.comctrls.TCustomTreeView.MultiSelect"/>
+      <element name="TTreeView.MultiSelectStyle" link="#lcl.comctrls.TCustomTreeView.MultiSelectStyle"/>
       <element name="TTreeView.ParentColor" link="#LCL.Controls.TControl.ParentColor"/>
       <element name="TTreeView.ParentFont" link="#LCL.Controls.TControl.ParentFont"/>
       <element name="TTreeView.ParentShowHint" link="#LCL.Controls.TControl.ParentShowHint"/>
       <element name="TTreeView.PopupMenu" link="#LCL.Controls.TControl.PopupMenu"/>
-      <element name="TTreeView.ReadOnly" link="TCustomTreeView.ReadOnly"/>
-      <element name="TTreeView.RightClickSelect" link="TCustomTreeView.RightClickSelect"/>
-      <element name="TTreeView.RowSelect" link="TCustomTreeView.RowSelect"/>
-      <element name="TTreeView.ScrollBars" link="TCustomTreeView.ScrollBars"/>
-      <element name="TTreeView.SelectionColor" link="TCustomTreeView.SelectionColor"/>
-      <element name="TTreeView.SelectionFontColor" link="TCustomTreeView.SelectionFontColor"/>
-      <element name="TTreeView.SelectionFontColorUsed" link="TCustomTreeView.SelectionFontColorUsed"/>
-      <element name="TTreeView.SeparatorColor" link="TCustomTreeView.SeparatorColor"/>
-      <element name="TTreeView.ShowButtons" link="TCustomTreeView.ShowButtons"/>
+      <element name="TTreeView.ReadOnly" link="#lcl.comctrls.TCustomTreeView.ReadOnly"/>
+      <element name="TTreeView.RightClickSelect" link="#lcl.comctrls.TCustomTreeView.RightClickSelect"/>
+      <element name="TTreeView.RowSelect" link="#lcl.comctrls.TCustomTreeView.RowSelect"/>
+      <element name="TTreeView.ScrollBars" link="#lcl.comctrls.TCustomTreeView.ScrollBars"/>
+      <element name="TTreeView.SelectionColor" link="#lcl.comctrls.TCustomTreeView.SelectionColor"/>
+      <element name="TTreeView.SelectionFontColor" link="#lcl.comctrls.TCustomTreeView.SelectionFontColor"/>
+      <element name="TTreeView.SelectionFontColorUsed" link="#lcl.comctrls.TCustomTreeView.SelectionFontColorUsed"/>
+      <element name="TTreeView.SeparatorColor" link="#lcl.comctrls.TCustomTreeView.SeparatorColor"/>
+      <element name="TTreeView.ShowButtons" link="#lcl.comctrls.TCustomTreeView.ShowButtons"/>
       <element name="TTreeView.ShowHint" link="#LCL.Controls.TControl.ShowHint"/>
-      <element name="TTreeView.ShowLines" link="TCustomTreeView.ShowLines"/>
-      <element name="TTreeView.ShowRoot" link="TCustomTreeView.ShowRoot"/>
-      <element name="TTreeView.SortType" link="TCustomTreeView.SortType"/>
-      <element name="TTreeView.StateImages" link="TCustomTreeView.StateImages"/>
-      <element name="TTreeView.StateImagesWidth" link="TCustomTreeView.StateImagesWidth"/>
+      <element name="TTreeView.ShowLines" link="#lcl.comctrls.TCustomTreeView.ShowLines"/>
+      <element name="TTreeView.ShowRoot" link="#lcl.comctrls.TCustomTreeView.ShowRoot"/>
+      <element name="TTreeView.SortType" link="#lcl.comctrls.TCustomTreeView.SortType"/>
+      <element name="TTreeView.StateImages" link="#lcl.comctrls.TCustomTreeView.StateImages"/>
+      <element name="TTreeView.StateImagesWidth" link="#lcl.comctrls.TCustomTreeView.StateImagesWidth"/>
       <element name="TTreeView.TabOrder" link="#LCL.Controls.TWinControl.TabOrder"/>
       <element name="TTreeView.TabStop" link="#LCL.Controls.TWinControl.TabStop"/>
       <element name="TTreeView.Tag" link="#rtl.Classes.TComponent.Tag"/>
-      <element name="TTreeView.ToolTips" link="TCustomTreeView.ToolTips"/>
+      <element name="TTreeView.ToolTips" link="#lcl.comctrls.TCustomTreeView.ToolTips"/>
       <element name="TTreeView.Visible" link="#LCL.Controls.TControl.Visible"/>
-      <element name="TTreeView.OnAddition" link="TCustomTreeView.OnAddition"/>
-      <element name="TTreeView.OnAdvancedCustomDraw" link="TCustomTreeView.OnAdvancedCustomDraw"/>
-      <element name="TTreeView.OnAdvancedCustomDrawItem" link="TCustomTreeView.OnAdvancedCustomDrawItem"/>
-      <element name="TTreeView.OnChange" link="TCustomTreeView.OnChange"/>
-      <element name="TTreeView.OnChanging" link="TCustomTreeView.OnChanging"/>
+      <element name="TTreeView.OnAddition" link="#lcl.comctrls.TCustomTreeView.OnAddition"/>
+      <element name="TTreeView.OnAdvancedCustomDraw" link="#lcl.comctrls.TCustomTreeView.OnAdvancedCustomDraw"/>
+      <element name="TTreeView.OnAdvancedCustomDrawItem" link="#lcl.comctrls.TCustomTreeView.OnAdvancedCustomDrawItem"/>
+      <element name="TTreeView.OnChange" link="#lcl.comctrls.TCustomTreeView.OnChange"/>
+      <element name="TTreeView.OnChanging" link="#lcl.comctrls.TCustomTreeView.OnChanging"/>
       <element name="TTreeView.OnClick" link="#LCL.Controls.TControl.OnClick"/>
-      <element name="TTreeView.OnCollapsed" link="TCustomTreeView.OnCollapsed"/>
-      <element name="TTreeView.OnCollapsing" link="TCustomTreeView.OnCollapsing"/>
-      <element name="TTreeView.OnCompare" link="TCustomTreeView.OnCompare"/>
+      <element name="TTreeView.OnCollapsed" link="#lcl.comctrls.TCustomTreeView.OnCollapsed"/>
+      <element name="TTreeView.OnCollapsing" link="#lcl.comctrls.TCustomTreeView.OnCollapsing"/>
+      <element name="TTreeView.OnCompare" link="#lcl.comctrls.TCustomTreeView.OnCompare"/>
       <element name="TTreeView.OnContextPopup" link="#LCL.Controls.TControl.OnContextPopup"/>
-      <element name="TTreeView.OnCreateNodeClass" link="TCustomTreeView.OnCreateNodeClass"/>
-      <element name="TTreeView.OnCustomCreateItem" link="TCustomTreeView.OnCustomCreateItem"/>
-      <element name="TTreeView.OnCustomDraw" link="TCustomTreeView.OnCustomDraw"/>
-      <element name="TTreeView.OnCustomDrawItem" link="TCustomTreeView.OnCustomDrawItem"/>
-      <element name="TTreeView.OnCustomDrawArrow" link="TCustomTreeView.OnCustomDrawArrow"/>
+      <element name="TTreeView.OnCreateNodeClass" link="#lcl.comctrls.TCustomTreeView.OnCreateNodeClass"/>
+      <element name="TTreeView.OnCustomCreateItem" link="#lcl.comctrls.TCustomTreeView.OnCustomCreateItem"/>
+      <element name="TTreeView.OnCustomDraw" link="#lcl.comctrls.TCustomTreeView.OnCustomDraw"/>
+      <element name="TTreeView.OnCustomDrawItem" link="#lcl.comctrls.TCustomTreeView.OnCustomDrawItem"/>
+      <element name="TTreeView.OnCustomDrawArrow" link="#lcl.comctrls.TCustomTreeView.OnCustomDrawArrow"/>
       <element name="TTreeView.OnDblClick" link="#LCL.Controls.TControl.OnDblClick"/>
-      <element name="TTreeView.OnDeletion" link="TCustomTreeView.OnDeletion"/>
+      <element name="TTreeView.OnDeletion" link="#lcl.comctrls.TCustomTreeView.OnDeletion"/>
       <element name="TTreeView.OnDragDrop" link="#LCL.Controls.TControl.OnDragDrop"/>
       <element name="TTreeView.OnDragOver" link="#LCL.Controls.TControl.OnDragOver"/>
-      <element name="TTreeView.OnEdited" link="TCustomTreeView.OnEdited"/>
-      <element name="TTreeView.OnEditing" link="TCustomTreeView.OnEditing"/>
-      <element name="TTreeView.OnEditingEnd" link="TCustomTreeView.OnEditingEnd"/>
+      <element name="TTreeView.OnEdited" link="#lcl.comctrls.TCustomTreeView.OnEdited"/>
+      <element name="TTreeView.OnEditing" link="#lcl.comctrls.TCustomTreeView.OnEditing"/>
+      <element name="TTreeView.OnEditingEnd" link="#lcl.comctrls.TCustomTreeView.OnEditingEnd"/>
       <element name="TTreeView.OnEndDrag" link="#LCL.Controls.TControl.OnEndDrag"/>
       <element name="TTreeView.OnEnter" link="#LCL.Controls.TWinControl.OnEnter"/>
       <element name="TTreeView.OnExit" link="#LCL.Controls.TWinControl.OnExit"/>
-      <element name="TTreeView.OnExpanded" link="TCustomTreeView.OnExpanded"/>
-      <element name="TTreeView.OnExpanding" link="TCustomTreeView.OnExpanding"/>
-      <element name="TTreeView.OnGetImageIndex" link="TCustomTreeView.OnGetImageIndex"/>
-      <element name="TTreeView.OnGetSelectedIndex" link="TCustomTreeView.OnGetSelectedIndex"/>
+      <element name="TTreeView.OnExpanded" link="#lcl.comctrls.TCustomTreeView.OnExpanded"/>
+      <element name="TTreeView.OnExpanding" link="#lcl.comctrls.TCustomTreeView.OnExpanding"/>
+      <element name="TTreeView.OnGetImageIndex" link="#lcl.comctrls.TCustomTreeView.OnGetImageIndex"/>
+      <element name="TTreeView.OnGetSelectedIndex" link="#lcl.comctrls.TCustomTreeView.OnGetSelectedIndex"/>
       <element name="TTreeView.OnKeyDown" link="#LCL.Controls.TWinControl.OnKeyDown"/>
       <element name="TTreeView.OnKeyPress" link="#LCL.Controls.TWinControl.OnKeyPress"/>
       <element name="TTreeView.OnKeyUp" link="#LCL.Controls.TWinControl.OnKeyUp"/>
@@ -20892,16 +21096,16 @@
       <element name="TTreeView.OnMouseWheelHorz" link="#LCL.Controls.TControl.OnMouseWheelHorz"/>
       <element name="TTreeView.OnMouseWheelLeft" link="#LCL.Controls.TControl.OnMouseWheelLeft"/>
       <element name="TTreeView.OnMouseWheelRight" link="#LCL.Controls.TControl.OnMouseWheelRight"/>
-      <element name="TTreeView.OnNodeChanged" link="TCustomTreeView.OnNodeChanged"/>
+      <element name="TTreeView.OnNodeChanged" link="#lcl.comctrls.TCustomTreeView.OnNodeChanged"/>
       <element name="TTreeView.OnResize" link="#LCL.Controls.TControl.OnResize"/>
-      <element name="TTreeView.OnSelectionChanged" link="TCustomTreeView.OnSelectionChanged"/>
+      <element name="TTreeView.OnSelectionChanged" link="#lcl.comctrls.TCustomTreeView.OnSelectionChanged"/>
       <element name="TTreeView.OnShowHint" link="#LCL.Controls.TControl.OnShowHint"/>
       <element name="TTreeView.OnStartDrag" link="#LCL.Controls.TControl.OnStartDrag"/>
       <element name="TTreeView.OnUTF8KeyPress" link="#LCL.Controls.TWinControl.OnUTF8KeyPress"/>
-      <element name="TTreeView.Options" link="TCustomTreeView.Options"/>
-      <element name="TTreeView.Items" link="TCustomTreeView.Items"/>
-      <element name="TTreeView.TreeLineColor" link="TCustomTreeView.TreeLineColor"/>
-      <element name="TTreeView.TreeLinePenStyle" link="TCustomTreeView.TreeLinePenStyle"/>
+      <element name="TTreeView.Options" link="#lcl.comctrls.TCustomTreeView.Options"/>
+      <element name="TTreeView.Items" link="#lcl.comctrls.TCustomTreeView.Items"/>
+      <element name="TTreeView.TreeLineColor" link="#lcl.comctrls.TCustomTreeView.TreeLineColor"/>
+      <element name="TTreeView.TreeLinePenStyle" link="#lcl.comctrls.TCustomTreeView.TreeLinePenStyle"/>
 
       <element name="TTVGetNodeText">
         <short/>
@@ -21175,7 +21379,7 @@
         <seealso/>
       </element>
 
-      <element name="THeaderSection.GetDisplayName" link="#RTL.Classes.TCollectionItem.GetDisplayName">
+      <element name="THeaderSection.GetDisplayName" link="#RTL.Classes.TCollectionItem.DisplayName">
         <short/>
         <descr/>
         <seealso/>
@@ -21189,7 +21393,7 @@
           <var>Create</var> - constructor for THeaderSection: calls inherited <var>Create</var> then initializes state, visibility, alignment, size and Index
         </short>
         <seealso>
-          <link id="#rtl.Classes.TCollectionItem.Create">TCollectionItem.Create</link>
+          <link id="#rtl.classes.TCollectionItem.Create">TCollectionItem.Create</link>
         </seealso>
       </element>
       <element name="THeaderSection.Create.ACollection">
@@ -21201,7 +21405,7 @@
           <var>Assign</var> - if <var>Source</var> is of correct type, copies properties directly, otherwise calls inherited <var>Assign</var> which probably raises an exception
         </short>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.Assign">TPersistent.Assign</link>
+          <link id="#rtl.classes.TPersistent.Assign">TPersistent.Assign</link>
         </seealso>
       </element>
       <element name="THeaderSection.Assign.Source">
@@ -21287,7 +21491,7 @@
         <descr/>
         <seealso>
           <link id="THeaderSections.Items"/>
-          <link id="#RTL.Classes.TCollection.GetItem"/>
+          <link id="#rtl.classes.TCollection.GetItem">TCollection.GetItem</link>
         </seealso>
       </element>
       <element name="THeaderSections.GetItem.Result">
@@ -21302,7 +21506,7 @@
         <descr/>
         <seealso>
           <link id="THeaderSections.Items"/>
-          <link id="#RTL.Classes.TCollection.GetItem"/>
+          <link id="#rtl.classes.TCollection.GetItem">TCollection.GetItem</link>
         </seealso>
       </element>
       <element name="THeaderSections.SetItem.Index">
@@ -21317,25 +21521,25 @@
           <var>GetOwner</var> returns a HeaderControl, overriding inherited value
         </short>
         <seealso>
-          <link id="#rtl.Classes.TPersistent.GetOwner">TPersistent.GetOwner</link>
+          <link id="#rtl.classes.TPersistent.GetOwner">TPersistent.GetOwner</link>
         </seealso>
       </element>
       <element name="THeaderSections.GetOwner.Result">
         <short/>
       </element>
 
-      <element name="THeaderSections.Update" link="#rtl.Classes.TCollection.Update">
+      <element name="THeaderSections.Update" link="#rtl.classes.TCollection.Update">
         <short>Performs actions needed when a collection item has been changed</short>
         <descr>
           <p>
             <var>Update</var> is an overridden method used to notify observers of a change to the specified item in the collection.
           </p>
           <remark>
-            Please note: Update does <b>not</b> call the inherited method which notifies observers of the change.
+            Update does <b>not</b> call the inherited method which notifies observers of the change.
           </remark>
         </descr>
         <seealso>
-          <link id="#RTL.Classes.TCollection.Update"/>
+          <link id="#rtl.classes.TCollection.Update">TCollection.Update</link>
         </seealso>
       </element>
       <element name="THeaderSections.Update.Item">
@@ -21497,7 +21701,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#lcl.ExtCtrls.Multi-PageControls">Multi-PageControls</link>
+          <link id="#lcl.extctrls.Multi-PageControls">Using Multi-Page Controls</link>
         </seealso>
       </element>
 
@@ -21693,7 +21897,7 @@
           <var>GetControlClassDefaultSize</var> - returns its own defaults, overriding inherited values
         </short>
         <seealso>
-          <link id="#LCL.Controls.TControl.GetControlClassDefaultSize">TControl.GetControlClassDefaultSize</link>
+          <link id="#lcl.controls.TControl.GetControlClassDefaultSize">TControl.GetControlClassDefaultSize</link>
         </seealso>
       </element>
       <element name="TCustomHeaderControl.GetControlClassDefaultSize.Result">
@@ -21732,8 +21936,8 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Create">TComponent.Create</link>
-          <link id="#LCL.Controls.TCustomControl.Create">TCustomControl.Create</link>
+          <link id="#lcl.controls.TCustomControl.Create">TCustomControl.Create</link>
+          <link id="#rtl.classes.TComponent.Create">TComponent.Create</link>
         </seealso>
       </element>
       <element name="TCustomHeaderControl.Create.AOwner">
@@ -21746,8 +21950,8 @@
         </short>
         <descr/>
         <seealso>
-          <link id="#rtl.Classes.TComponent.Destroy">TComponent.Destroy</link>
-          <link id="#LCL.Controls.TCustomControl.Destroy">TCustomControl.Destroy</link>
+          <link id="#lcl.controls.TCustomControl.Destroy">TCustomControl.Destroy</link>
+          <link id="#rtl.classes.TComponent.Destroy">TComponent.Destroy</link>
         </seealso>
       </element>
 
@@ -21876,7 +22080,7 @@
           </p>
         </descr>
         <seealso>
-          <link id="#lcl.ExtCtrls.Multi-PageControls">Multi-PageControls</link>
+          <link id="#lcl.ExtCtrls.Multi-PageControls">Using Multi-Page Controls</link>
         </seealso>
       </element>
 
@@ -21890,8 +22094,8 @@
       <element name="THeaderControl.DragMode" link="#LCL.Controls.TControl.DragMode"/>
       <element name="THeaderControl.Enabled" link="#LCL.Controls.TControl.Enabled"/>
       <element name="THeaderControl.Font" link="#LCL.Controls.TControl.Font"/>
-      <element name="THeaderControl.Images" link="TCustomHeaderControl.Images"/>
-      <element name="THeaderControl.ImagesWidth" link="TCustomHeaderControl.ImagesWidth"/>
+      <element name="THeaderControl.Images" link="#lcl.comctrls.TCustomHeaderControl.Images"/>
+      <element name="THeaderControl.ImagesWidth" link="#lcl.comctrls.TCustomHeaderControl.ImagesWidth"/>
       <element name="THeaderControl.Constraints" link="#LCL.Controls.TControl.Constraints"/>
       <element name="THeaderControl.Sections" link="#LCL.ComCtrls.TCustomHeaderControl.Sections"/>
       <element name="THeaderControl.ShowHint" link="#LCL.Controls.TControl.ShowHint"/>
@@ -22022,7 +22226,7 @@
           <p>
             Register is a procedure used to register components in the <file>comctrls.pp</file> unit in the Lazarus IDE. Register adds the following components:
           </p>
-          <p><b>Common Controls Tab></b></p>
+          <p><b>Common Controls Tab</b></p>
           <ul>
             <li>TTrackbar</li>
             <li>TProgressBar</li>

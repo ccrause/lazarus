@@ -28,11 +28,10 @@ uses
   // RTL
   Classes, SysUtils, glib2, gdk2pixbuf, pango, gdk2, gtk2,
   // LazUtils
-  DynHashArray, LazLoggerBase,
+  GraphType, DynHashArray, LazLoggerBase, LazTracer, LazUtilities,
   // LCL
-  Gtk2Extra,
-  LCLIntf, LCLProc, LCLType, LCLMemManager,
-  GraphType, Gtk2Globals, Graphics {for TColor};
+  Gtk2Extra, Gtk2Globals,
+  LCLIntf, LCLType, LCLMemManager, Graphics {for TColor};
 
 {$ifdef TraceGdiCalls}
 const
@@ -477,8 +476,8 @@ type
     ExStyle: Integer;
     EventMask: TGdkEventMask;
     DoubleBuffer: PGdkPixmap;
-    CursorPos: integer;               // needed for delayed SetSelStart
-    SelLength: integer;               // needed for delayed SetSelLength
+    CursorPos: integer;
+    SelLength: integer;
     ControlCursor: HCursor;           // current widget cursor
     Flags: TWidgetInfoFlags;
     ChangeLock: Integer;              // lock events
@@ -487,6 +486,7 @@ type
     UserData: Pointer;
     FormBorderStyle: Integer;         // used only by forms
     FormWindowState: TGdkEventWindowState; // used only by forms to stop infinite loops eg. issue #16505
+    FirstPaint: boolean; // for accurate frame - forms only
   end;
 
   //TODO: remove

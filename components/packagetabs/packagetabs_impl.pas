@@ -23,7 +23,7 @@
   Abstract:
     Replacement of source editor tabs/pages with buttons sorted by package and name.
 }
-unit packagetabs_impl;
+unit PackageTabs_impl;
 
 {$mode objfpc}{$H+}
 
@@ -32,15 +32,15 @@ interface
 uses
   Classes, SysUtils, Types, Contnrs,
   // LCL
-  LCLProc, LCLIntf, Forms, Controls, StdCtrls, Buttons, ComCtrls, ExtCtrls,
+  LCLIntf, Forms, Controls, StdCtrls, Buttons, ComCtrls, ExtCtrls,
   Graphics, Menus, Clipbrd,
   // LazUtils
-  LazFileUtils, Laz2_XMLCfg,
+  LazUtilities, LazFileUtils, Laz2_XMLCfg, LazUTF8,
   // IdeIntf
   SrcEditorIntf, PackageIntf, LazIDEIntf, IDEImagesIntf, IDECommands,
   IDEOptEditorIntf, ProjectIntf,
   // PackageTabs
-  packagetabsstr;
+  PackageTabsStr;
 
 type
   TPackageTabButton = class(TSpeedButton)
@@ -98,7 +98,7 @@ type
     Title: string;
     Package: TIDEPackage;
     GroupTabLabel: TGroupTabLabelClass;
-    Files: TStringList;
+    Files: TStringListUTF8Fast;
 
     constructor Create(AType: TGroupType; const ATitle: string; APackage: TIDEPackage);
     destructor Destroy; override;
@@ -462,8 +462,8 @@ end;
 
 procedure TPackageTabScrollBox.DoAlignControls;
 var
-  xNextY, I: Integer;
-  xControl: TControl;
+  I: Integer;
+  xControl, xPrevControl: TControl;
   xClientRect: TRect;
   xBS: TControlBorderSpacing;
 begin
@@ -471,18 +471,23 @@ begin
   AdjustClientRect(xClientRect);
   DisableAlign;
   try
-    xNextY := 0;
+    xPrevControl := nil;
     for I := 0 to ControlCount-1 do
     begin
       xControl := Controls[I];
 
       xControl.Anchors := [akLeft, akRight, akTop];
+      if Assigned(xPrevControl) then
+      begin
+        xControl.AnchorSide[akTop].Control := xPrevControl;
+        xControl.AnchorSide[akTop].Side := asrBottom;
+      end;
       xBS := xControl.BorderSpacing;
       xControl.SetBounds(
-        xBS.Left+xBS.Around, xNextY+xBS.Top+xBS.Around,
+        xBS.Left+xBS.Around, 0,
         xClientRect.Right-xClientRect.Left-xBS.Left-xBS.Right-xBS.Around*2,
         xBS.ControlHeight);
-      Inc(xNextY, xControl.Height);
+      xPrevControl := xControl;
     end;
   finally
     EnableAlign;
@@ -508,8 +513,8 @@ begin
   inherited CalculatePreferredSize(PreferredWidth, PreferredHeight,
     WithThemeSpace);
 
-  PreferredHeight := Height; // ignore PreferredHeight
-  PreferredWidth := PreferredWidth + 6;
+  PreferredHeight := PreferredHeight + 4;
+  PreferredWidth := PreferredWidth + 8;
 end;
 
 { TGroupTabLabel }
@@ -531,7 +536,7 @@ begin
   inherited CalculatePreferredSize(PreferredWidth, PreferredHeight,
     WithThemeSpace);
 
-  PreferredHeight := Height; // ignore PreferredHeight
+  PreferredHeight := PreferredHeight + 8;
   PreferredWidth := PreferredWidth + 8;
 end;
 
@@ -557,6 +562,7 @@ begin
         if Assigned(FOnCloseAllFiles) then
           FOnCloseAllFiles(Self);
       end;
+    else // disable warning
     end;
   end;
 end;
@@ -583,7 +589,7 @@ begin
   &Type := AType;
   Title := ATitle;
   Package := APackage;
-  Files := TStringList.Create;
+  Files := TStringListUTF8Fast.Create;
   Files.Sorted := True;
   Files.Duplicates := dupAccept;
 end;
@@ -915,7 +921,6 @@ begin
         xLbl.Caption := xPkgItem.Title;
         xLbl.Parent := FPanel;
         xLbl.PopupMenu := FTabLabelMenu;
-        xLbl.Height := FPanel.Scale96ToForm(TPackageTabButton.GetControlClassDefaultSize.cy);
         xLbl.OnCloseAllFiles := @CloseAllFiles;
         if FPanel is TPackageTabScrollBox then
         begin
@@ -938,7 +943,6 @@ begin
           xEditor.UpdateProjectFile; // updates FNewEditorInfo.PageIndex
           Inc(xNewIndex);
           xBtn := TPackageTabButton.Create(Self);
-          xBtn.Height := xLbl.Height;
           xBtn.Caption := xEditor.PageCaption;
           xBtn.Hint := xEditor.FileName;
           xBtn.ShowHint := True;
@@ -1154,6 +1158,7 @@ begin
   case Button of
     mbLeft: FWindow.ActiveEditor := xBtn.Editor;
     mbMiddle: LazarusIDE.DoCloseEditorFile(xBtn.Editor, [cfSaveFirst]);
+  else // disable warning
   end;
 end;
 

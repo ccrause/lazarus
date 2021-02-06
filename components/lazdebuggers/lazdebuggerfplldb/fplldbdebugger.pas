@@ -25,11 +25,15 @@ uses
   {$IFdef WithWinMemReader}
   windows,
   {$ENDIF}
-  Classes, sysutils, math, FpdMemoryTools, FpDbgInfo, LldbDebugger,
-  LldbInstructions, LldbHelper, DbgIntfBaseTypes, DbgIntfDebuggerBase, LCLProc,
-  Forms, FpDbgLoader, FpDbgDwarf, LazLoggerBase, LazClasses, FpPascalParser,
-  FpPascalBuilder, FpErrorMessages, FpDbgDwarfDataClasses, FpDbgDwarfFreePascal,
-  FpDbgCommon;
+  Classes, sysutils, math,
+  Forms,
+  LazLoggerBase, LazUTF8, LazClasses,
+  // DebuggerIntf
+  DbgIntfBaseTypes, DbgIntfDebuggerBase,
+  // FpDebug
+  FpdMemoryTools, FpDbgInfo, FpPascalParser, FpDbgLoader, FpDbgDwarf,
+  FpPascalBuilder, FpErrorMessages, FpDbgDwarfDataClasses, FpDbgCommon,
+  LldbDebugger, LldbInstructions, LldbHelper;
 
 type
 
@@ -57,7 +61,7 @@ type
     destructor Destroy; override;
     function ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean; override;
     function ReadMemoryEx({%H-}AnAddress, {%H-}AnAddressSpace:{%H-} TDbgPtr; ASize: {%H-}Cardinal; ADest: Pointer): Boolean; override;
-    function ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr; AContext: TFpDbgAddressContext): Boolean; override;
+    function ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr; AContext: TFpDbgLocationContext): Boolean; override;
     function RegisterSize({%H-}ARegNum: Cardinal): Integer; override;
   end;
 
@@ -130,7 +134,9 @@ type
     FMemManager: TFpDbgMemManager;
     FDwarfLoaderThread: TDwarfLoaderThread;
     // cache last context
-    FLastContext: array [0..MAX_CTX_CACHE-1] of TFpDbgInfoContext;
+    FLastContext: array [0..MAX_CTX_CACHE-1] of TFpDbgSymbolScope;
+    FLockUnLoadDwarf: integer;
+    FUnLoadDwarfNeeded: Boolean;
     procedure DoBeginReceivingLines(Sender: TObject);
     procedure DoEndReceivingLines(Sender: TObject);
   protected
@@ -144,6 +150,8 @@ type
     function  HasDwarf: Boolean;
     function LoadDwarf: String;
     procedure UnLoadDwarf;
+    procedure LockUnLoadDwarf;
+    procedure UnLockUnLoadDwarf;
     function  RequestCommand(const ACommand: TDBGCommand;
               const AParams: array of const;
               const ACallback: TMethod): Boolean; override;
@@ -151,7 +159,7 @@ type
 
     procedure GetCurrentContext(out AThreadId, AStackFrame: Integer);
     function  GetLocationForContext(AThreadId, AStackFrame: Integer): TDBGPtr;
-    function  GetInfoContextForContext(AThreadId, AStackFrame: Integer): TFpDbgInfoContext;
+    function  GetInfoContextForContext(AThreadId, AStackFrame: Integer): TFpDbgSymbolScope;
     {$IFdef WithWinMemReader}
     property TargetPID;
     {$EndIf}
@@ -247,7 +255,7 @@ type
 
   TFpLldbLineInfo = class(TDBGLineInfo)
   private
-    FRequestedSources: TStringList;
+    FRequestedSources: TStringListUTF8Fast;
   protected
     function  FpDebugger: TFpLldbDebugger;
     procedure DoStateChange(const {%H-}AOldState: TDBGState); override;
@@ -327,8 +335,7 @@ begin
       exit;
 
 
-    FDwarfInfo := TFpDwarfInfo.Create(FImageLoaderList);
-    FDwarfInfo.MemManager := FMemManager;
+    FDwarfInfo := TFpDwarfInfo.Create(FImageLoaderList, FMemManager);
     if Terminated then
       exit;
 
@@ -402,7 +409,7 @@ end;
 
 procedure TFPLldbLocals.ProcessLocals(ALocals: TLocals);
 var
-  Ctx: TFpDbgInfoContext;
+  Ctx: TFpDbgSymbolScope;
   ProcVal: TFpValue;
   i: Integer;
   m: TFpValue;
@@ -413,7 +420,9 @@ begin
     exit;
   end;
 
+  FpDebugger.LockUnLoadDwarf;
   Ctx := FpDebugger.GetInfoContextForContext(ALocals.ThreadId, ALocals.StackFrame);
+  ProcVal := nil;
   try
     if (Ctx = nil) or (Ctx.SymbolAtAddress = nil) then begin
       ALocals.SetDataValidity(ddsInvalid);
@@ -450,6 +459,7 @@ begin
   finally
     Ctx.ReleaseReference;
     ProcVal.ReleaseReference;
+    FpDebugger.UnLockUnLoadDwarf;
   end;
 end;
 
@@ -623,7 +633,7 @@ begin
 end;
 
 function TFpLldbDbgMemReader.ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr;
-  AContext: TFpDbgAddressContext): Boolean;
+  AContext: TFpDbgLocationContext): Boolean;
 var
   rname: String;
   v: String;
@@ -800,6 +810,7 @@ begin
 
 debugln(['ProcessEvalList ']);
   inc(FWatchEvalLock);
+  FpDebugger.LockUnLoadDwarf;
   try // TODO: if the stack/thread is changed, registers will be wrong
     while (FpDebugger.FWatchEvalList.Count > 0) and (FEvaluationCmdObj = nil) and (not FWatchEvalCancel)
     do begin
@@ -829,6 +840,7 @@ debugln(['ProcessEvalList ']);
     end;
   finally
     dec(FWatchEvalLock);
+    FpDebugger.UnLockUnLoadDwarf;
   end;
 end;
 
@@ -883,7 +895,7 @@ end;
 
 constructor TFpLldbLineInfo.Create(const ADebugger: TDebuggerIntf);
 begin
-  FRequestedSources := TStringList.Create;
+  FRequestedSources := TStringListUTF8Fast.Create;
   inherited Create(ADebugger);
 end;
 
@@ -1191,8 +1203,7 @@ begin
     FMemManager := TFpDbgMemManager.Create(FMemReader, TFpDbgMemConvertorLittleEndian.Create);
     FMemManager.SetCacheManager(TFpLldbDbgMemCacheManagerSimple.Create);
 
-    FDwarfInfo := TFpDwarfInfo.Create(FImageLoaderList);
-    FDwarfInfo.MemManager := FMemManager;
+    FDwarfInfo := TFpDwarfInfo.Create(FImageLoaderList, FMemManager);
     FDwarfInfo.LoadCompilationUnits;
 
     if FDwarfInfo.TargetInfo.bitness = b64 then
@@ -1210,6 +1221,11 @@ end;
 
 procedure TFpLldbDebugger.UnLoadDwarf;
 begin
+  if FLockUnLoadDwarf > 0 then begin
+    FUnLoadDwarfNeeded := True;
+    exit;
+  end;
+  FUnLoadDwarfNeeded := False;
   debugln(DBG_VERBOSE, ['TFpLldbDebugger.UnLoadDwarf ']);
   FreeAndNil(FDwarfInfo);
   FreeAndNil(FImageLoaderList);
@@ -1226,6 +1242,18 @@ begin
     FDwarfLoaderThread.FreeDwarf;
     FreeAndNil(FDwarfLoaderThread);
   end;
+end;
+
+procedure TFpLldbDebugger.LockUnLoadDwarf;
+begin
+  inc(FLockUnLoadDwarf);
+end;
+
+procedure TFpLldbDebugger.UnLockUnLoadDwarf;
+begin
+  dec(FLockUnLoadDwarf);
+  if (FLockUnLoadDwarf <= 0) and FUnLoadDwarfNeeded then
+    UnLoadDwarf;
 end;
 
 function TFpLldbDebugger.RequestCommand(const ACommand: TDBGCommand;
@@ -1357,10 +1385,10 @@ begin
 end;
 
 function TFpLldbDebugger.GetInfoContextForContext(AThreadId,
-  AStackFrame: Integer): TFpDbgInfoContext;
+  AStackFrame: Integer): TFpDbgSymbolScope;
 var
   Addr: TDBGPtr;
-  i: Integer;
+  i, sa: Integer;
 begin
   Result := nil;
   if FDwarfInfo = nil then
@@ -1381,7 +1409,8 @@ begin
   i := MAX_CTX_CACHE - 1;
   while (i >= 0) and
     ( (FLastContext[i] = nil) or
-      (FLastContext[i].ThreadId <> AThreadId) or (FLastContext[i].StackFrame <> AStackFrame)
+      (FLastContext[i].LocationContext.ThreadId <> AThreadId) or
+      (FLastContext[i].LocationContext.StackFrame <> AStackFrame)
     )
   do
     dec(i);
@@ -1392,8 +1421,16 @@ begin
     exit;
   end;
 
-  DebugLn(DBG_VERBOSE, ['* FDwarfInfo.FindContext ', dbgs(Addr)]);
-  Result := FDwarfInfo.FindContext(AThreadId, AStackFrame, Addr);
+  DebugLn(DBG_VERBOSE, ['* FDwarfInfo.FindSymbolScope ', dbgs(Addr)]);
+  if FDwarfInfo.TargetInfo.bitness = b32 then
+    sa := 4
+  else
+    sa := 8;
+  Result := FDwarfInfo.FindSymbolScope(
+    TFpDbgSimpleLocationContext.Create(FMemManager, Addr, sa, AThreadId, AStackFrame),
+    Addr
+  );
+  Result.LocationContext.ReleaseReference;
 
   if Result = nil then begin
     debugln(DBG_VERBOSE, ['GetInfoContextForContext CTX NOT FOUND for ', AThreadId, ', ', AStackFrame]);
@@ -1414,7 +1451,7 @@ end;
 function TFpLldbDebugger.EvaluateExpression(AWatchValue: TWatchValue; AExpression: String;
   out AResText: String; out ATypeInfo: TDBGType; EvalFlags: TDBGEvaluateFlags): Boolean;
 var
-  Ctx: TFpDbgInfoContext;
+  Ctx: TFpDbgSymbolScope;
   PasExpr, PasExpr2: TFpPascalExpression;
   ResValue: TFpValue;
   s: String;
@@ -1461,12 +1498,12 @@ begin
     RepeatCnt := -1;
   end;
   if Ctx = nil then exit;
-debugln(['TFpLldbDebugger.EvaluateExpression ctx ', Ctx.Address]);
 
-  FMemManager.DefaultContext := Ctx;
+  FMemManager.DefaultContext := Ctx.LocationContext;
   FPrettyPrinter.AddressSize := ctx.SizeOfAddress;
   FPrettyPrinter.MemManager := ctx.MemManager;
 
+  LockUnLoadDwarf;
   PasExpr := TFpPascalExpression.Create(AExpression, Ctx);
   try
     if not IsWatchValueAlive then exit;
@@ -1491,6 +1528,12 @@ DebugLn(DBG_VERBOSE, [ErrorHandler.ErrorAsString(PasExpr.Error)]);
     if not IsWatchValueAlive then exit;
 
     ResValue := PasExpr.ResultValue;
+    if ResValue = nil then begin
+      AResText := 'Error';
+      if AWatchValue <> nil then
+        AWatchValue.Validity := ddsInvalid;
+      exit;
+    end;
 
     if (ResValue.Kind = skClass) and (ResValue.AsCardinal <> 0) and (defClassAutoCast in EvalFlags)
     then begin
@@ -1500,18 +1543,19 @@ DebugLn(DBG_VERBOSE, [ErrorHandler.ErrorAsString(PasExpr.Error)]);
         if FMemManager.ReadAddress(ClassAddr, SizeVal(Ctx.SizeOfAddress), CNameAddr) then begin
           if (FMemManager.ReadUnsignedInt(CNameAddr, SizeVal(1), NameLen)) then
             if NameLen > 0 then begin
-              SetLength(CastName, NameLen);
-              CNameAddr.Address := CNameAddr.Address + 1;
-              FMemManager.ReadMemory(CNameAddr, SizeVal(NameLen), @CastName[1]);
-              PasExpr2 := TFpPascalExpression.Create(CastName+'('+AExpression+')', Ctx);
-              PasExpr2.ResultValue;
-              if PasExpr2.Valid then begin
-                PasExpr.Free;
-                PasExpr := PasExpr2;
-                ResValue := PasExpr.ResultValue;
-              end
-              else
-                PasExpr2.Free;
+              if FMemManager.SetLength(CastName, NameLen) then begin
+                CNameAddr.Address := CNameAddr.Address + 1;
+                FMemManager.ReadMemory(CNameAddr, SizeVal(NameLen), @CastName[1]);
+                PasExpr2 := TFpPascalExpression.Create(CastName+'('+AExpression+')', Ctx);
+                PasExpr2.ResultValue;
+                if PasExpr2.Valid then begin
+                  PasExpr.Free;
+                  PasExpr := PasExpr2;
+                  ResValue := PasExpr.ResultValue;
+                end
+                else
+                  PasExpr2.Free;
+              end;
             end;
         end;
       end;
@@ -1578,6 +1622,7 @@ DebugLn(DBG_VERBOSE, [ErrorHandler.ErrorAsString(PasExpr.Error)]);
     PasExpr.Free;
     FMemManager.DefaultContext := nil;
     Ctx.ReleaseReference;
+    UnLockUnLoadDwarf;
   end;
 end;
 

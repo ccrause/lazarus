@@ -26,15 +26,13 @@ unit opkman_downloader;
 
 {$mode objfpc}{$H+}
 
-{$INCLUDE opkman_fpcdef.inc}
-
 interface
 
 uses
   Classes, SysUtils, fpjson, LazIDEIntf, md5,
   // OpkMan
   opkman_common, opkman_serializablepackages, opkman_const, opkman_options,
-  {$IFDEF FPC311}fphttpclient{$ELSE}opkman_httpclient{$ENDIF};
+  {$IF FPC_FULLVERSION>=30200}fphttpclient, opensslsockets{$ELSE}opkman_httpclient{$ENDIF};
 
 type
   TDownloadType = (dtJSON, dtPackage, dtUpdate);
@@ -92,6 +90,7 @@ type
     FSpeed: Integer;
     FStartTime: QWord;
     FElapsed: QWord;
+    FTick: Qword;
     FNeedToBreak: Boolean;
     FDownloadTo: String;
     FUPackageName: String;
@@ -295,7 +294,11 @@ begin
   FSpeed := Round(FTotPosTmp/FElapsed);
   if FSpeed > 0 then
     FRemaining := Round((FTotSize - FTotPosTmp)/FSpeed);
-  Synchronize(@DoOnPackageDownloadProgress);
+  if FElapsed >= FTick + 1 then
+  begin
+    FTick := FElapsed;
+    Synchronize(@DoOnPackageDownloadProgress);
+  end;
   Sleep(5);
 end;
 
@@ -309,7 +312,7 @@ begin
   Sleep(50);
   FErrMsg := '';
   FErrTyp := etNone;
-  if FDownloadType = dtJSON then //JSON
+  if FDownloadType = dtJSON then
   begin
     if not FNeedToBreak then
       Synchronize(@DoOnJSONProgress);

@@ -50,6 +50,7 @@ type
     bOptions: TButton;
     bSubmit: TButton;
     cbJSONForUpdates: TCheckBox;
+    cbOrphanedPackage: TCheckBox;
     edCategories: TEdit;
     edFPCCompatibility: TEdit;
     edSupportedWidgetset: TEdit;
@@ -60,6 +61,7 @@ type
     edSVNURL: TEdit;
     edHomePageURL: TEdit;
     lbCategory: TLabel;
+    lbExternalDependencies: TLabel;
     lbDownloadURL: TLabel;
     lbDisplayName: TLabel;
     lbSVNURL: TLabel;
@@ -74,6 +76,7 @@ type
     lbSupportedWidgetSet: TLabel;
     lbComDescr: TLabel;
     mComDescr: TMemo;
+    mExternalDependencies: TMemo;
     pnB: TPanel;
     pnButtons: TPanel;
     pnCategories: TPanel;
@@ -97,6 +100,7 @@ type
     procedure bHelpClick(Sender: TObject);
     procedure bOptionsClick(Sender: TObject);
     procedure bSubmitClick(Sender: TObject);
+    procedure cbOrphanedPackageClick(Sender: TObject);
     procedure edDisplayNameKeyPress(Sender: TObject; var Key: char);
     procedure edPackageDirAcceptDirectory(Sender: TObject; Var Value: String);
     procedure edPackageDirButtonClick(Sender: TObject);
@@ -194,6 +198,8 @@ type
     FDownloadURL: String;
     FSVNURL: String;
     FCommunityDescription: String;
+    FExternalDependencies: String;
+    FOrphanedPackage: Integer;
   end;
 
 procedure TCreateRepositoryPackagesFrm.FormCreate(Sender: TObject);
@@ -211,7 +217,8 @@ begin
   lbDownloadURL.Caption := rsCreateRepositoryPackageFrm_lbDownloadURL_Caption;
   lbSVNURL.Caption := rsCreateRepositoryPackageFrm_lbSVNURL_Caption;
   lbComDescr.Caption := rsMainFrm_VSTText_CommunityDescription + ':';
-
+  lbExternalDependencies.Caption := rsMainFrm_VSTText_ExternalDeps + ':';
+  cbOrphanedPackage.Caption := rsMainFrm_VSTText_OrphanedPackage1 + ' (' + rsMainFrm_VSTText_OrphanedPackage2 + ')';
   bHelp.Caption := rsCreateRepositoryPackageFrm_bHelp_Caption;
   bHelp.Hint := rsCreateRepositoryPackageFrm_bHelp_Hint;
   bOptions.Caption := rsCreateRepositoryPackageFrm_bOptions_Caption;
@@ -445,6 +452,40 @@ procedure TCreateRepositoryPackagesFrm.edPackageDirAcceptDirectory(
   Sender: TObject; Var Value: String);
 var
   PackageList: TStringList;
+
+  procedure GetData(ARootData: PData);
+  var
+    I: Integer;
+    ct4laz_name: String;
+  begin
+    ARootData^.FCategory := '';
+    ARootData^.FDisplayName := '';
+    ARootData^.FHomePageURL := '';
+    ARootData^.FDownloadURL := '';
+    ARootData^.FSVNURL := '';
+    ARootData^.FCommunityDescription := '';
+    ARootData^.FExternalDependencies := '';
+    ARootData^.FDataType := 0;
+    if ARootData^.FName = 'ct4laz' then
+      ct4laz_name := ExtractFileName(TPackageData(PackageList.Objects[0]).FPackageRelativePath);
+    for I := 0 to SerializablePackages.Count - 1 do
+    begin
+      if (SerializablePackages.Items[I].Name = ARootData^.FName) or ((ARootData^.FName = 'ct4laz') and (SerializablePackages.Items[I].Name = ct4laz_name)) then
+      begin
+        ARootData^.FCategory := SerializablePackages.Items[I].Category;
+        ARootData^.FDisplayName := SerializablePackages.Items[I].DisplayName;
+        ARootData^.FHomePageURL := SerializablePackages.Items[I].HomePageURL;
+        ARootData^.FDownloadURL := SerializablePackages.Items[I].DownloadURL;
+        ARootData^.FSVNURL := SerializablePackages.Items[I].SVNURL;
+        ARootData^.FCommunityDescription := SerializablePackages.Items[I].CommunityDescription;
+        ARootData^.FExternalDependencies := SerializablePackages.Items[I].ExternalDependecies;
+        ARootData^.FOrphanedPackage := SerializablePackages.Items[I].OrphanedPackage;
+        Break;
+      end;
+    end;
+  end;
+
+var
   I: Integer;
   Node, RootNode: PVirtualNode;
   Data, RootData: PData;
@@ -468,20 +509,16 @@ begin
         FVSTPackageData.NodeDataSize := SizeOf(TData);
         RootNode := FVSTPackages.AddChild(nil);
         RootNode^.CheckType := ctTriStateCheckBox;
+        RootNode^.CheckState := csCheckedNormal;
         RootData := FVSTPackages.GetNodeData(RootNode);
         RootData^.FName := TPackageData(PackageList.Objects[0]).FPackageBaseDir;
-        RootData^.FCategory := '';
-        RootData^.FDisplayName := '';
-        RootData^.FHomePageURL := '';
-        RootData^.FDownloadURL := '';
-        RootData^.FSVNURL := '';
-        RootData^.FCommunityDescription := '';
-        RootData^.FDataType := 0;
+        GetData(RootData);
         FPackageName := RootData^.FName;
         for I := 0 to PackageList.Count - 1 do
         begin
           Node := FVSTPackages.AddChild(RootNode);
           Node^.CheckType := ctTriStateCheckBox;
+          Node^.CheckState := csCheckedNormal;
           Data := FVSTPackages.GetNodeData(Node);
           Data^.FName := TPackageData(PackageList.Objects[I]).FName;
           Data^.FPackageBaseDir := TPackageData(PackageList.Objects[I]).FPackageBaseDir;
@@ -514,9 +551,13 @@ begin
     end;
   finally
     if CanGo then
-      ShowHideControls(2)
+    begin
+      ShowHideControls(2);
+      EnableDisableControls(True);
+    end
     else
-      ShowHideControls(0)
+      ShowHideControls(0);
+
   end;
 end;
 
@@ -688,6 +729,22 @@ begin
   fPackageZipper.StartZip(FPackageDir, FPackageFile);
 end;
 
+procedure TCreateRepositoryPackagesFrm.cbOrphanedPackageClick(Sender: TObject);
+var
+  Node: PVirtualNode;
+  Data: PData;
+begin
+  Node := FVSTPackages.GetFirstSelected;
+  if Node = nil then
+    Exit;
+  if FVSTPackages.GetNodeLevel(Node) <> 0 then
+    Exit;
+  Data := FVSTPackages.GetNodeData(Node);
+  Data^.FOrphanedPackage := Ord(cbOrphanedPackage.Checked);
+  FVSTPackages.ReinitNode(Node, False);
+  FVSTPackages.RepaintNode(Node);
+end;
+
 procedure TCreateRepositoryPackagesFrm.edDisplayNameKeyPress(Sender: TObject;
   var Key: char);
 begin
@@ -730,9 +787,22 @@ end;
 procedure TCreateRepositoryPackagesFrm.VSTPackagesGetImageIndex(
   Sender: TBaseVirtualTree; Node: PVirtualNode; Kind: TVTImageKind;
   Column: TColumnIndex; var Ghosted: Boolean; var ImageIndex: Integer);
+var
+  Data: PData;
 begin
   if Column = 0 then
-    ImageIndex := IMAGE_INDEX_MAP[FVSTPackages.GetNodeLevel(Node)];
+  begin
+    Data := FVSTPackages.GetNodeData(Node);
+    if FVSTPackages.GetNodeLevel(Node) = 0 then
+    begin
+      if Data^.FOrphanedPackage = 1 then
+        ImageIndex := 36
+      else
+        ImageIndex := 1;
+    end
+    else
+      ImageIndex := IMAGE_INDEX_MAP[FVSTPackages.GetNodeLevel(Node)];
+  end;
 end;
 
 procedure TCreateRepositoryPackagesFrm.SaveExtraInfo(const ANode: PVirtualNode);
@@ -748,6 +818,8 @@ begin
          Data^.FDownloadURL :=   edDownloadURL.Text;
          Data^.FSVNURL := edSVNURL.Text;
          Data^.FCommunityDescription := mComDescr.Text;
+         Data^.FExternalDependencies := mExternalDependencies.Text;
+         Data^.FOrphanedPackage := Ord(cbOrphanedPackage.Checked);
        end;
     1: begin
          Data^.FLazCompatibility := edLazCompatibility.Text;
@@ -797,6 +869,8 @@ begin
     edDownloadURL.Text := Data^.FDownloadURL;
     edSVNURL.Text := Data^.FSVNURL;
     mComDescr.Text := Data^.FCommunityDescription;
+    mExternalDependencies.Text := Data^.FExternalDependencies;
+    cbOrphanedPackage.Checked := Data^.FOrphanedPackage = 1;
   end
   else if Level = 1 then
   begin
@@ -1076,6 +1150,7 @@ begin
       MetaPkg.DownloadURL := RootData^.FDownloadURL;
       MetaPkg.SVNURL := RootData^.FSVNURL;
       MetaPkg.CommunityDescription := RootData^.FCommunityDescription;
+      MetaPkg.ExternalDependecies := RootData^.FExternalDependencies;
       Node := FVSTPackages.GetFirstChild(RootNode);
       while Assigned(Node) do
       begin

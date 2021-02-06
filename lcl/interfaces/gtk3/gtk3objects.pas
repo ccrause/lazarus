@@ -21,13 +21,13 @@ unit gtk3objects;
 interface
 
 uses
-  Classes, SysUtils, Types, FPCanvas,
+  Classes, SysUtils, Types, math, FPCanvas,
   // LazUtils
   LazUTF8, IntegerList, LazStringUtils,
   // LCL
   LCLType, LCLProc, Graphics,
   LazGtk3, LazGdk3, LazGObject2, LazGLib2, LazGdkPixbuf2,
-  LazPango1, LazPangoCairo1, LazCairo1;
+  LazPango1, LazPangoCairo1, LazCairo1, gtk3procs;
 
 type
   TGtk3DeviceContext = class;
@@ -50,8 +50,11 @@ type
   TGtk3ContextObject = class(TGtk3Object)
   private
     FShared: Boolean;
+    fContext:TGtk3DeviceContext;
   public
     constructor Create; override;
+    function Select(ACtx:TGtk3DeviceContext):TGtk3ContextObject;virtual;
+    function Get(szbuf:integer;pbuf:pointer):integer;virtual;abstract;
     property Shared: Boolean read FShared write FShared;
   end;
 
@@ -66,6 +69,8 @@ type
   public
     constructor Create(ACairo: Pcairo_t; AWidget: PGtkWidget = nil);
     constructor Create(ALogFont: TLogFont; const ALongFontName: String);
+    function Select(ACtx:TGtk3DeviceContext):TGtk3ContextObject;override;
+    function Get(szbuf:integer;pbuf:pointer):integer;override;
     destructor Destroy; override;
     procedure UpdateLogFont;
     property FontName: String read FFontName write FFontName;
@@ -79,14 +84,16 @@ type
   TGtk3Brush = class(TGtk3ContextObject)
   private
     FColor: TColor;
-    FContext: TGtk3DeviceContext;
     FStyle: LongWord;
     procedure SetColor(AValue: TColor);
     procedure SetStyle(AStyle:longword);
   public
     brush_pattern:pcairo_pattern_t;
+    pat_buf:pdword;
     LogBrush: TLogBrush;
     constructor Create; override;
+    function Select(ACtx:TGtk3DeviceContext):TGtk3ContextObject;override;
+    function Get(szbuf:integer;pbuf:pointer):integer;override;
     destructor Destroy;override;
     procedure UpdatePattern;
     property Color: TColor read FColor write SetColor;
@@ -105,7 +112,6 @@ type
     FStyle: TFPPenStyle;
     FWidth: Integer;
     FColor: TColor;
-    FContext: TGtk3DeviceContext;
     FIsExtPen: Boolean;
     procedure SetColor(AValue: TColor);
     procedure setCosmetic(b: Boolean);
@@ -113,6 +119,8 @@ type
   public
     LogPen: TLogPen;
     constructor Create; override;
+    function Select(ACtx:TGtk3DeviceContext):TGtk3ContextObject;override;
+    function Get(szbuf:integer;pbuf:pointer):integer;override;
     property Color: TColor read FColor write SetColor;
     property Context: TGtk3DeviceContext read FContext write FContext;
 
@@ -134,6 +142,10 @@ type
     property Handle: Pcairo_region_t read FHandle write FHandle;
     constructor Create(CreateHandle: Boolean); virtual; overload;
     constructor Create(CreateHandle: Boolean; X1,Y1,X2,Y2: Integer); virtual; overload;
+    constructor Create(X1,Y1,X2,Y2,nW,nH: Integer); virtual; overload;
+    constructor CreateEllipse(X1,Y1,X2,Y2: Integer); virtual; overload;
+    function Select(ACtx:TGtk3DeviceContext):TGtk3ContextObject;override;
+    function Get(szbuf:integer;pbuf:pointer):integer;override;
     destructor Destroy; override;
     function GetExtents: TRect;
     function ContainsRect(ARect: TRect): Boolean;
@@ -153,6 +165,8 @@ type
     constructor Create(vHandle: PGdkPixbuf); overload;
     constructor Create(AData: PByte; width: Integer; height: Integer; format: cairo_format_t; const ADataOwner: Boolean = False); overload;
     constructor Create(AData: PByte; width: Integer; height: Integer; bytesPerLine: Integer; format: cairo_format_t; const ADataOwner: Boolean = False); overload;
+    function Select(ACtx:TGtk3DeviceContext):TGtk3ContextObject;override;
+    function Get(szbuf:integer;pbuf:pointer):integer;override;
     destructor Destroy; override;
     procedure CopyFrom(AImage: PGdkPixbuf; x, y, w, h: integer);
     function height: Integer;
@@ -169,8 +183,15 @@ type
 
   { TGtk3Cursor }
 
-  TGtk3Cursor = class(TGtk3ContextObject)
-  // TODO
+  TGtk3Cursor = class(TGtk3Object)
+  private
+    fHandle:PGdkCursor;
+  public
+    constructor Create(ACur:integer);overload;
+    constructor Create(pixbuf:PGdkPixbuf;x,y:gint);overload;
+    constructor Create(img:TGtk3Image);overload;
+    destructor Destroy;override;
+    property Handle:PGdkCursor read fHandle;
   end;
 
   { TGtk3DeviceContext }
@@ -208,7 +229,7 @@ type
     procedure FillAndStroke;
   public
     CairoSurface: Pcairo_surface_t;
-    Widget: Pcairo_t;
+    pcr: Pcairo_t;
     Parent: PGtkWidget;
     Window: PGdkWindow;
     ParentPixmap: PGdkPixbuf;
@@ -243,7 +264,7 @@ type
     procedure fillRect(x, y, w, h: Integer; ABrush: HBRUSH); overload;
     procedure fillRect(x, y, w, h: Integer); overload;
     function RoundRect(X1, Y1, X2, Y2: Integer; RX, RY: Integer): Boolean;
-
+    function drawFocusRect(const aRect: TRect): boolean;
     function getBpp: integer;
     function getDepth: integer;
     function getDeviceSize: TPoint;
@@ -255,6 +276,7 @@ type
     function ResetClip: Integer;
     procedure TranslateCairoToDevice;
     procedure Translate(APoint: TPoint);
+    procedure set_antialiasing(aamode:boolean);
     property BkMode: Integer read FBkMode write FBkMode;
     property CanRelease: Boolean read FCanRelease write FCanRelease;
     property CurrentBrush: TGtk3Brush read FCurrentBrush write FCurrentBrush;
@@ -284,7 +306,7 @@ function ReplaceAmpersandsWithUnderscores(const S: string): string; inline;
 
 implementation
 
-uses gtk3int, gtk3procs;
+uses gtk3int,controls;
 
 const
   PixelOffset = 0.5; // Cairo API needs 0.5 pixel offset to not make blurry lines
@@ -301,30 +323,10 @@ var
 
   function create_stipple(stipple_data:pbyte;width,height:integer):pcairo_pattern_t;forward;
 
-  const COLOR_A_PRE = $3093BA52;
-  const COLOR_B_PRE = $30FFFFFF;
-  (*function PREMULTIPLY(argb:dword);inline                                                                          \
-        ((argb & 0xFF << 24) |                                                                         \
-         ((((argb & 0xFF << 16) >> 16) * ((argb & 0xFF << 24) >> 24) / 0xFF) << 16) |                  \
-         ((((argb & 0xFF << 8) >> 8) * ((argb & 0xFF << 24) >> 24) / 0xFF) << 8) |                     \
-         ((((argb & 0xFF << 0) >> 0) * ((argb & 0xFF << 24) >> 24) / 0xFF) << 0))
-  #define COLOR_A_PRE PREMULTIPLY (COLOR_A)
-  #define COLOR_B_PRE PREMULTIPLY (COLOR_B)
-  *)
+  const clr_A = $FF008000;//$3093BA52;
+  const clr_B = $FFFFFFFF;//$30FFFFFF;
+
   const
-       stipple_data: array[0..8 * 8-1] of dword = (
-            COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE,
-            COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE,
-            COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE,
-            COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE,
-            COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE,
-
-            COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE,
-            COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE,
-            COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE,
-            COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE, COLOR_A_PRE,
-            COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE, COLOR_B_PRE);
-
         (* the stipple patten should look like that
          *	    1 1 1 0  0 0 0 1
          *	    1 1 0 0  0 0 1 1
@@ -337,6 +339,83 @@ var
          *	    1 1 1 1  0 0 0 0
          *)
 
+       stipple_bdiag: array[0..8 * 8-1] of dword = (
+            clr_A, clr_A, clr_A, clr_B, clr_B, clr_B, clr_B, clr_A,
+            clr_A, clr_A, clr_B, clr_B, clr_B, clr_B, clr_A, clr_A,
+            clr_A, clr_B, clr_B, clr_B, clr_B, clr_A, clr_A, clr_A,
+            clr_B, clr_B, clr_B, clr_B, clr_A, clr_A, clr_A, clr_A,
+            //-----------------------------------------------------
+            clr_B, clr_B, clr_B, clr_A, clr_A, clr_A, clr_A, clr_B,
+            clr_B, clr_B, clr_A, clr_A, clr_A, clr_A, clr_B, clr_B,
+            clr_B, clr_A, clr_A, clr_A, clr_A, clr_B, clr_B, clr_B,
+            clr_A, clr_A, clr_A, clr_A, clr_B, clr_B, clr_B, clr_B);
+
+        stipple_fdiag: array[0..8 * 8-1] of dword = (
+            clr_A, clr_A, clr_A, clr_A, clr_B, clr_B, clr_B, clr_B,
+            clr_B, clr_A, clr_A, clr_A, clr_A, clr_B, clr_B, clr_B,
+            clr_B, clr_B, clr_A, clr_A, clr_A, clr_A, clr_B, clr_B,
+            clr_B, clr_B, clr_B, clr_A, clr_A, clr_A, clr_A, clr_B,
+            //-----------------------------------------------------
+            clr_B, clr_B, clr_B, clr_B, clr_A, clr_A, clr_A, clr_A,
+            clr_A, clr_B, clr_B, clr_B, clr_B, clr_A, clr_A, clr_A,
+            clr_A, clr_A, clr_B, clr_B, clr_B, clr_B, clr_A, clr_A,
+            clr_A, clr_A, clr_A, clr_B, clr_B, clr_B, clr_B, clr_A);
+
+
+
+       //bsHorizontal
+       stipple_horz: array[0..15] of dword = (
+          clr_B, clr_B, clr_B, clr_B,
+          clr_B, clr_B, clr_B, clr_B,
+          clr_B, clr_B, clr_B, clr_B,
+          clr_A, clr_A, clr_A, clr_A
+       );
+
+       stipple_vert: array[0..15] of dword = (
+          clr_A, clr_B, clr_B, clr_B,
+          clr_A, clr_B, clr_B, clr_B,
+          clr_A, clr_B, clr_B, clr_B,
+          clr_A, clr_B, clr_B, clr_B
+       );
+
+      (* , bsVertical, bsFDiagonal,
+                   bsBDiagonal, bsCross, bsDiagCross, bsImage, bsPattern);*)
+
+
+       stipple_cross0: array[0..8] of dword = (
+          clr_B, clr_A, clr_B,
+          clr_A, clr_A, clr_A,
+          clr_B, clr_A, clr_B
+       );
+
+       stipple_cross1: array[0..63] of dword = (
+          clr_B, clr_B, clr_B, clr_A, clr_A, clr_B, clr_B, clr_B,
+          clr_B, clr_B, clr_B, clr_A, clr_A, clr_B, clr_B, clr_B,
+          clr_B, clr_B, clr_B, clr_A, clr_A, clr_B, clr_B, clr_B,
+          clr_A, clr_A, clr_A, clr_A, clr_A, clr_A, clr_A, clr_A,
+          clr_A, clr_A, clr_A, clr_A, clr_A, clr_A, clr_A, clr_A,
+          clr_B, clr_B, clr_B, clr_A, clr_A, clr_B, clr_B, clr_B,
+          clr_B, clr_B, clr_B, clr_A, clr_A, clr_B, clr_B, clr_B,
+          clr_B, clr_B, clr_B, clr_A, clr_A, clr_B, clr_B, clr_B
+       );
+
+       stipple_dcross0: array[0..8] of dword = (
+          clr_A, clr_B, clr_A,
+          clr_B, clr_A, clr_B,
+          clr_A, clr_B, clr_A
+       );
+
+       stipple_dcross: array[0..63] of dword = (
+          clr_A, clr_B, clr_B, clr_B, clr_B, clr_B, clr_B, clr_A,
+          clr_A, clr_A, clr_B, clr_B, clr_B, clr_B, clr_A, clr_A,
+          clr_B, clr_A, clr_A, clr_B, clr_B, clr_A, clr_A, clr_B,
+          clr_B, clr_B, clr_A, clr_A, clr_A, clr_A, clr_B, clr_B,
+          //----------------------------------------------------
+          clr_B, clr_B, clr_B, clr_A, clr_A, clr_B, clr_B, clr_B,
+          clr_B, clr_B, clr_A, clr_A, clr_A, clr_A, clr_B, clr_B,
+          clr_B, clr_A, clr_A, clr_B, clr_B, clr_A, clr_A, clr_B,
+          clr_A, clr_A, clr_B, clr_B, clr_B, clr_B, clr_A, clr_A
+       );
 
 function Gtk3DefaultContext: TGtk3DeviceContext;
 begin
@@ -380,12 +459,52 @@ begin
   B := ((AColor shr 16) and $FF) / 255;
 end;
 
+{ TGtk3Cursor }
+
+constructor TGtk3Cursor.Create(ACur:integer);
+var gdk_cur:integer;
+begin
+  case ACur of
+  crArrow: gdk_cur:=GDK_ARROW;
+  else
+    gdk_cur:=GDK_ARROW;
+  end;
+
+  Fhandle:=TGdkCursor.new(gdk_cur);
+end;
+
+constructor TGtk3Cursor.Create(pixbuf: PGdkPixbuf;x,y:gint);
+begin
+  fHandle:=TGdkCursor.new_from_pixbuf(TGdkDisplay.get_default(),pixbuf,x,y);
+end;
+
+constructor TGtk3Cursor.Create(img: TGtk3Image);
+var w,h:gint;
+begin
+  inherited Create;
+  w:=img.width;
+  h:=img.height;
+  Create(img.Handle,w,h);
+end;
+
+destructor TGtk3Cursor.Destroy;
+begin
+  PGdkCursor(fHandle)^.unref();
+  inherited Destroy;
+end;
+
 { TGtk3ContextObject }
 
 constructor TGtk3ContextObject.Create;
 begin
   inherited Create;
   FShared := False;
+end;
+
+function TGtk3ContextObject.Select(ACtx:TGtk3DeviceContext): TGtk3ContextObject;
+begin
+  DbgS('Default context object selected, please implement');
+  Result:=nil;
 end;
 
 { TGtk3Region }
@@ -407,6 +526,102 @@ begin
   ARect.width := x2 - x1;
   ARect.height := y2 - y1;
   FHandle := cairo_region_create_rectangle(@ARect);
+end;
+
+constructor TGtk3Region.Create(X1,Y1,X2,Y2,nW,nH: Integer);
+var
+  ASurface: pcairo_surface_t;
+  cr:Pcairo_t;
+  rr:double;
+  w,h:integer;
+begin
+  inherited Create;
+  FHandle := nil;
+  w:=x2-x1;
+  h:=y2-y1;
+  rr:=nW/2;
+
+  ASurface := cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+  cr:=cairo_create(ASurface);
+  try
+    cairo_new_path(cr);
+
+    cairo_move_to(cr,x1,y2-rr);
+    cairo_line_to(cr,x1,y1+rr);
+    cairo_arc(cr,x1 + rr, y1 + rr, rr, pi, 3*pi/2);
+    cairo_line_to(cr,x2-rr,y1);
+    cairo_arc(cr,x2 - rr, y1 + rr, rr, 3*pi/2, 0);
+    cairo_line_to(cr,x2,y2-rr);
+    cairo_arc(cr,x2 - rr, y2 - rr, rr, 0, pi/2);
+    cairo_line_to(cr,x1-rr,y2);
+    cairo_arc(cr,x1 + rr, y2 - rr, rr, pi/2, pi);
+
+    cairo_close_path(cr);
+    cairo_set_source_rgba(cr,1,1,1,1);
+    cairo_fill_preserve(cr);
+
+    FHandle := gdk_cairo_region_create_from_surface(ASurface);
+  finally
+    cairo_destroy(cr);
+    cairo_surface_destroy(ASurface);
+  end;
+end;
+
+constructor TGtk3Region.CreateEllipse(X1,Y1,X2,Y2: Integer);
+var
+  ASurface: pcairo_surface_t;
+  cr:Pcairo_t;
+  rr:double;
+  w,h:integer;
+  save_matrix:cairo_matrix_t;
+begin
+  inherited Create;
+  FHandle := nil;
+  w:=x2-x1;
+  h:=y2-y1;
+
+  ASurface := cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+  cr:=cairo_create(ASurface);
+  try
+    cairo_save(cr);
+    try
+      cairo_get_matrix(cr, @save_matrix);
+      cairo_translate (cr, x1 + w / 2.0 + PixelOffset, y1 + h / 2.0 + PixelOffset);
+      cairo_scale (cr, w / 2.0, h / 2.0);
+      cairo_new_path(cr);
+      cairo_arc
+          (
+            (*cr =*) cr,
+            (*xc =*) 0,
+            (*yc =*) 0,
+            (*radius =*) 1,
+            (*angle1 =*) 0,
+            (*angle2 =*) 2 * Pi
+          );
+      cairo_close_path(cr);
+      cairo_set_source_rgba(cr,1,1,1,1);
+      cairo_fill_preserve(cr);
+    finally
+      cairo_restore(cr);
+    end;
+    FHandle := gdk_cairo_region_create_from_surface(ASurface);
+  finally
+    cairo_destroy(cr);
+    cairo_surface_destroy(ASurface);
+  end;
+end;
+
+function TGtk3Region.Select(ACtx: TGtk3DeviceContext): TGtk3ContextObject;
+begin
+  fContext:=ACtx;
+  if not Assigned(fContext) then exit(nil);
+  fContext.setClipRegion(Self);
+  Result:=Self;
+end;
+
+function TGtk3Region.Get(szbuf: integer; pbuf: pointer): integer;
+begin
+  Result:=0;
 end;
 
 destructor TGtk3Region.Destroy;
@@ -592,6 +807,22 @@ begin
   g_object_unref(AContext);
 end;
 
+function TGtk3Font.Select(ACtx:TGtk3DeviceContext): TGtk3ContextObject;
+begin
+  fContext:=ACtx;
+  if not Assigned(fContext) then exit(nil);
+  Result := fContext.CurrentFont;
+  fContext.CurrentFont:= Self;
+end;
+
+function TGtk3Font.Get(szbuf: integer; pbuf: pointer): integer;
+begin
+  Result:=sizeof(Self.LogFont);
+  if pbuf=nil then exit;
+  Self.UpdateLogFont;
+  move(LogFont,pbuf^,min(szbuf,Result));
+end;
+
 destructor TGtk3Font.Destroy;
 begin
   if Assigned(FLayout) then
@@ -759,6 +990,19 @@ begin
   end;
 end;
 
+function TGtk3Image.Select(ACtx: TGtk3DeviceContext): TGtk3ContextObject;
+begin
+  fContext:=ACtx;
+  if not Assigned(ACtx) then exit(nil);
+  Result := fContext.CurrentImage;
+  fContext.SetImage(Self);
+end;
+
+function TGtk3Image.Get(szbuf: integer; pbuf: pointer): integer;
+begin
+  Result:=0;
+end;
+
 destructor TGtk3Image.Destroy;
 begin
   if FHandle <> nil then
@@ -845,8 +1089,8 @@ var
 begin
   FColor := AValue;
   ColorToCairoRGB(FColor, ARed, AGreen, ABlue);
-  if Assigned(FContext) and Assigned(FContext.Widget) then
-    cairo_set_source_rgb(FContext.Widget, ARed, AGreen, ABlue);
+  if Assigned(FContext) and Assigned(FContext.pcr) then
+    cairo_set_source_rgb(FContext.pcr, ARed, AGreen, ABlue);
 end;
 
 constructor TGtk3Pen.Create;
@@ -864,15 +1108,30 @@ begin
   FPenMode := pmCopy; // default pen mode
 end;
 
+function TGtk3Pen.Select(ACtx:TGtk3DeviceContext): TGtk3ContextObject;
+begin
+  fContext:=ACtx;
+  if not Assigned(fContext) then exit(nil);
+  Result := FContext.CurrentPen;
+  fContext.CurrentPen := Self;
+end;
+
+function TGtk3Pen.Get(szbuf: integer; pbuf: pointer): integer;
+begin
+  Result:=sizeof(LogPen);
+  if pbuf=nil then exit;
+  move(LogPen,pbuf^,min(result,szbuf));
+end;
+
 procedure TGtk3Pen.setCosmetic(b: Boolean);
 begin
   FCosmetic := B;
-  if Assigned(FContext) and Assigned(FContext.Widget) then
+  if Assigned(FContext) and Assigned(FContext.pcr) then
   begin
     if b then
-      cairo_set_line_width(FContext.Widget, 0)
+      cairo_set_line_width(FContext.pcr, 0)
     else
-      cairo_set_line_width(FContext.Widget, 1);
+      cairo_set_line_width(FContext.pcr, 1);
   end;
 end;
 
@@ -880,7 +1139,7 @@ procedure TGtk3Pen.setWidth(p1: Integer);
 begin
   FWidth := p1;
   if Assigned(FContext) then
-    cairo_set_line_width(FContext.Widget, p1);
+    cairo_set_line_width(FContext.pcr, p1);
 end;
 
 { TGtk3Brush }
@@ -892,7 +1151,7 @@ begin
   FColor := AValue;
   ColorToCairoRGB(FColor, ARed, AGreen, ABlue);
   if Assigned(FContext) then
-    cairo_set_source_rgb(FContext.Widget, ARed, AGreen, ABlue);
+    cairo_set_source_rgb(FContext.pcr, ARed, AGreen, ABlue);
 end;
 
 procedure TGtk3Brush.SetStyle(AStyle: longword);
@@ -905,26 +1164,101 @@ end;
 constructor TGtk3Brush.Create;
 begin
   inherited Create;
-  {$note IMPORTANT TODO: use cairo_pattern_t for brush }
-  // cairo_pattern_create_for_surface();
-  FContext := nil;
   FColor := clNone;
   FillChar(LogBrush, SizeOf(TLogBrush), #0);
+end;
+
+function TGtk3Brush.Select(ACtx:TGtk3DeviceContext): TGtk3ContextObject;
+begin
+  fContext:=ACtx;
+  if not Assigned(fContext) then exit(nil);
+  Result := fContext.CurrentBrush;
+  Self.UpdatePattern;
+  fContext.CurrentBrush := Self;
+end;
+
+function TGtk3Brush.Get(szbuf: integer; pbuf: pointer): integer;
+begin
+  Result:=sizeof(LogBrush);
+  if pbuf=nil then exit;
+  move(LogBrush,pbuf^,min(Result,szbuf));
 end;
 
 destructor TGtk3Brush.Destroy;
 begin
   if Assigned(brush_pattern) then
     cairo_pattern_destroy(brush_pattern);
+  if Assigned(pat_buf) then
+  freeandnil(pat_buf);
   inherited Destroy;
 end;
 
 procedure TGtk3Brush.UpdatePattern;
+var
+  w,h,i,j:integer;
+  clr:dword;
+  rgb:array[0..3] of byte absolute clr;
+  pat_sample,psrc,pdst:pdword;
 begin
+  if Self.LogBrush.lbStyle<>BS_HATCHED then exit;
+
   if Assigned(Self.brush_pattern) then
+  begin
      cairo_pattern_destroy(brush_pattern);
-  self.brush_pattern:=create_stipple(@stipple_data,8,8); // this stipple_data is 8x8
+     freeandnil(pat_buf);
+  end;
+  case TBrushStyle(Self.LogBrush.lbHatch+ord(bsHorizontal)) of
+  bsHorizontal:
+    begin
+      w:=4; h:=4;
+      pat_sample:=@stipple_horz;
+    end;
+  bsVertical:
+    begin
+      w:=4; h:=4;
+      pat_sample:=@stipple_vert;
+    end;
+  bsFDiagonal:
+    begin
+      w:=8; h:=8;
+      pat_sample:=@stipple_fdiag;
+    end;
+  bsBDiagonal:
+    begin
+      w:=8; h:=8;
+      pat_sample:=@stipple_bdiag;
+    end;
+  bsCross:
+    begin
+      w:=8; h:=8;
+      pat_sample:=@stipple_cross1;
+    end;
+  bsDiagCross:
+    begin
+      w:=8; h:=8;
+      pat_sample:=@stipple_dcross;
+    end;
+  else
+    exit
+  end;
+  psrc:=pat_sample;
+  getmem(pat_buf,w*h*sizeof(dword));
+  pdst:=pat_buf;
+  clr:=ColorToRgb(Self.Color);
+  for i:=0 to h-1 do
+  for j:=0 to w-1 do
+  begin
+    case psrc^ of
+    clr_A: pdst^:=$ff000000 or (rgb[0] shl 16) or (rgb[1] shl 8) or (rgb[2]);
+    clr_B: pdst^:=$ffffffff;
+    end;
+    inc(psrc); inc(pdst);
+  end;
+  {GTK3 states the buffer must exist, until image that uses the buffer - destroyed}
+  brush_pattern:=create_stipple(PByte(pat_buf),w,w);
 end;
+
+
 
 function create_stipple(stipple_data:pbyte;width,height:integer):pcairo_pattern_t;
 var
@@ -948,7 +1282,7 @@ function TGtk3DeviceContext.GetOffset: TPoint;
 var
   dx,dy: Double;
 begin
-  cairo_surface_get_device_offset(cairo_get_target(Widget), @dx, @dy);
+  cairo_surface_get_device_offset(cairo_get_target(pcr), @dx, @dy);
   Result := Point(Round(dx), Round(dy));
 end;
 
@@ -972,7 +1306,7 @@ var
 begin
   dx := AValue.X;
   dy := AValue.Y;
-  cairo_surface_set_device_offset(cairo_get_target(Widget), dx, dy);
+  cairo_surface_set_device_offset(cairo_get_target(pcr), dx, dy);
 end;
 
 procedure TGtk3DeviceContext.setPen(AValue: TGtk3Pen);
@@ -1021,7 +1355,7 @@ begin
   if Self.FCurrentBrush.Style<>0 then
   begin
     if Assigned(Self.FCurrentBrush.brush_pattern) then
-    cairo_set_source(Widget,Self.FCurrentBrush.brush_pattern);
+    cairo_set_source(pcr,Self.FCurrentBrush.brush_pattern);
   end;
 end;
 
@@ -1038,7 +1372,7 @@ end;
 procedure TGtk3DeviceContext.ApplyPen;
   procedure SetDash(d: array of double);
   begin
-    cairo_set_dash(Widget, @d, High(d)+1, 0);
+    cairo_set_dash(pcr, @d, High(d)+1, 0);
   end;
 var
   cap: cairo_line_cap_t;
@@ -1048,15 +1382,15 @@ begin
   case FCurrentPen.Mode of
     pmBlack: begin
       SetSourceColor(clBlack);
-      cairo_set_operator(Widget, CAIRO_OPERATOR_OVER);
+      cairo_set_operator(pcr, CAIRO_OPERATOR_OVER);
     end;
     pmWhite: begin
       SetSourceColor(clWhite);
-      cairo_set_operator(Widget, CAIRO_OPERATOR_OVER);
+      cairo_set_operator(pcr, CAIRO_OPERATOR_OVER);
     end;
-    pmCopy: cairo_set_operator(Widget, CAIRO_OPERATOR_OVER);
-    pmXor: cairo_set_operator(Widget, CAIRO_OPERATOR_XOR);
-    pmNotXor: cairo_set_operator(Widget, CAIRO_OPERATOR_XOR);
+    pmCopy: cairo_set_operator(pcr, CAIRO_OPERATOR_OVER);
+    pmXor: cairo_set_operator(pcr, CAIRO_OPERATOR_XOR);
+    pmNotXor: cairo_set_operator(pcr, CAIRO_OPERATOR_XOR);
     {pmNop,
     pmNot,
     pmCopy,
@@ -1070,27 +1404,27 @@ begin
     pmMask,
     pmNotMask,}
     else
-      cairo_set_operator(Widget, CAIRO_OPERATOR_OVER);
+      cairo_set_operator(pcr, CAIRO_OPERATOR_OVER);
   end;
 
   if FCurrentPen.Cosmetic then
-    cairo_set_line_width(Widget, 1.0)
+    cairo_set_line_width(pcr, 1.0)
   else
   begin
     w := FCurrentPen.Width;
     if w = 0 then
       w := 0.5;
-    cairo_set_line_width(Widget, w {* ScaleX}); //line_width is diameter of the pen circle
+    cairo_set_line_width(pcr, w {* ScaleX}); //line_width is diameter of the pen circle
   end;
 
   case FCurrentPen.Style of
-    psSolid: cairo_set_dash(Widget, nil, 0, 0);
+    psSolid: cairo_set_dash(pcr, nil, 0, 0);
     psDash: SetDash(Dash_Dash);
     psDot: SetDash(Dash_Dot);
     psDashDot: SetDash(Dash_DashDot);
     psDashDotDot: SetDash(Dash_DashDotDot);
   else
-    cairo_set_dash(Widget, nil, 0, 0);
+    cairo_set_dash(pcr, nil, 0, 0);
   end;
 
   case FCurrentPen.EndCap of
@@ -1105,12 +1439,12 @@ begin
     psDash, psDot, psDashDot, psDashDotDot:
       cap := CAIRO_LINE_CAP_BUTT
   end;
-  cairo_set_line_cap(Widget, cap);
+  cairo_set_line_cap(pcr, cap);
 
   case FCurrentPen.JoinStyle of
-    pjsRound: cairo_set_line_join(Widget, CAIRO_LINE_JOIN_ROUND);
-    pjsBevel: cairo_set_line_join(Widget, CAIRO_LINE_JOIN_BEVEL);
-    pjsMiter: cairo_set_line_join(Widget, CAIRO_LINE_JOIN_MITER);
+    pjsRound: cairo_set_line_join(pcr, CAIRO_LINE_JOIN_ROUND);
+    pjsBevel: cairo_set_line_join(pcr, CAIRO_LINE_JOIN_BEVEL);
+    pjsMiter: cairo_set_line_join(pcr, CAIRO_LINE_JOIN_MITER);
   end;
 end;
 
@@ -1119,6 +1453,7 @@ constructor TGtk3DeviceContext.Create(AWidget: PGtkWidget;
 var
   W: gint;
   H: gint;
+  ACairo:pcairo_t;
   ARect: TGdkRectangle;
   AWindow: PGdkWindow;
   x: gint;
@@ -1146,15 +1481,22 @@ begin
 
   if AWidget = nil then
   begin
-    AWindow := gdk_get_default_root_window;
+   (* AWindow := gdk_get_default_root_window;
     AWindow^.get_geometry(@x, @y, @w, @h);
     w:=1; h:=1;
     // ParentPixmap := gdk_pixbuf_get_from_window(AWindow, x, y, w, h);
     // Widget := gdk_cairo_create(AWindow);
     // gdk_cairo_set_source_pixbuf(Widget, ParentPixmap, 0, 0);
-    CairoSurface := cairo_image_surface_create(CAIRO_FORMAT_RGB24, w, h);
-    Widget := cairo_create(CairoSurface);
-    ParentPixmap := gdk_pixbuf_get_from_surface(CairoSurface, 0, 0, 1, 1);
+    //CairoSurface := cairo_image_surface_create(CAIRO_FORMAT_RGB24, w, h);
+    CairoSurface := cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+    Widget := cairo_create(CairoSurface);   *)
+
+    ACairo := gdk_cairo_create(gdk_get_default_root_window);
+    gdk_cairo_get_clip_rectangle(ACairo, @ARect);
+    CairoSurface := cairo_image_surface_create(CAIRO_FORMAT_ARGB32, ARect.width, ARect.height);
+    pcr := cairo_create(CairoSurface);
+
+    ParentPixmap := gdk_pixbuf_get_from_surface(CairoSurface, 0, 0, ARect.width, ARect.height);
     FOwnsSurface := True;
   end else
   begin
@@ -1166,18 +1508,18 @@ begin
       H := gtk_widget_get_allocated_height(AWidget);
       if W <= 0 then W := 1;
       if H <= 0 then H := 1;
-      Widget := gdk_cairo_create(gtk_widget_get_window(AWidget));
+      pcr := gdk_cairo_create(gtk_widget_get_window(AWidget));
     end else
     begin
       W := gtk_widget_get_allocated_width(AWidget);
       H := gtk_widget_get_allocated_height(AWidget);
       if W <= 0 then W := 1;
       if H <= 0 then H := 1;
-      Widget := gdk_cairo_create(gtk_widget_get_window(AWidget));
+      pcr := gdk_cairo_create(gtk_widget_get_window(AWidget));
     end;
   end;
   if not FOwnsSurface then
-    CairoSurface := cairo_get_target(Widget);
+    CairoSurface := cairo_get_target(pcr);
   CreateObjects;
   (*
   FRopMode := R2_COPYPEN;
@@ -1208,12 +1550,12 @@ begin
   FCanRelease := False;
   FOwnsCairo := True;
   FCurrentTextColor := clBlack;
-  AWindow^.get_geometry(@x, @y, @w, @h);
+  //AWindow^.get_geometry(@x, @y, @w, @h);
   // ParentPixmap := gdk_pixbuf_get_from_window(AWindow, x, y, w, h);
-  Widget := gdk_cairo_create(AWindow);
+  pcr := gdk_cairo_create(AWindow);
   // gdk_cairo_set_source_pixbuf(Widget, ParentPixmap, 0, 0);
-  gdk_cairo_set_source_window(Widget, AWindow, 0, 0);
-  CairoSurface := cairo_get_target(Widget);
+  gdk_cairo_set_source_window(pcr, AWindow, 0, 0);
+  CairoSurface := cairo_get_target(pcr);
   CreateObjects;
 end;
 
@@ -1237,8 +1579,8 @@ begin
   FCurrentTextColor := clBlack;
   gdk_cairo_get_clip_rectangle(ACairo, @AGdkRect);
   FvClipRect := RectFromGdkRect(AGdkRect);
-  Widget := ACairo;
-  CairoSurface := cairo_get_target(Widget);
+  pcr := ACairo;
+  CairoSurface := cairo_get_target(pcr);
   CreateObjects;
 end;
 
@@ -1248,14 +1590,14 @@ begin
     WriteLn('TGtk3DeviceContext.Destroy ',dbgHex(PtrUInt(Self)));
   {$endif}
   DeleteObjects;
-  if FOwnsCairo and (Widget <> nil) then
-    cairo_destroy(Widget);
+  if FOwnsCairo and (pcr <> nil) then
+    cairo_destroy(pcr);
   if (ParentPixmap <> nil) then
     g_object_unref(ParentPixmap);
   if FOwnsSurface and (CairoSurface <> nil) then
     cairo_surface_destroy(CairoSurface);
   Parent := nil;
-  Widget := nil;
+  pcr := nil;
   ParentPixmap := nil;
   CairoSurface := nil;
   Window := nil;
@@ -1278,12 +1620,12 @@ begin
   FPen.Color := clBlack;
   FCurrentPen := FPen;
   FCurrentBrush := FBrush;
-  FFont := TGtk3Font.Create(Widget, Parent);
+  FFont := TGtk3Font.Create(pcr, Parent);
   FCurrentFont := FFont;
   FvImage := TGtk3Image.Create(nil, 1, 1, 8, CAIRO_FORMAT_ARGB32);
   FCurrentImage := FvImage;
 
-  cairo_get_matrix(Widget, @Matrix);
+  cairo_get_matrix(pcr, @Matrix);
   // widget with menu or other non-client exclusions have offset in trasform matrix
   fncOrigin:=Point(round(Matrix.x0),round(Matrix.y0));
 end;
@@ -1304,10 +1646,10 @@ procedure TGtk3DeviceContext.drawPixel(x, y: Integer; AColor: TColor);
 // Seems that painting line from (a-1, b-1) to (a,b) gives one pixel
 begin
   SetSourceColor(AColor);
-  cairo_set_line_width(Widget, 1);
-  cairo_move_to(Widget, x - PixelOffset, y - PixelOffset);
-  cairo_line_to(Widget, x + PixelOffset, y + PixelOffset);
-  cairo_stroke(Widget);
+  cairo_set_line_width(pcr, 1);
+  cairo_move_to(pcr, x - PixelOffset, y - PixelOffset);
+  cairo_line_to(pcr, x + PixelOffset, y + PixelOffset);
+  cairo_stroke(pcr);
 end;
 
 function TGtk3DeviceContext.getPixel(x, y: Integer): TColor;
@@ -1327,24 +1669,24 @@ end;
 
 procedure TGtk3DeviceContext.drawRect(x1, y1, w, h: Integer; const AFill, ABorder: Boolean);
 begin
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
-    cairo_rectangle(Widget, x1 + PixelOffset, y1 + PixelOffset, w - 1, h - 1);
+    cairo_rectangle(pcr, x1 + PixelOffset, y1 + PixelOffset, w - 1, h - 1);
 
     if AFill then
     begin
       ApplyBrush;
-      cairo_fill_preserve(Widget);
+      cairo_fill_preserve(pcr);
     end;
     if ABorder then
     begin
       ApplyPen;
-      cairo_stroke(Widget);
+      cairo_stroke(pcr);
     end;
 
-    cairo_new_path(Widget);
+    cairo_new_path(pcr);
   finally
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
 end;
 
@@ -1353,7 +1695,8 @@ begin
   RoundRect(x, y, w, h, rx, ry);
 end;
 
-procedure TGtk3DeviceContext.drawText(X, Y: Integer; AText: PChar; ALen: Integer);
+procedure TGtk3DeviceContext.drawText(x, y: Integer; AText: PChar; ALen: Integer
+  );
 var
   R, G, B: Double;
   gColor: TGdkColor;
@@ -1362,14 +1705,14 @@ var
   UseBack: boolean;
   ornt:integer;
 begin
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
-    cairo_move_to(Widget, X, Y);
+    cairo_move_to(pcr, X, Y);
     ornt := Self.FCurrentFont.FLogFont.lfOrientation;
     if ornt<>0 then
-      cairo_rotate(Widget, - pi * (ornt / 10)/180);
-    ColorToCairoRGB(TColor(CurrentTextColor), R, G, B);
-    cairo_set_source_rgb(Widget, R, G, B);
+      cairo_rotate(pcr, - pi * (ornt / 10)/180);
+    ColorToCairoRGB(ColorToRgb(TColor(CurrentTextColor)), R, G, B);
+    cairo_set_source_rgb(pcr, R, G, B);
 
     FCurrentFont.Layout^.set_text(AText, ALen);
 
@@ -1383,7 +1726,7 @@ begin
       FCurrentFont.Layout^.set_attributes(AttrList);
     end;
 
-    pango_cairo_show_layout(Widget, FCurrentFont.Layout);
+    pango_cairo_show_layout(pcr, FCurrentFont.Layout);
 
     if UseBack then
     begin
@@ -1391,7 +1734,7 @@ begin
       pango_attribute_destroy(Attr);
     end;
   finally
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
 end;
 
@@ -1399,37 +1742,37 @@ procedure TGtk3DeviceContext.drawEllipse(x, y, w, h: Integer; AFill, ABorder: Bo
 var
   save_matrix:cairo_matrix_t;
 begin
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
-    cairo_get_matrix(Widget, @save_matrix);
-    cairo_translate (Widget, x + w / 2.0 + PixelOffset, y + h / 2.0 + PixelOffset);
-    cairo_scale (Widget, w / 2.0, h / 2.0);
-    cairo_new_path(Widget);
+    cairo_get_matrix(pcr, @save_matrix);
+    cairo_translate (pcr, x + w / 2.0 + PixelOffset, y + h / 2.0 + PixelOffset);
+    cairo_scale (pcr, w / 2.0, h / 2.0);
+    cairo_new_path(pcr);
     cairo_arc
         (
-          (*cr =*) Widget,
+          (*cr =*) pcr,
           (*xc =*) 0,
           (*yc =*) 0,
           (*radius =*) 1,
           (*angle1 =*) 0,
           (*angle2 =*) 2 * Pi
         );
-    cairo_close_path(Widget);
+    cairo_close_path(pcr);
     if AFill then
     begin
       ApplyBrush;
-      cairo_fill_preserve(Widget);
+      cairo_fill_preserve(pcr);
     end;
   finally
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
   if ABorder then
   begin
     ApplyPen;
-    cairo_stroke(Widget);
+    cairo_stroke(pcr);
   end;
   //if ABorder=false, need to clear current path
-  cairo_new_path(Widget);
+  cairo_new_path(pcr);
 end;
 
 procedure TGtk3DeviceContext.drawSurface(targetRect: PRect;
@@ -1441,21 +1784,21 @@ begin
   {$IFDEF VerboseGtk3DeviceContext}
   DebugLn('TGtk3DeviceContext.DrawSurface ');
   {$ENDIF}
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
     with targetRect^ do
-      cairo_rectangle(Widget, Left + PixelOffset, Top + PixelOffset, Right - Left, Bottom - Top);
-    cairo_set_source_surface(Widget, Surface, 0, 0);
+      cairo_rectangle(pcr, Left + PixelOffset, Top + PixelOffset, Right - Left, Bottom - Top);
+    cairo_set_source_surface(pcr, Surface, 0, 0);
     cairo_matrix_init_identity(@M);
     cairo_matrix_translate(@M, SourceRect^.Left, SourceRect^.Top);
     cairo_matrix_scale(@M,  (sourceRect^.Right-sourceRect^.Left) / (targetRect^.Right-targetRect^.Left),
         (sourceRect^.Bottom-sourceRect^.Top) / (targetRect^.Bottom-targetRect^.Top));
     cairo_matrix_translate(@M, -targetRect^.Left, -targetRect^.Top);
-    cairo_pattern_set_matrix(cairo_get_source(Widget), @M);
-    cairo_clip(Widget);
-    cairo_paint(Widget);
+    cairo_pattern_set_matrix(cairo_get_source(pcr), @M);
+    cairo_clip(pcr);
+    cairo_paint(pcr);
   finally
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
 end;
 
@@ -1469,19 +1812,19 @@ begin
   {$IFDEF VerboseGtk3DeviceContext}
   DebugLn('TGtk3DeviceContext.DrawImage ');
   {$ENDIF}
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
     // pm := Image;
     // AData := PByte(gdk_pixbuf_get_pixels(pm));
     // ASurface := cairo_image_surface_create_for_data(AData, CAIRO_FORMAT_ARGB32, gdk_pixbuf_get_width(pm), gdk_pixbuf_get_height(pm), gdk_pixbuf_get_rowstride(pm));
     // cairo_set_source_surface(Widget, ASurface, targetRect^.Left, targetRect^.Top);
-    gdk_cairo_set_source_pixbuf(Widget, Image, 0, 0);
+    gdk_cairo_set_source_pixbuf(pcr, Image, 0, 0);
     with targetRect^ do
-      cairo_rectangle(Widget, Left + PixelOffset, Top + PixelOffset, Right - Left, Bottom - Top);
-    cairo_paint(Widget);
+      cairo_rectangle(pcr, Left + PixelOffset, Top + PixelOffset, Right - Left, Bottom - Top);
+    cairo_paint(pcr);
   finally
     // cairo_surface_destroy(ASurface);
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
 end;
 
@@ -1493,23 +1836,26 @@ begin
   {$IFDEF VerboseGtk3DeviceContext}
   DebugLn('TGtk3DeviceContext.DrawImage ');
   {$ENDIF}
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
-    gdk_cairo_set_source_pixbuf(Widget, Image, 0, 0);
+    gdk_cairo_set_source_pixbuf(pcr, Image, 0, 0);
     with targetRect^ do
-      cairo_rectangle(Widget, Left + PixelOffset, Top + PixelOffset, Right - Left, Bottom - Top);
+      cairo_rectangle(pcr, Left + PixelOffset, Top + PixelOffset, Right - Left, Bottom - Top);
+
+    cairo_set_operator (pcr, CAIRO_OPERATOR_OVER);
+
 
     cairo_matrix_init_identity(@M);
     cairo_matrix_translate(@M, SourceRect^.Left, SourceRect^.Top);
     cairo_matrix_scale(@M,  (sourceRect^.Right-sourceRect^.Left) / (targetRect^.Right-targetRect^.Left),
         (sourceRect^.Bottom-sourceRect^.Top) / (targetRect^.Bottom-targetRect^.Top));
     cairo_matrix_translate(@M, -targetRect^.Left, -targetRect^.Top);
-    cairo_pattern_set_matrix(cairo_get_source(Widget), @M);
+    cairo_pattern_set_matrix(cairo_get_source(pcr), @M);
     //cairo_fill (Widget);
-    cairo_clip(Widget);
-    cairo_paint(Widget);
+    cairo_clip(pcr);
+    cairo_paint(pcr);
   finally
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
 end;
 
@@ -1523,15 +1869,15 @@ begin
   {$IFDEF VerboseGtk3DeviceContext}
   DebugLn('TGtk3DeviceContext.DrawPixmap ');
   {$ENDIF}
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
     AData := PByte(gdk_pixbuf_get_pixels(pm));
     ASurface := cairo_image_surface_create_for_data(AData, CAIRO_FORMAT_ARGB32, gdk_pixbuf_get_width(pm), gdk_pixbuf_get_height(pm), gdk_pixbuf_get_rowstride(pm));
-    cairo_set_source_surface(Widget, ASurface, sr^.Left, sr^.Top);
-    cairo_paint(Widget);
+    cairo_set_source_surface(pcr, ASurface, sr^.Left, sr^.Top);
+    cairo_paint(pcr);
   finally
     cairo_surface_destroy(ASurface);
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
 end;
 
@@ -1539,15 +1885,15 @@ procedure TGtk3DeviceContext.drawPolyLine(P: PPoint; NumPts: Integer);
 var
   i: Integer;
 begin
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
     ApplyPen;
-    cairo_move_to(Widget, P[0].X+PixelOffset, P[0].Y+PixelOffset);
+    cairo_move_to(pcr, P[0].X+PixelOffset, P[0].Y+PixelOffset);
     for i := 1 to NumPts-1 do
-      cairo_line_to(Widget, P[i].X+PixelOffset, P[i].Y+PixelOffset);
-    cairo_stroke(Widget);
+      cairo_line_to(pcr, P[i].X+PixelOffset, P[i].Y+PixelOffset);
+    cairo_stroke(pcr);
   finally
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
 
 end;
@@ -1557,30 +1903,30 @@ procedure TGtk3DeviceContext.drawPolygon(P: PPoint; NumPts: Integer;
 var
   i: Integer;
 begin
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
     // add offset so the center of the pixel is used
-    cairo_move_to(Widget, P[0].X+PixelOffset, P[0].Y+PixelOffset);
+    cairo_move_to(pcr, P[0].X+PixelOffset, P[0].Y+PixelOffset);
     for i := 1 to NumPts-1 do
-      cairo_line_to(Widget, P[i].X+PixelOffset, P[i].Y+PixelOffset);
-    cairo_close_path(Widget);
+      cairo_line_to(pcr, P[i].X+PixelOffset, P[i].Y+PixelOffset);
+    cairo_close_path(pcr);
 
     if AFill then
     begin
       ApplyBrush;
-      cairo_set_fill_rule(Widget, cairo_fill_rule_t(FillRule));
-      cairo_fill_preserve(Widget);
+      cairo_set_fill_rule(pcr, cairo_fill_rule_t(FillRule));
+      cairo_fill_preserve(pcr);
     end;
 
     if ABorder then
     begin
       ApplyPen;
-      cairo_stroke(Widget);
+      cairo_stroke(pcr);
     end;
 
-    cairo_new_path(Widget);
+    cairo_new_path(pcr);
   finally
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
 end;
 
@@ -1599,24 +1945,24 @@ begin
   // we need 3 points left for continuous and 4 for not continous
   MaxIndex := NumPoints - 3 - Ord(not Continuous);
 
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
     i := 0;
     while i <= MaxIndex do
     begin
       if i = 0 then
       begin
-        cairo_move_to(Widget, P[i].X+PixelOffset, P[i].Y+PixelOffset); // start point
+        cairo_move_to(pcr, P[i].X+PixelOffset, P[i].Y+PixelOffset); // start point
         Inc(i);
       end
       else
       if not Continuous then
       begin
-        cairo_line_to(Widget, P[i].X+PixelOffset, P[i].Y+PixelOffset); // start point
+        cairo_line_to(pcr, P[i].X+PixelOffset, P[i].Y+PixelOffset); // start point
         Inc(i);
       end;
 
-      cairo_curve_to(Widget,
+      cairo_curve_to(pcr,
                      P[i].X+PixelOffset, P[i].Y+PixelOffset, // control point 1
                      P[i+1].X+PixelOffset, P[i+1].Y+PixelOffset, // control point 2
                      P[i+2].X+PixelOffset, P[i+2].Y+PixelOffset); // end point and start point of next
@@ -1625,23 +1971,23 @@ begin
 
     if Filled then
     begin
-      cairo_close_path(Widget);
+      cairo_close_path(pcr);
       if bFill then
       begin
         ApplyBrush;
-        cairo_fill_preserve(Widget);
+        cairo_fill_preserve(pcr);
       end;
     end;
 
     if bBorder then
     begin
       ApplyPen;
-      cairo_stroke(Widget);
+      cairo_stroke(pcr);
     end
     else
-      cairo_new_path(Widget);
+      cairo_new_path(pcr);
   finally
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
 end;
 
@@ -1664,7 +2010,7 @@ begin
   // WriteLn('TGtk3DeviceContext.fillRect ',Format('x %d y %d w %d h %d',[x, y, w, h]));
   {$endif}
 
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
     ATempBrush := nil;
     if ABrush <> 0 then
@@ -1675,18 +2021,18 @@ begin
     end;
 
     applyBrush;
-    cairo_rectangle(Widget, x + PixelOffset, y + PixelOffset, w - 1, h - 1);
-    cairo_fill_preserve(Widget);
+    cairo_rectangle(pcr, x + PixelOffset, y + PixelOffset, w - 1, h - 1);
+    cairo_fill_preserve(pcr);
 
     // must paint border, filling is not enough
     SetSourceColor(FCurrentBrush.Color);
-    cairo_set_line_width(Widget, 1);
-    cairo_stroke(Widget);
+    cairo_set_line_width(pcr, 1);
+    cairo_stroke(pcr);
 
     if ABrush <> 0 then
       CurrentBrush:= ATempBrush;
   finally
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
 end;
 
@@ -1701,14 +2047,14 @@ begin
   begin
     ApplyBrush;
     if Assigned(FCurrentPen) and (FCurrentPen.Style = psClear) then
-      cairo_fill(Widget)
+      cairo_fill(pcr)
     else
-      cairo_fill_preserve(Widget);
+      cairo_fill_preserve(pcr);
   end;
   if Assigned(FCurrentPen) and (FCurrentPen.Style <> psClear) then
   begin
     ApplyPen;
-    cairo_stroke(Widget);
+    cairo_stroke(pcr);
   end;
 end;
 
@@ -1716,18 +2062,18 @@ procedure TGtk3DeviceContext.EllipseArcPath(CX, CY, RX, RY: Double; Angle1, Angl
 begin
   if (RX=0) or (RY=0) then //cairo_scale do not likes zero params
     Exit;
-  cairo_save(Widget);
+  cairo_save(pcr);
   try
-    cairo_translate(Widget, SX(CX), SY(CY));
-    cairo_scale(Widget, SX2(RX), SY2(RY));
+    cairo_translate(pcr, SX(CX), SY(CY));
+    cairo_scale(pcr, SX2(RX), SY2(RY));
     if not Continuous then
-      cairo_move_to(Widget, cos(Angle1), sin(Angle1)); //Move to arcs starting point
+      cairo_move_to(pcr, cos(Angle1), sin(Angle1)); //Move to arcs starting point
     if Clockwise then
-      cairo_arc(Widget, 0, 0, 1, Angle1, Angle2)
+      cairo_arc(pcr, 0, 0, 1, Angle1, Angle2)
     else
-      cairo_arc_negative(Widget, 0, 0, 1, Angle1, Angle2);
+      cairo_arc_negative(pcr, 0, 0, 1, Angle1, Angle2);
   finally
-    cairo_restore(Widget);
+    cairo_restore(pcr);
   end;
 end;
 
@@ -1736,25 +2082,61 @@ var
   DX, DY: Double;
 begin
   Result := False;
-  cairo_surface_get_device_offset(cairo_get_target(Widget), @DX, @DY);
+  cairo_surface_get_device_offset(cairo_get_target(pcr), @DX, @DY);
   DX := DX+PixelOffset;
   DY := DY+PixelOffset;
-  cairo_translate(Widget, DX, DY);
+  cairo_translate(pcr, DX, DY);
   try
-    cairo_move_to(Widget, SX(X1+RX), SY(Y1));
-    cairo_line_to(Widget, SX(X2-RX), SY(Y1));
+    cairo_move_to(pcr, SX(X1+RX), SY(Y1));
+    cairo_line_to(pcr, SX(X2-RX), SY(Y1));
     EllipseArcPath(X2-RX, Y1+RY, RX, RY, -PI/2, 0, True, True);
-    cairo_line_to(Widget, SX(X2), SY(Y2-RY));
+    cairo_line_to(pcr, SX(X2), SY(Y2-RY));
     EllipseArcPath(X2-RX, Y2-RY, RX, RY, 0, PI/2, True, True);
-    cairo_line_to(Widget, SX(X1+RX), SY(Y2));
+    cairo_line_to(pcr, SX(X1+RX), SY(Y2));
     EllipseArcPath(X1+RX, Y2-RY, RX, RY, PI/2, PI, True, True);
-    cairo_line_to(Widget, SX(X1), SY(Y1+RX));
+    cairo_line_to(pcr, SX(X1), SY(Y1+RX));
     EllipseArcPath(X1+RX, Y1+RY, RX, RY, PI, PI*1.5, True, True);
     FillAndStroke;
     Result := True;
   finally
-    cairo_translate(Widget, -DX, -DY);
+    cairo_translate(pcr, -DX, -DY);
   end;
+end;
+
+function TGtk3DeviceContext.drawFocusRect(const aRect: TRect): boolean;
+var
+  Context: PGtkStyleContext;
+  AValue: TGValue;
+begin
+  Result := False;
+
+  if Parent <> nil then
+    Context := Parent^.get_style_context
+  else
+  begin
+    Context:=TGtkStyleContext.new();
+    Context^.add_class('button');
+    //gtk_style_context_get(Context,GTK_STATE_NORMAL,[]);
+ { if gtk_widget_get_default_style^.has_context then
+  begin
+    // Context := gtk_widget_get_default_style^.has_context
+    AValue.g_type := G_TYPE_POINTER;
+    AValue.set_pointer(nil);
+    g_object_get_property(gtk_widget_get_default_style,'context',@AValue);
+    Context := AValue.get_pointer;
+    AValue.unset;
+  end else
+    Context := nil;}
+  end;
+  if Context = nil then
+  begin
+    DebugLn('WARNING: TGtk3WidgetSet.DrawFocusRect drawing focus on non widget context isn''t implemented.');
+    exit;
+  end;
+  with aRect do
+    gtk_render_focus(Context ,pcr, Left, Top, Right - Left, Bottom - Top);
+
+  Result := True;
 end;
 
 function TGtk3DeviceContext.getBpp: integer;
@@ -1824,13 +2206,13 @@ var
   FX, FY: Double;
   X0, Y0: Integer;
 begin
-  if not Assigned(Widget) then
+  if not Assigned(pcr) then
     exit(False);
   ApplyPen;
 
   // we must paint line until, but NOT including, (X,Y)
   // let's offset X, Y by 1 px, but only for horizontal and vertical lines (yet?)
-  cairo_get_current_point(Widget, @FX, @FY);
+  cairo_get_current_point(pcr, @FX, @FY);
   X0 := Round(FX-PixelOffset);
   Y0 := Round(FY-PixelOffset);
   if X0 = X then
@@ -1852,8 +2234,8 @@ begin
       Inc(X);
   end;
 
-  cairo_line_to(Widget, X+PixelOffset, Y+PixelOffset);
-  cairo_stroke(Widget);
+  cairo_line_to(pcr, X+PixelOffset, Y+PixelOffset);
+  cairo_stroke(pcr);
   Result := True;
 end;
 
@@ -1862,26 +2244,26 @@ var
   dx: Double;
   dy: Double;
 begin
-  if not Assigned(Widget) then
+  if not Assigned(pcr) then
     exit(False);
   if OldPoint <> nil then
   begin
-    cairo_get_current_point(Widget, @dx, @dy);
+    cairo_get_current_point(pcr, @dx, @dy);
     OldPoint^.X := Round(dx);
     OldPoint^.Y := Round(dy);
   end;
-  cairo_move_to(Widget, X+PixelOffset, Y+PixelOffset);
+  cairo_move_to(pcr, X+PixelOffset, Y+PixelOffset);
   Result := True;
 end;
 
 function TGtk3DeviceContext.SetClipRegion(ARgn: TGtk3Region): Integer;
 begin
   Result := SimpleRegion;
-  if Assigned(Widget) then
+  if Assigned(pcr) then
   begin
-    cairo_reset_clip(Widget);
-    gdk_cairo_region(Self.Widget, ARgn.FHandle);
-    cairo_clip(Widget);
+    cairo_reset_clip(pcr);
+    gdk_cairo_region(pcr, ARgn.FHandle);
+    cairo_clip(pcr);
   end;
 end;
 
@@ -1890,7 +2272,7 @@ var
   R, G, B: double;
 begin
   TColorToRGB(AColor, R, G, B);
-  cairo_set_source_rgb(Widget, R, G, B);
+  cairo_set_source_rgb(pcr, R, G, B);
 end;
 
 procedure TGtk3DeviceContext.SetImage(AImage: TGtk3Image);
@@ -1898,7 +2280,7 @@ var
   APixBuf: PGdkPixbuf;
 begin
   FCurrentImage := AImage;
-  cairo_destroy(Widget);
+  cairo_destroy(pcr);
   APixBuf := AImage.Handle;
   if not Gtk3IsGdkPixbuf(APixBuf) then
   begin
@@ -1918,15 +2300,15 @@ begin
                                                 APixBuf^.get_width,
                                                 APixBuf^.get_height,
                                                 APixBuf^.rowstride);
-  Widget := cairo_create(CairoSurface);
+  pcr := cairo_create(CairoSurface);
   FOwnsSurface := true;
 end;
 
 function TGtk3DeviceContext.ResetClip: Integer;
 begin
   Result := NullRegion;
-  if Assigned(Widget) then
-    cairo_reset_clip(Widget);
+  if Assigned(pcr) then
+    cairo_reset_clip(pcr);
 end;
 
 procedure TGtk3DeviceContext.TranslateCairoToDevice;
@@ -1939,7 +2321,14 @@ end;
 
 procedure TGtk3DeviceContext.Translate(APoint: TPoint);
 begin
-  cairo_translate(Widget, APoint.X, APoint.Y);
+  cairo_translate(pcr, APoint.X, APoint.Y);
+end;
+
+procedure TGtk3DeviceContext.set_antialiasing(aamode: boolean);
+const
+   caa:array[boolean] of cairo_antialias_t = (CAIRO_ANTIALIAS_NONE,CAIRO_ANTIALIAS_DEFAULT);
+begin
+  cairo_set_antialias(pcr, caa[aamode]);
 end;
 
 

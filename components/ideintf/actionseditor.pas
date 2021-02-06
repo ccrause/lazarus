@@ -26,8 +26,10 @@ interface
 uses
   Classes, SysUtils, contnrs,
   // LCL
-  LCLIntf, LCLType, LCLProc, Forms, Controls, Dialogs, ExtCtrls, StdCtrls,
-  Graphics, Menus, ComCtrls, DBActns, StdActns, ActnList,
+  LCLType, LCLProc, Forms, Controls, Dialogs, ExtCtrls, StdCtrls,
+  Graphics, Menus, ComCtrls, DBActns, StdActns, ActnList, ImgList,
+  // LazUtils
+  LazLoggerBase, LazUTF8,
   // IDEIntf
   ObjInspStrConsts, ComponentEditors, PropEdits, PropEditUtils, IDEWindowIntf,
   IDEImagesIntf;
@@ -147,7 +149,8 @@ type
       override;
   private
     FActionList: TActionList;
-    FDesigner: TComponentEditorDesigner;
+    FCompDesigner: TComponentEditorDesigner;
+    FCompEditor: TActionListComponentEditor;
     procedure AddCategoryActions(aCategory: String);
     function CategoryIndexOf(Category: String): Integer;
     function IsValidCategory(Category: String): Boolean;
@@ -160,7 +163,6 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure SetActionList(AActionList: TActionList);
-    property Designer:TComponentEditorDesigner read FDesigner write FDesigner;
   end;
 
   { TActionListComponentEditor }
@@ -168,7 +170,7 @@ type
   TActionListComponentEditor = class(TComponentEditor)
   private
     FActionList: TActionList;
-    FDesigner: TComponentEditorDesigner;
+    FCompDesigner: TComponentEditorDesigner;
   protected
   public
     constructor Create(AComponent: TComponent;
@@ -602,7 +604,7 @@ begin
   if Category <> cActionListEditorUnknownCategory
   then NewAction.Category := Category
   else NewAction.Category := '';
-  NewAction.Name := FDesigner.CreateUniqueComponentName(NewAction.ClassName);
+  NewAction.Name := FCompDesigner.CreateUniqueComponentName(NewAction.ClassName);
   
   if Assigned(ActionProperty) then begin
     TCustomAction(NewAction).Caption := ActionProperty.ActionProperty.Caption;
@@ -611,11 +613,11 @@ begin
   end;
 
   NewAction.ActionList := FActionList;
-  FDesigner.PropertyEditorHook.PersistentAdded(NewAction,True);
+  FCompDesigner.PropertyEditorHook.PersistentAdded(NewAction,True);
 
-  FDesigner.Modified;
+  FCompDesigner.Modified;
   if LastItem then
-    FDesigner.SelectOnlyThisComponent(FActionList.ActionByName(NewAction.Name));
+    FCompDesigner.SelectOnlyThisComponent(FActionList.ActionByName(NewAction.Name));
 end;
 
 procedure TActionListEditor.SplitterCanResize(Sender: TObject;
@@ -681,7 +683,7 @@ begin
 
   lstActionName.Items.Move(lboxIndex, lboxIndex+direction);
   lstActionName.ItemIndex := lboxIndex+direction;
-  FDesigner.Modified;
+  FCompDesigner.PropertyEditorHook.Modified(FCompEditor);
 end;
 
 procedure TActionListEditor.ActMoveDownUpdate(Sender: TObject);
@@ -703,7 +705,7 @@ var
 begin
   if FActionList=nil then exit;
   NewAction := TAction.Create(FActionList.Owner);
-  NewAction.Name := FDesigner.CreateUniqueComponentName(NewAction.ClassName);
+  NewAction.Name := FCompDesigner.CreateUniqueComponentName(NewAction.ClassName);
 
   if lstCategory.ItemIndex > 1 // ignore first two items (virtual categories)
   then NewAction.Category := lstCategory.Items[lstCategory.ItemIndex]
@@ -714,9 +716,9 @@ begin
   // Selection updates correctly when we first clear the selection in Designer
   //  and in Object Inspector, then add a new item. Otherwise there is
   //  a loop of back-and-forth selection updates and the new item does not show.
-  FDesigner.ClearSelection;
-  FDesigner.PropertyEditorHook.PersistentAdded(NewAction,True);
-  FDesigner.Modified;
+  FCompDesigner.ClearSelection;
+  FCompDesigner.PropertyEditorHook.PersistentAdded(NewAction,True);
+  FCompDesigner.Modified;
 end;
 
 procedure TActionListEditor.ActNewStdExecute(Sender: TObject);
@@ -756,14 +758,17 @@ end;
 procedure TActionListEditor.lstActionNameDrawItem(Control: TWinControl;
   Index: Integer; ARect: TRect; State: TOwnerDrawState);
 var
+  lb: TListBox;
   ACanvas: TCanvas;
   R: TRect;
-  dh, dth: Integer;
+  dh: Integer;
+  Imgs: TCustomImageList;
   AAction: TCustomAction;
   S: String;
 begin
-  if FActionList=nil then exit;;
-  ACanvas := TListBox(Control).Canvas;
+  if FActionList=nil then exit;
+  lb := TListBox(Control);
+  ACanvas := lb.Canvas;
   if odSelected in State then
   begin
     ACanvas.Brush.Color := clHighlight;
@@ -773,27 +778,21 @@ begin
     ACanvas.Brush.Color := clWindow;
     ACanvas.Font.Color := clWindowText;
   end;
-  S := TListBox(Control).Items[Index];
   R := ARect;
   dh := R.Bottom - R.Top;
   ACanvas.FillRect(R);
   inc(R.Left, 2);
-  if (TListBox(Control).Items.Objects[Index] is TCustomAction)
-  and (FActionList.Images <> nil) then begin
-    AAction := TListBox(Control).Items.Objects[Index] as TCustomAction;
+  Imgs := FActionList.Images;
+  if (lb.Items.Objects[Index] is TCustomAction) and Assigned(Imgs) then
+  begin
+    AAction := TCustomAction(lb.Items.Objects[Index]);
     R.Right := R.Left + dh;
     if AAction.ImageIndex <> -1 then
-    begin
-      dth := FActionList.Images.Height;
-      if dth > dh then
-        FActionList.Images.StretchDraw(ACanvas, AAction.ImageIndex, Rect(R.Left, R.Top + 1, R.Left + dh - 2, R.Bottom - 1))
-      else
-        FActionList.Images.Draw(ACanvas, R.Left, R.Top + (dh -dth) div 2, AAction.ImageIndex);
-    end;
+      Imgs.Draw(ACanvas, R.Left, R.Top + (dh-Imgs.Height) div 2, AAction.ImageIndex);
     Inc(R.Left, dh + 2);
   end;
-  dth := Canvas.TextHeight(S);
-  ACanvas.TextOut(R.Left, R.Top + (dh - dth) div 2, S);
+  S := lb.Items[Index];
+  ACanvas.TextOut(R.Left, R.Top + (dh-Canvas.TextHeight(S)) div 2, S);
   if odFocused in State then
     ACanvas.DrawFocusRect(ARect);
 end;
@@ -839,7 +838,7 @@ begin
   if Assigned(OldAction) then
   begin
     try
-      FDesigner.PropertyEditorHook.DeletePersistent(TPersistent(OldAction));
+      FCompDesigner.PropertyEditorHook.DeletePersistent(TPersistent(OldAction));
       OldAction:=nil;
     except
       on E: Exception do begin
@@ -858,7 +857,7 @@ begin
     then lstActionName.ItemIndex := lstActionName.Items.Count -1
     else lstActionName.ItemIndex := iNameIndex;
 
-    FDesigner.SelectOnlyThisComponent(
+    FCompDesigner.SelectOnlyThisComponent(
        FActionList.ActionByName(lstActionName.Items[lstActionName.ItemIndex]));
   end;
 
@@ -868,7 +867,7 @@ begin
       lstCategory.Items.Delete(OldIndex);
   end;
   if lstActionName.ItemIndex < 0
-  then FDesigner.SelectOnlyThisComponent(FActionList);
+  then FCompDesigner.SelectOnlyThisComponent(FActionList);
 end;
 
 procedure TActionListEditor.lstCategoryClick(Sender: TObject);
@@ -886,7 +885,7 @@ begin
   CurAction := GetSelectedAction;
   if CurAction = nil then Exit;
 
-  FDesigner.SelectOnlyThisComponent(CurAction);
+  FCompDesigner.SelectOnlyThisComponent(CurAction);
 end;
 
 procedure TActionListEditor.lstActionNameDblClick(Sender: TObject);
@@ -906,7 +905,12 @@ begin
   if FActionList = AActionList then exit;
   if FActionList<>nil then RemoveFreeNotification(FActionList);
   FActionList := AActionList;
-  if FActionList<>nil then FreeNotification(FActionList);
+  if FActionList<>nil then
+  begin
+    FreeNotification(FActionList);
+    if FActionList.Images<>nil then
+      lstActionName.ItemHeight := FActionList.Images.Height;
+  end;
   FillCategories;
   //FillActionByCategory(-1);
 end;
@@ -1026,7 +1030,7 @@ begin
     if i > -1 then
       lstActionName.ItemIndex := i
     else if lstActionName.ItemIndex = -1 then
-      FDesigner.SelectOnlyThisComponent(FActionList);
+      FCompDesigner.SelectOnlyThisComponent(FActionList);
   end;
 end;
 
@@ -1037,11 +1041,12 @@ constructor TActionListComponentEditor.Create(AComponent: TComponent;
   ADesigner: TComponentEditorDesigner);
 begin
   inherited Create(AComponent, ADesigner);
-  FDesigner := ADesigner;
+  FCompDesigner := ADesigner;
 end;
 
 destructor TActionListComponentEditor.Destroy;
 begin
+  DebugLn(['TActionListComponentEditor.Destroy']);
   inherited Destroy;
 end;
 
@@ -1053,14 +1058,13 @@ begin
   AActionList := GetComponent as TActionList;
   if AActionList = nil
   then raise Exception.Create('TActionListComponentEditor.Edit AActionList=nil');
-  AEditor:=FindActionEditor(AActionList);
+  AEditor := FindActionEditor(AActionList);
   if not Assigned(AEditor) then begin
-    AEditor:=TActionListEditor.Create(Application);
-    with AEditor do begin
-      lstActionName.ItemIndex := -1;
-      Designer := Self.FDesigner;
-      SetActionList(AActionList);
-    end;
+    AEditor := TActionListEditor.Create(Application);
+    AEditor.lstActionName.ItemIndex := -1;
+    AEditor.FCompDesigner := Self.FCompDesigner;
+    AEditor.FCompEditor := Self;
+    AEditor.SetActionList(AActionList);
   end;
   SetPopupModeParentForPropertyEditor(AEditor);
   AEditor.ShowOnTop;
@@ -1332,17 +1336,17 @@ end;
 procedure TActionCategoryProperty.GetValues(Proc: TGetStrProc);
 var
   I: Integer;
-  Values: TStringList;
-  Act:TContainedAction;
-  ActLst:TCustomActionList;
-  S:string;
+  Values: TStringListUTF8Fast;
+  Act: TContainedAction;
+  ActLst: TCustomActionList;
+  S: string;
 begin
   ActLst:=nil;
   Act:=GetComponent(0) as TContainedAction;
   if Assigned(Act) then
     ActLst:=Act.ActionList;
   if not Assigned(ActLst) then exit;
-  Values := TStringList.Create;
+  Values := TStringListUTF8Fast.Create;
   try
     for i:=0 to ActLst.ActionCount-1 do
     begin

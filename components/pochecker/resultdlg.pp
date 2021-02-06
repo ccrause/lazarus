@@ -24,16 +24,12 @@ type
     CloseBtn: TBitBtn;
     Panel1: TPanel;
     SaveDialog: TSaveDialog;
-    FLog: TStringList;
-    FStatLog: TStringList;
-    FDupLog: TStringList;
     LogMemo: TSynEdit;
     GeneralTabSheet: TTabSheet;
     StatisticsTabSheet: TTabSheet;
     DuplicatesTabSheet: TTabSheet;
     DupMemo: TSynEdit;
     procedure CopyMenuItemClick(Sender: TObject);
-    procedure FormClose(Sender: TObject; var CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -42,24 +38,11 @@ type
     procedure SaveAsMenuItemClick(Sender: TObject);
   private
     PoHL: TSynPoSyn;
-    FPoFamilyList: TPoFamilyList;
-    FPoFamilyStats: TPoFamilyStats;
     FSettings: TPoCheckerSettings;
     procedure GetCurrentMemo(var CurrentMemo: TSynEdit);
     procedure LoadConfig;
     procedure SaveConfig;
   public
-    // The following fields keep translation statistics calculated when tests were performed.
-    // They will allow to avoid recalculation of these values in GraphStat form.
-    FTotalTranslated: Integer;
-    FTotalUntranslated: Integer;
-    FTotalFuzzy: Integer;
-    FTotalPercTranslated: Double;
-    property Log: TStringList read FLog write FLog;
-    property StatLog: TStringList read FStatLog write FStatLog;
-    property DupLog: TStringList read FDupLog write FDupLog;
-    property PoFamilyList: TPoFamilyList read FPoFamilyList write FPoFamilyList;
-    property PoFamilyStats: TPoFamilyStats read FPoFamilyStats write FPoFamilyStats;
     property Settings: TPoCheckerSettings read FSettings write FSettings;
   end; 
 
@@ -80,23 +63,9 @@ begin
 
   LogMemo.Lines.Clear;
   StatMemo.Lines.Clear;
-  FLog := TStringList.Create;
-  FStatLog := TStringList.Create;
-  FDupLog := TStringList.Create;
   PoHL := TSynPoSyn.Create(Self);
   LogMemo.Highlighter := PoHL;
   GraphStatBtn.Caption := sShowStatGraph;
-  FTotalTranslated := 0;
-  FTotalUntranslated := 0;
-  FTotalFuzzy := 0;
-end;
-
-procedure TResultDlgForm.FormClose(Sender: TObject;
-  var CloseAction: TCloseAction);
-begin
-  FLog.Clear;
-  FStatLog.Clear;
-  FDupLog.Clear;
 end;
 
 procedure TResultDlgForm.CopyMenuItemClick(Sender: TObject);
@@ -110,9 +79,6 @@ end;
 
 procedure TResultDlgForm.FormDestroy(Sender: TObject);
 begin
-  FLog.Free;
-  FStatLog.Free;
-  FDupLog.Free;
   SaveConfig;
 end;
 
@@ -133,10 +99,10 @@ end;
 
 procedure TResultDlgForm.FormShow(Sender: TObject);
 begin
-  LogMemo.Lines.Assign(FLog);
-  StatMemo.Lines.Assign(FStatLog);
-  DupMemo.Lines.Assign(FDupLog);
-  GraphStatBtn.Visible := (PoFamilyStats <> nil) and (PoFamilyStats.Count > 0);
+  LogMemo.Lines.Assign(PoFamilyList.InfoLog);
+  StatMemo.Lines.Assign(PoFamilyList.StatLog);
+  DupMemo.Lines.Assign(PoFamilyList.DupLog);
+  GraphStatBtn.Visible := (PoFamilyList.PoFamilyStats <> nil) and (PoFamilyList.PoFamilyStats.Count > 0);
   LoadConfig;
   WindowState := Settings.ResultsFormWindowState;
 end;
@@ -147,18 +113,16 @@ var
 begin
   GraphStatForm := TGraphStatForm.Create(nil);
   try
-    GraphStatForm.PoFamilyList := Self.PoFamilyList;
-    GraphStatForm.PoFamilyStats := Self.PoFamilyStats;
     GraphStatForm.Settings := Self.Settings;
 
-    if Self.PoFamilyList.LangID <> lang_all then
+    if PoFamilyList.LangID <> lang_all then
     begin
       GraphStatForm.TranslatedLabel.Caption := Format(sTranslatedStringsTotal, [
-        IntToStr(FTotalTranslated), FTotalPercTranslated]);
+        IntToStr(PoFamilyList.PoFamilyListStats.Translated), PoFamilyList.StatPerc(PoFamilyList.PoFamilyListStats.Translated)]);
       GraphStatForm.UnTranslatedLabel.Caption := Format(sUntranslatedStringsTotal
-        , [IntToStr(FTotalUntranslated)]);
+        , [IntToStr(PoFamilyList.PoFamilyListStats.Untranslated)]);
       GraphStatForm.FuzzyLabel.Caption := Format(sFuzzyStringsTotal, [IntToStr(
-        FTotalFuzzy)]);
+        PoFamilyList.PoFamilyListStats.Fuzzy)]);
     end
     else
     begin

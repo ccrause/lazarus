@@ -85,12 +85,18 @@ begin
   end;
 end;
 
-function FilenameIsPascalUnit(const Filename: string): boolean;
+function FilenameHasPascalExt(const Filename: string): boolean;
 var
-  i: Integer;
+  i, FnPos: Integer;
+  FnExt: String;
 begin
+  FnPos := length(Filename);
+  while (FnPos>=1) and (Filename[FnPos]<>'.') do dec(FnPos);
+  if FnPos < 1 then
+    exit(false);          // no extension in filename
+  FnExt := LowerCase(Copy(Filename, FnPos, length(FileName)));
   for i:=Low(PascalFileExt) to High(PascalFileExt) do
-    if CompareFileExt(Filename,PascalFileExt[i],false)=0 then
+    if CompareStr(FnExt,PascalFileExt[i])=0 then
       exit(true);
   Result:=false;
 end;
@@ -200,8 +206,8 @@ begin
   Result:=LazFileUtils.CreateAbsolutePath(Filename, BaseDirectory);
 end;
 
-function CopyFile(const SrcFilename, DestFilename: String;
-                  Flags: TCopyFileFlags=[cffOverwriteFile]; ExceptionOnError: Boolean=False): Boolean;
+function CopyFile(const SrcFilename, DestFilename: string;
+  Flags: TCopyFileFlags; ExceptionOnError: Boolean): boolean;
 var
   SrcHandle: THandle;
   DestHandle: THandle;
@@ -269,7 +275,8 @@ begin
   end;
 end;
 
-function CopyFile(const SrcFilename, DestFilename: string; PreserveTime: Boolean; ExceptionOnError: Boolean): boolean;
+function CopyFile(const SrcFilename, DestFilename: string;
+  PreserveTime: boolean; ExceptionOnError: Boolean): boolean;
 // Flags parameter can be used for the same thing.
 var
   Flags: TCopyFileFlags;
@@ -354,7 +361,10 @@ begin
   {$ENDIF}
 end;
 
-function ReadFileToString(const Filename: String): String;
+function ReadFileToString(const Filename: string): string;
+// Read and return the contents of a text file in one slurp.
+// Note: FileSize() returns 0 for virtual files at least in Unix like systems.
+//       Then use different ways to read contents, eg. TStringList.LoadFromFile();
 var
   SrcHandle: THandle;
   ReadCount: LongInt;
@@ -381,10 +391,10 @@ begin
   end;
 end;
 
-function SearchFileInPath(const Filename, BasePath, SearchPath,
-  Delimiter: string; Flags: TSearchFileInPathFlags): string;
+function SearchFileInPath(const Filename, BasePath: string; SearchPath: string;
+  const Delimiter: string; Flags: TSearchFileInPathFlags): string;
 var
-  p, StartPos, l: integer;
+  p, StartPos, l, QuoteStart: integer;
   CurPath, Base: string;
 begin
 //debugln('[SearchFileInPath] Filename="',Filename,'" BasePath="',BasePath,'" SearchPath="',SearchPath,'" Delimiter="',Delimiter,'"');
@@ -411,8 +421,27 @@ begin
   l:=length(SearchPath);
   while StartPos<=l do begin
     p:=StartPos;
-    while (p<=l) and (pos(SearchPath[p],Delimiter)<1) do inc(p);
-    CurPath:=TrimFilename(copy(SearchPath,StartPos,p-StartPos));
+    while (p<=l) and (pos(SearchPath[p],Delimiter)<1) do
+    begin
+      if (SearchPath[p]='"') and (sffDequoteSearchPath in Flags) then
+      begin
+        // For example: Windows allows set path=C:\"a;b c"\d;%path%
+        QuoteStart:=p;
+        repeat
+          inc(p);
+        until (p>l) or (SearchPath[p]='"');
+        if p<=l then
+        begin
+          system.delete(SearchPath,p,1);
+          system.delete(SearchPath,QuoteStart,1);
+          dec(l,2);
+          dec(p,2);
+        end;
+      end;
+      inc(p);
+    end;
+    CurPath:=copy(SearchPath,StartPos,p-StartPos);
+    CurPath:=TrimFilename(CurPath);
     StartPos:=p+1;
     if CurPath='' then continue;
     if not FilenameIsAbsolute(CurPath) then
@@ -593,10 +622,6 @@ end;
 
 function FindDefaultExecutablePath(const Executable: string;
   const BaseDir: string): string;
-const
-  Flags : TSearchFileInPathFlags = [
-    {$IFDEF Unix}sffDontSearchInBasePath,{$ENDIF}
-    sffFile,sffExecutable];
 var
   Env: string;
 begin
@@ -611,11 +636,11 @@ begin
     {$ENDIF}
   end else begin
     Env:=GetEnvironmentVariableUTF8('PATH');
-    Result:=SearchFileInPath(Executable, BaseDir, Env, PathSeparator, Flags);
+    Result:=SearchFileInPath(Executable, BaseDir, Env, PathSeparator, sffFindProgramInPath);
     if Result<>'' then exit;
     {$IFDEF Windows}
     if ExtractFileExt(Executable)='' then begin
-      Result:=SearchFileInPath(Executable+'.exe', BaseDir, Env, PathSeparator, Flags);
+      Result:=SearchFileInPath(Executable+'.exe', BaseDir, Env, PathSeparator, sffFindProgramInPath);
       if Result<>'' then exit;
     end;
     {$ENDIF}
@@ -628,6 +653,7 @@ end;
 procedure TListFileSearcher.DoFileFound;
 begin
   FList.Add(FileName);
+  inherited;
 end;
 
 constructor TListFileSearcher.Create(AList: TStrings);
@@ -637,7 +663,7 @@ begin
 end;
 
 procedure FindAllFiles(AList: TStrings; const SearchPath: String;
-  SearchMask: String; SearchSubDirs: Boolean; DirAttr: Word;
+  const SearchMask: String; SearchSubDirs: Boolean; DirAttr: Word;
   MaskSeparator: char; PathSeparator: char);
 var
   Searcher: TListFileSearcher;
@@ -653,7 +679,7 @@ begin
   end;
 end;
 
-function FindAllFiles(const SearchPath: String; SearchMask: String;
+function FindAllFiles(const SearchPath: String; const SearchMask: String;
   SearchSubDirs: Boolean; DirAttr: Word;
   MaskSeparator: char; PathSeparator: char): TStringList;
 begin
@@ -672,6 +698,7 @@ end;
 procedure TListDirectoriesSearcher.DoDirectoryFound;
 begin
   FDirectoriesList.Add(FileName);
+  inherited;
 end;
 
 function FindAllDirectories(const SearchPath : string;
@@ -746,7 +773,7 @@ begin
   FSearching := False;
 end;
 
-procedure TFileSearcher.Search(ASearchPath: String; ASearchMask: String;
+procedure TFileSearcher.Search(const ASearchPath: String; const ASearchMask: String;
   ASearchSubDirs: Boolean; CaseSensitive: Boolean = False);
 var
   MaskList: TMaskList;
@@ -817,14 +844,18 @@ var
   end;
 
 var
-  p: SizeInt;
-  Dir: String;
+  p1, p2: SizeInt;
   i: Integer;
+  Dir: String;
   OtherDir: String;
+  MaskOptions: TMaskOptions;
 begin
   if FSearching then RaiseSearchingError;
-
-  MaskList := TMaskList.Create(ASearchMask, FMaskSeparator, CaseSensitive);
+  if CaseSensitive then
+    MaskOptions := [moCaseSensitive]
+  else
+    MaskOptions := [];
+  MaskList := TMaskList.Create(ASearchMask, FMaskSeparator, MaskOptions);
   // empty mask = all files mask
   if MaskList.Count = 0 then
     FreeAndNil(MaskList);
@@ -832,12 +863,14 @@ begin
   FSearching := True;
   SearchDirectories:=TStringList.Create;
   try
-    while ASearchPath<>'' do begin
-      p:=Pos(FPathSeparator,ASearchPath);
-      if p<1 then
-        p:=length(ASearchPath)+1;
-      Dir:=ResolveDots(LeftStr(ASearchPath,p-1));
-      Delete(ASearchPath,1,p);
+    p1:=1;
+    while p1<=Length(ASearchPath) do
+    begin
+      p2:=PosEx(FPathSeparator,ASearchPath,p1);
+      if p2<1 then
+        p2:=length(ASearchPath)+1;
+      Dir:=ResolveDots(Copy(ASearchPath,p1,p2-p1));
+      p1:=p2+1;
       if Dir='' then continue;
       Dir:=ChompPathDelim(Dir);
       for i:=SearchDirectories.Count-1 downto 0 do

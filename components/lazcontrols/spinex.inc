@@ -37,7 +37,6 @@ begin
   if (MaxValue < MinValue) then FMaxValue := MinValue;
   if (FNullValueBehaviour <> nvbShowTextHint) then
     FValue := GetLimitedValue(FValue);
-
   if (not HandleAllocated) then Exit;
 
   if ([csLoading, csDestroying] * ComponentState <> []) then
@@ -121,6 +120,20 @@ begin
   UpdateControl;
 end;
 
+procedure TSpinEditExBase.EditKeyPress(var Key: Char);
+begin
+  inherited EditKeyPress(Key);
+  if not KeyAllowed(Key) then
+    Key := #0;
+end;
+
+procedure TSpinEditExBase.EditUtf8KeyPress(var UTF8Key: TUTF8Char);
+begin
+  inherited EditUtf8KeyPress(UTF8Key);
+  if not Utf8KeyAllowed(Utf8Key) then
+    Utf8Key := '';
+end;
+
 procedure TSpinEditExBase.EditChange;
 begin
   {$ifdef debugspinex}
@@ -190,6 +203,11 @@ end;
 function TSpinEditExBase.MaxValueStored: Boolean;
 begin
   Result := not SameValue(FMaxValue, DefMaxValue);
+end;
+
+function TSpinEditExBase.MinValueStored: Boolean;
+begin
+  Result := not SameValue(FMinValue, DefMinValue);
 end;
 
 procedure TSpinEditExBase.EditMouseWheelUp(Shift: TShiftState;
@@ -310,6 +328,7 @@ begin
   FArrowKeys := True;
   FIncrement := DefIncrement;
   FMaxValue := DefMaxValue;
+  FMinValue := DefMinValue;
   FUpdatePending := True;
   FSettingValue := False;
   FNullValueBehaviour := nvbMinValue;
@@ -348,6 +367,45 @@ begin
   end;
 end;
 
+function TSpinEditExBase.StrToValue(const S: String): T;
+var
+  Def, N: T;
+begin
+  {$ifdef debugspinex}
+  debugln(['TSpinEditExBase.StrToValue: S="',S,'"']);
+  {$endif}
+  case FNullValueBehaviour of
+    nvbShowTextHint: Def := FNullValue;
+    nvbLimitedNullValue: Def := GetLimitedValue(FNullValue);
+    nvbMinValue: Def := FMinValue;
+    nvbMaxValue: Def := MaxValue;
+    nvbInitialValue: Def := FInitialValue;
+  end;
+  try
+    if TextIsNumber(S, N) then
+      Result := N
+    else
+      Result := Def;
+    if not (FNullValueBehaviour = nvbShowTextHint) then
+      Result := GetLimitedValue(Result);
+  except
+    Result := Def;
+  end;
+  {$ifdef debugspinex}
+  debugln(['  Result=',(Result)]);
+  {$endif}
+end;
+
+function TSpinEditExBase.KeyAllowed(Key: Char): Boolean;
+begin
+  Result := True;
+end;
+
+function TSpinEditExBase.Utf8KeyAllowed(Key: TUTF8Char): Boolean;
+begin
+  Result := True;
+end;
+
 procedure TSpinEditExBase.FinalizeWnd;
 begin
   GetValue;
@@ -369,18 +427,55 @@ begin
   UpdateControl;
 end;
 
+procedure TCustomFloatSpinEditEx.SetDisplayMode(AValue: TDisplayMode);
+begin
+  if FDisplayMode = AValue then Exit;
+  GetValue;
+  FDisplayMode := AValue;
+  UpdateControl;
+end;
+
+procedure TCustomFloatSpinEditEx.SetExponentDigits(AValue: Integer);
+begin
+  if FExponentDigits = AValue then Exit;
+  GetValue;
+  FExponentDigits := AValue;
+  UpdateControl;
+end;
+
+procedure TCustomFloatSpinEditEx.SetExponentialFormatLimitNeg(AValue: Integer);
+begin
+  if (FExponentialFormatLimitNeg = AValue) or (AValue > -1) then Exit;
+  GetValue;
+  FExponentialFormatLimitNeg := AValue;
+  UpdateControl;
+end;
+
+procedure TCustomFloatSpinEditEx.SetExponentialFormatLimitPos(AValue: Integer);
+begin
+  if (FExponentialFormatLimitPos = AValue) or (AValue < 0) then Exit;
+  GetValue;
+  FExponentialFormatLimitPos := AValue;
+  UpdateControl;
+end;
+
+procedure TCustomFloatSpinEditEx.SetPrecision(AValue: Integer);
+begin
+  if FPrecision = AValue then Exit;
+  GetValue;
+  FPrecision := AValue;
+  UpdateControl;
+end;
+
+function TCustomFloatSpinEditEx.GetFormatsettings: TFormatSettings;
+begin
+  Result := FFS;
+end;
+
 procedure TCustomFloatSpinEditEx.EditKeyPress(var Key: char);
 begin
-  inherited EditKeyPress(Key);
-  {Disallow any key that is not a digit, decimalseparator or '-'
-   For ease of use translate any decimalpoint or comma to DecimalSeparator
-   Tab, BackSpace, Cut, Paste, Copy, Undo of course should be passed onto inherited KeyPress
-   If FDecimals = 0, disallow decimalseparator also
-  }
   if (Key in ['.',',']) then Key := FFS.Decimalseparator;
-  if not (Key in (Digits + AllowedControlChars + [FFS.DecimalSeparator,'-'])) then Key := #0;
-  if (Key = FFS.DecimalSeparator) and (FDecimals = 0) then Key := #0;
-  if (Key = '-') and IsLimited and (MinValue >= 0) then Key := #0;
+  inherited EditKeyPress(Key);
 end;
 
 function TCustomFloatSpinEditEx.TextIsNumber(const S: String; out ANumber: Double
@@ -428,42 +523,48 @@ end;
 
 
 function TCustomFloatSpinEditEx.ValueToStr(const AValue: Double): String;
+var
+  LValue: Double;
 begin
-  Result := FloatToStrF(GetLimitedValue(AValue), ffFixed, 20, DecimalPlaces, FFS);
+  LValue := GetLimitedValue(AValue);
+  case FDisplayMode of
+    dmFixed:
+    begin
+      Result := FloatToStrF(LValue, ffFixed, 20, DecimalPlaces, FFS)
+    end;
+    dmScientific:
+    begin
+      Result := FloatToStrF(LValue, ffExponent, FPrecision, FExponentDigits, FFS)
+    end;
+    dmAuto,dmAutoZeroFixed:
+    begin
+      //it is safe to use (LValue=0.0) and not SameValue, since this is about text input
+      //and '0.0000' as text will be converted to a bitpattern of all zero's
+      if not ((FDisplayMode = dmAutoZeroFixed) and (LValue = 0.0)) and
+         (
+           (Abs(LValue) > Power(10,FExponentialFormatLimitPos)) or
+           (Abs(LValue) < Power(10,FExponentialFormatLimitNeg))
+         ) then
+        Result := FloatToStrF(LValue, ffExponent, FPrecision, FExponentDigits, FFS)
+      else
+        Result := FloatToStrF(LValue, ffFixed, 20, DecimalPlaces, FFS)
+    end;
+  end;
 end;
 
-function TCustomFloatSpinEditEx.StrToValue(const S: String): Double;
-var
-  Def, D: Double;
+function TCustomFloatSpinEditEx.KeyAllowed(Key: Char): Boolean;
 begin
-  {$ifdef debugspinex}
-  debugln(['TCustomFloatSpinEditEx.StrToValue: S="',S,'"']);
-  {$endif}
-  case FNullValueBehaviour of
-    nvbShowTextHint: Def := FNullValue;
-    nvbLimitedNullValue: Def := GetLimitedValue(FNullValue);
-    nvbMinValue: Def := FMinValue;
-    nvbMaxValue: Def := MaxValue;
-    nvbInitialValue: Def := FInitialValue;
-  end;
-  try
-    if (FNullValueBehaviour = nvbShowTextHint)then
-    begin
-      if TextIsNumber(S, D)
-      then
-        Result := D
-      else
-        Result := Def;
-    end
-    else
-      Result := GetLimitedValue(StrToFloatDef(S, Def, FFS));
-  except
-    Result := Def;
-  end;
-  {$ifdef debugspinex}
-  debugln(['  Result=',(Result)]);
-  {$endif}
+  {
+   Disallow any key that is not a digit, decimalseparator or '+', '-' or 'E/e'
+   For ease of use translate any decimalpoint or comma to DecimalSeparator
+   Tab, BackSpace, Cut, Paste, Copy, Undo of course should be passed onto inherited KeyPress
+   If FDecimals = 0, disallow decimalseparator also
+  }
+  Result := (Key in (Digits + AllowedControlChars + [FFS.DecimalSeparator,'-','+','e','E']));
+  if Result and (Key = FFS.DecimalSeparator) and (FDecimals = 0) then
+    Result := False;
 end;
+
 
 constructor TCustomFloatSpinEditEx.Create(TheOwner: TComponent);
 begin
@@ -471,22 +572,60 @@ begin
   FFS := DefaultFormatSettings;
   FFS.DecimalSeparator := DefDecimalSeparator;
   FDecimals := DefDecimals;
+  FExponentialFormatLimitPos := 6;
+  FExponentialFormatLimitNeg := -6;
+  FPrecision := 6;
+  FExponentDigits := 2;
+  FDisplayMode := dmFixed;
 end;
 
 
 
 { TCustomSpinEditEx }
 
-procedure TCustomSpinEditEx.EditKeyPress(var Key: char);
+function InsertThousandSeparator(const ValueS, AThousandSep: String): String;
+// A bit more complicated, but 3 times faster than repeated Insert() calls
+var
+  ResLen, ResPos, SLen, i, j: Integer;
 begin
-  inherited EditKeyPress(Key);
-  {Disallow any key that is not a digit or -
-   Tab, BackSpace, Cut, Paste, Copy, Undo of course should be passed onto inherited KeyPress
-  }
-  inherited EditKeyPress(Key);
-  if not (Key in (Digits + AllowedControlChars + ['-'])) then Key := #0;
-  if (Key = '-') and IsLimited and (MinValue >= 0) then Key := #0;
+  if (AThousandSep = '') then
+    Exit(ValueS);
+  Result := '';
+  SLen := Length(ValueS);
+  //Needed separators = ((SLen - 1) div 3)
+  ResLen := SLen + ((SLen - 1) div 3) * Length(AThousandSep);
+  SetLength(Result, ResLen);
+  ResPos := ResLen;
+  for i := Length(ValueS) downto 1 do
+  begin
+    if (SLen <> i) and ((SLen-i) mod 3 = 0) then
+    begin
+      for j := Length(AThousandSep) downto 1 do
+      begin
+        Result[ResPos] := AThousandSep[j];
+        Dec(ResPos);
+      end;
+    end;
+    Result[ResPos] := ValueS[i];
+    Dec(ResPos);
+  end;
 end;
+
+function RemoveThousandSeparator(const ValueS: String; AThousandSeparator: String): String;
+begin
+  if (AThousandSeparator = '') then
+    Result := ValueS
+  else
+    Result := StringReplace(ValueS, AThousandSeparator, '', [rfReplaceAll]);
+end;
+
+procedure TCustomSpinEditEx.SetThousandSeparator(AValue: String);
+begin
+  if FThousandSeparator = AValue then Exit;
+  FThousandSeparator := AValue;
+  UpdateControl;
+end;
+
 
 function TCustomSpinEditEx.SafeInc(AValue: Int64): Int64;
 begin
@@ -514,7 +653,7 @@ begin
   {$endif}
 
   try
-    Result := TryStrToInt64(S, N);
+    Result := TryStrToInt64(RemoveThousandSeparator(S, FThousandSeparator), N);
     ANumber := N;
   except
     Result := False;
@@ -528,39 +667,16 @@ end;
 function TCustomSpinEditEx.ValueToStr(const AValue: Int64): String;
 begin
   Result := IntToStr(AValue);
+  if (FThousandSeparator <> '') then
+    Result := InsertThousandSeparator(Result, FThousandSeparator);
 end;
 
-function TCustomSpinEditEx.StrToValue(const S: String): Int64;
-var
-  Def, N: Int64;
+function TCustomSpinEditEx.KeyAllowed(Key: Char): Boolean;
 begin
-  {$ifdef debugspinex}
-  debugln(['TCustomSpinEditEx.StrToValue: S="',S,'"']);
-  {$endif}
-  case FNullValueBehaviour of
-    nvbShowTextHint: Def := FNullValue;
-    nvbLimitedNullValue: Def := GetLimitedValue(FNullValue);
-    nvbMinValue: Def := FMinValue;
-    nvbMaxValue: Def := MaxValue;
-    nvbInitialValue: Def := FInitialValue;
-  end;
-  try
-    if (FNullValueBehaviour = nvbShowTextHint)then
-    begin
-      if TextIsNumber(S, N)
-      then
-        Result := N
-      else
-        Result := Def;
-    end
-    else
-      Result := GetLimitedValue(StrToInt64Def(S, Def));
-  except
-    Result := Def;
-  end;
-  {$ifdef debugspinex}
-  debugln(['  Result=',(Result)]);
-  {$endif}
+  {Disallow any key that is not a digit or - or (part of) FThousandSeparator
+   Tab, BackSpace, Cut, Paste, Copy, Undo of course should be passed onto inherited KeyPress
+  }
+  Result := ((Key in (Digits + AllowedControlChars + ['-'])) or (Pos(Key, FThousandSeparator) > 0));
+  if Result and (Key = '-') and IsLimited and (MinValue >= 0) then
+    Result := False;
 end;
-
-

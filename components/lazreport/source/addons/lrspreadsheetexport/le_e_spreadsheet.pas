@@ -39,7 +39,12 @@ unit le_e_spreadsheet;
 interface
 
 uses
-  Classes, SysUtils, LR_ExportMatrix, LR_Class, LR_BarC, fpspreadsheet, Graphics, le_e_spreadsheet_types;
+  Classes, SysUtils, Math,
+  // LazUtils + LCL
+  LazFileUtils, LCLType, LCLIntf, Forms, Controls, Graphics,
+  LR_ExportMatrix, LR_Class, LR_BarC, fpspreadsheet, le_e_spreadsheet_types,
+  le_e_spreadsheet_params, fpsTypes, fpsutils, fpsAllFormats,
+  le_e_spreadsheet_consts, lrSpreadSheetExp, fpsPageLayout;
 
 type
 
@@ -103,9 +108,6 @@ type
   end;
 
 implementation
-uses LCLType, le_e_spreadsheet_params, fpsTypes, fpsutils, fpsAllFormats,
-  LazUTF8Classes, Forms, Controls, LCLIntf, LazFileUtils, le_e_spreadsheet_consts,
-  lrSpreadSheetExp, math, fpsPageLayout;
 
 const
   ssAligns : array [TAlignment] of TsHorAlignment = (haLeft, haRight, haCenter);
@@ -327,7 +329,7 @@ end;
 procedure TlrSpreadSheetExportFilter.ShowBarCode(View: TfrCustomBarCodeView);
 var
   R: TExportObject;
-  FBmp: TBitmap;
+  FBmp: TLazreportBitmap;
   FX, FY: Integer;
   LHeader: ^TBitMapInfoHeader;
   M: TMemoryStream;
@@ -354,6 +356,10 @@ const
 +}
 begin
   R:=FExportMatrix.ExportObject(View);
+  {$IFDEF LCLNOGUI}
+  FBmp := View.GenerateBitmap;
+  M := FBmp.Stream;
+  {$ELSE}
   FBmp:=TBitmap.Create;
   FBmp.Width:=View.dx;
   FBmp.Height:=View.dy;
@@ -374,6 +380,7 @@ begin
 
   M:=TMemoryStream.Create;
   FBMP.SaveToStream(M);
+  {$ENDIF}
 
   LHeader := M.Memory + SizeOf(TBitMapFileHeader);
   LHeader^.biXPelsPerMeter := Ceil(F_DPI * 100 / 2.54);
@@ -385,12 +392,13 @@ begin
 
   R.ObjType:=gtPicture;
   FBmp.Free;
+  M.Free;
 end;
 
 function TlrSpreadSheetExportFilter.Setup: boolean;
 begin
   Result:=inherited Setup;
-
+  {$IFNDEF LCLNOGUI}
   if Assigned(lrSpreadSheetExportComponent) and not lrSpreadSheetExportComponent.ShowSetupForm then exit;
 
   leSpreadsheetParamsForm:=TleSpreadsheetParamsForm.Create(Application);
@@ -450,13 +458,16 @@ begin
       BandTypes := BandTypes - [btPageFooter];
   end;
   leSpreadsheetParamsForm.Free;
+  {$ENDIF}
 end;
 
 procedure TlrSpreadSheetExportFilter.AfterExport;
 begin
   inherited AfterExport;
+  {$IFNDEF LCLNOGUI}
   if FOpenAfterExport and FileExistsUTF8(FFileName) then
     OpenDocument(FFileName);
+  {$ENDIF}
 end;
 
 constructor TlrSpreadSheetExportFilter.Create(AStream: TStream);
@@ -491,8 +502,8 @@ begin
   FExportMatrix.MergeCell:=FMergeCell;
   FExportMatrix.DeleteEmptyRow:=FDeleteEmptyRow;
 
-  if AStream is TFileStreamUTF8 then
-    FFileName := TFileStreamUTF8(AStream).FileName
+  if AStream is TFileStream then
+    FFileName := TFileStream(AStream).FileName
   else
     FFileName := '';
 end;

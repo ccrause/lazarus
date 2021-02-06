@@ -12,11 +12,11 @@ interface
 
 uses
   // FCL
-  SysUtils, Classes,
+  Classes, SysUtils,
   // LCL
-  LCLProc, LCLPlatformDef,
+  LCLPlatformDef,
   // LazUtils
-  LazConfigStorage,
+  LazUtilities, LazConfigStorage, LazLoggerBase,
   // IdeIntf
   PropEdits;
 
@@ -521,8 +521,7 @@ begin
           and (AClass.InheritsFrom(BaseClass));
 end;
 
-function TOIFavoriteProperty.Compare(AFavorite: TOIFavoriteProperty
-  ): integer;
+function TOIFavoriteProperty.Compare(AFavorite: TOIFavoriteProperty): integer;
 
   function CompareBaseClass: integer;
   begin
@@ -634,13 +633,12 @@ begin
   for I := 0 to Count - 1 do
   begin
     if not (Items[I] is TOIRestrictedProperty) then Continue;
-    CurItem:=Items[I] as TOIRestrictedProperty;
+    CurItem:=TOIRestrictedProperty(Items[I]);
     Result := Result + CurItem.IsRestricted(AClass,PropertyName);
   end;
 end;
 
-function TOIRestrictedProperties.AreRestricted(
-  Selection: TPersistentSelectionList;
+function TOIRestrictedProperties.AreRestricted(Selection: TPersistentSelectionList;
   const PropertyName: string): TLCLPlatforms;
 var
   I: Integer;
@@ -648,9 +646,7 @@ begin
   Result := [];
   if Selection = nil then Exit;
   for i:=0 to Selection.Count-1 do
-  begin
     Result := Result + IsRestricted(TPersistentClass(Selection[i].ClassType), PropertyName);
-  end;
 end;
 
 end.

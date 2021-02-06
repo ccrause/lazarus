@@ -310,7 +310,7 @@ type
   TSynMarkupHighIfDefLinesTree = class(TSynSizedDifferentialAVLTree)
   private
     FHighlighter: TSynPasSyn;
-    FLines: TSynEditStrings;
+    FLines: TSynEditStringsLinked;
     FClearing: Boolean;
     FDisposedNodes: TSynSizedDifferentialAVLNode;
     FOnNodeStateRequest: TSynMarkupIfdefStateRequest;
@@ -321,7 +321,7 @@ type
 
     procedure IncChangeStep;
     procedure SetHighlighter(AValue: TSynPasSyn);
-    procedure SetLines(AValue: TSynEditStrings);
+    procedure SetLines(AValue: TSynEditStringsLinked);
     function GetHighLighterWithLines: TSynCustomFoldHighlighter;
   private
     //copied from SynEdit
@@ -380,7 +380,7 @@ type
 
     property OnNodeStateRequest: TSynMarkupIfdefStateRequest read FOnNodeStateRequest write FOnNodeStateRequest;
     property Highlighter: TSynPasSyn read FHighlighter write SetHighlighter;
-    property Lines : TSynEditStrings read FLines write SetLines;
+    property Lines : TSynEditStringsLinked read FLines write SetLines;
     property ChangeStep: Integer read FChangeStep;
   end;
 
@@ -473,7 +473,7 @@ type
     procedure DoMarkupChanged(AMarkup: TSynSelectedColor); override;
     procedure DoTextChanged(StartLine, EndLine, ACountDiff: Integer); override; // 1 based
     procedure DoVisibleChanged(AVisible: Boolean); override;
-    procedure SetLines(const AValue: TSynEditStrings); override;
+    procedure SetLines(const AValue: TSynEditStringsLinked); override;
     procedure SetInvalidateLinesMethod(const AValue: TInvalidateLines); override;
     property  IfDefTree: TSynMarkupHighIfDefLinesTree read FIfDefTree;
   public
@@ -523,8 +523,6 @@ function dbgs(APeerType: TSynMarkupIfdefPeerType): String; overload;
 
 implementation
 
-uses
-  SynEdit;
 var
   TheDict: TSynRefCountedDict = nil;
   {$IFDEF WITH_SYN_DEBUG_MARKUP_IFDEF}
@@ -873,7 +871,7 @@ end;
 procedure TSynRefCountedDict.CheckWordEnd(MatchEnd: PChar; MatchIdx: Integer;
   var IsMatch: Boolean; var StopSeach: Boolean);
 begin
-  IsMatch := not ((MatchEnd+1)^ in ['a'..'z', 'A'..'Z', '0'..'9', '_']);
+  IsMatch := not ((MatchEnd)^ in ['a'..'z', 'A'..'Z', '0'..'9', '_']);
 end;
 
 constructor TSynRefCountedDict.Create;
@@ -1714,7 +1712,7 @@ begin
   Clear;
 end;
 
-procedure TSynMarkupHighIfDefLinesTree.SetLines(AValue: TSynEditStrings);
+procedure TSynMarkupHighIfDefLinesTree.SetLines(AValue: TSynEditStringsLinked);
 begin
   if FLines = AValue then Exit;
 
@@ -3929,7 +3927,7 @@ begin
     DoMarkupChanged(nil);
 end;
 
-procedure TSynEditMarkupIfDef.SetLines(const AValue: TSynEditStrings);
+procedure TSynEditMarkupIfDef.SetLines(const AValue: TSynEditStringsLinked);
 begin
   if Lines <> nil then begin
     Lines.RemoveNotifyHandler(senrTextBufferChanged, @DoBufferChanged);

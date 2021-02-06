@@ -58,9 +58,7 @@ type
     destructor Destroy; override;
     function GetHtmlStream(const AUrl: string;
       APostData: TIpFormDataEntity): TStream; override;
-  {$IFDEF IP_LAZARUS}
     function DoGetStream(const AUrl: string): TStream; override;
-  {$ENDIF}
     function CheckURL(const AUrl: string;
       var AContentType: string): Boolean; override;
     procedure Leave(AHtml: TIpHtml); override;
@@ -83,10 +81,8 @@ begin
   FDocumment := TMemoryStream.Create;
   HandledProtocols.Add('HTTP');
   FClient.ResponseHeaders.NameValueSeparator := ':';
-{$IF FPC_FULLVERSION > 30000}
   FClient.AllowRedirect := True;
   FClient.MaxRedirects := High(Byte);
-{$ENDIF}
 end;
 
 destructor TIpHttpDataProvider.Destroy;
@@ -104,32 +100,26 @@ begin
   Result.Seek(0, soFromBeginning);
 end;
 
-{$IFDEF IP_LAZARUS}
 function TIpHttpDataProvider.DoGetStream(const AUrl: string): TStream;
 begin
   Result := TMemoryStream.Create;
   Result.CopyFrom(FDocumment, 0);
   Result.Seek(0, soFromBeginning);
 end;
-{$ENDIF}
 
 function TIpHttpDataProvider.CheckURL(const AUrl: string;
   var AContentType: string): Boolean;
 var
   VAddrRec: TIpAddrRec;
 begin
-{$IFDEF VER2_6}
-  FillChar(VAddrRec, SizeOf(TIpAddrRec), 0);
-{$ELSE}
   VAddrRec := Default(TIpAddrRec);
-{$ENDIF}
   Initialize(VAddrRec);
   try
     IpParseURL(AUrl, VAddrRec);
     FDocumment.Clear;
     FClient.Get(AUrl, FDocumment);
     Result := (FClient.ResponseStatusCode = 200)
-{$IF FPC_FULLVERSION > 30000}or FClient.IsRedirect(FClient.ResponseStatusCode){$ENDIF};
+      or FClient.IsRedirect(FClient.ResponseStatusCode);
     if Result then
     begin
       FContentType := AllTrimSpaces(FClient.ResponseHeaders.Values['Content-Type']);

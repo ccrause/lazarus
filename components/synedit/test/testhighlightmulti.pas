@@ -466,7 +466,7 @@ var
     AssertEquals(Format('%s / %s: Range-Count', [Name, AName]), length(ExpRanges), r.Count);
     for i := 0 to high(ExpRanges) do
       if ExpRanges[i] <> -1 then
-        AssertEquals(Format('%s / %s: Line %d', [Name, AName, i]), ExpRanges[i], PtrUInt(r[i]));
+        AssertEquals(Format('%s / %s: Line %d', [Name, AName, i]), ExpRanges[i], Integer(PtrUInt(r[i])));
   end;
 
   function RPoint(Y,X: Integer): TPoint;
@@ -903,7 +903,7 @@ var
     FreeAndNil(MultiHl);
   end;
 begin
-  TSynEditStringList(SynEdit.TextBuffer).AddChangeHandler(senrHighlightChanged, @DoHighlightChanged);
+  SynEdit.ViewedTextBuffer.AddChangeHandler(senrHighlightChanged, @DoHighlightChanged);
   {%region Issue 0022745}
     PushBaseName('Insert at end, create new section at end');   // Issue 0022745
     SynEdit.ClearAll;

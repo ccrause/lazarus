@@ -12,6 +12,10 @@ msgstr ""
 "X-Generator: Poedit 1.8.7.1\n"
 "X-Poedit-SourceCharset: UTF-8\n"
 
+#: strpas2jsdesign.pjsdatompackagetemplatedirectory
+msgid "Atom package template directory"
+msgstr ""
+
 #: strpas2jsdesign.pjsdbrowse
 msgid "Browse"
 msgstr ""
@@ -60,8 +64,26 @@ msgstr ""
 msgid "missing path to pas2js"
 msgstr ""
 
+#: strpas2jsdesign.pjsdnewatompackage
+msgid "Atom package"
+msgstr ""
+
+#: strpas2jsdesign.pjsdnewatompackagedescr
+msgid "A pas2js program running as Atom package."
+msgstr ""
+
+#: strpas2jsdesign.pjsdnewvscodeextension
+msgid "Visual Studio Code extension"
+msgstr ""
+
+#: strpas2jsdesign.pjsdnewvscodeextensiondescr
+msgid "A pas2js program running as Visual Studio Code extension."
+msgstr ""
+
 #: strpas2jsdesign.pjsdnodejsappdescription
-msgid "A pas2js program running in node.js"
+#, fuzzy
+#| msgid "A pas2js program running in node.js"
+msgid "A pas2js program running in node.js."
 msgstr "一个pas2js程序运行在node.js"
 
 #: strpas2jsdesign.pjsdnodejsapplication
@@ -144,6 +166,10 @@ msgstr ""
 msgid "Run RTL when all page resources are fully loaded"
 msgstr ""
 
+#: strpas2jsdesign.pjsdselectatomtemplatedir
+msgid "Select Atom package template directory"
+msgstr ""
+
 #: strpas2jsdesign.pjsdselectbrowserexecutable
 msgid "Select browser executable"
 msgstr ""
@@ -154,6 +180,10 @@ msgstr ""
 
 #: strpas2jsdesign.pjsdselectpas2jsexecutable
 msgid "Select pas2js executable"
+msgstr ""
+
+#: strpas2jsdesign.pjsdselectvscodetemplatedir
+msgid "Select Visual Studio Code extension template directory"
 msgstr ""
 
 #: strpas2jsdesign.pjsdselectxexecutable
@@ -190,8 +220,14 @@ msgstr ""
 msgid "Use this URL to start application"
 msgstr ""
 
+#: strpas2jsdesign.pjsdvisualstudiocodeextensiontemplatedirectory
+msgid "Visual Studio Code extension template directory"
+msgstr ""
+
 #: strpas2jsdesign.pjsdwebappdescription
-msgid "A pas2js program running in the browser"
+#, fuzzy
+#| msgid "A pas2js program running in the browser"
+msgid "A pas2js program running in the browser."
 msgstr "一个pas2js程序运行在浏览器"
 
 #: strpas2jsdesign.pjsdwebapplication

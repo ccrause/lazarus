@@ -27,7 +27,7 @@ interface
 
 uses
   Classes, SysUtils, Graphics, Controls, LCLProc,
-  SynEditMarkup, SynEditMiscClasses, SynEditPointClasses, SynEditMiscProcs;
+  SynEditMarkup, SynEditMiscClasses, SynEditPointClasses, SynEditTypes;
 
 type
 
@@ -59,6 +59,8 @@ type
                                          const aStartCol: TLazSynDisplayTokenBound;
                                          const AnRtlInfo: TLazSynDisplayRtlInfo;
                                          out   ANextPhys, ANextLog: Integer); override;
+    function GetMarkupAttributeAtWrapEnd(const aRow: Integer;
+      const aWrapCol: TLazSynDisplayTokenBound): TSynSelectedColor; override;
 
     property ColorTillEol: boolean read FColorTillEol write SetColorTillEol;
     property UseIncrementalColor : Boolean read FUseIncrementalColor write SetUseIncrementalColor;
@@ -67,7 +69,6 @@ type
   end;
 
 implementation
-uses SynEdit, SynEditTypes;
 
 { TSynEditMarkupSelection }
 
@@ -99,7 +100,7 @@ var
   p1, p2 : TPoint;
 begin
   inherited DoMarkupChanged(AMarkup);
-  if (not FSelection.SelAvail) or (TCustomSynEdit(SynEdit).HideSelection and not TCustomSynEdit(SynEdit).Focused) then
+  if (not FSelection.SelAvail) or (SynEdit.HideSelection and not SynEdit.Focused) then
     exit;
 
   p1 := FSelection.FirstLineBytePos;  // always ordered
@@ -140,7 +141,7 @@ begin
   nSelStart := 0;
   nSelEnd := 0;
 
-  if (not TCustomSynEdit(SynEdit).HideSelection or TCustomSynEdit(SynEdit).Focused) then begin
+  if (not SynEdit.HideSelection or SynEdit.Focused) then begin
     p1 := FSelection.FirstLineBytePos;  // always ordered
     p2 := FSelection.LastLineBytePos;
 
@@ -210,6 +211,16 @@ begin
   //  then
   //    Result := MarkupInfo;
   //end;
+end;
+
+function TSynEditMarkupSelection.GetMarkupAttributeAtWrapEnd(
+  const aRow: Integer; const aWrapCol: TLazSynDisplayTokenBound
+  ): TSynSelectedColor;
+begin
+  result := nil;
+
+  if (nSelStart <= aWrapCol.Logical) and ((nSelEnd > aWrapCol.Logical) or (nSelEnd < 0)) then
+    Result := MarkupInfo;
 end;
 
 procedure TSynEditMarkupSelection.GetNextMarkupColAfterRowCol(const aRow: Integer;

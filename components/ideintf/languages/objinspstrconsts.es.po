@@ -298,14 +298,40 @@ msgstr "IfNDef"
 msgid "Set value"
 msgstr "Establecer valor"
 
-#: objinspstrconsts.lisunabletofindparserfortool
-#, object-pascal-format
-msgid "Unable to find parser for tool \"%s\""
-msgstr "No se encontró analizador para la herramienta \"%s\""
+#: objinspstrconsts.lrsbufdsfilters
+msgid "XML data files|*.xml;Binary data files|*.dat"
+msgstr ""
 
-#: objinspstrconsts.lisunabletofindparserwithname
-#, object-pascal-format
-msgid "Unable to find parser with name \"%s\""
+#: objinspstrconsts.lrscopyfromdataset
+msgid "Copy data from other dataset"
+msgstr ""
+
+#: objinspstrconsts.lrscreatedataset
+msgid "Create dataset"
+msgstr ""
+
+#: objinspstrconsts.lrsdatasetactive
+msgid "Dataset is already active, close it first."
+msgstr ""
+
+#: objinspstrconsts.lrsloadfromfile
+msgid "Load data from file"
+msgstr ""
+
+#: objinspstrconsts.lrsnodatasetsavailableforcopy
+msgid "No dataset available to copy data from."
+msgstr ""
+
+#: objinspstrconsts.lrsprovidedatafilename
+msgid "Select a data file to save data to"
+msgstr ""
+
+#: objinspstrconsts.lrssavetofile
+msgid "Save data to file"
+msgstr ""
+
+#: objinspstrconsts.lrsselectdatafilename
+msgid "Select a file with data to load into dataset"
 msgstr ""
 
 #: objinspstrconsts.nbcesaddpage
@@ -484,10 +510,6 @@ msgstr "Confirmar borrado"
 msgctxt "objinspstrconsts.oiscopycomponents"
 msgid "&Copy"
 msgstr "&Copiar"
-
-#: objinspstrconsts.oiscreateanewpascalunit
-msgid "Create a new pascal unit."
-msgstr "Crear una unidad Pascal nueva."
 
 #: objinspstrconsts.oiscreatedefaultevent
 msgid "Create default event"
@@ -868,10 +890,6 @@ msgstr "Establecer por defecto: %s"
 #: objinspstrconsts.oissettodefaulthint
 msgid "Set property value to Default"
 msgstr "Establecer valor de la propiedad como predeterminado"
-
-#: objinspstrconsts.oisshowalloutputlines
-msgid "Show all output lines"
-msgstr ""
 
 #: objinspstrconsts.oisshowclasses
 msgid "Show classes"
@@ -1281,10 +1299,6 @@ msgstr "Editor del Filtro"
 #: objinspstrconsts.pefiltername
 msgid "Filter name"
 msgstr "Nombre del Filtro"
-
-#: objinspstrconsts.pirsunit
-msgid "Pascal unit"
-msgstr "Unidad Pascal"
 
 #: objinspstrconsts.rscdalignment
 msgid "Alignment"

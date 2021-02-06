@@ -42,10 +42,15 @@ begin
     TWSCustomComboBoxClass(WidgetSetClass).SetItemIndex(Self, FItemIndex);
   TWSCustomComboBoxClass(WidgetSetClass).SetStyle(Self, FStyle);
   TWSCustomComboBoxClass(WidgetSetClass).SetArrowKeysTraverseList(Self, FArrowKeysTraverseList);
+  TWSCustomComboBoxClass(WidgetSetClass).SetReadOnly(Self, FReadOnly);
   TWSCustomComboBoxClass(WidgetSetClass).SetMaxLength(Self, FMaxLength);
   TWSCustomComboBoxClass(WidgetSetClass).SetDropDownCount(Self, FDropDownCount);
+  if WidgetSet.GetLCLCapability(lcTextHint) = LCL_CAPABILITY_YES then
+    TWSCustomComboBoxClass(WidgetSetClass).SetTextHint(Self, FTextHint)
+  else
+    ShowEmulatedTextHintIfYouCan;
 
-  if FSelStart <> FSelLength then
+  if FSelLength<>0 then
   begin
     ASelStart:= FSelStart;
     ASelLength:= FSelLength;
@@ -92,8 +97,7 @@ begin
 
   if AMode in [lapAutoAdjustWithoutHorizontalScrolling, lapAutoAdjustForDPI] then
   begin
-    if (Style in [csOwnerDrawFixed, csOwnerDrawVariable, csOwnerDrawEditableFixed, csOwnerDrawEditableVariable])
-    and (FItemHeight > 0) then
+    if Style.IsOwnerDrawn and (FItemHeight > 0) then
       ItemHeight := Round(ItemHeight * AYProportion);
   end;
 end;
@@ -126,7 +130,7 @@ procedure TCustomComboBox.DoEnter;
 begin
   inherited DoEnter;
   //AutoSelect when DoEnter is fired by keyboard
-  if (Style = csDropDownList) then Exit;//Non editable style
+  if not Style.HasEditBox then Exit;//Non editable style
   if (FAutoSelect and not (csLButtonDown in ControlState)) then
   begin
    SelectAll;
@@ -189,11 +193,6 @@ begin
   Result := FMaxLength;
 end;
 
-function TCustomComboBox.GetReadOnly: Boolean;
-begin
-  Result := Style in [csDropDownList, csOwnerDrawFixed, csOwnerDrawVariable];
-end;
-
 {------------------------------------------------------------------------------
   Method: TCustomComboBox.LMChanged
   Params: msg -
@@ -252,7 +251,7 @@ end;
 procedure TCustomComboBox.CloseUp;
 begin
   if [csLoading,csDestroying,csDesigning]*ComponentState<>[] then exit;
-  if Style in [csSimple, csDropDown, csOwnerDrawEditableFixed, csOwnerDrawEditableVariable] then
+  if Style.HasEditBox then
   begin
     EditingDone;
     FEditingDone := False;
@@ -302,7 +301,7 @@ end;
 function TCustomComboBox.GetSelText: string;
 begin
   //debugln('TCustomComboBox.GetSelText ');
-  if FStyle in [csDropDown, csSimple] then
+  if FStyle.HasEditBox then
     Result:= UTF8Copy(Text, SelStart + 1, SelLength)
   else
     Result:= '';
@@ -321,7 +320,7 @@ var
   OldSelStart: integer;
 begin
   //debugln('TCustomComboBox.SetSelText ',Val);
-  if FStyle in [csDropDown, csSimple] then
+  if FStyle.HasEditBox then
   begin
     OldText := Text;
     OldSelStart := SelStart;
@@ -402,7 +401,7 @@ var
   CurText: String;
 begin
   //debugln('TCustomComboBox.SelectAll ');
-  if (FStyle in [csDropDown, csSimple]) then
+  if FStyle.HasEditBox then
   begin
     CurText := Text;
     if (CurText <> '') then
@@ -430,6 +429,32 @@ begin
   end;
 end;
 
+function TCustomComboBox.RealGetText: TCaption;
+begin
+  if FEmulatedTextHintStatus = thsShowing then
+    Result := ''
+  else
+    Result := inherited RealGetText;
+end;
+
+procedure TCustomComboBox.RealSetText(const AValue: TCaption);
+// If the text AValue occurs in the list of strings, then sets the itemindex,
+//  otherwise does the default action
+var
+  I: integer;
+begin
+  // when items have same text, FItems.IndexOf(AValue) gives wrong index. Issue #28683.
+  if AValue<>'' then
+  begin
+    I := ItemIndex;
+    if (I < 0) or (I >= FItems.Count) or (FItems[I] <> AValue) then
+      if not (csLoading in ComponentState) then
+        ItemIndex := FItems.IndexOf(AValue);
+    HideEmulatedTextHint;
+  end;
+  inherited;
+end;
+
 procedure TCustomComboBox.SetArrowKeysTraverseList(Value : Boolean);
 begin
   if Value <> FArrowKeysTraverseList then
@@ -449,6 +474,18 @@ begin
     Message.Result := 1
   else
     inherited WMChar(Message);
+end;
+
+procedure TCustomComboBox.WMKillFocus(var Message: TLMKillFocus);
+begin
+  inherited WMKillFocus(Message);
+  ShowEmulatedTextHintIfYouCan;
+end;
+
+procedure TCustomComboBox.WMSetFocus(var Message: TLMSetFocus);
+begin
+  HideEmulatedTextHint;
+  inherited WMSetFocus(Message);
 end;
 
 procedure TCustomComboBox.SetCharCase(eccCharCase: TEditCharCase);
@@ -473,6 +510,14 @@ begin
   RegisterPropertyToSkip(TCustomComboBox, 'ImeMode',    'VCL compatibility property', '');
 end;
 
+function TCustomComboBox.CanShowEmulatedTextHint: Boolean;
+begin
+  Result := HandleAllocated and
+            (WidgetSet.GetLCLCapability(lcTextHint)=LCL_CAPABILITY_NO) and
+            (([csDesigning,csLoading] * ComponentState) = []) and
+            (FTextHint <> '') and (Text = '') and not Focused;
+end;
+
 procedure TCustomComboBox.CreateParams(var Params: TCreateParams);
 const
   ComboBoxStyles: array[TComboBoxStyle] of dword = (
@@ -495,14 +540,12 @@ begin
   FEditingDone := Key = VK_RETURN;
   Skip := False;
   UserDropDown := ((Shift *[ssAlt] = [ssAlt]) and (Key = VK_DOWN));
-  PreventDropDown := Key in [VK_TAB, VK_RETURN, VK_ESCAPE];
+  if Style = csSimple then
+    PreventDropDown := Key in [VK_RETURN, VK_ESCAPE]
+  else
+    PreventDropDown := Key in [VK_TAB, VK_RETURN, VK_ESCAPE];
   if PreventDropDown then
   begin
-    // Prevent execution of DefaultAction (Delphi compatibility) except for
-    // style csSimple. There DroppedDown is always true (Delphi compatible).
-    // Tab key should work further and shouldn't be deleted. Issue #32559
-    if DroppedDown and not (Style = csSimple) then
-      Key := VK_UNKNOWN;
     DroppedDown := False;
   end;
   // if AutoDropDown then don't close DropDown, like in Delphi, issue #31247
@@ -550,7 +593,7 @@ begin
   //SelectAll when hitting return key for AutoSelect feature
   if (Key = VK_RETURN) then
   begin
-    if ((cbactEnabled in FAutoCompleteText) and (Style <> csDropDownList)) then
+    if ((cbactEnabled in FAutoCompleteText) and Style.HasEditBox) then
     begin
       // Only happens with alpha-numeric keys and return key and editable Style
       SelectAll;
@@ -562,7 +605,7 @@ begin
     end;
   end
   else
-  if ((cbactEnabled in FAutoCompleteText) and (Style <> csDropDownList)) then
+  if ((cbactEnabled in FAutoCompleteText) and Style.HasEditBox) then
   begin
     //Only happens with alpha-numeric keys and return key and editable Style
     //DebugLn(['TCustomComboBox.KeyUp ',Key,' ',IsEditableTextKey(Key)]);
@@ -677,9 +720,7 @@ function TCustomComboBox.GetItemHeight: Integer;
 begin
   // FItemHeight is not initialized at class creating. we can, but with what value?
   // so, if it still uninitialized (=0), then we ask widgetset
-  if (FStyle in [csOwnerDrawFixed, csOwnerDrawVariable,
-                 csOwnerDrawEditableFixed, csOwnerDrawEditableVariable])
-  and (FItemHeight > 0) or not HandleAllocated then
+  if FStyle.IsOwnerDrawn and (FItemHeight > 0) or not HandleAllocated then
     Result := FItemHeight
   else
   begin
@@ -715,8 +756,7 @@ begin
   FItemHeight := AValue;
   if not HandleAllocated then
     exit;
-  if Style in [csOwnerDrawFixed, csOwnerDrawVariable,
-               csOwnerDrawEditableFixed, csOwnerDrawEditableVariable] then
+  if Style.IsOwnerDrawn then
     TWSCustomComboBoxClass(WidgetSetClass).SetItemHeight(Self, FItemHeight);
 end;
 
@@ -808,7 +848,7 @@ begin
   ControlStyle := ControlStyle - [csCaptureMouse];
   with GetControlClassDefaultSize do
     SetInitialBounds(0, 0, CX, CY);
-  FItems := TStringlist.Create;
+  FItems := TStringListUTF8Fast.Create;
   FItemIndex := -1;
   FItemWidth := 0;
   FMaxLength := 0;
@@ -883,14 +923,14 @@ var i: integer;
 begin
   // insert as first
   if (Items.Count=0)
-  or (not CaseSensitive and (UTF8CompareText(Items[0],Item)<>0))
+  or (not CaseSensitive and (UTF8CompareLatinTextFast(Items[0],Item)<>0))
   or (CaseSensitive and (Items[0]<>Item)) then
   begin
     Items.InsertObject(0,Item,AnObject);
   end;
   // delete old
   for i:=Items.Count-1 downto 1 do begin
-    if (not CaseSensitive and (UTF8CompareText(Items[i],Item)=0))
+    if (not CaseSensitive and (UTF8CompareLatinTextFast(Items[i],Item)=0))
     or (CaseSensitive and (Items[i]=Item)) then
       Items.Delete(i);
   end;
@@ -947,31 +987,6 @@ begin
     // WidgetSet must be called even when csDestroying for at least TIniPropStorage's needs.
     FItemIndex:= TWSCustomComboBoxClass(WidgetSetClass).GetItemIndex(Self);
   Result := FItemIndex;
-end;
-
-{------------------------------------------------------------------------------
-  Method: TCustomComboBox.RealSetText
-  Params: AValue -
-  Returns: nothing
-
-  If the text AValue occurs in the list of strings, then sets the itemindex,
-  otherwise does the default action
- ------------------------------------------------------------------------------}
-procedure TCustomComboBox.RealSetText(const AValue: TCaption);
-var
-  I: integer;
-begin
-  // when items have same text, FItems.IndexOf(AValue) gives wrong index. Issue #28683.
-  I := ItemIndex;
-  if (I < 0) or (I >= FItems.Count) or (FItems[I] <> AValue) then
-  begin
-    I := FItems.IndexOf(AValue);
-    if I >= 0 then
-      ItemIndex := I
-    else if (not (csLoading in ComponentState)) then
-      ItemIndex := -1;
-  end;
-  inherited;
 end;
 
 {------------------------------------------------------------------------------
@@ -1047,7 +1062,7 @@ begin
       AHeight := FItemHeight
     else
       AHeight := ItemHeight;
-    if FStyle in [csOwnerDrawVariable, csOwnerDrawEditableVariable] then
+    if FStyle.IsVariable then
       MeasureItem(Integer(ItemId), AHeight);
     if AHeight > 0 then
       ItemHeight := AHeight;
@@ -1093,7 +1108,56 @@ end;
 
 procedure TCustomComboBox.SetReadOnly(const AValue: Boolean);
 begin
-  // will be removed in 1.10
+  if FReadOnly = AValue then
+    Exit;
+  FReadOnly := AValue;
+  if (not HandleAllocated) or (csLoading in ComponentState) then
+    Exit;
+  TWSCustomComboBoxClass(WidgetSetClass).SetReadOnly(Self, FReadOnly);
+end;
+
+// TextHint stuff
+
+procedure TCustomComboBox.SetTextHint(const AValue: TTranslateString);
+begin
+  if (FTextHint = AValue) then Exit;
+  FTextHint := AValue;
+  if (WidgetSet.GetLCLCapability(lcTextHint) = LCL_CAPABILITY_YES) and HandleAllocated then
+    TWSCustomComboBoxClass(WidgetSetClass).SetTextHint(Self, AValue);
+  if FTextHint = '' then
+    HideEmulatedTextHint
+  else
+    ShowEmulatedTextHintIfYouCan;
+end;
+
+procedure TCustomComboBox.ShowEmulatedTextHintIfYouCan;
+begin
+  if CanShowEmulatedTextHint then
+    ShowEmulatedTextHint;
+end;
+
+procedure TCustomComboBox.ShowEmulatedTextHint;
+var
+  HintFont: TFont;
+begin
+  FEmulatedTextHintStatus := thsChanging;
+  HintFont := CreateEmulatedTextHintFont(Self);
+  try
+    TWSCustomComboBoxClass(WidgetSetClass).SetFont(Self, HintFont);
+  finally
+    HintFont.Free;
+  end;
+  TWSCustomComboBoxClass(WidgetSetClass).SetText(Self, Self.TextHint);
+  FEmulatedTextHintStatus := thsShowing;
+end;
+
+procedure TCustomComboBox.HideEmulatedTextHint;
+begin
+  if FEmulatedTextHintStatus<>thsShowing then
+    Exit;
+  TWSCustomComboBoxClass(WidgetSetClass).SetFont(Self, Font);
+  TWSCustomComboBoxClass(WidgetSetClass).SetText(Self, '');
+  FEmulatedTextHintStatus := thsHidden;
 end;
 
 {------------------------------------------------------------------------------
@@ -1126,6 +1190,75 @@ begin
   else
   {$endif}
     inherited;
+end;
+
+{ TComboBoxStyleHelper }
+
+function TComboBoxStyleHelper.HasEditBox: Boolean;
+const
+  ArrHasEditBox: array[TComboBoxStyle] of Boolean = (
+    True,  // csDropDown
+    True,  // csSimple
+    False, // csDropDownList
+    False, // csOwnerDrawFixed
+    False, // csOwnerDrawVariable
+    True,  // csOwnerDrawEditableFixed
+    True   // csOwnerDrawEditableVariable
+  );
+begin
+  Result := ArrHasEditBox[Self];
+end;
+
+function TComboBoxStyleHelper.IsOwnerDrawn: Boolean;
+const
+  ArrIsOwnerDrawn: array[TComboBoxStyle] of Boolean = (
+    False, // csDropDown
+    False, // csSimple
+    False, // csDropDownList
+    True,  // csOwnerDrawFixed
+    True,  // csOwnerDrawVariable
+    True,  // csOwnerDrawEditableFixed
+    True   // csOwnerDrawEditableVariable
+  );
+begin
+  Result := ArrIsOwnerDrawn[Self];
+end;
+
+function TComboBoxStyleHelper.IsVariable: Boolean;
+const
+  ArrIsVariable: array[TComboBoxStyle] of Boolean = (
+    False, // csDropDown
+    False, // csSimple
+    False, // csDropDownList
+    False, // csOwnerDrawFixed
+    True,  // csOwnerDrawVariable
+    False, // csOwnerDrawEditableFixed
+    True   // csOwnerDrawEditableVariable
+  );
+begin
+  Result := ArrIsVariable[Self];
+end;
+
+function TComboBoxStyleHelper.SetEditBox(const AHasEditBox: Boolean): TComboBoxStyle;
+const
+  ArrSetEditBox: array[Boolean, TComboBoxStyle] of TComboBoxStyle = (
+   (csDropDownList,              // csDropDown
+    csDropDownList,              // csSimple
+    csDropDownList,              // csDropDownList
+    csOwnerDrawFixed,            // csOwnerDrawFixed
+    csOwnerDrawVariable,         // csOwnerDrawVariable
+    csOwnerDrawFixed,            // csOwnerDrawEditableFixed
+    csOwnerDrawVariable),        // csOwnerDrawEditableVariable
+   (csDropDown,                  // csDropDown
+    csSimple,                    // csSimple
+    csDropDown,                  // csDropDownList
+    csOwnerDrawEditableFixed,    // csOwnerDrawFixed
+    csOwnerDrawEditableVariable, // csOwnerDrawVariable
+    csOwnerDrawEditableFixed,    // csOwnerDrawEditableFixed
+    csOwnerDrawEditableVariable) // csOwnerDrawEditableVariable
+  );
+begin
+  Result := ArrSetEditBox[AHasEditBox, Self];
 end;
 
 // included by stdctrls.pp

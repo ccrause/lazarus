@@ -33,6 +33,11 @@ is64 = $$find(QMAKE_HOST.arch, ".*64")
   QMAKE_CXXFLAGS += -mstackrealign -mincoming-stack-boundary=2 
 }  
 
+haiku:isEmpty(is64) {
+  message("Added stack alignment options to CXXFLAGS in support of SSE i386 on Haiku")
+  QMAKE_CXXFLAGS += -mstackrealign -mincoming-stack-boundary=2
+}
+
 !equals(QT_MAJOR_VERSION,5)|!equals(QT_MINOR_VERSION,6) {
   message("Note: This binding version was generated for Qt 5.6.1. Current Qt is" $$QT_VERSION)
   message("Qt documents binary compatibility in each Version Change Note: http://qt.nokia.com/developer/changes")
@@ -73,8 +78,7 @@ CONFIG -= warn_on
 CONFIG -= create_prl
 CONFIG -= link_prl
 
-CONFIG -= release
-CONFIG += debug
+CONFIG += release
 CONFIG += dll
 CONFIG += warn_off
   

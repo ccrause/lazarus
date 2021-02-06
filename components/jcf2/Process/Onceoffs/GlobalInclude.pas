@@ -33,7 +33,9 @@ unit GlobalInclude;
 
 interface
 
-uses BaseVisitor, SourceToken;
+uses
+  SysUtils,
+  BaseVisitor, SourceToken;
 
 type
   TGlobalInclude = class(TBaseTreeNodeVisitor)
@@ -52,7 +54,6 @@ type
 implementation
 
 uses
-  { delphi }SysUtils,
   JclAnsiStrings,
   { local }Tokens, TokenUtils, JcfSettings,
   SettingsTypes, ParseTreeNodeType, SetClarify;
@@ -82,8 +83,8 @@ end;
 
 function TGlobalInclude.IsIncludedInSettings: boolean;
 begin
-  Result := ( not FormatSettings.Obfuscate.Enabled) and
-    (FormatSettings.Clarify.OnceOffs <> eDoNotRun)
+  Result := not FormattingSettings.Obfuscate.Enabled and
+               (FormattingSettings.Clarify.OnceOffs <> eDoNotRun)
 end;
 
 

@@ -33,8 +33,8 @@ interface
 }
 
 uses
-  { delphi }
-  Classes,
+  Classes, SysUtils,
+  Forms,
   { local }
   Tokens, SourceTokenList, SourceToken;
 
@@ -72,7 +72,7 @@ type
 
 
     function CurrentToken: TSourceToken;
-
+    function LastSolidToken: TSourceToken;
     procedure CompactTokens;
 
     procedure NextToken;
@@ -90,8 +90,6 @@ procedure RemoveConditionalCompilation(const pcTokens: TSourceTokenList);
 implementation
 
 uses
-  { delphi }
-  SysUtils, Forms,
   { local }
   PreProcessorExpressionTokenise, PreProcessorExpressionParser,
   ParseError, JcfSettings;
@@ -162,7 +160,8 @@ begin
 
   fiCurrentTokenIndex := 0;
 
-  fcDefinedSymbols := TStringList.Create;
+  fcDefinedSymbols := TStringList.Create;      // Will compare with CompareText.
+  {$IF FPC_FULLVERSION>=30200}fcDefinedSymbols.UseLocale := False;{$ENDIF}
   fcDefinedSymbols.Sorted := True;
   fcDefinedSymbols.Duplicates := dupIgnore;
 
@@ -202,12 +201,20 @@ begin
     Result := fcTokens.SourceTokens[fiCurrentTokenIndex];
 end;
 
+function TPreProcessorParseTree.LastSolidToken: TSourceToken;
+begin
+  Result:=nil;
+  if fcTokens<>nil then
+    Result:=fcTokens.LastSolidToken;
+end;
+
 procedure TPreProcessorParseTree.ProcessTokenList(const pcTokens: TSourceTokenList);
 var
   liLoop:  integer;
   lcToken: TSourceToken;
 begin
   Assert(pcTokens <> nil);
+  CheckNilPointer(pcTokens);
 
   fcTokens := pcTokens;
 
@@ -252,6 +259,7 @@ begin
  }
   lcToken := CurrentToken;
   Assert(lcToken <> nil);
+  CheckNilPointer(lcToken);
 
   case lcToken.PreprocessorSymbol of
     ppDefine:
@@ -399,16 +407,21 @@ procedure TPreProcessorParseTree.ParsePreProcessorDirective(
   const peSymbolTypes: TPreProcessorSymbolTypeSet);
 var
   lcToken: TSourceToken;
+const
+  lExceptionMessage='Expected compiler directive ';
 begin
   lcToken := CurrentToken;
   Assert(lcToken <> nil, 'nil token, expected ' +
     PreProcSymbolTypeSetToString(peSymbolTypes));
 
+  if lcToken=nil then
+    raise TEParseError.Create(lExceptionMessage, LastSolidToken);
+
   if lcToken.CommentStyle <> eCompilerDirective then
-    raise TEParseError.Create('Expected compiler directive', lcToken);
+    raise TEParseError.Create(lExceptionMessage, lcToken);
 
   if not (lcToken.PreprocessorSymbol in peSymbolTypes) then
-    raise TEParseError.Create('Expected compiler directive ' +
+    raise TEParseError.Create(lExceptionMessage +
       PreProcSymbolTypeSetToString(peSymbolTypes), lcToken);
 
   NextToken;
@@ -425,6 +438,7 @@ begin
   begin
     lcToken := CurrentToken;
     Assert(lcToken <> nil);
+    CheckNilPointer(lcToken);
 
     lcToken.PreProcessedOut := not fbPreprocessorIncluded;
 
@@ -563,7 +577,6 @@ var
   lsOutText: string;
   lcCurrentToken, lcExcludedText: TSourceToken;
 begin
-
   // right, what's out?
   liLoop := 0;
   while liLoop < fcTokens.Count - 1 do

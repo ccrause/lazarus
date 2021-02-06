@@ -47,7 +47,12 @@ See http://www.gnu.org/licenses/gpl.html
 
 interface
 
-uses Classes;
+uses
+  Classes, SysUtils,
+  Forms,
+  // local
+  JcfStringUtils;
+
 
 function GetApplicationFolder: string;
 
@@ -69,20 +74,7 @@ function SplitIntoLines(s: string): TStrings;
 procedure SplitIntoChangeSections(const s1, s2, SameStart, SameEnd: TStrings);
 
 
-{$IFDEF DELPHI_5}
-{ these functions are in Delphi 6 and up }
-function IncludeTrailingPathDelimiter(const psPath: string): string;
-function FileIsReadOnly(const psFile: string): boolean;
-{$ENDIF}
-
-
 implementation
-
-uses
-  { delphi }
-  SysUtils, Forms,
-  { local }
-  JcfStringUtils;
 
 function GetApplicationFolder: string;
 begin
@@ -402,24 +394,5 @@ begin
   end;
 
 end;
-
-{$IFDEF DELPHI_5}
-
-{ these functions are in Delphi 6 and up }
-
-function IncludeTrailingPathDelimiter(const psPath: string): string;
-begin
-  Result := psPath;
-  if StrRight(psPath, 1) <> DirDelimiter then
-    Result := Result + DirDelimiter;
-end;
-
-{ dummy for D5}
-function FileIsReadOnly(const psFile: string): boolean;
-begin
-  Result := False;
-end;
-
-{$ENDIF}
 
 end.

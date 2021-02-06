@@ -42,7 +42,7 @@ unit SynEditKeyCmds;
 interface
 
 uses
-  Classes, Menus, SysUtils, LCLIntf, LCLType;
+  Classes, Menus, SysUtils, LCLIntf, LCLType, SynEditStrConst;
 
 const
   //****************************************************************************
@@ -265,6 +265,8 @@ const
   ecCutCurrentLine     = 609; //
   ecCutAddCurrentLine  = 610; //
 
+  ecPasteAsColumns  = 611;  // Paste clipboard to current position as if it was column mode
+
   ecBlockIndent     = 615;  // Indent selection
   ecBlockUnindent   = 616;  // Unindent selection
   ecTab             = 617;  // Tab key
@@ -417,10 +419,6 @@ procedure RegisterKeyCmdIdentProcs(IdentToIntFn: TIdentToInt; IntToIdentFn: TInt
 procedure RegisterExtraGetEditorCommandValues(AProc: TGetEditorCommandValuesProc);
 
 implementation
-
-// FOR LAZARUS
-uses
-  SynEditStrConst;
 
 //=============================================================================
 // This code should move to the menus.pas
@@ -955,10 +953,7 @@ begin
   begin
     Clear;
     for x := 0 to TSynEditKeyStrokes(Source).Count-1 do
-    begin
-      with Add do
-        Assign(TSynEditKeyStrokes(Source)[x]);
-    end;
+      Add.Assign(TSynEditKeyStrokes(Source)[x]);
   end else
     inherited Assign(Source);
 end;

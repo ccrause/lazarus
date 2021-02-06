@@ -7,7 +7,7 @@ interface
 uses
    SysUtils, Classes, laz.VirtualTrees,
   // LCL
-  Forms, Controls, Buttons, Graphics, ExtCtrls, StdCtrls, LCLType, ButtonPanel,
+  Forms, Controls, Buttons, Graphics, ExtCtrls, LCLType, ButtonPanel,
   Menus,
   //IDEIntf
   PackageIntf,
@@ -94,6 +94,7 @@ begin
   spCollapse.Caption := '';
   spCollapse.Images := MainDM.Images;
   spCollapse.ImageIndex := IMG_COLLAPSE;
+  ButtonPanel1.OKButton.Caption := rsMainFrm_TBInstall_Caption;
   FVST := TLazVirtualStringTree.Create(nil);
   with FVST do
   begin
@@ -355,7 +356,7 @@ begin
   while Assigned(Node) do
   begin
     Data := FVST.GetNodeData(Node);
-    if UpperCase(Data^.LazarusPackageName + '.lpk') = UpperCase(AName) then
+    if CompareText(Data^.LazarusPackageName + '.lpk', AName) = 0 then
     begin
       Result := Node^.CheckState = csCheckedNormal;
       Break;

@@ -36,12 +36,9 @@ type
     procedure pmiInsRowClick(Sender: TObject);
     procedure SetDefaultMenuItemClick(Sender: TObject);
   private
-    FList: TStringList;
     fLoaded: boolean;
     fSaved: boolean;
   public
-    constructor Create(TheOwner: TComponent); override;
-    destructor Destroy; override;
     function GetTitle: String; override;
     procedure Setup({%H-}ADialog: TAbstractOptionsEditorDialog); override;
     procedure ReadSettings({%H-}AOptions: TAbstractIDEOptions); override;
@@ -215,6 +212,7 @@ procedure LoadGridFromFileDialogFilter(Grid: TStringGrid; Filter: string;
           end;
           if p^='|' then break;
         until p^=#0;
+        if p^=#0 then break;
         inc(p);
       end;
     end;
@@ -271,18 +269,6 @@ begin
     lisResetAllFileFiltersToDefaults, mtConfirmation, [mbCancel, mbOK])<>mrOk
   then exit;
   LoadGridFromFileDialogFilter(grdFileFilters,GetDefaultFileDialogFilter,false);
-end;
-
-constructor TFileFiltersOptionsFrame.Create(TheOwner: TComponent);
-begin
-  inherited Create(TheOwner);
-  FList := TStringList.Create;
-end;
-
-destructor TFileFiltersOptionsFrame.Destroy;
-begin
-  FList.Free;
-  inherited Destroy;
 end;
 
 function TFileFiltersOptionsFrame.GetTitle: String;

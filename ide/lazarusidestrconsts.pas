@@ -529,7 +529,8 @@ resourcestring
   lisMenuStepIntoContext = 'Step Into (Context)';
   lisMenuStepOverContext = 'Step Over (Context)';
   lisMenuStepOut = 'Step O&ut';
-  lisMenuRunToCursor = 'Step over to &Cursor';
+  lisMenuStepToCursor = 'Step over to &Cursor';
+  lisMenuRunToCursor = 'Run to Cursor';
   lisKMStopProgram = 'Stop Program';
   lisContinueAndDoNotAskAgain = 'Continue and do not ask again';
   lisSuspiciousUnitPath = 'Suspicious unit path';
@@ -1169,14 +1170,14 @@ resourcestring
        'License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.'
       +'%s'
       +'Lazarus is an IDE to create graphical and console applications '
-      +'with Free Pascal. Free Pascal is Pascal and Object Pascal '
-      +'compiler that runs on Windows, Linux, Mac OS X, FreeBSD and more.'
+      +'with Free Pascal. Free Pascal is a Pascal and Object Pascal '
+      +'compiler that runs on Windows, Linux, macOS, FreeBSD and more.'
       +'%s'
       +'Lazarus is the missing part of the puzzle that will allow you to '
-      +'develop programs for all of the above platforms in a Delphi like '
+      +'develop programs for all of the above platforms in a Delphi-like '
       +'environment. The IDE is a RAD tool that includes a form designer.'
       +'%s'
-      +'As Lazarus is growing we need more developers.';
+      +'As Lazarus is growing, we need more developers.';
   lisAboutNoContributors = 'Cannot find contributors list.';
   lisUnitNameAlreadyExistsCap = 'Unitname already in project';
   lisTheUnitAlreadyExists = 'The unit "%s" already exists.';
@@ -1298,9 +1299,8 @@ resourcestring
   lisElevateTheMessagePriorityToAlwaysShowItByDefaultIt = 'Elevate the message'
     +' priority to always show it (by default it has low priority "verbose")';
   lisMessagesWindow = 'Messages Window';
-  lisCheckForDiskFileChangesViaContent = 'Check for disk file changes via content '
-    +'rather than timestamp';
-  lisAutoCheckModifiedFiles = 'Automatically check (select) modified files';
+  lisCheckForDiskFileChangesViaContent =
+    'Check for disk file changes via content rather than timestamp';
   lisSlowerButMoreAccurate = 'Slower but more accurate.';
 
   // Search dialog
@@ -3121,6 +3121,7 @@ resourcestring
   srkmecCut                   = 'Cut';
   srkmecCopy                  = 'Copy';
   srkmecPaste                 = 'Paste';
+  srkmecPasteAsColumns        = 'Paste (as Columns)';
   srkmecCopyAdd               = 'Copy (Add to Clipboard)';
   srkmecCutAdd                = 'Cut (Add to Clipboard)';
   srkmecCopyCurrentLine       = 'Copy current line';
@@ -4045,6 +4046,7 @@ resourcestring
 
   // new dialog
   lisNewDlgNoItemSelected = 'No item selected';
+  lisUnitMustSaveBeforeInherit = 'Unit "%s" must be saved before it can be inherited from. Save now?';
   lisErrorOpeningComponent = 'Error opening component';
   lisUnableToOpenAncestorComponent = 'Unable to open ancestor component';
   lisNewDlgPleaseSelectAnItemFirst = 'Please select an item first.';
@@ -4131,9 +4133,6 @@ resourcestring
   lisProjAddTheMaximumVersionIsInvalid = 'The Maximum Version "%s" is invalid.'
     +'%sPlease use the format major.minor.release.build'
     +'%sFor example: 1.0.20.10';
-  lisProjAddInvalidPascalUnitName = 'Invalid Pascal unit name';
-  lisProjAddTheUnitNameIsNotAValidPascalIdentifier = 'The unit name "%s" is '
-    +'not a valid Pascal identifier.';
   lisProjAddUnitNameAlreadyExists = 'Unit name already exists';
   lisProjAddTheUnitNameAlreadyExistsInTheProject = 'The unit name "%s" '
     +'already exists in the project%swith file: "%s".';
@@ -4172,6 +4171,7 @@ resourcestring
     +'%sSave your work now !'
     +'%sHit Stop, and hope the best, we''re pulling the plug.';
   lisExecutionStopped = 'Execution stopped';
+  lisExecutionStoppedExitCode = 'Execution stopped with exit-code %1:d ($%2:s)';
   lisFileNotFound = 'File not found';
   lisDisableOptionXg = 'Disable Option -Xg?';
   lisTheProjectWritesTheDebugSymbolsToAnExternalFileThe = 'The project writes '
@@ -4250,6 +4250,8 @@ resourcestring
   lisDiskDiffSomeFilesHaveChangedOnDisk = 'Some files have changed on disk:';
   lisDiskDiffClickOnOneOfTheAboveItemsToSeeTheDiff = 'Click on one of the '
     +'above items to see the diff';
+  lisDiskDiffSomeFilesHaveLocalChanges = 'Some files have local changes.'
+    +' Either local or external changes will be overwritten.';
   lisDiskDiffReloadCheckedFilesFromDisk = 'Reload checked files from disk';
   lisDiskDiffIgnoreAllDiskChanges = 'Ignore all disk changes';
   
@@ -4790,6 +4792,7 @@ resourcestring
   lisPckEditRemovedFiles = 'Removed Files';
   lisPckEditRemovedRequiredPackages = 'Removed required packages';
   lisPckEditDefault = '%s, default: %s';
+  lisPckEditCheckAvailabilityOnline = 'Check availability online';
   lisPckEditAvailableOnline = '(available online)';
   lisPckEditFPMakePackage = '(fpmake)';
   lisPckEditDependencyProperties = 'Dependency Properties';
@@ -5396,6 +5399,7 @@ resourcestring
   lisDebugOptionsFrmAdditionalSearchPath = 'Additional search path';
   lisDebugOptionsFrmDebuggerGeneralOptions = 'Debugger general options';
   lisDebugOptionsFrmShowMessageOnStop = 'Show message on stop';
+  lisDebugOptionsFrmShowExitCodeOnStop = 'Show message on stop with Error (Exit-code <> 0)';
   lisDebugOptionsFrmResetDebuggerOnEachRun = 'Reset Debugger after each run';
   lisDebugOptionsFrmAutoCloseAsm = 'Automatically close the assembler window, after source not found';
   lisDebugOptionsFrmDebuggerSpecific = 'Debugger specific options (depends on '
@@ -5484,7 +5488,8 @@ resourcestring
 
   // View Search Results dialog
   rsFoundButNotListedHere = 'Found but not listed here: ';
-  rsStartANewSearch = 'Start a new search';
+  rsRefreshTheSearch = 'Refresh the search';
+  rsNewSearchWithSameCriteria = 'New search with same criteria';
   rsCloseCurrentPage = 'Close current page';
   rsFilterTheListWithString = 'Filter the lines in list with a string';
   rsCloseLeft = 'Close page(s) on the left';
@@ -5650,6 +5655,7 @@ resourcestring
   lisLocals = 'Local Variables';
   lisLocalsNotEvaluated = 'Locals not evaluated';
   lisEvaluateModify = '&Evaluate/Modify';
+  lisEvaluateAll = 'Evaluate all';
   lisLocalsDlgCopyName = '&Copy Name';
   lisLocalsDlgCopyValue = 'C&opy Value';
   lisLocalsDlgCopyNameValue = 'Co&py Name and Value';
@@ -5958,6 +5964,10 @@ resourcestring
     +'exist. Values were not checked.';
   lisInsertPrintShortTag = 'Insert PrintShort tag';
   lisIdCOpening = 'Opening';
+  lisAutomaticallyInvokeOnType = 'Automatically invoke on typing';
+  lisAutomaticallyInvokeOnTypeUseTimer = 'Use completion box delay';
+  lisAutomaticallyInvokeOnTypeOnlyWordEnd = 'Only complete when at end of word';
+  lisAutomaticallyInvokeOnTypeMinLength = 'Only complete if word is longer or equal';
   lisAutomaticallyInvokeAfterPoint = 'Automatically invoke after point';
   lisAutomaticallyUseSinglePossibleIdent = 'Automatically use single possible identifier';
   lisWhenThereIsOnlyOnePossibleCompletionItemUseItImmed = 'When there is only '
@@ -6573,8 +6583,7 @@ resourcestring
   lisUnableToRun2 = 'Unable to run "%s"';
 
   lisSelectFrame = 'Select Frame';
-  lisDsgToggleShowingNonVisualComponents = 'Toggle showing nonvisual '
-    +'components';
+  lisDsgToggleShowingNonVisualComponents = 'Toggle showing nonvisual components';
   lisDsgShowNonVisualComponents = 'Show nonvisual components';
 
   // * Debug Event Log *
@@ -6628,6 +6637,13 @@ resourcestring
   lisDebugOptionsFrmDebuggerBackend = 'Debugger Backend:';
   lisDebugOptionsFrmUseIDEDebugger = '-- Use IDE default Debugger --';
   lisDebugOptionsFrmUnknownDebuggerBacke = 'Unknown Debugger backend "%s"';
+  lisDynPkgAutoScrollOnDeletePa = 'Auto Scroll on delete past left border';
+  lisDynPkgAutoScrollOnTypePast = 'Auto Scroll on type past right border';
+  lisDynPkgTriggerOnMinCharsVis = 'Trigger on min chars visible';
+  lisDynPkgTriggerOnMinCharsOfW = 'Trigger on min chars (% of width)';
+  lisDynPkgAmountToScrollIn = 'Amount to scroll in';
+  lisDynPkgAmountToScrollIn2 = 'Amount to scroll in (%)';
+  lisDynPkgAmountToScrollInMax = 'Amount to scroll in (Max)';
 
 implementation
 

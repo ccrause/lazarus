@@ -32,7 +32,7 @@ unit FPCUnitLazIDEIntf;
 interface
 
 uses
-  Classes, SysUtils, LazIDEIntf, ProjectIntf, Controls, Forms, testcaseopts;
+  Classes, SysUtils, LazIDEIntf, ProjectIntf, Controls, Forms, testcaseopts, strtestcaseopts;
 
 type
   { TFPCUnitApplicationDescriptor }
@@ -89,20 +89,6 @@ procedure Register;
 
 implementation
 
-resourcestring
-  sFPCUnTestApp = 'FPCUnit Test Application';
-  sFPCUnTestAppDesc = 'FPCUnit Test Application%sAn application to run '
-    +'FPCUnit test cases.%sThe application source is automatically maintained by '
-    +'Lazarus.';
-  sFPCUnTestCase = 'FPCUnit Test Case';
-  sFPCUnTestCaseDesc = 'FPCUnit Test Case%sA unit containing a FPCUnit Test '
-    +'Case.';
-  sWriteYourOwnTest = 'Write your own test';
-  sFPCUnConsoleTestApp = 'FPCUnit Console Test Application';
-  sFPCUnConsoleTestDesc = 'FPCUnit Console Test Application%sAn application '
-    +'to run FPCUnit test cases in console mode.%sThe application source is '
-    +'automatically maintained by Lazarus.';
-
 procedure Register;
 begin
   FileDescriptorFPCUnitTestCase:=TFileDescPascalUnitFPCUnitTestCase.Create;
@@ -127,11 +113,8 @@ begin
 end;
 
 function TFPCUnitApplicationDescriptor.GetLocalizedDescription: string;
-var
-  le: string;
 begin
-  le := System.LineEnding;
-  Result:=Format(sFPCUnTestAppDesc,[le+le,le]);
+  Result:=sFPCUnTestAppDesc;
 end;
 
 function TFPCUnitApplicationDescriptor.InitProject(AProject: TLazProject): TModalResult;
@@ -255,7 +238,7 @@ end;
 
 function TFileDescPascalUnitFPCUnitTestCase.GetLocalizedDescription: string;
 begin
-  Result:=Format(sFPCUnTestCaseDesc,[#13]);
+  Result:=sFPCUnTestCaseDesc;
 end;
 
 function TFileDescPascalUnitFPCUnitTestCase.GetInterfaceSource(const Filename,
@@ -331,11 +314,8 @@ begin
 end;
 
 function TFPCUnitConsoleApplicationDescriptor.GetLocalizedDescription: string;
-var
-  le: string;
 begin
-  le := System.LineEnding;
-  Result:=Format(sFPCUnConsoleTestDesc,[le+le,le]);
+  Result:=sFPCUnConsoleTestDesc;
 end;
 
 function TFPCUnitConsoleApplicationDescriptor.InitProject(

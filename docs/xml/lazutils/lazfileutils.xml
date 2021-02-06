@@ -12,7 +12,7 @@
       </short>
       <descr>
         <p>
-          LazFileUtils contains types, procedures, and functions used for file and directory operations. This file is part of the LazUtils package.
+          <file>lazfileutils.pas</file> contains types, procedures, and functions used for file and directory operations. This file is part of the LazUtils package.
         </p>
         <remark>
           All functions are thread safe unless explicitly stated.
@@ -32,15 +32,14 @@
             The return value indicates the relative order in a sort operation, and can contain the following values:
           </p>
           <dl>
-            <dt><code> &lt;0 </code></dt>
+            <dt>&lt;0</dt>
             <dd>Filename1 comes before Filename2</dd>
-            <dt><code> 0 </code></dt>
+            <dt>0</dt>
             <dd>Filename1 and Filename2 to have the same value</dd>
-            <dt><code> &gt;0 </code></dt>
+            <dt>&gt;0</dt>
             <dd>Filename1 comes after Filename2</dd>
           </dl>
         </descr>
-        <errors></errors>
         <seealso>
           <link id="CompareFilenamesIgnoreCase"/>
         </seealso>
@@ -74,15 +73,15 @@
             The return value indicates the relative order in a case-insensitive sort operation, and can contain the following values:
           </p>
           <dl>
-            <dt><code> &lt;0 </code></dt>
+            <dt>&lt;0</dt>
             <dd>Filename1 comes before Filename2</dd>
-            <dt><code> 0 </code></dt>
+            <dt>0</dt>
             <dd>Filename1 and Filename2 to have the same value</dd>
-            <dt><code> &gt;0 </code></dt>
+            <dt>&gt;0</dt>
             <dd>Filename1 comes after Filename2</dd>
           </dl>
         </descr>
-        <errors></errors>
+        <errors/>
         <seealso>
           <link id="CompareFilenames"/>
         </seealso>
@@ -130,8 +129,8 @@
             The return is 1 if Filename does not contain a file extension.
           </p>
         </descr>
-        <errors></errors>
-        <seealso></seealso>
+        <errors/>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -164,12 +163,11 @@
             <var>CompareFilenameStarts</var> is an <var>Integer</var> function used to compare the specified file names to determine their relative sort order. Arguments in Filename1 and Filename2 do not need to be the same length. When they have different lengths, the number of characters common to both are used in the comparison. CompareFilenameStarts calls CompareFileNames to perform the comparison, and get the return value for the function.
           </p>
           <p>
-            See CompareFilename for more information about the numeric return value and its meaning.
+            See CompareFilenames for more information about the numeric return value and its meaning.
           </p>
         </descr>
         <seealso>
-          <link id ="CompareFileNames">CompareFilenames</link>
-          <link id ="CompareFileName">CompareFilename</link>
+          <link id="CompareFileNames"/>
         </seealso>
       </element>
 
@@ -211,11 +209,11 @@
             <var>IgnoreCase</var> indicates if upper- or lower-case differences are ignored in the file name comparison; the default value for the parameter is <b>False</b> (indicating that case differences are <b>not</b> ignored). For platforms where <b>CaseInsensitiveFilenames</b> is defined, the value in IgnoreCase defaults to <b>True</b>. When IgnoreCase is <b>True</b>, the <var>UTF8CompareText</var> function is called to perform a case-insensitive comparison of the specified file names. Otherwise, the ordinal byte values in the specified file names are compared until a difference is found, or the entire file name in Filename1 has been examined.
           </p>
           <p>
-            If either Filename1 or Filename2 are unassigned (contain <b>Nil</b>) or begin with a Null character (<b>Decimal 0</b>), the return value is set <b>0</b> (<b>zero</b>) and no additional actions are performed in the function. See CompareFilename for more information about the numeric return value for the function and its meaning.
+            If either Filename1 or Filename2 are unassigned (contain <b>Nil</b>) or begin with a Null character (<b>Decimal 0</b>), the return value is set <b>0</b> (<b>zero</b>) and no additional actions are performed in the function. See CompareFilenames for more information about the numeric return value for the function and its meaning.
           </p>
         </descr>
         <seealso>
-          <link id="CompareFilename"/>
+          <link id="CompareFilenames"/>
           <link id="UTF8CompareText"/>
         </seealso>
       </element>
@@ -277,10 +275,10 @@
         </errors>
         <seealso>
           <link id="FileCreateUTF8"/>
-          <link id="FileWrite"/>
-          <link id="FileClose"/>
           <link id="DeleteFileUTF8"/>
           <link id="InvalidateFileStateCache"/>
+          <link id="#rtl.sysutils.FileWrite">FileWrite</link>
+          <link id="#rtl.sysutils.FileClose">FileClose</link>
         </seealso>
       </element>
 
@@ -304,7 +302,7 @@
             <var>ExtractFileNameOnly</var> is a <var>String</var> function used to extract the base file name (without the file extension) from the value in AFilename. Path information, up to the last directory separator ('/' or '\') or device separator (':') character, in AFileName is ignored. The file extension, starting at the '.' character, is also omitted.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -339,7 +337,7 @@
             The return value is False if TheFilename (without the optional device identifier) is an empty string (''), or does not start with the directory separator for the environment.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -371,7 +369,7 @@
             The return value is False if TheFilename (without the optional device identifier)is an empty string (''), or does not start with the directory separator for the environment.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -397,7 +395,7 @@
             In  UNIX-like environments, the FilenameIsUnixAbsolute function is used in the implementation of FilenameIsAbsolute. The return value is False if TheFilename is an empty string (''), or does not start with the directory separator for the environment.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -410,30 +408,30 @@
         <short>Path and file name to use in the function</short>
       </element>
 
-      <!-- function Visibility: default -->
       <element name="ForceDirectory">
         <short>
           Creates the specified directory if it does not already exist
         </short>
         <descr>
           <p>
-            <var>ForceDirectory</var>  is a Boolean function which creates the specified directory if it does not already exist. ForceDirectory ensures that a trailing path delimiter exists in DirectoryName prior to checking the file system. Each directory in the specified path is examined in the function using DirPathExists.  ForceDirectory calls CreateDirUTF8 if a directory does not exist, and may exit with a return value of False if directory creation is not successful.
+            <var>ForceDirectory</var>  is a Boolean function which creates the specified directory if it does not already exist. ForceDirectory ensures that a trailing path delimiter exists in <var>DirectoryName</var> prior to checking the file system. Duplicate adjacent path delimiters (like '//foo//bar/foobar/' or '\\foo\\bar\foobar\') are removed prior to checking the directory path.
           </p>
           <p>
-            The return value is True if all directories in the path information already exist, or are successfully created in the function.
+            Each directory in the specified path is validated by calling <var>DirPathExists</var>. ForceDirectory calls <var>CreateDirUTF8</var> if a directory does not exist, and may exit with a return value of <b>False</b> if directory creation is not successful.
+          </p>
+          <p>
+            The return value is <b>True</b> if all directories in the path information already exist, or are successfully created in the function.
           </p>
         </descr>
         <seealso>
           <link id="ForceDirectoriesUTF8"/>
+          <link id="DirPathExists"/>
+          <link id="CreateDirUtf8"/>
         </seealso>
       </element>
-
-      <!-- function result Visibility: default -->
       <element name="ForceDirectory.Result">
         <short>Returns True if directory exists or if it was successfully created</short>
       </element>
-
-      <!-- argument Visibility: default -->
       <element name="ForceDirectory.DirectoryName">
         <short>Path information for the operation</short>
       </element>
@@ -445,7 +443,7 @@
         </short>
         <descr>
           <p>
-            CheckIfFileIsExecutable is a procedure used to examine the specified file name to see if it is executable. CheckIfFileIsExecutable is implemented for UNIX-like environments, and allows TProcess to better determine if the file can be executed on the platform or OS, and to get better error messages when it cannot.
+            CheckIfFileIsExecutable is a procedure used to examine the specified file name to see if it is executable. CheckIfFileIsExecutable is implemented for UNIX-like environments, and allows  a process to better determine if the file can be executed on the platform or OS, and to get better error messages when it cannot.
           </p>
           <p>
             CheckIfFileIsExecutable raises an exception with a specific message when the platform or OS facilities indicate it is necessary.
@@ -493,9 +491,6 @@
            </dd>
           </dl>
         </errors>
-        <seealso>
-          <link id="#fcl.Process.TProcess"/>
-        </seealso>
       </element>
 
       <!-- argument Visibility: default -->
@@ -513,7 +508,7 @@
             FileIsExecutable is a Boolean function used to determine if the specified file name is executable. For UNIX-like environments,  a combination of FpStat, FPS_ISREG, and FpAccess are used to get the return value. For the Windows environment, the value from FileExistsUTF8 is used as the return value. In short, the function is not really useful in a Windows environment.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -537,8 +532,8 @@
           </p>
         </descr>
         <seealso>
-          <link id="FpReadLink"/>
           <link id="FileGetAttrUTF8"/>
+          <link id="#rtl.baseunix.FpReadLink">FpReadLink</link>
         </seealso>
       </element>
       <element name="FileIsSymlink.Result">
@@ -565,7 +560,7 @@
         </descr>
         <seealso>
           <link id="FileOpenUTF8"/>
-          <link id="fpfstat"/>
+          <link id="#rtl.BaseUnix.FpFstat">FpFstat</link>
         </seealso>
       </element>
       <element name="FileIsHardLink.Result">
@@ -582,12 +577,12 @@
         </short>
         <descr>
           <p>
-            FileIsReadable is a Boolean function which indicates if the specified file name is readable. For UNIX-like environments, FpAccess is used to get the return value. On Windows, the return value is the result from FileExistsUTF8. In short, the function is not really useful on the Windows platform where a suitable file attribute does not exist for the purpose.
+            <var>FileIsReadable</var> is a <var>Boolean</var> function which indicates if the specified file name is readable. For UNIX-like environments, FpAccess is used to get the return value. On Windows, the return value is the result from FileExistsUTF8. In short, the function is not really useful on the Windows platform where a suitable file attribute does not exist for the purpose.
           </p>
         </descr>
         <seealso>
-          <link id="FpAccess"/>
           <link id="FileExistsUTF8"/>
+          <link id="#rtl.baseunix.FpAccess">FpAccess</link>
         </seealso>
       </element>
 
@@ -611,7 +606,7 @@
             FileIsWritable is a Boolean function which indicates if the specified file name is writable. For UNIX-like environments, FpAccess is used to get the return value. For Windows, FileGetAttrUTF8 is used to determine if faReadOnly is omitted from the attributes for the file.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -648,7 +643,7 @@
             Content in the file (up to 1024 characters) is checked to ensure that invalid Null and Control characters are not found in the file. The return value is True when the specified file name exists in the local file system, and does not contain Null or Control characters.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -668,7 +663,7 @@
 
       <!-- function Visibility: default -->
       <element name="FilenameIsTrimmed">
-        <short></short>
+        <short/>
         <descr>
           <p>
             FilenameIsTrimmed is an overloaded Boolean function used to determine if the specified file name contains characters to remove or resolve before use. The variant which uses PChar values performs the comparison. The  return value is False when the file name is a candidate for use of TrimFilename to remove whitespace or special characters.
@@ -677,7 +672,7 @@
             Use TrimFilename to remove leading or trailing whitespace, duplicate directory separators, or relative path symbols.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -708,7 +703,7 @@
         <descr>
           <var>TrimFilename</var> is a String function used to remove leading and trailing spaces (Decimal 32) in the specified path and file name. In addition, ResolveDots is called to expand directory characters (like '.' and '..') and to remove duplicate path delimiters (like '//').
         </descr>
-        <errors></errors>
+        <errors/>
         <seealso>
           <link id="ResolveDots"/>
           <link id="FileNameIsTrimmed"/>
@@ -756,7 +751,7 @@
             CleanAndExpandFilename is a String function used to remove whitespace and to resolve special characters in the specified file name. CleanAndExpandFilename calls TrimFilename and ExpandFileNameUTF8 to get the return value for the function. The return value is the current directory when Filename contains an empty string ('').
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -810,7 +805,7 @@
             The return value is an empty string (<b>''</b>) if Filename contains an empty string (<b>''</b>).
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -878,7 +873,7 @@
             CreateRelativePath is thread safe, and therefore, does not guarantee that the current directory is correct for file names like 'D:test.txt'.
           </remark>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -925,7 +920,7 @@
             This is a logical test;  FileIsInPath does not expand or follow symbolic links.
           </remark>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -956,7 +951,7 @@
             Please note: PathIsInPath ensures that a trailing path delimiter is included in the Path and Directory arguments prior to performing its comparison. On Windows, this results in a Path like 'C:' being treated as if it contains 'C:\'.
           </remark>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="PathIsInPath.Result">
         <short>True when Directory exists in Path</short>
@@ -983,7 +978,7 @@
             The return value is the same as the <var>aFileName</var> argument if the file name did not need to be shortened.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="ShortDisplayFilename.Result">
         <short>Shortened version of the specifed file name</short>
@@ -996,11 +991,11 @@
       </element>
 
       <element name="TPathDelimSwitch">
-        <short></short>
+        <short/>
         <descr>
           <var>TPathDelimSwitch</var> is an enumerated type with values that indicate how path delimiters in file names are handled in routines like SwitchPathDelims, CheckPathDelim, and IsCurrentPathDelim. Values in the enumeration represent the various platform- or OS-specific path delimiters available in the Lazarus LCL at run-time.
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="TPathDelimSwitch.pdsNone">
         <short>No path delimiter changes were used</short>
@@ -1025,7 +1020,7 @@
         <seealso>
           <link id="TPathDelimSwitch"/>
           <link id="SwitchPathDelims"/>
-          <link id="DirectorySeparator"/>
+          <link id="#rtl.system.DirectorySeparator">DirectorySeparator</link>
         </seealso>
       </element>
 
@@ -1041,7 +1036,7 @@
             For Windows, this means any UNIX path delimiters (<b>/</b>) in FileName are converted into the Windows path delimiter (<b>\</b>). Conversely, for all other platforms and environments, the Windows path delimiter (<b>\</b>) is converted to the UNIX notation (<b>/</b>). All path delimiter substitutions in FileName occur inline.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="ForcePathDelims.FileName">
         <short>File name examined in the routine</short>
@@ -1075,7 +1070,7 @@
             <var>AppendPathDelim</var> is a <var>String</var> function used to ensure that a trailing path delimiter is included in the specified Path. The return value includes the value in Path and the trailing path delimiter (when needed).
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1098,7 +1093,7 @@
             <var>ChompPathDelim</var> is a <var>String</var> function used to remove a trailing path delimiter from the specified value in Path. For  environments where UNC paths are allowed, ChompPathDelim ensures that the UNC path delimiters are retained.  Windows Device identifiers, such as "D:"  are also retained in Path.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1191,7 +1186,7 @@
         <short>Value to compare to the current path delimiter for the system</short>
       </element>
       <element name="CheckPathDelim.Changed">
-        <short></short>
+        <short/>
       </element>
 
       <element name="IsCurrentPathDelim">
@@ -1224,7 +1219,7 @@
            </dd>
           </dl>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="IsCurrentPathDelim.Result">
         <short>Boolean result of the path delimiter comparison</short>
@@ -1348,7 +1343,7 @@
             Compiler defines determine the mechanism used to perform a comparison of the values in APath and SearchPath; i.e. <var>CaseInsensitiveFilenames</var> and <var>NotLiteralFilenames</var>. <var>CompareFilenames</var> is called to perform the comparison when inline comparison of string values in not supported.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="FindPathInSearchPath.Result">
         <short>Position or value for the located search path</short>
@@ -1376,7 +1371,7 @@
             <var>FileExistsUTF8</var> is a <var>Boolean</var> function which indicates if the specified file name exists in the local file system. For the Windows environment, FileExistsUTF8 uses FileGetAttrUTF8 to ensure that Filename does not have the <b>FILE_ATTRIBUTE_DIRECTORY</b> attribute. For UNIX-like environments, the FileExists function in <file>SysUtils</file> is used to get the return value.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1405,7 +1400,7 @@
             The return value is in FileDate format, and can be transformed to a TDateTime value with the FileDateToDateTime function.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1428,7 +1423,7 @@
             <var>DirectoryExistsUTF8</var> is <var>Boolean</var> function used to determine if the specified path exists on the local file system. For the Windows environment, FileGetAttrUTF8 is called to see if <b>FILE_ATTRIBUTE_DIRECTORY</b> is included in the file attributes for the specified Directory. For UNIX-like environments, the DirectoryExists function in the <file>SysUtils</file> unit is used to get the return value.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1454,7 +1449,7 @@
             If an empty string ('') is passed in Filename, it is expanded to the current directory using GetCurrentDirUTF8. When FileName contains the tilde character (<b>~</b>), it is converted to the path to the home directory for the user using the <var>HOME</var> environment variable.  Relative paths in FileName are resolved by calling ResolveDots.
           </p>
         </descr>
-        <errors></errors>
+        <errors/>
         <seealso>
           <link id="GetCurrentDirUTF8"/>
           <link id="ResolveDots"/>
@@ -1492,9 +1487,9 @@
             The return value contains the result from GetLastError; a non-zero value indicates that no files matching the criteria were found.
           </p>
         </descr>
-        <errors></errors>
+        <errors/>
         <seealso>
-          <link id="#rtl.Dos.FIndFirst"/>
+          <link id="#rtl.sysutils.FindFirst">FindFirst</link>
         </seealso>
       </element>
 
@@ -1534,7 +1529,7 @@
             The return value contains the result from GetLastError; a non-zero value indicates that an error was encountered.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1557,7 +1552,7 @@
             <var>FindCloseUTF8</var> is a procedure used to free resources allocated to the search record in F by the <var>FindFirstUTF8</var> routine. FindCloseUTF8 calls the FindClose function in the <file>SysUtils</file> unit.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- argument Visibility: default -->
@@ -1581,7 +1576,7 @@
             The return value is the value from GetLastError; a non-zero value indicates that an error has occurred.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1638,7 +1633,7 @@
            </dd>
           </dl>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1693,7 +1688,7 @@
             The return value contains the result from GetLastError; a non-zero value indicates that an error has occurred.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1727,7 +1722,7 @@
             The return value contains True when Filename is successfully deleted from the local file system.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1756,8 +1751,8 @@
             The return value is True if the file is renamed successfully.
           </p>
         </descr>
-        <errors></errors>
-        <seealso></seealso>
+        <errors/>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1794,7 +1789,7 @@
             When ImplicitCurrentDir is <b>False</b>, each path in DirList is searched for a file with the specified name. The search is stopped when the first file with the specified file name is found. The return value contains the path in DirList where the file name was located along with the file name, or an empty string ('') if the specified file is not found in the search.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1822,7 +1817,7 @@
             <var>FileIsReadOnlyUTF8</var> is a <var>Boolean</var> function used to determine if the specified file is marked as read-only in the local file system. FileIsReadOnlyUTF8 calls FileGetAttrUTF8 for the specified file name and checks to see if  faReadOnly has been included in the file attributes value. The return value is True when faReadOnly has been included in the file attributes.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1844,14 +1839,16 @@
           <p>
             <var>GetCurrentDirUTF8</var> is a <var>String</var> function used to get the name for the current directory in the local file system.
           </p>
-            For the Windows environment, GetCurrentDirectoryW is called to get the current directory name. UTF8Encode is called to convert the WideString value to UTF-8, and used as the return value for the function.
           <p>
+            For the Windows environment, GetCurrentDirectoryW is called to get the current directory name. UTF8Encode is called to convert the WideString value to UTF-8, and used as the return value for the function.
           </p>
           <p>
             For UNIX-like environments, GetCurrentDir in SysUtils is called to get the current directory name.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso>
+          <link id="#rtl.sysutils.GetCurrentDir">GetCurrentDir</link>
+        </seealso>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1886,7 +1883,7 @@
            </dd>
           </dl>
         </errors>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1917,7 +1914,7 @@
             An error can occur if a directory with the specified name already exists in the local file system.
           </p>
         </errors>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <!-- function result Visibility: default -->
@@ -1949,9 +1946,8 @@
             The return value is True when the specified directory is successfully removed.
           </p>
         </descr>
-        <errors></errors>
         <seealso>
-          <link id="#rtl.SysUtils.RemoveDir"/>
+          <link id="#rtl.sysutils.RemoveDir">RemoveDir</link>
         </seealso>
       </element>
 
@@ -2016,8 +2012,8 @@
           </p>
         </descr>
         <seealso>
-          <link id="#RTL.SysUtils.FileOpen"/>
           <link id="UTF8ToSys"/>
+          <link id="#rtl.sysutils.FileOpen">FileOpen</link>
         </seealso>
       </element>
       <element name="FileOpenUTF8.Result">
@@ -2042,7 +2038,7 @@
         </descr>
         <seealso>
           <link id="UTF8ToSys"/>
-          <link id="#RTL.SysUtils.FileCreate"/>
+          <link id="#rtl.sysutils.FileCreate">FileCreate</link>
         </seealso>
       </element>
       <element name="FileCreateUTF8.Result">
@@ -2061,11 +2057,10 @@
       <element name="FileSizeUtf8">
         <short>Gets the size for the specified file name</short>
         <descr>
-          <var>FileSizeUTF8</var> is an <var>Int64</var> function used to get the size for the file specified in the UTF-8-encoded <var>Filename</var> argument. FileSizeUTF8 calls <var>UTFToAnsi</var> to convert the value in Filename to an AnsiString type, and calls the <var>FindFirst</var> routine in the <file>SysUtils</file> unit to get the size for the specified file name.
+          <var>FileSizeUTF8</var> is an <var>Int64</var> function used to get the size for the file specified in the UTF-8-encoded <var>Filename</var> argument. FileSizeUTF8 calls <var>Utf8ToSys</var> to convert the value in Filename to the system string type type, and calls the <var>FindFirst</var> routine in the <file>SysUtils</file> unit to get the size for the specified file name.
         </descr>
         <seealso>
-          <link id="UTF8ToAnsi"/>
-          <link id="#RTL.SysUtils.FindFirst"/>
+          <link id="#rtl.sysutils.FindFirst">FindFirst</link>
         </seealso>
       </element>
       <element name="FileSizeUtf8.Result">
@@ -2153,7 +2148,7 @@ Modified: MM/DD/YYYY hh:mm
           The return value can be 'Modified: ?' if an exception is encountered when getting the date/time value for the file.
         </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="GetFileDescription.Result">
         <short>String with the file information for the platform or OS</short>
@@ -2190,7 +2185,7 @@ Modified: MM/DD/YYYY hh:mm
             File attributes not found in Attrib are represented as '-' characters.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="DbgSFileAttr.Result">
         <short>String with information about the file attributes</short>
@@ -2230,7 +2225,7 @@ Modified: MM/DD/YYYY hh:mm
             <var>TPhysicalFilenameOnError</var> is an enumerated type with values that indicate the action taken when an error is encountered when retrieving the physical file name for a symbolic link on the local file system. TPhysicalFilenameOnError includes the following enumeration values and meanings:
           </p>
           <dl>
-            <dd>pfeException</dd>
+            <dt>pfeException</dt>
             <dd>
               Causes an exception to be raised for the missing file name.
             </dd>
@@ -2330,7 +2325,7 @@ Modified: MM/DD/YYYY hh:mm
       </element>
 
       <element name="GetAppConfigDirUTF8">
-        <short></short>
+        <short/>
         <descr>
           <p>
             <var>GetAppConfigDirUTF8</var> is a <var>String</var> function used to get the directory on the local file system where application configuration and data files are stored.
@@ -2361,8 +2356,8 @@ Modified: MM/DD/YYYY hh:mm
           </p>
         </descr>
         <seealso>
-          <link id="#RTL.SysUtils.GetAppConfigDir"/>
           <link id="ForceDirectoriesUTF8"/>
+          <link id="#rtl.sysutils.GetAppConfigDir">GetAppConfigDir</link>
         </seealso>
       </element>
       <element name="GetAppConfigDirUTF8.Result">
@@ -2390,19 +2385,25 @@ Modified: MM/DD/YYYY hh:mm
             <var>GetAppConfigFileUTF8</var> is a <var>String</var> function used to get a UTF-8-encoded configuration file name for the current application. GetAppConfigFileUTF8 calls the <var>GetAppConfigFile</var> function in the <file>SysUtils</file> unit to get the return value for the function. <var>SysToUTF8</var> is called for the file name to ensure that it is encoded using the UTF-8 encoding scheme.
           </p>
           <p>
-            <var>Global</var> is a <var>Boolean</var> which indicates if system- or user-specific path information is used in the configuration file name. When Global contains <b>True</b>, the system-wide configuration path is used in the return value. Otherwise, a user-specific path is used in the return value.
+            <var>Global</var> is a <var>Boolean</var> which indicates whether system- or user-specific path information is used in the configuration file name. When Global contains <b>True</b>, the system-wide configuration path is used in the return value. Otherwise, a user-specific path is used in the return value.
           </p>
           <p>
-            <var>SubDir</var> is a <var>Boolean</var> value that indicates if a sub-directory for the application is included in the path for the configuration file. When SubDir is <b>True</b>, a sub-directory with the same name as the application is included in the path information.
+            <var>SubDir</var> is a <var>Boolean</var> value that indicates if a sub-directory for the application is included in the path for the configuration file. When SubDir is <b>True</b>, a "Config" sub-directory  is included in the path information.
           </p>
           <p>
             <var>CreateDir</var> is a <var>Boolean</var> argument that indicates if any missing directories in the configuration file path are created in the function. When CreateDir is <b>False</b>, no additional actions are performed in the function. Otherwise, the path information is passed to <var>ForceDirectoriesUTF8</var> to create any missing directories. If any of the directories are not successfully created, an <var>EInOutError</var> exception is raised with the message in <var>lrsUnableToCreateConfigDirectoryS</var>.
           </p>
+          <p>
+            The return value contains the path to the configuration file including the requested path, configuration file name, and configuration file extension.
+          </p>
         </descr>
+        <errors>
+          Raises an EInOutError exception when directories in the  path cannot be created on the local file system.
+        </errors>
         <seealso>
-          <link id="#RTL.SysUtils.GetAppConfigFile"/>
-          <link id="#RTL.SysUtils.SysToUTF8"/>
           <link id="ForceDirectoriesUTF8"/>
+          <link id="#rtl.sysutils.GetAppConfigFile">GetAppConfigFile</link>
+          <link id="#lazutils.lazutf8.SysToUTF8">SysToUTF8</link>
         </seealso>
       </element>
       <element name="GetAppConfigFileUTF8.Result">
@@ -2448,7 +2449,7 @@ Modified: MM/DD/YYYY hh:mm
             GetTempFileNameUTF8 examines the files in the specified directory to determine if a file already exists which starts with the value in  Prefix. If a file is located in the directory, a numeric suffix (starting at 0) is appended to the base file name in Prefix to build a temporary file name which does not already exist in the directory.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="GetTempFileNameUTF8.Result">
         <short>Temporary file name generated in the routine</short>
@@ -2481,7 +2482,7 @@ Modified: MM/DD/YYYY hh:mm
             Use ExtractUNCVolume to get host and path information from a file name expressed using UNC notation.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="IsUNCPath.Result">
         <short>True when the path contains UNC notation</short>
@@ -2549,7 +2550,7 @@ Modified: MM/DD/YYYY hh:mm
 C:\
           </code>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="ExtractFileRoot.Result">
         <short>Root directory on the file system for the specified file name </short>
@@ -2559,34 +2560,34 @@ C:\
       </element>
 
       <element name="GetDarwinSystemFilename">
-        <short></short>
+        <short/>
         <descr>
           Implemented when the platform or OS includes the <b>darwin</b> compiler define. Used in the implementation of TryCreateRelativePath for the Darwin platform.
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="GetDarwinSystemFilename.Result">
-        <short></short>
+        <short/>
       </element>
       <element name="GetDarwinSystemFilename.Filename">
-        <short></short>
+        <short/>
       </element>
 
       <element name="GetDarwinNormalizedFilename">
-        <short></short>
+        <short/>
         <descr>
           Implemented when the platform or OS includes the <b>darwin</b> compiler define. Handles canonical string normalization forms for file names on the Darwin platform.
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
       <element name="GetDarwinNormalizedFilename.Result">
-        <short></short>
+        <short/>
       </element>
       <element name="GetDarwinNormalizedFilename.Filename">
-        <short></short>
+        <short/>
       </element>
       <element name="GetDarwinNormalizedFilename.nForm">
-        <short></short>
+        <short/>
       </element>
 
       <element name="SHGetFolderPathUTF8">
@@ -2625,8 +2626,8 @@ C:\
         <short>
           Ensures that whitespace and quoting use the format required for command line parameters
         </short>
-        <descr></descr>
-        <seealso></seealso>
+        <descr/>
+        <seealso/>
       </element>
       <element name="StrToCmdLineParam.Result">
         <short>
@@ -2639,8 +2640,8 @@ C:\
 
       <element name="MergeCmdLineParams">
         <short>Generates a string with the specified list of parameters</short>
-        <descr></descr>
-        <seealso></seealso>
+        <descr/>
+        <seealso/>
       </element>
       <element name="MergeCmdLineParams.Result">
         <short>String representation for the list of parameters</short>
@@ -2651,8 +2652,8 @@ C:\
 
       <element name="SplitCmdLine">
         <short>Splits the specified command line into program and parameter values</short>
-        <descr></descr>
-        <seealso></seealso>
+        <descr/>
+        <seealso/>
       </element>
       <element name="SplitCmdLine.CmdLine">
         <short>Command line examined in the function</short>
@@ -2666,8 +2667,8 @@ C:\
 
       <element name="PrepareCmdLineOption">
         <short>Ensures command line options are formatted properly</short>
-        <descr></descr>
-        <seealso></seealso>
+        <descr/>
+        <seealso/>
       </element>
       <element name="PrepareCmdLineOption.Result">
         <short>Command line option after quoting has been applied</short>
@@ -2712,7 +2713,6 @@ C:\
         </descr>
         <seealso>
           <link id="TInvalidateFileStateCacheEvent"/>
-          <link id="InvalidateFileStateCacheEvent"/>
         </seealso>
       </element>
 

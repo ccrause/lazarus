@@ -75,6 +75,8 @@ type
     IsUpdated: Boolean;
     SVNURL: String;
     CommunityDescription: String;
+    ExternalDependencies: String;
+    OrphanedPackage: Integer;
     InstallState: Integer;
     ButtonID: Integer;
     Button: TSpeedButton;
@@ -107,6 +109,7 @@ type
     FShowHintFrm: TShowHintFrm;
     FOldButtonNode: PVirtualNode;
     FStarSize: Integer;
+    procedure DoOpenPackage(const APackageName: String);
     procedure VSTBeforeCellPaint(Sender: TBaseVirtualTree;
       TargetCanvas: TCanvas; Node: PVirtualNode; {%H-}Column: TColumnIndex;
       {%H-}CellPaintMode: TVTCellPaintMode; CellRect: TRect; var {%H-}ContentRect: TRect);
@@ -149,6 +152,7 @@ type
     procedure SetButtonVisibility(Node: PVirtualNode; Column: TColumnIndex);
     procedure CallBack(Sender: TBaseVirtualTree; Node: PVirtualNode; {%H-}Data: Pointer; var {%H-}Abort: Boolean);
     procedure ShowDetails(const AButtonID: Integer);
+    procedure OpenPackage(const AButtonID: Integer);
     procedure ResetDependencyNodes;
   public
     constructor Create(const AParent: TWinControl; const AImgList: TImageList;
@@ -371,6 +375,8 @@ begin
          ChildData^.PackageState := LazarusPkg.PackageState;
          ChildData^.HasUpdate := LazarusPkg.HasUpdate;
          ChildData^.DataType := 2;
+         Inc(UniqueID);
+         ChildData^.ButtonID := -UniqueID;
          //add description(DataType = 3)
          GrandChildNode := FVST.AddChild(ChildNode);
          FVST.IsDisabled[GrandChildNode] := FVST.IsDisabled[GrandChildNode^.Parent];
@@ -486,7 +492,23 @@ begin
        GrandChildData^.DataType := 19;
        Inc(UniqueID);
        GrandChildData^.ButtonID := UniqueID;
-       Data^.CommunityDescription := SerializablePackages.Items[I].CommunityDescription;;
+       Data^.CommunityDescription := SerializablePackages.Items[I].CommunityDescription;
+       //add external dependecies(DataType = 20) - added 2020.04.14
+       GrandChildNode := FVST.AddChild(ChildNode);
+       FVST.IsDisabled[GrandChildNode] := FVST.IsDisabled[GrandChildNode^.Parent];
+       GrandChildData := FVST.GetNodeData(GrandChildNode);
+       GrandChildData^.ExternalDependencies := SerializablePackages.Items[I].ExternalDependecies;
+       GrandChildData^.DataType := 20;
+       Inc(UniqueID);
+       GrandChildData^.ButtonID := UniqueID;
+       Data^.ExternalDependencies := SerializablePackages.Items[I].ExternalDependecies;
+       //add orphaned package(DataType = 21) - added 2020.07.23
+       GrandChildNode := FVST.AddChild(ChildNode);
+       FVST.IsDisabled[GrandChildNode] := FVST.IsDisabled[GrandChildNode^.Parent];
+       GrandChildData := FVST.GetNodeData(GrandChildNode);
+       GrandChildData^.OrphanedPackage := SerializablePackages.Items[I].OrphanedPackage;
+       GrandChildData^.DataType := 21;
+       Data^.OrphanedPackage := SerializablePackages.Items[I].OrphanedPackage;
     end;
     FVST.SortTree(0, laz.VirtualTrees.sdAscending);
     ExpandEx;
@@ -528,6 +550,7 @@ var
 begin
   if Assigned(PackageDetailsFrm) then
     Exit;
+
   Node := VST.GetFirst;
   while Assigned(Node) do
   begin
@@ -554,6 +577,15 @@ begin
                FrmCaption := rsMainFrm_VSTText_ComDesc  + ' "' + MetaPackageData^.PackageDisplayName + '"';
              end;
            end;
+       20: begin
+             MetaPackageNode := ParentNode^.Parent;
+             if MetaPackageNode <> nil then
+             begin
+               MetaPackageData := VST.GetNodeData(MetaPackageNode);
+               Text := Data^.ExternalDependencies;
+               FrmCaption := rsMainFrm_VSTText_ExternalMetaPackageDeps  + ' "' + MetaPackageData^.PackageDisplayName + '"';
+             end;
+           end;
       end;
       Break;
     end;
@@ -570,9 +602,47 @@ begin
   end;
 end;
 
-procedure TVisualTree.ButtonClick(Sender: TObject);
+procedure TVisualTree.DoOpenPackage(const APackageName: String);
+var
+  LazarusPkg: TLazarusPackage;
 begin
-  ShowDetails((Sender as TSpeedButton).Tag);
+  LazarusPkg := SerializablePackages.FindLazarusPackage(APackageName);
+  if (LazarusPkg <> nil) and (FileExists(LazarusPkg.PackageAbsolutePath)) then
+  begin
+    if PackageEditingInterface.DoOpenPackageFile(LazarusPkg.PackageAbsolutePath, [], True) <> mrOk then
+      MessageDlgEx(rsMainFrm_VSTText_Open_Error, mtError, [mbOk], TForm(FVST.Parent.Parent));
+  end
+  else
+    MessageDlgEx(rsMainFrm_VSTText_Open_Notfound, mtError, [mbOk], TForm(FVST.Parent.Parent));
+end;
+
+procedure TVisualTree.OpenPackage(const AButtonID: Integer);
+var
+  Node: PVirtualNode;
+  Data: PData;
+begin
+  Node := VST.GetFirst;
+  while Assigned(Node) do
+  begin
+    Data := VST.GetNodeData(Node);
+    if Data^.ButtonID = AButtonID then
+    begin
+      DoOpenPackage(Data^.LazarusPackageName);
+      Break;
+    end;
+    Node := VST.GetNext(Node);
+  end;
+end;
+
+procedure TVisualTree.ButtonClick(Sender: TObject);
+var
+  Tag: Integer;
+begin
+  Tag := (Sender as TSpeedButton).Tag;
+  if Tag < 0 then
+    OpenPackage(Tag)
+  else
+    ShowDetails(Tag);
 end;
 
 function TVisualTree.TranslateCategories(const AStr: String): String;
@@ -1166,7 +1236,7 @@ begin
         FVST.RepaintNode(Node);
       end;
     end;
-    if Data^.DataType in [3..19] then
+    if Data^.DataType in [3..20] then
     begin
       FVST.IsDisabled[Node] := FVST.IsDisabled[Node^.Parent];
       ParentData := FVST.GetNodeData(Node^.Parent);
@@ -1295,7 +1365,7 @@ begin
                 begin
                   DependencyPkg := TLazarusPackage(SerializablePackages.Items[DataSearch^.PID].LazarusPackages.Items[DataSearch^.PFID]);
                   if (FVST.CheckState[NodeSearch] <> csCheckedNormal) and
-                       (UpperCase(DataSearch^.LazarusPackageName) = UpperCase(PkgFileName)) and
+                       (CompareText(DataSearch^.LazarusPackageName, PkgFileName) = 0) and
                          ((SerializablePackages.IsDependencyOk(TPackageDependency(PackageList.Items[I]), DependencyPkg)) and
                            ((not (DependencyPkg.PackageState = psInstalled)) or ((DependencyPkg.PackageState = psInstalled) and (not (SerializablePackages.IsInstalledVersionOk(TPackageDependency(PackageList.Items[I]), DataSearch^.InstalledVersion)))))) then
                   begin
@@ -1413,8 +1483,15 @@ begin
             ((not Options.ShowRegularIcons) or ((Options.ShowRegularIcons) and (Data^.InstallState = 0))) then
            ImageIndex := 25
          else
-           ImageIndex := 1;
-      else
+         begin
+           if Data^.OrphanedPackage = 0 then
+             ImageIndex := 1
+           else
+             ImageIndex := 36;
+         end;
+     20: ImageIndex := 10;
+     21: ImageIndex := 36;
+     else
         ImageIndex := Data^.DataType
     end;
   end;
@@ -1486,6 +1563,8 @@ begin
        17: CellText := rsMainFrm_VSTText_HomePageURL;
        18: CellText := rsMainFrm_VSTText_DownloadURL;
        19: CellText := rsMainFrm_VSTText_CommunityDescription;
+       20: CellText := rsMainFrm_VSTText_ExternalDeps;
+       21: CellText := rsMainFrm_VSTText_OrphanedPackage1;
       end;
     end
     else if Column = 1 then
@@ -1588,6 +1667,11 @@ begin
        17: CellText := Data^.HomePageURL;
        18: CellText := Data^.DownloadURL;
        19: CellText := GetDisplayString(Data^.CommunityDescription);
+       20: CellText := GetDisplayString(Data^.ExternalDependencies);
+       21: case Data^.OrphanedPackage of
+             0: CellText := rsMainFrm_VSTText_Install0;
+             1: CellText := rsMainFrm_VSTText_Install1;
+           end;
       end;
     end
     else if Column = 5 then
@@ -1794,17 +1878,24 @@ begin
 
     if (Data^.Button = nil) and
        (
+         ((Data^.DataType = 2) and (Data^.PackageState in [psExtracted, psInstalled])) or
          ((Data^.DataType = 3) and (Trim(Data^.Description) <> '')) or
          ((Data^.DataType = 9) and (Trim(Data^.License) <> '')) or
-         ((Data^.DataType = 19) and (Trim(Data^.CommunityDescription) <> ''))
-
+         ((Data^.DataType = 19) and (Trim(Data^.CommunityDescription) <> '')) or
+         ((Data^.DataType = 20) and (Trim(Data^.ExternalDependencies) <> ''))
         ) then
     begin
       Data := FVST.GetNodeData(FHoverNode);
       Data^.Button := TSpeedButton.Create(VST);
       with Data^.Button do
       begin
-        Caption := '...';
+        if Data^.DataType = 2 then
+        begin
+          Width := 75;
+          Caption := rsMainFrm_VSTText_Open;
+        end
+        else
+          Caption := '...';
         Parent := FVST;
         Tag := Data^.ButtonID;
         Visible := True;
@@ -1957,20 +2048,24 @@ begin
     17: HintText := Data^.HomePageURL;
     18: HintText := Data^.DownloadURL;
     19: HintText := Data^.CommunityDescription;
+    20: HintText := Data^.ExternalDependencies;
    else
        HintText := '';
   end;
 end;
 
 procedure TVisualTree.VSTDblClick(Sender: TObject);
+var
+  Data: PData;
+  Node: PVirtualNode;
 begin
-{  if FLinkClicked then
+  Node := FVST.GetFirstSelected;
+  if (Node <> nil) and (FVST.GetNodeLevel(Node) = 2) then
   begin
-    FLinkClicked := False;
-    FHoverColumn := -1;
-    FHoverNode := nil;
-    OpenURL(FLink);
-  end;}
+    Data := FVST.GetNodeData(Node);
+    if (Data^.DataType = 2) and (Data^.PackageState in [psExtracted, psInstalled]) then
+      DoOpenPackage(Data^.LazarusPackageName);
+  end;
 end;
 
 procedure TVisualTree.VSTScroll(Sender: TBaseVirtualTree; DeltaX, DeltaY: Integer);

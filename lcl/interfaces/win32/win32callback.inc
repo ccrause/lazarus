@@ -15,6 +15,7 @@
 {$ENDIF}
 type
   TWinControlAccess = class(TWinControl);
+  TApplicationAccess = class(TApplication);
 {*************************************************************}
 {            callback routines                                }
 {*************************************************************}
@@ -324,6 +325,8 @@ type
 
   TWindowProcHelper = record
   private
+    procedure SetlWinControl(AValue: TWinControl);
+  private
     // WindowProc parameters
     Window: HWnd;            // DWord / QWord
     Msg: UInt;               // LongWord
@@ -332,7 +335,7 @@ type
     // Other variables
     LMessage: TLMessage;
     PLMsg: PLMessage;
-    lWinControl: TWinControl;
+    FlWinControl: TWinControl;
     WinProcess: Boolean;
     NotifyUserInput: Boolean;
     WindowInfo: PWin32WindowInfo;
@@ -399,7 +402,16 @@ type
     procedure UpdateLMMovePos(X, Y: Smallint);
     procedure UpdateUIState(CharCode: Word);
     function DoWindowProc: LResult;    // Called from the actual WindowProc.
+    property lWinControl: TWinControl read FlWinControl write SetlWinControl;
   end;
+  PWindowProcHelper = ^TWindowProcHelper;
+
+  { TWindProcNotificationReceiver }
+
+  TWindProcNotificationReceiver = class
+    procedure ReceiveDestroyNotify(Sender: TObject);
+  end;
+
 
 // Implementation of TWindowProcHelper
 
@@ -430,18 +442,14 @@ end;
 
 function TWindowProcHelper.GetPopMenuItemObject: TObject;
 var
-  MenuHandle: HMENU;
+  MainMenuHandle: HMENU;
   MenuInfo: MENUITEMINFO;
 begin
   MenuInfo.cbSize := MMenuItemInfoSize;
   MenuInfo.fMask := MIIM_DATA;
 
-  MenuHandle := 0;
-  if Assigned(WindowInfo^.PopupMenu) then
-    MenuHandle := GetMenuParent(HMENU(WParam), WindowInfo^.PopupMenu.Handle);
-  if MenuHandle = 0 then
-    MenuHandle := GetMenuParent(HMENU(WParam), GetMenu(Window));
-  if GetMenuItemInfo(MenuHandle, LOWORD(LParam), true, @MenuInfo) then
+  MainMenuHandle := GetMenuParent(HMENU(WParam), GetMenu(Window));
+  if GetMenuItemInfo(MainMenuHandle, LOWORD(LParam), true, @MenuInfo) then
     Result := TObject(MenuInfo.dwItemData)
   else
     Result := nil;
@@ -516,6 +524,22 @@ begin
   {$ifdef MSG_DEBUG}
     DebugLn(MessageStackDepth, ' *double buffering on DC: ', IntToHex(CurDoubleBuffer.DC, sizeof(HDC)*2));
   {$endif}
+end;
+
+procedure TWindowProcHelper.SetlWinControl(AValue: TWinControl);
+begin
+  if FlWinControl = AValue then Exit;
+  if FlWinControl <> nil then begin
+    FlWinControl.DecLCLRefCount;
+    FlWinControl.RemoveHandlerOnBeforeDestruction(@TWindProcNotificationReceiver(@Self).ReceiveDestroyNotify);
+  end;
+
+  FlWinControl := AValue;
+
+  if FlWinControl <> nil then begin
+    FlWinControl.AddHandlerOnBeforeDestruction(@TWindProcNotificationReceiver(@Self).ReceiveDestroyNotify);
+    FlWinControl.IncLCLRefCount;
+  end;
 end;
 
 procedure TWindowProcHelper.CalcClipRgn(PaintRegion: HRGN);
@@ -1323,7 +1347,7 @@ begin
       itemindex is updated, so set text manually }
     CBN_SELCHANGE:
     begin
-      if TCustomComboBox(lWinControl).Style in [csSimple, csDropDown] then
+      if TCustomComboBox(lWinControl).Style.HasEditBox then
         UpdateComboBoxText(TCustomComboBox(lWinControl));
       SendSimpleMessage(lWinControl, LM_CHANGED);
       LMessage.Msg := LM_SELCHANGE;
@@ -1374,9 +1398,9 @@ begin
     if ChildWinControl <> nil then
     begin
       if (ChildWinControl is TCustomEdit)
-      and (TAccessCustomEdit(ChildWinControl).FEmulatedTextHintStatus=thsShowing) then
+      and (TCustomEdit(ChildWinControl).EmulatedTextHintStatus = thsShowing) then
       begin
-        EditFont := TAccessCustomEdit(ChildWinControl).CreateEmulatedTextHintFont;
+        EditFont := CreateEmulatedTextHintFont(ChildWinControl);
         try
           WindowColor := EditFont.Color;
         finally
@@ -1464,7 +1488,7 @@ begin
        (((lWinControl is TCustomListbox) and
           (TCustomListBox(lWinControl).Style <> lbStandard)) or
        ((lWinControl is TCustomCombobox) and
-          (TCustomCombobox(lWinControl).Style in [csOwnerDrawFixed, csOwnerDrawVariable, csOwnerDrawEditableFixed, csOwnerDrawEditableVariable])))
+           TCustomCombobox(lWinControl).Style.IsOwnerDrawn))
     then
       UpdateDrawListItem(LM_DRAWLISTITEM)
     else if Assigned(WindowInfo^.DrawItemHandler) then begin
@@ -1955,6 +1979,14 @@ begin
   end;
 end;
 
+{ TWindProcNotificationReceiver }
+
+procedure TWindProcNotificationReceiver.ReceiveDestroyNotify(Sender: TObject);
+begin
+  assert(PWindowProcHelper(Self)^.FlWinControl = Sender, 'TWindProcNotificationReceiver.ReceiveDestroyNotify: PWindowProcHelper(Self)^.FlWinControl = Sender');
+  PWindowProcHelper(Self)^.lWinControl := nil;
+end;
+
 // This is called from the actual WindowProc.
 
 function TWindowProcHelper.DoWindowProc: LResult;
@@ -1975,6 +2007,7 @@ const
   WM_DPICHANGED = $02E0;
 {$ENDIF}
 begin
+  try
   FillChar(LMessage, SizeOf(LMessage), 0);
   PLMsg := @LMessage;
   WinProcess := True;
@@ -1987,6 +2020,7 @@ begin
   end else begin
     lWinControl := WindowInfo^.WinControl;
   end;
+
   if (IgnoreNextCharWindow <> 0) and ((Msg = WM_CHAR) or (Msg = WM_SYSCHAR)) then
   begin
     if IgnoreNextCharWindow = Window then
@@ -2021,6 +2055,8 @@ begin
       begin
         CheckSynchronize;
         TWin32Widgetset(Widgetset).CheckPipeEvents;
+        if Assigned(Application) then
+          TApplicationAccess(Application).ProcessAsyncCallQueue;
       end;
     WM_ENTERIDLE: Application.Idle(False);
     WM_ACTIVATE:  SetLMessageAndParams(LM_ACTIVATE);
@@ -2702,6 +2738,10 @@ begin
   else if PLMsg = @LMNotify     then Result := LMNotify.Result
   else if PLMsg = @LMMouseEvent then Result := LMMouseEvent.Result
   else                               Result := PLMsg^.Result;
+
+  finally
+    lWinControl := nil;
+  end;
 end;
 
 {------------------------------------------------------------------------------
@@ -2732,6 +2772,7 @@ begin
   Helper.LParam := LParam;
   Helper.NMHdr := PNMHdr(LParam);
   Result := Helper.DoWindowProc;
+  Helper.lWinControl := nil;
 end;
 
 {$ifdef MSG_DEBUG}

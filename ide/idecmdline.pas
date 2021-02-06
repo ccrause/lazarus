@@ -40,11 +40,12 @@ interface
 uses 
   Classes, SysUtils,
   // LazUtils
-  FileUtil, LazFileUtils, LazUTF8, LazUTF8Classes, LazLogger,
+  FileUtil, LazFileUtils, LazUTF8, LazLogger,
   // IDE
   LazConf;
 
 const
+  // IDE cmd line options
   ShowSetupDialogOptLong='--setup';
   PrimaryConfPathOptLong='--primary-config-path=';
   PrimaryConfPathOptShort='--pcp=';
@@ -59,12 +60,17 @@ const
   DebugLogOptEnable='--debug-enable=';
   LanguageOpt='--language=';
   LazarusDirOpt ='--lazarusdir=';
+const
+  // startlazarus options
+  StartLazarusPidOpt   = '--lazarus-pid=';
+  StartLazarusDebugOpt = '--debug';
 
 procedure ParseCommandLine(aCmdLineParams: TStrings; out IDEPid : Integer;
             out ShowSplashScreen: boolean);
 function GetCommandLineParameters(aCmdLineParams: TStrings;
             isStartLazarus: Boolean = False) : string;
 function ExtractPrimaryConfigPath(aCmdLineParams: TStrings): string;
+function ExpandParamFile(const s: string): string;
 
 function IsHelpRequested : Boolean;
 function IsVersionRequested : boolean;
@@ -101,7 +107,7 @@ begin
   CfgFileName := AppendPathDelim(ProgramDirectory) + 'lazarus.cfg';
   if FileExistsUTF8(CfgFileName) then begin
     DebugLn(['using config file ', CfgFileName]);
-    CfgFileContent := TStringListUTF8.Create;
+    CfgFileContent := TStringList.Create;
     CfgFileContent.LoadFromFile(CfgFileName);
   end;
   Result := CfgFileContent;
@@ -197,9 +203,6 @@ end;
 
 procedure ParseCommandLine(aCmdLineParams: TStrings; out IDEPid: Integer; out
   ShowSplashScreen: boolean);
-const
-  LazarusPidOpt   = '--lazarus-pid=';
-  LazarusDebugOpt = '--debug';
 var
   i     : Integer;
   Param : string;
@@ -209,16 +212,17 @@ begin
   HasDebugLog := False;
   for i := 1 to ParamsAndCfgCount do begin
     Param := ParamsAndCfgStr(i);
+    if Param='' then continue;
     if SysUtils.CompareText(LeftStr(Param, length(DebugLogOpt)), DebugLogOpt) = 0 then
       HasDebugLog := HasDebugLog or (length(Param) > length(DebugLogOpt));
-    if (Param=LazarusDebugOpt) and (not HasDebugLog) then begin
+    if (Param=StartLazarusDebugOpt) and (not HasDebugLog) then begin
       aCmdLineParams.Add('--debug-log=' +
                          AppendPathDelim(UTF8ToSys(GetPrimaryConfigPath)) + 'debug.log');
     end;
-    if LeftStr(Param,length(LazarusPidOpt))=LazarusPidOpt then begin
+    if LeftStr(Param,length(StartLazarusPidOpt))=StartLazarusPidOpt then begin
       try
         IDEPid :=
-          StrToInt(RightStr(Param,Length(Param)-Length(LazarusPidOpt)));
+          StrToInt(RightStr(Param,Length(Param)-Length(StartLazarusPidOpt)));
       except
         DebugLn('Failed to parse %s',[Param]);
         IDEPid := 0;
@@ -250,7 +254,7 @@ var
   s: String;
 begin
   if isStartLazarus then
-    Result := ' --no-splash-screen --started-by-startlazarus'
+    Result := ' '+NoSplashScreenOptLong+' '+StartedByStartLazarusOpt
   else
     Result := '';
   for i := 0 to aCmdLineParams.Count - 1 do begin
@@ -280,6 +284,25 @@ begin
     GetParam(aCmdLineParams[i],PrimaryConfPathOptLong,Result);
     GetParam(aCmdLineParams[i],PrimaryConfPathOptShort,Result);
   end;
+end;
+
+function ExpandParamFile(const s: string): string;
+const
+  a: array[1..5] of string = (
+    PrimaryConfPathOptLong,PrimaryConfPathOptShort,
+    SecondaryConfPathOptLong,SecondaryConfPathOptShort,
+    LazarusDirOpt
+  );
+var
+  p: string;
+begin
+  Result:=s;
+  for p in a do
+    if LeftStr(Result,length(p))=p then
+    begin
+    Result:=LeftStr(Result,length(p))+ExpandFileNameUTF8(copy(Result,length(p)+1,length(Result)));
+    exit;
+    end;
 end;
 
 function IsHelpRequested : Boolean;

@@ -26,6 +26,7 @@ resourcestring
   rsUserDrawnSeries = 'User-drawn series';
   rsExpressionSeries = 'Math expression series';
   rsExpressionColorMapSeries = 'Math expression color map series';
+  rsPolygonSeries = 'Polygon series';
 
   // Series editor
   sesSeriesEditorTitle = 'Edit series';
@@ -148,6 +149,7 @@ resourcestring
   rsErrFitNoFitParams = 'No fit parameters specified.';
   rsErrFitSingular = 'Fitting matrix is (nearly) singular.';
   rsErrFitNoBaseFunctions = 'Not enough user-provided base functions.';
+  rsErrNumericalOverflow = 'Numerical overflow.';
   rsFitNumObservations = 'Number of observations';
   rsFitNumFitParams = 'Number of fit parameters';
   rsFitDegreesOfFreedom = 'Degrees of freedom';
@@ -160,6 +162,7 @@ resourcestring
   rsFitReducedChiSquared = 'Reduced Chi-squared';
   rsFitResidualStandardError = 'Residual standard error';
   rsFitVarianceRatio = 'Variance ratio F';
+  rsFitTValue = 't value';
   rsFitPValue = 'p value';
 
 

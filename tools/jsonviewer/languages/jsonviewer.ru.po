@@ -147,6 +147,10 @@ msgstr "Аргументы конструктора"
 msgid "Property type suffix"
 msgstr "Суффикс типа свойства"
 
+#: tcreatecodeform.letoplevelclassname.caption
+msgid "Toplevel class name"
+msgstr "Имя класса верхнего уровня"
+
 #: tcreatecodeform.leunitname.caption
 msgid "Unit name"
 msgstr "Имя модуля"
@@ -403,6 +407,10 @@ msgstr "Заключать строковые значения в кавычки
 #: tmainform.misaveformatted.caption
 msgid "Save Formatted JSON"
 msgstr "Сохранять форматированный JSON"
+
+#: tmainform.mishowrest.caption
+msgid "Show REST panel"
+msgstr "Показывать панель REST"
 
 #: tmainform.misortmembers.caption
 msgid "Sort object members"

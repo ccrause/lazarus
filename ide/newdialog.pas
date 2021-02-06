@@ -44,9 +44,7 @@ uses
   ComCtrls, Controls, Dialogs, Forms, StdCtrls, ExtCtrls,
   ButtonPanel, ListViewFilterEdit,
   // LazUtils
-  LazUTF8,
-  // CodeTools
-  FileProcs,
+  LazUTF8, FileUtil,
   // IdeIntf
   IDEWindowIntf, IDEImagesIntf, NewItemIntf, ProjectIntf,
   LazIDEIntf, IDEHelpIntf, IDEDialogs,
@@ -190,7 +188,6 @@ var
   AnUnitInfo: TUnitInfo;
   InhCompItem: TFileDescInheritedComponent;
 begin
-
   ANode := ItemsTreeView.Selected;
   if (ANode = nil) or (ANode.Data = nil) or
     (not (TObject(ANode.Data) is TNewIDEItemTemplate)) then
@@ -211,9 +208,6 @@ begin
   // if the selected item is an inherited one
   if FNewItem is TNewItemProjectFile then
   begin
-    //
-    InputHistories.NewProjectType:=FNewItem.Name;
-
     NewFile:=TNewItemProjectFile(FNewItem);
     if (NewFile.Descriptor is TFileDescInheritedItem) then
     begin
@@ -224,9 +218,25 @@ begin
         if Assigned(AInheritedNode) then begin
           // load the ancestor component
           AnUnitInfo:=TUnitInfo(AInheritedNode.Data);
+
+          // Save the unit if not done yet.
+          if AnUnitInfo.IsVirtual then
+          begin
+            if IDEQuestionDialog(lisSave,
+                    Format(lisUnitMustSaveBeforeInherit, [AnUnitInfo.Filename]),
+                    mtInformation, [mrOK,mrCancel]) <> mrOK
+            then begin
+              FNewItem := nil;
+              ModalResult:=mrNone;
+              Exit;
+            end;
+            LazarusIDE.DoSaveProject([]);
+          end;
+          InputHistories.NewProjectType:=FNewItem.Name;
+
           if LazarusIDE.DoOpenComponent(AnUnitInfo.Filename,
-            [ofOnlyIfExists,ofQuiet,ofLoadHiddenResource,ofUseCache],[],
-            AncestorComponent)<>mrOk then
+                    [ofOnlyIfExists,ofQuiet,ofLoadHiddenResource,ofUseCache],[],
+                    AncestorComponent)<>mrOk then
           begin
             IDEMessageDialog(lisErrorOpeningComponent,
               lisUnableToOpenAncestorComponent, mtError, [mbCancel]);
@@ -255,22 +265,21 @@ end;
 // Fill the list of inheritable items in the project
 procedure TNewOtherDialog.FillProjectInheritableItemsList;
 var
-  aComponentList: TStringList;
+  aComponentList: TStringListUTF8Fast;
   i: integer;
   ListItem: TListViewDataItem;
   AnUnitInfo: TUnitInfo;
 Begin
   try
     // Auxiliar stringlist to sort component list
-    aComponentList := TStringList.Create;
+    aComponentList := TStringListUTF8Fast.Create;
 
     // Loop trough project units which have a component
     for i := 0 to Project1.UnitCount-1 do begin
-      if (not Project1.Units[i].IsPartOfProject)
-      or (not FilenameIsPascalUnit(Project1.Units[i].Filename)) then
-        continue;
-      if Project1.Units[i].ComponentName<>'' then
-        aComponentList.AddObject(Project1.Units[i].ComponentName, Project1.Units[i]);
+      AnUnitInfo := Project1.Units[i];
+      if AnUnitInfo.IsPartOfProject and FilenameHasPascalExt(AnUnitInfo.Filename)
+      and (AnUnitInfo.ComponentName<>'') then
+        aComponentList.AddObject(AnUnitInfo.ComponentName, AnUnitInfo);
     end;
     // Sort lists (by component name)
     aComponentList.Sort;
@@ -394,7 +403,8 @@ begin
     end else
     begin
       aNewItemTemplate := TNewIDEItemTemplate(ANode.Data);
-      Desc := aNewItemTemplate.Description;
+      Desc := aNewItemTemplate.LocalizedName + LineEnding+LineEnding
+             +aNewItemTemplate.Description;
       if aNewItemTemplate is TNewItemProjectFile then
       begin
         if TNewItemProjectFile(aNewItemTemplate).Descriptor is TFileDescInheritedComponent
@@ -507,7 +517,7 @@ end;
 function TNewLazIDEItemCategories.IndexOf(const CategoryName: string): integer;
 begin
   Result := Count - 1;
-  while (Result >= 0) and (UTF8CompareText(CategoryName, Items[Result].Name) <> 0) do
+  while (Result >= 0) and (UTF8CompareLatinTextFast(CategoryName, Items[Result].Name) <> 0) do
     Dec(Result);
 end;
 

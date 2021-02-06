@@ -202,10 +202,8 @@ StartIter,
 EndIter: TGtkTextIter;
 begin
   gtk_text_buffer_get_iter_at_line(FGtkBuf, @StartIter, Index);
-  if Index = Count-1 then begin
-    gtk_text_iter_backward_char(@StartIter);
+  if Index = Count-1 then
     gtk_text_buffer_get_end_iter(FGtkBuf, @EndIter)
-  end
   else
     gtk_text_buffer_get_iter_at_line(FGtkBuf, @EndIter, Index+1);
   gtk_text_buffer_delete(FGtkBuf, @StartIter, @EndIter);
@@ -245,19 +243,26 @@ begin
 end;
 
 procedure TGtk2MemoStrings.SetTextStr(const Value: string);
+var
+  aText: string;
 begin
-  QueueCursorMove(0);
-  QueueSelectLength(0);
-  if (Value <> '') and (Text <> '') then
+  aText := Text;
+  // don't queue cursor movement if both old and new text are emtpy
+  if (aText<>'') or (Value<>'') then
+  begin
+    QueueCursorMove(0);
+    QueueSelectLength(0);
+  end;
+  if (Value <> '') and (aText <> '') then
     LockOnChange({%H-}PGtkObject(Owner.Handle), 1);
   gtk_text_buffer_set_text(FGtkBuf, PChar(Value), -1);
 end;
 
 procedure TGtk2MemoStrings.LoadFromFile(const FileName: string);
 var
-  TheStream: TFileStreamUTF8;
+  TheStream: TFileStream;
 begin
-  TheStream:=TFileStreamUtf8.Create(FileName,fmOpenRead or fmShareDenyWrite);
+  TheStream:=TFileStream.Create(FileName,fmOpenRead or fmShareDenyWrite);
   try
     LoadFromStream(TheStream);
   finally
@@ -267,9 +272,9 @@ end;
 
 procedure TGtk2MemoStrings.SaveToFile(const FileName: string);
 var
-  TheStream: TFileStreamUTF8;
+  TheStream: TFileStream;
 begin
-  TheStream:=TFileStreamUtf8.Create(FileName,fmCreate);
+  TheStream:=TFileStream.Create(FileName,fmCreate);
   try
     SaveToStream(TheStream);
   finally

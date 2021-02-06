@@ -43,7 +43,7 @@ type
   TSynEditMarkup = class(TObject)
   private
     FMarkupInfo : TSynSelectedColor;
-    FLines : TSynEditStrings;
+    FLines : TSynEditStringsLinked;
     FCaret : TSynEditCaret;
     FTopLine, FLinesInWindow : Integer;
     FSynEdit : TSynEditBase;
@@ -68,7 +68,7 @@ type
     procedure MarkupChanged(AMarkup: TObject);
 
     procedure SetInvalidateLinesMethod(const AValue : TInvalidateLines); virtual;
-    procedure SetLines(const AValue : TSynEditStrings); virtual;
+    procedure SetLines(const AValue : TSynEditStringsLinked); virtual;
     procedure SetTopLine(const AValue : Integer); virtual;
     procedure SetLinesInWindow(const AValue : Integer); virtual;
     procedure SetCaret(const AValue : TSynEditCaret); virtual;
@@ -116,6 +116,14 @@ type
                                            const AnRtlInfo: TLazSynDisplayRtlInfo;
                                            AMarkup: TSynSelectedColorMergeResult); virtual;
 
+    function GetMarkupAttributeAtWrapEnd(const aRow: Integer;
+                                         const aWrapCol: TLazSynDisplayTokenBound): TSynSelectedColor; virtual;
+                                         // experimental; // params may still change
+    procedure MergeMarkupAttributeAtWrapEnd(const aRow: Integer;
+                                           const aWrapCol: TLazSynDisplayTokenBound;
+                                           AMarkup: TSynSelectedColorMergeResult); virtual;
+                                           // experimental; // params may still change
+
     // Notifications about Changes to the text
     Procedure TextChanged(aFirstCodeLine, aLastCodeLine, ACountDiff: Integer); virtual; // 1 based
     Procedure TempDisable;
@@ -131,7 +139,7 @@ type
     property FrameStyle: TSynLineStyle read GetFrameStyle;
     property Style : TFontStyles read GetStyle;
     property Enabled: Boolean read GetEnabled write SetEnabled;
-    property Lines : TSynEditStrings read fLines write SetLines;
+    property Lines : TSynEditStringsLinked read fLines write SetLines;
     property Caret : TSynEditCaret read fCaret write SetCaret;
     property TopLine : Integer read fTopLine write SetTopLine;
     property LinesInWindow : Integer read fLinesInWindow write SetLinesInWindow;
@@ -148,7 +156,7 @@ type
 
   protected
     procedure SetInvalidateLinesMethod(const AValue : TInvalidateLines); override;
-    procedure SetLines(const AValue : TSynEditStrings); override;
+    procedure SetLines(const AValue : TSynEditStringsLinked); override;
     procedure SetTopLine(const AValue : Integer); override;
     procedure SetLinesInWindow(const AValue : Integer); override;
     procedure SetCaret(const AValue : TSynEditCaret); override;
@@ -183,6 +191,10 @@ type
                                            const AnRtlInfo: TLazSynDisplayRtlInfo;
                                            AMarkup: TSynSelectedColorMergeResult); override;
 
+    procedure MergeMarkupAttributeAtWrapEnd(const aRow: Integer;
+      const aWrapCol: TLazSynDisplayTokenBound;
+      AMarkup: TSynSelectedColorMergeResult); override;
+
     // Notifications about Changes to the text
     Procedure TextChanged(aFirstCodeLine, aLastCodeLine, ACountDiff: Integer); override; // lines are 1 based
   end;
@@ -190,7 +202,6 @@ type
 
   
 implementation
-uses SynEdit;
 
 { TSynEditMarkup }
 
@@ -260,7 +271,7 @@ begin
   DoMarkupChanged(AMarkup as TSynSelectedColor);
 end;
 
-procedure TSynEditMarkup.SetLines(const AValue : TSynEditStrings);
+procedure TSynEditMarkup.SetLines(const AValue: TSynEditStringsLinked);
 begin
   if fLines = AValue then exit;
   fLines := AValue;
@@ -347,12 +358,12 @@ end;
 
 function TSynEditMarkup.ScreenRowToRow(aRow : Integer) : Integer;
 begin
-  Result := TCustomSynEdit(SynEdit).ScreenRowToRow(aRow);
+  Result := SynEdit.ScreenXYToTextXY(Point(0, aRow)).Y;
 end;
 
 function TSynEditMarkup.RowToScreenRow(aRow : Integer) : Integer;
 begin
-  Result := TCustomSynEdit(SynEdit).RowToScreenRow(aRow);
+  Result := SynEdit.TextXYToScreenXY(Point(0, aRow)).Y;
 end;
 
 function TSynEditMarkup.LogicalToPhysicalPos(const p : TPoint) : TPoint;
@@ -367,7 +378,7 @@ end;
 
 function TSynEditMarkup.Highlighter : TSynCustomHighlighter;
 begin
-  Result := TCustomSynEdit(SynEdit).Highlighter;
+  Result := SynEdit.Highlighter as TSynCustomHighlighter;
 end;
 
 function TSynEditMarkup.OwnedByMgr: Boolean;
@@ -447,6 +458,23 @@ begin
   c := GetMarkupAttributeAtRowCol(aRow, aStartCol, AnRtlInfo);
   if assigned(c) then
     AMarkup.Merge(c, aStartCol, AEndCol);
+end;
+
+function TSynEditMarkup.GetMarkupAttributeAtWrapEnd(const aRow: Integer;
+  const aWrapCol: TLazSynDisplayTokenBound): TSynSelectedColor;
+begin
+  Result := nil;
+end;
+
+procedure TSynEditMarkup.MergeMarkupAttributeAtWrapEnd(const aRow: Integer;
+  const aWrapCol: TLazSynDisplayTokenBound;
+  AMarkup: TSynSelectedColorMergeResult);
+var
+  c: TSynSelectedColor;
+begin
+  c := GetMarkupAttributeAtWrapEnd(aRow, aWrapCol);
+  if assigned(c) then
+    AMarkup.Merge(c);
 end;
 
 procedure TSynEditMarkup.TextChanged(aFirstCodeLine, aLastCodeLine, ACountDiff: Integer);
@@ -601,6 +629,19 @@ begin
   end;
 end;
 
+procedure TSynEditMarkupManager.MergeMarkupAttributeAtWrapEnd(
+  const aRow: Integer; const aWrapCol: TLazSynDisplayTokenBound;
+  AMarkup: TSynSelectedColorMergeResult);
+var
+  i : integer;
+begin
+  for i := 0 to fMarkUpList.Count-1 do begin
+    if TSynEditMarkup(fMarkUpList[i]).RealEnabled then
+      TSynEditMarkup(fMarkUpList[i]).MergeMarkupAttributeAtWrapEnd
+        (aRow, aWrapCol, AMarkup);
+  end;
+end;
+
 function TSynEditMarkupManager.GetMarkupAttributeAtRowCol(const aRow: Integer;
   const aStartCol: TLazSynDisplayTokenBound;
   const AnRtlInfo: TLazSynDisplayRtlInfo): TSynSelectedColor;
@@ -659,7 +700,7 @@ begin
     TSynEditMarkup(fMarkUpList[i]).SetInvalidateLinesMethod(AValue);
 end;
 
-procedure TSynEditMarkupManager.SetLines(const AValue : TSynEditStrings);
+procedure TSynEditMarkupManager.SetLines(const AValue: TSynEditStringsLinked);
 var
   i : integer;
 begin

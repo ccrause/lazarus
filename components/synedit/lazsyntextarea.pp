@@ -1,7 +1,7 @@
 unit LazSynTextArea;
 
 {$mode objfpc}{$H+}
-{ $INLINE OFF}
+{$INLINE OFF}
 
 interface
 
@@ -57,12 +57,14 @@ type
     FCharWidths: TPhysicalCharWidths;
     FCharWidthsLen: Integer;
     FCurTxtLineIdx : Integer;
+    FCurLineByteLen: Integer;
 
     // Fields for GetNextHighlighterTokenFromView
     // Info about the token (from highlighter)
     FCurViewToken: TLazSynDisplayTokenInfo;
     FCurViewCurTokenStartPos: TLazSynDisplayTokenBound; // Start bound of the HL token
     FCurViewAttr: TSynSelectedColorMergeResult;
+    FWrapEndBound: TLazSynDisplayTokenBound;
     // Scanner Pos
     FCurViewScannerPos: TLazSynDisplayTokenBound;  // Start according to Logical flow. Left for LTR, or Right for RTL
     FCurViewScannerPhysCharPos: Integer;           // 1 based - Full char bound (Before FCurViewScannerPos.Physical (PaintStart))
@@ -77,7 +79,7 @@ type
     FNextMarkupPhysPos, FNextMarkupLogPos: Integer;
     FCurMarkupNextStart: TLazSynDisplayTokenBound;
     FCurMarkupNextRtlInfo: TLazSynDisplayRtlInfo;
-    FCurMarkupState: (cmPreInit, cmLine, cmPastEOL);
+    FCurMarkupState: (cmPreInit, cmLine, cmPastEOL, cmPastWrapEnd);
     FMarkupTokenAttr: TSynSelectedColorMergeResult;
     procedure InitCurMarkup;
   public
@@ -190,24 +192,36 @@ type
     property OnStatusChange: TStatusChangeEvent read fOnStatusChange write fOnStatusChange;
   end;
 
+  { TLazSynSurfaceWithText }
+
+  TLazSynSurfaceWithText = class(TLazSynSurface)
+  private
+    FTextArea: TLazSynTextArea;
+  protected
+    procedure SetTextArea(AValue: TLazSynTextArea); virtual;
+    function GetTextArea: TLazSynTextArea; virtual;
+  public
+    procedure Assign(Src: TLazSynSurface); override;
+    property TextArea: TLazSynTextArea read GetTextArea write SetTextArea;
+  end;
+
   { TLazSynSurfaceManager }
 
-  TLazSynSurfaceManager = class(TLazSynSurface)
+  TLazSynSurfaceManager = class(TLazSynSurfaceWithText)
   private
-    FLeftGutterArea: TLazSynSurface;
+    FLeftGutterArea: TLazSynSurfaceWithText;
     FLeftGutterWidth: integer;
-    FRightGutterArea: TLazSynSurface;
+    FRightGutterArea: TLazSynSurfaceWithText;
     FRightGutterWidth: integer;
-    FTextArea: TLazSynTextArea;
-    procedure SetLeftGutterArea(AValue: TLazSynSurface);
+    procedure SetLeftGutterArea(AValue: TLazSynSurfaceWithText);
     procedure SetLeftGutterWidth(AValue: integer);
-    procedure SetRightGutterArea(AValue: TLazSynSurface);
+    procedure SetRightGutterArea(AValue: TLazSynSurfaceWithText);
     procedure SetRightGutterWidth(AValue: integer);
-    procedure SetTextArea(AValue: TLazSynTextArea);
   protected
-    function GetLeftGutterArea: TLazSynSurface; virtual;
-    function GetRightGutterArea: TLazSynSurface; virtual;
-    function GetTextArea: TLazSynTextArea; virtual;
+    function GetLeftGutterArea: TLazSynSurfaceWithText; virtual;
+    function GetRightGutterArea: TLazSynSurfaceWithText; virtual;
+    procedure SetTextArea(AValue: TLazSynTextArea); override;
+    function  GetTextArea: TLazSynTextArea; override;
   protected
     procedure SetBackgroundColor(AValue: TColor); virtual;
     procedure SetExtraCharSpacing(AValue: integer); virtual;
@@ -229,9 +243,8 @@ type
     procedure InvalidateTextLines(FirstTextLine, LastTextLine: TLineIdx); virtual;
     procedure InvalidateGutterLines(FirstTextLine, LastTextLine: TLineIdx); virtual;
 
-    property TextArea:        TLazSynTextArea read GetTextArea        write SetTextArea;
-    property LeftGutterArea:  TLazSynSurface  read GetLeftGutterArea  write SetLeftGutterArea;
-    property RightGutterArea: TLazSynSurface  read GetRightGutterArea write SetRightGutterArea;
+    property LeftGutterArea:  TLazSynSurfaceWithText read GetLeftGutterArea  write SetLeftGutterArea;
+    property RightGutterArea: TLazSynSurfaceWithText read GetRightGutterArea write SetRightGutterArea;
     property LeftGutterWidth:  integer read FLeftGutterWidth  write SetLeftGutterWidth;
     property RightGutterWidth: integer read FRightGutterWidth write SetRightGutterWidth;
   public
@@ -299,13 +312,16 @@ end;
 
 procedure TLazSynPaintTokenBreaker.SetHighlighterTokensLine(ALine: TLineIdx; out
   ARealLine: TLineIdx);
+var
+  LogLeftPos: Integer;
 begin
-  FDisplayView.SetHighlighterTokensLine(ALine, ARealLine);
+  FDisplayView.SetHighlighterTokensLine(ALine, ARealLine, LogLeftPos, FCurLineByteLen);
   FCharWidths := FLinesView.GetPhysicalCharWidths(ARealLine);
   FCharWidthsLen := Length(FCharWidths);
+  FCurLineByteLen := FCurLineByteLen + LogLeftPos - 1;
 
   FCurViewToken.TokenLength     := 0;
-  FCurViewScannerPos.Logical   := 1;
+  FCurViewScannerPos.Logical   := LogLeftPos;
   FCurViewScannerPos.Physical  := 1;
   FCurViewScannerPos.Offset    := 0;
   FCurViewScannerPhysCharPos  := 1;
@@ -325,6 +341,20 @@ begin
   if FCurMarkupState = cmPreInit then
     InitCurMarkup;
 
+  if (FCurLineByteLen < FCharWidthsLen) and (FCurViewScannerPos.Logical > FCurLineByteLen)
+  then begin
+    if FCurMarkupState <> cmPastWrapEnd then begin
+      assert(FCurViewScannerPos.Logical = FCurLineByteLen + 1, 'TLazSynPaintTokenBreaker.GetNextHighlighterTokenEx: FCurViewScannerPos.Logical = FCurLineByteLen + 1');
+      FCurMarkupState := cmPastWrapEnd;
+      FWrapEndBound := FCurViewScannerPos;
+    end;
+  end;
+
+  if (FCurMarkupState = cmPastWrapEnd) then begin
+    FNextMarkupPhysPos := MaxInt;
+    FNextMarkupLogPos := MaxInt;
+  end
+  else
   if (FNextMarkupPhysPos < 0) or
      (FCurMarkupNextRtlInfo.IsRtl       and (FNextMarkupPhysPos >= FCurMarkupNextStart.Physical)) or
      ((not FCurMarkupNextRtlInfo.IsRtl) and (FNextMarkupPhysPos <= FCurMarkupNextStart.Physical)) or
@@ -341,14 +371,19 @@ begin
       FNextMarkupLogPos := MaxInt;
   end;
 
+  if (FCurMarkupState <> cmPastWrapEnd) and (FCurLineByteLen < FCharWidthsLen) and
+     (FNextMarkupLogPos > FCurLineByteLen + 1)
+  then
+    FNextMarkupLogPos := FCurLineByteLen + 1; // stop at WrapEnd / EOL // tokens should have a bound there anyway
+
   ATokenInfo.Attr := nil;
-  if FCurMarkupState = cmPastEOL
+  if FCurMarkupState in [cmPastEOL, cmPastWrapEnd]
   then Result := False
   else Result := GetNextHighlighterTokenFromView(ATokenInfo, FNextMarkupPhysPos, FNextMarkupLogPos);
 
-  if (not Result) then begin
+  if not Result then begin
     // the first run StartPos is set by GetNextHighlighterTokenFromView
-    if FCurMarkupState = cmPastEOL then begin
+    if FCurMarkupState in [cmPastEOL, cmPastWrapEnd] then begin
       ATokenInfo.StartPos   := FCurMarkupNextStart
     end
     else
@@ -357,7 +392,8 @@ begin
       ATokenInfo.StartPos.Physical := FFirstCol;
     end;
 
-    FCurMarkupState := cmPastEOL;
+    if (FCurMarkupState <> cmPastWrapEnd) then
+      FCurMarkupState := cmPastEOL;
 
     Result := (ATokenInfo.StartPos.Physical < FLastCol);
     if not Result then
@@ -418,8 +454,12 @@ begin
     FMarkupTokenAttr.CurrentEndX   := ATokenInfo.EndPos;
   end;
 
-  fMarkupManager.MergeMarkupAttributeAtRowCol(FCurTxtLineIdx + 1,
-    ATokenInfo.StartPos, ATokenInfo.EndPos, ATokenInfo.RtlInfo, FMarkupTokenAttr);
+  if FCurMarkupState = cmPastWrapEnd then
+    fMarkupManager.MergeMarkupAttributeAtWrapEnd(FCurTxtLineIdx + 1,
+      FWrapEndBound, FMarkupTokenAttr)
+  else
+    fMarkupManager.MergeMarkupAttributeAtRowCol(FCurTxtLineIdx + 1,
+      ATokenInfo.StartPos, ATokenInfo.EndPos, ATokenInfo.RtlInfo, FMarkupTokenAttr);
   FMarkupTokenAttr.ProcessMergeInfo;
 
 
@@ -484,7 +524,7 @@ function TLazSynPaintTokenBreaker.GetNextHighlighterTokenFromView(out
 
   function GetCharWidthData(AIdx: Integer): TPhysicalCharWidth; inline;
   begin
-    if AIdx >= FCharWidthsLen
+    if (AIdx >= FCharWidthsLen) or (AIdx >= FCurLineByteLen)
     then Result := 1
     else Result := FCharWidths[AIdx];
   end;
@@ -579,7 +619,7 @@ function TLazSynPaintTokenBreaker.GetNextHighlighterTokenFromView(out
       repeat
         inc(ALogicIdx);
       until (ALogicIdx >= ALogicEnd) or
-            (ALogicIdx >= FCharWidthsLen) or ((FCharWidths[ALogicIdx] and PCWMask) <> 0);
+              (ALogicIdx >= FCharWidthsLen) or ((FCharWidths[ALogicIdx] and PCWMask) <> 0);
 
       pcw := GetCharWidthData(ALogicIdx);
       j := pcw and PCWMask;
@@ -611,10 +651,10 @@ function TLazSynPaintTokenBreaker.GetNextHighlighterTokenFromView(out
     j := (pcw and PCWMask);
     // must go over token bounds
     //while (ALogicIdx < ALogicEnd) and (pcw and PCWFlagRTL <> 0) do begin
-    while (ALogicIdx < FCharWidthsLen) and (pcw and PCWFlagRTL <> 0) do begin
+    while (ALogicIdx < FCharWidthsLen) and (ALogicIdx < FCurLineByteLen) and (pcw and PCWFlagRTL <> 0) do begin
       inc(RtlRunPhysWidth, j);
 
-      if j <> 0 then begin
+      if (j <> 0) and (FCurViewToken.TokenStart <> nil) then begin
         c := (FCurViewToken.TokenStart + i)^;
         if c = #9  then begin
           HasTabs := True;
@@ -630,7 +670,7 @@ function TLazSynPaintTokenBreaker.GetNextHighlighterTokenFromView(out
       repeat
         inc(ALogicIdx);
         inc(i);
-      until //(ALogicIdx >= ALogicEnd) or
+      until (ALogicIdx >= FCurLineByteLen) or
             (ALogicIdx >= FCharWidthsLen) or ((FCharWidths[ALogicIdx] and PCWMask) <> 0);
 
       pcw := GetCharWidthData(ALogicIdx);
@@ -683,7 +723,9 @@ begin
   while True do begin
     Result := MaybeFetchToken;    // Get token from View/Highlighter
     if not Result then begin
-      ATokenInfo.StartPos           := FCurViewScannerPos;
+      ATokenInfo.StartPos      := FCurViewScannerPos;
+      ATokenInfo.RtlInfo.IsRtl := False;
+      ATokenInfo.NextRtlInfo.IsRtl := False;
       if FCurViewToken.TokenAttr <> nil then begin
         InitSynAttr(FCurViewAttr, FCurViewToken.TokenAttr, FCurViewCurTokenStartPos);
         ATokenInfo.Attr := FCurViewAttr;
@@ -960,6 +1002,24 @@ begin
   end; // while True
 end;
 
+{ TLazSynSurfaceWithText }
+
+procedure TLazSynSurfaceWithText.SetTextArea(AValue: TLazSynTextArea);
+begin
+  FTextArea := AValue;
+end;
+
+function TLazSynSurfaceWithText.GetTextArea: TLazSynTextArea;
+begin
+  Result := FTextArea;
+end;
+
+procedure TLazSynSurfaceWithText.Assign(Src: TLazSynSurface);
+begin
+  inherited Assign(Src);
+  FTextArea := TLazSynSurfaceWithText(Src).FTextArea;
+end;
+
 { TLazSynSurfaceManager }
 
 procedure TLazSynSurfaceManager.SetLeftGutterWidth(AValue: integer);
@@ -989,19 +1049,20 @@ begin
   FTextArea.RightEdgeVisible := AValue;
 end;
 
-procedure TLazSynSurfaceManager.SetLeftGutterArea(AValue: TLazSynSurface);
+procedure TLazSynSurfaceManager.SetLeftGutterArea(AValue: TLazSynSurfaceWithText);
 begin
   if FLeftGutterArea = AValue then Exit;
   FLeftGutterArea := AValue;
   FLeftGutterArea.DisplayView := DisplayView;
+  FLeftGutterArea.TextArea := FTextArea;
 end;
 
-function TLazSynSurfaceManager.GetLeftGutterArea: TLazSynSurface;
+function TLazSynSurfaceManager.GetLeftGutterArea: TLazSynSurfaceWithText;
 begin
   Result := FLeftGutterArea;
 end;
 
-function TLazSynSurfaceManager.GetRightGutterArea: TLazSynSurface;
+function TLazSynSurfaceManager.GetRightGutterArea: TLazSynSurfaceWithText;
 begin
   Result := FRightGutterArea;
 end;
@@ -1031,11 +1092,12 @@ begin
   FTextArea.ForegroundColor := AValue;
 end;
 
-procedure TLazSynSurfaceManager.SetRightGutterArea(AValue: TLazSynSurface);
+procedure TLazSynSurfaceManager.SetRightGutterArea(AValue: TLazSynSurfaceWithText);
 begin
   if FRightGutterArea = AValue then Exit;
   FRightGutterArea := AValue;
   FRightGutterArea.DisplayView := DisplayView;
+  FLeftGutterArea.TextArea := FTextArea;
 end;
 
 procedure TLazSynSurfaceManager.SetRightGutterWidth(AValue: integer);
@@ -1050,6 +1112,10 @@ begin
   if FTextArea = AValue then Exit;
   FTextArea := AValue;
   FTextArea.DisplayView := DisplayView;
+  if FLeftGutterArea <> nil then
+    FLeftGutterArea.TextArea := FTextArea;
+  if FRightGutterArea <> nil then
+    FRightGutterArea.TextArea := FTextArea;
 end;
 
 procedure TLazSynSurfaceManager.SetVisibleSpecialChars(AValue: TSynVisibleSpecialChars);
@@ -1097,18 +1163,22 @@ end;
 procedure TLazSynSurfaceManager.InvalidateLines(FirstTextLine, LastTextLine: TLineIdx);
 var
   rcInval: TRect;
+  ViewedRange: TLineRange;
 begin
   rcInval := Bounds;
-  if (FirstTextLine >= 0) then
+  if (FirstTextLine >= 0) then begin
+    ViewedRange := DisplayView.TextToViewIndex(FirstTextLine);
     rcInval.Top := Max(TextArea.TextBounds.Top,
-                       TextArea.TextBounds.Top
-                       + (DisplayView.TextToViewIndex(FirstTextLine).Top
+                       TextArea.TextBounds.Top + (ViewedRange.Top
                           - TextArea.TopLine + 1) * TextArea.LineHeight);
-  if (LastTextLine >= 0) then
+  end;
+  if (LastTextLine >= 0) then begin
+    if LastTextLine <> FirstTextLine then
+      ViewedRange := DisplayView.TextToViewIndex(LastTextLine);
     rcInval.Bottom := Min(TextArea.TextBounds.Bottom,
-                          TextArea.TextBounds.Top
-                          + (DisplayView.TextToViewIndex(LastTextLine).Bottom
+                          TextArea.TextBounds.Top + (ViewedRange.Bottom
                              - TextArea.TopLine + 2)  * TextArea.LineHeight);
+  end;
 
   {$IFDEF VerboseSynEditInvalidate}
   DebugLn(['TCustomSynEdit.InvalidateGutterLines ',DbgSName(self), ' FirstLine=',FirstTextLine, ' LastLine=',LastTextLine, ' rect=',dbgs(rcInval)]);
@@ -1294,18 +1364,20 @@ end;
 procedure TLazSynTextArea.InvalidateLines(FirstTextLine, LastTextLine: TLineIdx);
 var
   rcInval: TRect;
+  ViewedRange: TLineRange;
 begin
   rcInval := Bounds;
-  if (FirstTextLine >= 0) then
+  if (FirstTextLine >= 0) then begin
+    ViewedRange := DisplayView.TextToViewIndex(FirstTextLine);
     rcInval.Top := Max(TextBounds.Top,
-                       TextBounds.Top
-                       + (DisplayView.TextToViewIndex(FirstTextLine).Top
-                          - TopLine + 1) * LineHeight);
-  if (LastTextLine >= 0) then
+                       TextBounds.Top + (ViewedRange.Top - TopLine + 1) * LineHeight);
+  end;
+  if (LastTextLine >= 0) then begin
+    if LastTextLine <> FirstTextLine then
+      ViewedRange := DisplayView.TextToViewIndex(LastTextLine);
     rcInval.Bottom := Min(TextBounds.Bottom,
-                          TextBounds.Top
-                          + (DisplayView.TextToViewIndex(LastTextLine).Bottom
-                             - TopLine + 2)  * LineHeight);
+                          TextBounds.Top + (ViewedRange.Bottom - TopLine + 2)  * LineHeight);
+  end;
 
   {$IFDEF VerboseSynEditInvalidate}
   DebugLn(['TCustomSynEdit.InvalidateTextLines ',DbgSName(self), ' FirstLine=',FirstTextLine, ' LastLine=',LastTextLine, ' rect=',dbgs(rcInval)]);

@@ -40,17 +40,17 @@ See http://www.gnu.org/licenses/gpl.html
 interface
 
 uses
-  { delphi }
-  {$IFNDEF FPC}Windows,{$ENDIF} Contnrs,
-  { local }
+  Contnrs, SysUtils,
+  Forms,
+  // local
   ParseTreeNode,
   ParseTreeNodeType,
   ParseError,
   SourceToken,
   SourceTokenList,
   Tokens,
-  TokenUtils;
-
+  TokenUtils,
+  JcfStringUtils;
 
 type
   TBuildParseTree = class(TObject)
@@ -65,6 +65,7 @@ type
     fiTokenCount: integer;
     procedure RecogniseTypeHelper;
     procedure SplitGreaterThanOrEqual;
+    procedure SplitShr_gg;
 
     procedure RecogniseGoal;
     procedure RecogniseUnit;
@@ -105,7 +106,6 @@ type
 
     procedure RecogniseTypeSection(const pbNestedInCLass: Boolean);
     procedure RecogniseVarSection(const pbClassVars: boolean);
-    procedure RecogniseClassVars;
     procedure RecogniseProcedureDeclSection;
     procedure RecogniseClassOperator(const pbHasBody: boolean);
     procedure RecogniseOperator(const pbHasBody: boolean);
@@ -287,12 +287,6 @@ type
   end;
 
 implementation
-
-uses
-  { delphi }
-  SysUtils, Forms,
-  { local }
-  JcfStringUtils;
 
 const
   UPDATE_INTERVAL = 512;
@@ -781,7 +775,7 @@ begin
 
   }
   while fcTokenList.FirstSolidTokenType in [ttConst, ttResourceString,
-      ttType, ttVar, ttThreadVar, ttOpenSquareBracket, ttExports, ttOperator] + ProcedureWords do
+      ttType, ttVar, ttThreadVar, ttOpenSquareBracket, ttExports, ttOperator, ttProperty,ttGeneric] + ProcedureWords do
     RecogniseInterfaceDecl;
 end;
 
@@ -809,12 +803,17 @@ begin
       RecogniseTypeSection(false);
     ttVar, ttThreadvar:
       RecogniseVarSection(false);
-    ttProcedure, ttFunction, ttOperator:
+    ttProcedure, ttFunction, ttOperator,ttGeneric:
       RecogniseExportedHeading;
     ttOpenSquareBracket:
       RecogniseAttributes;
     ttExports:
       RecogniseExportsSection;
+    ttProperty:
+    begin
+      RecogniseProperty;
+      Recognise(ttSemicolon);
+    end
     else
       raise TEParseError.Create('Expected const, type, var, procedure or function', lc);
   end;
@@ -838,16 +837,23 @@ begin
 
   case lt of
     ttProcedure:
-    begin
       RecogniseProcedureHeading(False, False);
-    end;
     ttFunction:
-    begin
       RecogniseFunctionHeading(False, False);
-    end;
     ttOperator:
-    begin
       RecogniseOperator(false);
+    ttGeneric:
+    begin
+      case fcTokenList.SolidTokenType(2) of
+        ttProcedure:
+          RecogniseProcedureHeading(False, False);
+        ttFunction:
+          RecogniseFunctionHeading(False, False);
+        ttOperator:
+          RecogniseOperator(false);
+        else
+          TEParseError.Create('Expected function or procedure', lc);
+        end;
     end
     else
       raise TEParseError.Create('Expected function or procedure', lc);
@@ -890,7 +896,7 @@ begin
   PushNode(nBlock);
 
   // [DeclSection]
-  if lt in (Declarations + ProcedureWords) then
+  if lt in ([ttGeneric] + Declarations + ProcedureWords) then
     RecogniseDeclSections;
 
   lc := fcTokenList.FirstSolidToken;
@@ -920,7 +926,7 @@ begin
 
   }
   while fcTokenList.FirstSolidTokenType in
-    [ttClass] + Declarations + ProcedureWords do
+    [ttClass, ttGeneric] + Declarations + ProcedureWords do
     RecogniseDeclSection;
 end;
 
@@ -951,10 +957,16 @@ begin
       RecogniseTypeSection(false);
     ttVar, ttThreadvar:
       RecogniseVarSection(false);
-    ttProcedure, ttFunction, ttConstructor, ttDestructor, ttClass, ttOperator:
+    ttProcedure, ttFunction, ttConstructor, ttDestructor, ttClass, ttOperator,ttGeneric:
       RecogniseProcedureDeclSection;
     ttExports:
       RecogniseExportsSection;
+    ttProperty:
+    begin
+      RecogniseProperty;
+      Recognise(ttSemicolon);
+    end
+
     else
       raise TEParseError.Create(
         'Expected label, const, type, var, procedure or function', lc);
@@ -1026,8 +1038,18 @@ begin
     // ("private" for exemple) can be written after.
     // So, inside a class, no wtReservedWordDirective allowed
     leFirstTokenType := fcTokenList.FirstSolidTokenType;
-    if pbNestedInClass and (leFirstTokenType in ClassVisibility) then
-      break;
+    if pbNestedInClass then
+    begin
+      if leFirstTokenType in (ClassVisibility+[ttStrict]) then
+        break;
+      if leFirstTokenType in [ttClass,ttVar,ttThreadVar,ttConst,ttFunction,ttProcedure,ttOperator,ttConstructor,ttDestructor,ttProperty] then
+        break;
+    end
+    else
+    begin
+      if (fcTokenList.FirstSolidTokenType = ttGeneric) and (fcTokenList.SolidTokenType(2) in [ttFunction,ttProcedure,ttOperator]) then
+        break;
+    end;
 
     // can be followed by an operator decl in FreePascal
     if leFirstTokenType = ttOperator then
@@ -1097,9 +1119,18 @@ begin
   begin
     RecogniseTypeDecl;
 
-    if pbNestedInClass and (fcTokenList.FirstSolidTokenType in ClassVisibility) then
-      break;
-
+    if pbNestedInClass then
+    begin
+      if fcTokenList.FirstSolidTokenType in (ClassVisibility + [ttStrict]) then
+        break;
+      if fcTokenList.FirstSolidTokenType in [ttClass,ttVar,ttThreadVar, ttConst,ttFunction,ttProcedure,ttOperator,ttConstructor,ttDestructor,ttProperty] then
+        break;
+    end
+    else
+    begin
+      if (fcTokenList.FirstSolidTokenType = ttGeneric) and (fcTokenList.SolidTokenType(2) in [ttFunction,ttProcedure,ttOperator]) then
+        break;
+    end;
     lc := fcTokenList.FirstSolidToken;
   end;
 
@@ -1203,40 +1234,52 @@ begin
 
   Recognise(ttEquals);
 
-  //Recognise type helper (for fpc)
-  if (fcTokenList.FirstSolidTokenType in [ttType,ttRecord]) and
-    (fcTokenList.SolidToken(2).TokenType=ttHelper) then
-  begin
-     RecogniseTypeHelper;
-  end else
+  repeat
 
-  // type or restricted type
-  if (fcTokenList.FirstSolidTokenType in [ttObject, ttClass, ttInterface,
-    ttDispInterface]) then
-    RecogniseRestrictedType
-  else
-    RecogniseType;
+     //Recognise type helper (for fpc)
+    if (fcTokenList.FirstSolidTokenType in [ttType,ttRecord]) and
+      (fcTokenList.SolidToken(2).TokenType=ttHelper) then
+    begin
+       RecogniseTypeHelper;
+    end else
 
-  if fcTokenList.FirstSolidTokenType = ttLessThan then
-  begin
-    RecogniseGenericType;
-  end;
 
-  if fcTokenList.FirstSolidTokenType = ttIs then
-  begin
-    Recognise(ttIs);
-    Recognise(ttNested);
-  end;
+    // type or restricted type
+    if (fcTokenList.FirstSolidTokenType in [ttObject, ttClass, ttInterface,
+      ttDispInterface]) then
+      RecogniseRestrictedType
+    else
+      RecogniseType;
 
-  // the type can be deprecated
-  if fcTokenList.FirstSolidTokenType = ttDeprecated then
-    Recognise(ttDeprecated);
+    if fcTokenList.FirstSolidTokenType = ttLessThan then
+    begin
+      RecogniseGenericType;
+    end;
 
+    if fcTokenList.FirstSolidTokenType = ttIs then
+    begin
+      Recognise(ttIs);
+      Recognise(ttNested);
+    end;
+
+    // the type can be deprecated
+    if fcTokenList.FirstSolidTokenType = ttDeprecated then
+      Recognise(ttDeprecated);
+
+    if fcTokenList.FirstSolidTokenType <> ttDot then
+      break;
+    Recognise(ttDot);
+
+  until false;
 
   Recognise(ttSemicolon);
 
   PopNode;
 end;
+
+const
+  CONST_GENERIC_TOKENS = [ttAt, ttOpenBracket, ttOpenSquareBracket, ttIdentifier, ttPlus, ttMinus,
+        ttNot, ttNumber, ttQuotedLiteralString, ttNil, ttTrue, ttFalse];
 
 function TBuildParseTree.GenericAhead: boolean;
 var
@@ -1264,7 +1307,7 @@ begin
     if liTokenIndex mod 2 = 0 then
     begin
       // should be id
-      if (lcToken.WordType <> wtBuiltInType) and (not IsIdentifierToken(lcToken, idAny)) then
+      if (lcToken.WordType <> wtBuiltInType) and (not IsIdentifierToken(lcToken, idAny)) and (not (lcToken.TokenType in CONST_GENERIC_TOKENS)) then
       begin
         break;
       end;
@@ -1297,36 +1340,102 @@ end;
 
 
 const
-  ConstraintTokens = [ttClass, ttRecord, ttConstructor];
+  ConstraintTokens = [ttClass, ttRecord, ttConstructor, ttInterface, ttObject];
 
 procedure TBuildParseTree.RecogniseGenericType;
+var
+  lbHasConst: boolean;
+  lbIsGenericType:boolean;
+
+  procedure RecogniseP;
+  var
+    liNestLevel: integer;
+  begin
+    if fcTokenList.FirstSolidTokenType = ttConst then
+    begin
+      Recognise(ttConst);
+      lbHasConst := True;
+    end;
+    if lbHasConst = False then //can be a expresion like    h: specialize TNames<[Blaise,Pascal]>;
+    begin
+      lbisGenericType:=(fcTokenList.FirstSolidTokenType=ttIdentifier) and (fcTokenList.SolidTokenType(2)=ttLessThan); //is generic type
+      if fcTokenList.FirstSolidTokenType=ttSpecialize then
+        lbIsGenericType:=true;
+      if (fcTokenList.FirstSolidTokenType in CONST_GENERIC_TOKENS) and (not lbIsGenericType) then
+      begin //hack. recognise tokens until ; , or >
+        liNestLevel := 0;
+        while (liNestLevel > 0) or (not (fcTokenList.FirstTokenType in [ttComma, ttGreaterThan, ttSemiColon, ttGreaterThanOrEqual, ttShr_gg])) do
+        begin
+          if fcTokenList.FirstTokenType in [ttOpenSquareBracket, ttOpenBracket] then
+            Inc(liNestLevel);
+          if fcTokenList.FirstTokenType in [ttCloseSquareBracket, ttCloseBracket] then
+            Dec(liNestLevel);
+          Recognise(fcTokenList.FirstTokenType);
+          if fcTokenList.EOF then
+          begin
+            raise TEParseError.Create('Unexpected EOF. ',nil);
+          end;
+        end;
+      end
+      else
+        RecogniseType;
+    end
+    else
+      RecogniseType;
+
+    if lbHasConst then
+    begin
+      if fcTokenList.FirstSolidTokenType = ttColon then
+        RecogniseGenericConstraints;
+    end;
+  end;
+
 begin
   PushNode(nGeneric);
 
   // angle brackets
   Recognise(ttLessThan);
-  RecogniseType;
 
-  if fcTokenList.FirstSolidTokenType = ttColon then
+  while True do
   begin
-    RecogniseGenericConstraints;
+    lbHasConst := False;
+    PushNode(nType);
+    RecogniseP;
+    // more types after commas
+    while fcTokenList.FirstSolidTokenType = ttComma do
+    begin
+      Recognise(ttComma);
+      RecogniseP;
+    end;
+
+    if fcTokenList.FirstSolidTokenType = ttColon then
+    begin
+      RecogniseGenericConstraints;
+    end;
+    if fcTokenList.FirstSolidTokenType <> ttSemiColon then
+    begin
+      PopNode;
+      break;
+    end;
+    Recognise(ttSemiColon);
+    PopNode;
   end;
 
-   // more types after commas
-   while fcTokenList.FirstSolidTokenType = ttComma do
-   begin
-      Recognise(ttComma);
-      RecogniseType;
-   end;
+  if fcTokenList.FirstSolidTokenType = ttGreaterThanOrEqual then
+  begin
+    // the tokenizer got it wrong - e.g "TTestNullable<T:Record>=Class"
+    // this is the same as TTestNullable<T:Record> =Class
+    RecogniseWhiteSpace;
+    SplitGreaterThanOrEqual;
+  end;
 
-   if  fcTokenList.FirstSolidTokenType = ttGreaterThanOrEqual  then
-   begin
-     // the tokenizer got it wrong - e.g "TTestNullable<T:Record>=Class"
-     // this is the same as TTestNullable<T:Record> =Class
-     RecogniseWhiteSpace;
+  if fcTokenList.FirstSolidTokenType = ttShr_gg then
+  begin
+    // >> operator
+    RecogniseWhiteSpace;
+    SplitShr_gg;
+  end;
 
-     SplitGreaterThanOrEqual;
-   end;
 
   Recognise(ttGreaterThan);
 
@@ -1393,6 +1502,35 @@ begin
     lcNewToken.FileName := fsFileName;
     lcNewToken.SourceCode := '=';
     lcNewToken.TokenType := ttEquals;
+
+    fcTokenList.Insert(liIndex + 1 , lcNewToken);
+  end;
+end;
+
+procedure TBuildParseTree.SplitShr_gg;
+var
+  liIndex: integer;
+  lcNewToken: TSourceToken;
+  fsFileName: string;
+begin
+  if fcTokenList.FirstTokenType = ttShr_gg then
+  begin
+    liIndex := fcTokenList.CurrentTokenIndex;
+    fsFileName := fcTokenList.SourceTokens[liIndex].FileName;
+
+    fcTokenList.Delete(liIndex);
+
+    lcNewToken := TSourceToken.Create();
+    lcNewToken.FileName := fsFileName;
+    lcNewToken.SourceCode := '>';
+    lcNewToken.TokenType := ttGreaterThan;
+
+    fcTokenList.Insert(liIndex, lcNewToken);
+
+    lcNewToken := TSourceToken.Create();
+    lcNewToken.FileName := fsFileName;
+    lcNewToken.SourceCode := '>';
+    lcNewToken.TokenType := ttGreaterThan;
 
     fcTokenList.Insert(liIndex + 1 , lcNewToken);
   end;
@@ -1602,7 +1740,9 @@ begin
     ttReal48, ttReal, ttSingle, ttDouble, ttExtended, ttCurrency, ttComp,
     ttShortInt, ttSmallInt, ttInteger, ttByte, ttLongInt, ttInt64, ttWord,
     ttBoolean, ttByteBool, ttWordBool, ttLongBool,
-    ttChar, ttWideChar, ttLongWord, ttPChar:
+    ttChar, ttWideChar, ttLongWord, ttPChar, ttCardinal, ttNativeInt, ttNativeUInt,
+    ttInt8, ttInt16, ttInt32, ttUInt8, ttUInt16, ttUInt32, ttUInt64, ttAnsiChar,
+    ttUnicodeChar, ttPAnsiChar, ttPUnicodeChar, ttPWideChar, ttPByte, ttPShortString:
       RecogniseSimpleType; {RealTypes + OrdTypes}
     ttOpenBracket:
       RecogniseSimpleType; {enumerated types}
@@ -1629,7 +1769,8 @@ begin
       RecogniseSpecializeType;
     ttHat:
       RecognisePointerType;
-    ttString, ttAnsiString, ttWideString:
+    ttString, ttAnsiString, ttWideString, ttShortString,
+    ttUnicodeString, ttUtf8String, ttUtf16String, ttRawByteString:
       RecogniseStringType; {StringWords}
     ttProcedure, ttFunction:
       RecogniseProcedureType;
@@ -1882,7 +2023,7 @@ begin
     end;
   end
   else
-    Recognise([ttAnsiString, ttWideString]);
+    Recognise(StringWords);
 end;
 
 //Recognise specialize keyword in type definition (for fpc)
@@ -2025,6 +2166,7 @@ end;
 procedure TBuildParseTree.RecogniseFieldList;
 var
   lcNextToken: TSourceToken;
+  lcVarSection:boolean;  
 begin
   // FieldList ->  FieldDecl/';'... [VariantSection] [';']
   lcNextToken := fcTokenList.FirstSolidToken;
@@ -2038,14 +2180,42 @@ begin
         RecogniseFunctionHeading(False, False);
       ttConstructor:
         RecogniseConstructorHeading(True);
+      ttDestructor:
+        RecogniseDestructorHeading(True);
       ttClass:
+      begin
+        lcVarSection:=fcTokenList.SolidTokenType(2) in [ttVar,ttThreadVar];
         RecogniseRecordStaticItem;
+        if lcVarSection then
+        begin
+          lcNextToken := fcTokenList.FirstSolidToken;
+          continue;
+        end;		
+      end;
       ttProperty:
         RecogniseProperty;
+      // nested types.
+      ttType:
+      begin
+        RecogniseTypeSection(true);
+        lcNextToken := fcTokenList.FirstSolidToken;
+        continue;
+      end;
+      ttVar, ttThreadVar:
+      begin
+        RecogniseVarSection(True);
+        lcNextToken := fcTokenList.FirstSolidToken;
+        continue;
+      end;
+      ttConst:
+      begin
+        RecogniseConstSection(true);
+        lcNextToken := fcTokenList.FirstSolidToken;
+        continue;
+      end
       else
         RecogniseFieldDecl;
     end;
-
 
     lcNextToken := fcTokenList.FirstSolidToken;
 
@@ -2089,8 +2259,28 @@ begin
       RecogniseFunctionHeading(false, false);
       PopNode;
     end;
-    else
-      RecogniseClassVars;
+    ttConstructor:
+    begin
+      PushNode(nConstructorDecl);
+      RecogniseConstructorHeading(true);
+      PopNode;
+    end;
+    ttDestructor:
+    begin
+      PushNode(nDestructorDecl);
+      RecogniseDestructorHeading(true);
+      PopNode;
+    end;
+    ttProperty:
+    begin
+      PushNode(nProperty);
+      RecogniseProperty;
+      PopNode;
+    end;
+    ttVar,ttThreadVar:
+    begin
+      RecogniseVarSection(true);
+    end;
   end;
 end;
 
@@ -2207,10 +2397,36 @@ begin
 end;
 
 procedure TBuildParseTree.RecognisePointerType;
+var
+  wTT:TTokenType;
 begin
   // PointerType -> '^' TypeId
   Recognise(ttHat);
   RecogniseTypeId;
+
+  wTT:=fcTokenList.FirstSolidTokenType;
+  if (wTT = ttSemiColon) then
+  begin
+    if fcTokenList.SolidTokenType(2)=ttNear then
+    begin
+      Recognise(ttSemiColon);
+      Recognise(ttNear);
+      // segment  'CS' 'DS' 'ES' 'SS' 'FS' 'GS'
+      if fcTokenList.FirstSolidTokenType = ttQuotedLiteralString then
+        Recognise(ttQuotedLiteralString);
+    end
+    else
+    if (fcTokenList.SolidTokenType(2)=ttFar) then
+    begin
+      Recognise(ttSemiColon);
+      Recognise(ttFar);
+    end
+    else if (fcTokenList.SolidTokenType(2)=ttHuge) then
+    begin
+      Recognise(ttSemiColon);
+      Recognise(ttHuge);
+    end;
+  end;
 end;
 
 procedure TBuildParseTree.RecogniseProcedureType;
@@ -2242,16 +2458,21 @@ const
   END_VAR_SECTION: TTokenTypeSet =
     [ttVar, ttThreadVar, ttConst, ttLabel, ttResourceString, ttType,
     ttBegin, ttEnd, ttImplementation, ttInitialization,
-    ttProcedure, ttFunction, ttOperator, ttConstructor, ttDestructor, ttClass, ttAsm];
+    ttProcedure, ttFunction, ttOperator, ttConstructor, ttDestructor, ttClass, ttAsm, ttGeneric];
 var
   leEndVarSection: TTokenTypeSet;
 begin
   leEndVarSection := END_VAR_SECTION;
   if pbClassVars then
-    leEndVarSection := leEndVarSection + ClassVisibility;
+    leEndVarSection := leEndVarSection + ClassVisibility + [ttStrict];
 
-
-  PushNode(nVarSection);
+  if pbClassVars and (fcTokenList.FirstSolidTokenType=ttClass) then
+  begin
+    PushNode(nClassVars);
+    Recognise(ttClass);
+  end
+  else
+    PushNode(nVarSection);
 
   // VarSection -> VAR (VarDecl ';')...
   Recognise([ttVar, ttThreadvar]);
@@ -2266,58 +2487,33 @@ begin
   PopNode;
 end;
 
-procedure TBuildParseTree.RecogniseClassVars;
-var
-  lbHasVars: Boolean;
-begin
-  PushNode(nClassVars);
-
-  Recognise(ttClass);
-  Recognise(ttVar);
-
-  // can be an empty section
-  lbHasVars := True;
-  if fcTokenList.FirstSolidTokenType in ClassVisibility + [ttEnd] then
-  begin
-    lbHasVars := False;
-  end;
-
-  if lbHasVars then
-  begin
-    RecogniseVarDecl;
-  end;
-
-  PopNode;
-end;
-
 procedure TBuildParseTree.RecogniseClassOperator(const pbHasBody: boolean);
 begin
   PushNode(nFunctionDecl);
   PushNode(nFunctionHeading);
   Recognise(ttClass);
   Recognise(ttOperator);
-
   RecogniseMethodName(False);
-
   if fcTokenList.FirstSolidTokenType = ttOpenBracket then
     RecogniseFormalParameters;
 
-  Recognise(ttColon);
-  PushNode(nFunctionReturnType);
-  RecogniseType;
-  PopNode;
-
+  //Managed records have operators without return
+  // Initialize, Finalize, Copy, AddRef.
+  if fcTokenList.FirstSolidTokenType = ttColon then
+  begin
+    Recognise(ttColon);
+    PushNode(nFunctionReturnType);
+    RecogniseType;
+    PopNode;
+  end;
   RecogniseProcedureDirectives;
-
   PopNode;
-
   if pbHasBody then
   begin
     Recognise(ttSemiColon);
     RecogniseBlock;
     Recognise(ttSemiColon);
   end;
-
   PopNode;
 end;
 
@@ -2365,7 +2561,7 @@ const
   OperatorTokens: TTokenTypeSet = [ttPlus, ttMinus, ttTimes, ttFloatDiv, ttExponent,
     ttEquals, ttGreaterThan, ttLessThan, ttGreaterThanOrEqual, ttLessThanOrEqual,
     ttAssign, ttPlusAssign, ttMinusAssign, ttTimesAssign, ttFloatDivAssign, ttXor,
-    ttAnd, ttOr, ttEnumerator];
+    ttAnd, ttOr, ttEnumerator, ttNot, ttDiv, ttMod, ttIn, ttShl, ttShr];
 begin
   Recognise(OperatorTokens);
 end;
@@ -2374,7 +2570,21 @@ procedure TBuildParseTree.RecogniseVarDecl;
 var
   lc: TSourceToken;
 begin
-  // VarDecl -> IdentList ':' Type [(ABSOLUTE (Ident | ConstExpr)) | '=' ConstExpr]
+  // (* attempted EBNF definition of a variable definition *)
+  // named : 'name' var_name
+  // exppubl : ( 'export' | 'public' ) [named] ';'
+  // external : ( 'external' [[lib_name] [named]] ';'
+  // absolute : 'absolute' var_name
+  // absolute : 'absolute' expression
+  // initvalue : '=' ConstExpr
+  // hints : [ 'deprecated'
+  // | 'experimental'
+  // | 'platform'
+  // | 'unimplemented' ]
+  // identlist : var_name { ',' var_name }
+  //
+  // vardef : identlist ':' vartype [ absolute ] ';'
+  // [( exppubl | external )] [ hints ]
 
   PushNode(nVarDecl);
 
@@ -2386,24 +2596,9 @@ begin
 
   if lc.TokenType = ttAbsolute then
   begin
-    PushNode(nAbsoluteVar);
+    PushNode(nVarAbsolute);
     Recognise(ttAbsolute);
-
-    if (fcTokenList.FirstSolidWordType in IdentifierTypes) then
-    begin
-      // can be a dotted name
-      RecogniseIdentifier(True, idAllowDirectives);
-
-      while fcTokenList.FirstSolidTokenType = ttDot do
-      begin
-        Recognise(ttDot);
-        RecogniseIdentifier(false, idAllowDirectives);
-      end;
-      
-    end
-    else
-      RecogniseConstantExpression;
-
+    RecogniseConstantExpression;
     PopNode;
   end
   else
@@ -2540,7 +2735,11 @@ begin
       Note that the function name can be omitted "
    }
   lc := fcTokenList.FirstSolidToken;
-
+  if lc.TokenType = ttSpecialize then
+  begin
+    Recognise(ttSpecialize);
+    lc := fcTokenList.FirstSolidToken;
+  end;
   if AnonymousMethodNext then
   begin
     RecogniseAnonymousMethod;
@@ -2847,6 +3046,12 @@ begin
       begin
         Recognise(ttOpenSquareBracket);
         RecogniseExprList;
+        // partial array pass  Test(A[2..5]);
+        if fcTokenList.FirstSolidTokenType=ttDoubleDot then
+        begin
+          Recognise(ttDoubleDot);
+          RecogniseExprList;
+        end;
         Recognise(ttCloseSquareBracket);
       end;
       ttOpenBracket:
@@ -2924,6 +3129,12 @@ begin
   PushNode(nStatement);
 
   lct :=  fcTokenList.FirstSolidTokenType;
+
+  if lct = ttSpecialize then
+  begin
+    Recognise(ttSpecialize);
+    lct :=  fcTokenList.FirstSolidTokenType;
+  end;
 
   if lct = ttSemicolon then
   begin
@@ -3383,6 +3594,7 @@ end;
 procedure TBuildParseTree.RecogniseForStmnt;
 var
   lc: TSourceToken;
+  lCountBrackets:integer;
 begin
   { ForStmt -> FOR QualId ':=' Expression (TO | DOWNTO) Expression DO Statement
 
@@ -3394,6 +3606,22 @@ begin
 
   Recognise(ttFor);
   RecogniseQualId;
+
+
+  //type cast    for TCollectionItem(item) in ItemList do 
+  // TypeCast1(TypeCast2(TypeCast3(item)))
+  lCountBrackets:=0;
+  while fcTokenList.FirstSolidTokenType=ttOpenBracket do
+  begin
+    Recognise(ttOpenBracket);
+    RecogniseQualId;
+    Inc(lCountBrackets);
+  end;
+  while lCountBrackets>0 do
+  begin
+    Recognise(ttCloseBracket);
+    Dec(lCountBrackets);
+  end;
 
   lc := fcTokenList.FirstSolidToken;
   if lc.TokenType = ttIn then
@@ -3639,6 +3867,24 @@ begin
           raise TEParseError.Create('expected class procedure or class function', lc);
       end;
     end;
+    ttGeneric:
+      case fcTokenList.SolidTokenType(2) of
+        ttProcedure:
+          RecogniseProcedureDecl(false);
+        ttFunction:
+          RecogniseFunctionDecl(false);
+        ttClass:
+          case fcTokenList.SolidTokenType(3) of
+            ttProcedure:
+              RecogniseProcedureDecl(false);
+            ttFunction:
+              RecogniseFunctionDecl(false);
+            else
+              raise TEParseError.Create('expected class procedure or class function', lc);
+          end
+        else
+          raise TEParseError.Create('expected class procedure or class function', lc);
+     end;
     else
       raise TEParseError.Create('expected procedure or function', lc);
   end;
@@ -3775,6 +4021,9 @@ begin
   // FunctionHeading -> FUNCTION Ident [FormalParameters] ':' (SimpleType | STRING)
   PushNode(nFunctionHeading);
 
+  if fcTokenList.FirstSolidTokenType = ttGeneric then
+    Recognise(ttGeneric);
+
   // class procs
   if fcTokenList.FirstSolidTokenType = ttClass then
     Recognise(ttClass);
@@ -3828,6 +4077,8 @@ begin
   }
 
   PushNode(nProcedureHeading);
+  if fcTokenList.FirstSolidTokenType = ttGeneric then
+    Recognise(ttGeneric);
 
   if fcTokenList.FirstSolidTokenType = ttClass then
     Recognise(ttClass);
@@ -4007,6 +4258,12 @@ begin
         begin
           Recognise(ttEnumerator);
           RecogniseIdentifier(False, idStrict);
+        end;
+        ttDeprecated:
+        begin
+          Recognise(ttDeprecated);
+          if fcTokenList.FirstSolidTokenType <> ttSemicolon then
+            RecogniseConstantExpression;
         end
         else
           Recognise(ProcedureDirectives);
@@ -4064,7 +4321,7 @@ begin
       Public ["name" "'" symname "'"]
   }
   result:=false;
-  if TopNode.HasParentNode([nClassBody, nObjectType]) then
+  if TopNode.HasParentNode([nClassBody, nObjectType, nRecordType]) then
     exit;
 
   Recognise(ttPublic);
@@ -4345,8 +4602,8 @@ end;
 procedure TBuildParseTree.RecogniseClassDeclarations(const pbInterface: boolean);
 const
   // can declare thse things in a class
-  CLASS_DECL_WORDS = [ttProcedure, ttFunction,
-    ttConstructor, ttDestructor, ttProperty, ttClass, ttConst, ttType, ttVar];
+  CLASS_DECL_WORDS = [ttProcedure, ttFunction, ttConstructor, ttDestructor,
+                      ttProperty, ttClass, ttConst, ttType, ttVar, ttThreadVar];
 var
   lc: TSourceToken;
   lbStarted: boolean;
@@ -4425,8 +4682,11 @@ begin
             RecogniseProcedureHeading(False, True);
           ttFunction:
             RecogniseFunctionHeading(False, True);
-          ttVar:
-            RecogniseClassVars;
+          ttVar, ttThreadVar:
+          begin
+            RecogniseVarSection(True);
+            lbHasTrailingSemicolon := False;
+          end;
           ttProperty:
           begin
             RecogniseProperty;
@@ -4463,7 +4723,7 @@ begin
         RecogniseTypeSection(true);
         lbHasTrailingSemicolon := False;
       end;
-      ttVar:
+      ttVar, ttThreadVar:
       begin
         RecogniseVarSection(True);
         lbHasTrailingSemicolon := False;
@@ -4660,7 +4920,7 @@ begin
         Recognise(ttWriteOnly);
       end;
       else
-        raise TEParseError.Create('expected proeprty specifier',
+        raise TEParseError.Create('expected property specifier',
           fcTokenList.FirstSolidToken);
     end;
 
@@ -4812,9 +5072,9 @@ end;
 
 procedure TBuildParseTree.RecogniseIdentValue;
 begin
-  if fcTokenList.FirstSolidTokenType = ttEquals then
+  if fcTokenList.FirstSolidTokenType in [ttEquals, ttAssign] then
   begin
-    Recognise(ttEquals);
+    Recognise(fcTokenList.FirstSolidTokenType);
     RecogniseExpr(True);
   end;
 end;
@@ -4890,22 +5150,26 @@ begin
   Recognise(IdentiferTokens);
 
   { tokens can be qualified by a unit name }
+  { can be nested types }
   if pbCanHaveUnitQualifier and (fcTokenList.FirstSolidTokenType = ttDot) then
   begin
-    Recognise(ttDot);
+    while fcTokenList.FirstSolidTokenType = ttDot do
+    begin
+      Recognise(ttDot);
 
-    { delphi.net can preface the identifier with an '&'
-      in order to do something obscure with it - make it a literal or something
+      { delphi.net can preface the identifier with an '&'
+        in order to do something obscure with it - make it a literal or something
 
-      e.g. "WebRequest.&Create" is not a constructor,
-      but a C# method called "Create", which is not a reserved word in C#
-    }
+        e.g. "WebRequest.&Create" is not a constructor,
+        but a C# method called "Create", which is not a reserved word in C#
+      }
 
-    RecognisePossiblyAmpdIdentifier;
+      RecognisePossiblyAmpdIdentifier;
+    end;
   end;
 
   PopNode;
-end;
+end; 
 
 { the name of a procedure/function/constructor can be
   a plain name or classname.methodname
@@ -5015,8 +5279,13 @@ begin
     // a use not a decl
     RecogniseGenericType;
   end;
-  
+  if fcTokenList.FirstSolidTokenType = ttDot then
+  begin
+    Recognise(ttDot);
+    RecogniseTypeId;
+  end;
 end;
+
 
 procedure TBuildParseTree.RecogniseAsmBlock;
 begin
@@ -5322,7 +5591,7 @@ begin
       begin
         lcLastChar := lcNext.SourceCode[Length(lcNext.SourceCode)];
 
-        if (lcLastChar = 'h') then
+        if ((lcLastChar = 'h') or (lcLastChar = 'H')) then
         begin
           Recognise(ttIdentifier);
         end;
@@ -5568,7 +5837,11 @@ var
   lc: TSourceToken;
 begin
   lc := fcTokenList.FirstSolidToken;
-
+  if lc.TokenType = ttSpecialize then
+  begin
+    Recognise(ttSpecialize);
+    lc := fcTokenList.FirstSolidToken;
+  end;
   { all kinds of reserved words can sometimes be param names
     thanks to COM and named params
     See LittleTest43.pas }

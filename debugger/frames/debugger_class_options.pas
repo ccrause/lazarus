@@ -29,7 +29,7 @@ uses
   // LCL
   Forms, Controls, StdCtrls, ExtCtrls, Buttons, Dialogs, ComCtrls, Menus,
   // LazUtils
-  FileUtil, LazFileUtils, LazStringUtils, LazFileCache, LazLoggerBase,
+  FileUtil, LazFileUtils, LazStringUtils, LazFileCache, LazLoggerBase, LazUTF8,
   // DebuggerIntf
   DbgIntfDebuggerBase,
   // IdeIntf
@@ -71,7 +71,6 @@ type
     procedure tbAddNewClick(Sender: TObject);
     procedure tbCopyClick(Sender: TObject);
     procedure tbDeleteClick(Sender: TObject);
-    procedure tbSelectClick(Sender: TObject);
   private
     FDebuggerFileHistory: TStringList;
     FInOdNameExit: Boolean;
@@ -156,6 +155,9 @@ procedure TDebuggerClassOptionsFrame.cmdOpenDebuggerPathClick(Sender: TObject);
 var
   OpenDialog: TOpenDialog;
   AFilename, ParsedFName: string;
+  lDirText : string;
+  lExpandedName: string; // Expanded name before Dialog
+  lDirName, lDirNameF : string;
 begin
   if FSelectedDbgPropertiesConfig = nil then
     exit;
@@ -166,6 +168,12 @@ begin
     OpenDialog.Options:=OpenDialog.Options+[ofPathMustExist];
     OpenDialog.Title:=lisChooseDebuggerExecutable;
 
+    lDirName := EnvironmentOptions.GetParsedValue(eopDebuggerFilename, lDirText{%H-});
+    lExpandedName := CleanAndExpandFilename(lDirName);
+    lDirName := GetValidDirectory(lDirName, {out} lDirNameF);
+    OpenDialog.InitialDir := lDirName;
+    OpenDialog.FileName := lDirNameF;
+
     if OpenDialog.Execute then begin
       AFilename:=CleanAndExpandFilename(OpenDialog.Filename);
       ParsedFName := EnvironmentOptions.GetParsedValue(eopDebuggerFilename, AFilename);
@@ -174,10 +182,11 @@ begin
       if CheckExecutable(FSelectedDbgPropertiesConfig.DebuggerFilename, ParsedFName,
         lisEnvOptDlgInvalidDebuggerFilename,
         lisEnvOptDlgInvalidDebuggerFilenameMsg)
-      then begin
-        SetComboBoxText(cmbDebuggerPath,AFilename,cstFilename);
-        FSelectedDbgPropertiesConfig.DebuggerFilename := AFilename;
-      end;
+      then
+        if UpperCase(lExpandedName)<>UpperCase(AFilename) then begin // Changed ?
+          SetComboBoxText(cmbDebuggerPath,AFilename,cstFilename);
+          FSelectedDbgPropertiesConfig.DebuggerFilename := AFilename;
+        end;
     end;
     InputHistories.StoreFileDialogSettings(OpenDialog);
   finally
@@ -267,11 +276,6 @@ begin
   FetchDebuggerSpecificOptions;
 end;
 
-procedure TDebuggerClassOptionsFrame.tbSelectClick(Sender: TObject);
-begin
-  tbSelect.CheckMenuDropdown;
-end;
-
 function TDebuggerClassOptionsFrame.SelectedDebuggerClass: TDebuggerClass;
 begin
   if FSelectedDbgPropertiesConfig = nil then
@@ -290,11 +294,11 @@ end;
 
 procedure TDebuggerClassOptionsFrame.FillDebuggerClassDropDown;
 var
-  List: TStringList;
+  List: TStringListUTF8Fast;
   i: Integer;
   d: TDebuggerClass;
 begin
-  List := TStringList.Create;
+  List := TStringListUTF8Fast.Create;
   for i := 0 to TBaseDebugManagerIntf.DebuggerCount - 1 do begin
     d := TBaseDebugManagerIntf.Debuggers[i];
     List.AddObject(d.Caption, TObject(d));
@@ -564,7 +568,6 @@ begin
   FDebuggerFileHistory := TStringList.Create;
   FDebuggerFileHistory.OwnsObjects := True;
   FCopiedDbgPropertiesConfigList := TDebuggerPropertiesConfigList.Create;
-  FCopiedDbgPropertiesConfigList.CaseSensitive := False;
   // create the PropertyGrid
   PropertyGrid:=TOIPropertyGrid.CreateWithParams(Self,FPropertyEditorHook
       ,[tkUnknown, tkInteger, tkChar, tkEnumeration, tkFloat, tkSet{, tkMethod}

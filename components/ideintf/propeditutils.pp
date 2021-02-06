@@ -11,7 +11,9 @@ unit PropEditUtils;
 interface
 
 uses
-  Classes, SysUtils, TypInfo, LazLoggerBase;
+  Classes, SysUtils, TypInfo,
+  // LazUtils
+  LazLoggerBase;
 
 type
   {
@@ -297,7 +299,7 @@ var
 begin
   FLookupRoot:=AValue;
   FComponentList.Clear;
-  if (FLookupRoot<>nil) and (FLookupRoot is TComponent) then
+  if FLookupRoot is TComponent then
     for i:=0 to TComponent(FLookupRoot).ComponentCount-1 do
       FComponentList.Add(TComponent(FLookupRoot).Components[i]);
   FSelection.Clear;
@@ -346,7 +348,7 @@ begin
   Result := False;
   if ALookupRoot <> LookupRoot then Exit;
   if not FSelection.IsEqual(ASelection) then Exit;
-  if (ALookupRoot <> nil) and (FLookupRoot is TComponent) then
+  if ALookupRoot is TComponent then
   begin
     if ComponentCount <> TComponent(ALookupRoot).ComponentCount then
       Exit;

@@ -17,13 +17,13 @@ unit IDEDialogs;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes,
   // LCL
   Dialogs,
   // LazUtils
   UITypes, LazFileCache,
-  // IdeIntf
-  LazMsgDialogs;
+  // BuildIntf
+  LazMsgWorker;
 
 type
 
@@ -40,6 +40,8 @@ type
   TIDESaveDialog = class(TSaveDialog)
   protected
     function DoExecute: boolean; override;
+  public
+    class function NeedOverwritePrompt: boolean; virtual;
   end;
   TIDESaveDialogClass = class of TIDESaveDialog;
 
@@ -57,11 +59,11 @@ var  // set by the IDE
 // Wrapper function for LazIDESelectDirectory with a default parameter.
 function LazSelectDirectory(const Title: string; const InitialDir: string = ''): string;
 
-// Wrapper function for LazMessageDialog in LazMsgDialogs.
+// Wrapper function for LazMessageWorker in LazMsgWorker.
 function IDEMessageDialog(const aCaption, aMsg: string;
                           DlgType: TMsgDlgType; Buttons: TMsgDlgButtons;
                           const HelpKeyword: string = ''): Integer;
-// Wrapper function for LazQuestionDialog in LazMsgDialogs.
+// Wrapper function for LazQuestionWorker in LazMsgWorker.
 function IDEQuestionDialog(const aCaption, aMsg: string;
                            DlgType: TMsgDlgType; Buttons: array of const;
                            const HelpKeyword: string = ''): Integer;
@@ -119,14 +121,14 @@ function IDEMessageDialog(const aCaption, aMsg: string;
                           DlgType: TMsgDlgType; Buttons: TMsgDlgButtons;
                           const HelpKeyword: string = ''): Integer;
 begin
-  Result := LazMessageDialog(aCaption, aMsg, DlgType, Buttons, HelpKeyword);
+  Result := LazMessageWorker(aCaption, aMsg, DlgType, Buttons, HelpKeyword);
 end;
 
 function IDEQuestionDialog(const aCaption, aMsg: string;
                            DlgType: TMsgDlgType; Buttons: array of const;
                            const HelpKeyword: string = ''): Integer;
 begin
-  Result := LazQuestionDialog(aCaption, aMsg, DlgType, Buttons, HelpKeyword);
+  Result := LazQuestionWorker(aCaption, aMsg, DlgType, Buttons, HelpKeyword);
 end;
 
 function IDEMessageDialogAb(const aCaption, aMsg: string; DlgType: TMsgDlgType;
@@ -177,6 +179,11 @@ function TIDESaveDialog.DoExecute: boolean;
 begin
   Result:=inherited DoExecute;
   LazFileCache.InvalidateFileStateCache;
+end;
+
+class function TIDESaveDialog.NeedOverwritePrompt: boolean;
+begin
+  Result:={$if defined(LCLCocoa)}false{$else}true{$endif};
 end;
 
 { TIDEOpenDialog }

@@ -560,9 +560,7 @@ end;
 procedure FillRawImageDescription(const ABitmapInfo: Windows.TBitmap; out ADesc: TRawImageDescription);
 begin
   ADesc.Init;
-
   ADesc.Format := ricfRGBA;
-
   ADesc.Depth := ABitmapInfo.bmBitsPixel;             // used bits per pixel
   ADesc.Width := ABitmapInfo.bmWidth;
   ADesc.Height := ABitmapInfo.bmHeight;
@@ -867,8 +865,7 @@ begin
   Result:=GetLCLClientBoundsOffset(OwnerObject, Rect);
 end;
 
-procedure LCLBoundsToWin32Bounds(Sender: TObject;
-  var Left, Top, Width, Height: Integer);
+procedure LCLBoundsToWin32Bounds(Sender: TObject; var Left, Top: Integer);
 var
   ORect: TRect;
 Begin

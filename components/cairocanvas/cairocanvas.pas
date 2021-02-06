@@ -31,8 +31,13 @@ unit CairoCanvas;
 interface
 
 uses
-  Types, SysUtils, Classes, LCLType, LCLProc, Graphics, math, GraphMath,
-  Printers, Cairo
+  Types, SysUtils, Classes, LCLType, LCLProc, Graphics, math,
+  // LCL
+  Printers,
+  // LazUtils
+  GraphMath,
+  //CairoCanvas
+  Cairo
   {$ifdef pangocairo}
   ,Pango, PangoCairo, GLib2
   {$endif}
@@ -363,7 +368,7 @@ end;
 procedure TCairoPrinterCanvas.NewPage;
 begin
   EndPage;
-  BeginPage;
+  inherited NewPage;
 end;
 
 procedure TCairoPrinterCanvas.BeginPage;

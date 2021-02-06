@@ -30,12 +30,12 @@ interface
 
 uses
   SysUtils, Types, Classes, Math, Laz_AVL_Tree,
-  // LazUtils
-  LazUTF8, LazUTF8Classes, LazLoggerBase, LazUtilities,
   // LCL
-  LCLStrConsts, LResources, LCLIntf, LCLType, LMessages, WSLCLClasses,
-  WSReferences, LCLProc, GraphType, Graphics, ImgList, ActnList, Themes, Menus,
-  Controls, Forms, StdCtrls, ExtCtrls, ToolWin, Buttons;
+  LCLStrConsts, LResources, LCLIntf, LCLType, LCLProc, LMessages, WSLCLClasses,
+  WSReferences, Graphics, ImgList, ActnList, Themes, Menus,
+  Controls, Forms, StdCtrls, ExtCtrls, ToolWin, Buttons,
+  // LazUtils
+  GraphType, LazUTF8, LazLoggerBase, LazUtilities;
 
 type
   THitTest = (htAbove, htBelow, htNowhere, htOnItem, htOnButton, htOnIcon,
@@ -733,6 +733,7 @@ type
     procedure MouseUp(Button: TMouseButton; Shift:TShiftState; X,Y:Integer); override;
     procedure MouseEnter; override;
     procedure MouseLeave; override;
+    function GetPopupMenu: TPopupMenu; override;
     class procedure WSRegisterClass; override;
   end;
   TNoteBookStringsTabControlClass = class of TNoteBookStringsTabControl;
@@ -909,6 +910,7 @@ type
     property OnStartDock;
     property OnStartDrag;
     property OnUnDock;
+    property Options;
     property ParentBiDiMode;
     property ParentFont;
     property ParentShowHint;
@@ -1509,9 +1511,10 @@ type
     procedure Change(AItem: TListItem; AChange: Integer); virtual;
     procedure ColClick(AColumn: TListColumn); virtual;
 
-    procedure Delete(Item : TListItem);
+    procedure Delete(AItem : TListItem); virtual;
     procedure DoDeletion(AItem: TListItem); virtual;
     procedure DoInsert(AItem: TListItem); virtual;
+    procedure InsertItem(AItem : TListItem); virtual;
     procedure DoItemChecked(AItem: TListItem);
     procedure DoSelectItem(AItem: TListItem; ASelected: Boolean); virtual;
     procedure DoAutoAdjustLayout(const AMode: TLayoutAdjustmentPolicy;
@@ -1519,8 +1522,8 @@ type
     procedure DoSetBounds(ALeft, ATop, AWidth, AHeight: integer); override;
 
     procedure DoEndEdit(AItem: TListItem; const AValue: String); virtual;
+    procedure Edit(AItem: TListItem); virtual;
 
-    procedure InsertItem(Item : TListItem);
     procedure ImageChanged(Sender : TObject);
     procedure Loaded; override;
     procedure Notification(AComponent: TComponent; Operation: TOperation); override;
@@ -1892,6 +1895,7 @@ type
     FMinRepeatInterval: Byte;  //Interval starts at 300 and this must be smaller always
     FMouseDownBounds : TRect;
     FMouseTimerEvent: TProcedureOfObject; // the Min/MaxBtn's Click method
+    FMouseInsideComp: Boolean; // Used for MouseEnter and MouseLeave events.
     FOnChanging: TUDChangingEvent;
     FOnChangingEx: TUDChangingEventEx;
     FOnClick: TUDClickEvent;
@@ -1900,6 +1904,8 @@ type
     FThousands: Boolean;
     FWrap: Boolean;
     FUseWS: Boolean;
+    function CheckMouseEntering: Boolean;
+    function CheckMouseLeaving: Boolean;
     function GetPosition: SmallInt;
     procedure BTimerExec(Sender : TObject);
     function GetFlat: Boolean;
@@ -1932,6 +1938,8 @@ type
     function DoMouseWheelUp(Shift: TShiftState; MousePos: TPoint): Boolean; override;
     function DoMouseWheelLeft(Shift: TShiftState; MousePos: TPoint): Boolean; override;
     function DoMouseWheelRight(Shift: TShiftState; MousePos: TPoint): Boolean; override;
+    procedure MouseEnter; override;
+    procedure MouseLeave; override;
     procedure DoSetBounds(ALeft, ATop, AWidth, AHeight: integer); override;
     procedure SetEnabled(Value: Boolean); override;
     class function GetControlClassDefaultSize: TSize; override;
@@ -2834,8 +2842,8 @@ type
     nsVisible,       // = Node.Visible
     nsBound          // bound to a tree, e.g. has Parent or is top lvl node
     );
-
   TNodeStates = set of TNodeState;
+
   TNodeAttachMode = (
     naAdd,           // add as last sibling of Destination
     naAddFirst,      // add as first sibling of Destination
@@ -2976,7 +2984,7 @@ type
     function CompareCount(CompareMe: Integer): Boolean;
     function DoCanExpand(ExpandIt: Boolean): Boolean;
     procedure DoExpand(ExpandIt: Boolean);
-    procedure ExpandItem(ExpandIt: Boolean; Recurse: Boolean);
+    procedure ExpandItem(ExpandIt, Recurse: Boolean);
     function GetAbsoluteIndex: Integer;
     function GetDeleting: Boolean;
     function GetHasChildren: Boolean;
@@ -3046,6 +3054,7 @@ type
     function EditText: Boolean;
     function FindNode(const NodeText: string): TTreeNode;
     function GetFirstChild: TTreeNode;
+    function GetFirstSibling: TTreeNode;
     function GetFirstVisibleChild: TTreeNode;
     function GetHandle: THandle;
     function GetLastChild: TTreeNode;
@@ -3287,7 +3296,8 @@ type
     tvoShowSeparators,
     tvoToolTips,
     tvoNoDoubleClickExpand,
-    tvoThemedDraw
+    tvoThemedDraw,
+    tvoEmptySpaceUnselect
     );
   TTreeViewOptions = set of TTreeViewOption;
 
@@ -3339,7 +3349,8 @@ type
     FLastVertScrollInfo: TScrollInfo;
     FMaxLvl: integer; // maximum level of all nodes
     FMaxRight: integer; // maximum text width of all nodes (needed for horizontal scrolling)
-    fMouseDownPos: TPoint;
+    FMouseDownPos: TPoint;
+    FMouseDownOnFoldingSign: Boolean;
     FMultiSelectStyle: TMultiSelectStyle;
     FHotTrackColor: TColor;
     FDisabledFontColor: TColor;
@@ -3423,6 +3434,7 @@ type
     function IsStoredBackgroundColor: Boolean;
     procedure HintMouseLeave(Sender: TObject);
     procedure ImageListChange(Sender: TObject);
+    function NodeIsSelected(aNode: TTreeNode): Boolean;
     procedure OnChangeTimer(Sender: TObject);
     procedure SetAutoExpand(Value: Boolean);
     procedure SetBackgroundColor(Value: TColor);
@@ -3516,6 +3528,10 @@ type
     procedure Change(Node: TTreeNode); virtual;
     procedure Collapse(Node: TTreeNode); virtual;
     procedure CreateWnd; override;
+    procedure Click; override;
+    procedure DblClick; override;
+    procedure TripleClick; override;
+    procedure QuadClick; override;
     procedure Delete(Node: TTreeNode); virtual;
     procedure DestroyWnd; override;
     procedure DoCreateNodeClass(var NewNodeClass: TTreeNodeClass); virtual;
@@ -3627,6 +3643,7 @@ type
     procedure EraseBackground(DC: HDC); override;
     function GetHitTestInfoAt(X, Y: Integer): THitTests;
     function GetNodeAt(X, Y: Integer): TTreeNode;
+    function GetNodeWithExpandSignAt(X, Y: Integer): TTreeNode;
     procedure GetInsertMarkAt(X, Y: Integer; out AnInsertMarkNode: TTreeNode;
                               out AnInsertMarkType: TTreeViewInsertMarkType);
     procedure SetInsertMark(AnInsertMarkNode: TTreeNode;

@@ -20,11 +20,15 @@ uses
   Controls, Forms, Dialogs, Menus, Graphics, LCLProc, LCLType, LCLIntf,
   Printers, osPrinters,
   // LazUtils
-  LazFileUtils, LazUTF8, LazUTF8Classes,
+  LazFileUtils, LazUTF8,
   // IDEIntf
   PropEdits,
   // LazReport
-  LR_View, LR_Pars, LR_Intrp, LR_DSet, LR_DBSet, LR_DBRel, LR_Const, DbCtrls;
+  LR_View, LR_Pars, LR_Intrp, LR_DSet, LR_DBSet, LR_DBRel, LR_Const, DbCtrls
+  {$IFDEF LCLNOGUI}
+  ,lr_ngcanvas
+  {$ENDIF}
+  ;
 
 const
   lrMaxBandsInReport       = 256; //temp fix. in future need remove this limit
@@ -136,6 +140,7 @@ type
   TPrintReportEvent = procedure(Sender: TfrReport) of object;
   TFormPageBookmarksEvent = procedure(Sender: TfrReport; Backup: boolean) of object;
   TExecScriptEvent = procedure(frObject:TfrObject; AScript:TfrScriptStrings) of object;
+  TBeforePreviewFormEvent = procedure( var PrForm : TfrPreviewForm ) of Object;
 
   TfrHighlightAttr = packed record
     FontStyle: Word;
@@ -1144,6 +1149,7 @@ type
     FObjectClick: TObjectClickEvent;
     FOnExportFilterSetup: TExportFilterSetup;
     fOnFormPageBookmarks: TFormPageBookmarksEvent;
+    fOnBeforePreview : TBeforePreviewFormEvent;
     FPages: TfrPages;
     FEMFPages: TfrEMFPages;
     FRebuildPrinter: boolean;
@@ -1291,7 +1297,8 @@ type
     // report manipulation methods
     function DesignReport: Integer;
     function PrepareReport: Boolean;
-    function ExportTo(FilterClass: TfrExportFilterClass; aFileName: String):Boolean;
+    function ExportTo(FilterClass: TfrExportFilterClass; aFileName: String):Boolean; overload;
+    function ExportTo(FilterClass: TfrExportFilterClass; exportStream: TStream; freeStream:boolean=false): boolean; overload;
     procedure ShowReport;
     procedure ShowPreparedReport;
     procedure PrintPreparedReport(const PageNumbers: String; Copies: Integer);
@@ -1360,6 +1367,7 @@ type
     property OnObjectClick: TObjectClickEvent read FObjectClick write FObjectClick;
     property OnMouseOverObject: TMouseOverObjectEvent read FMouseOverObject write FMouseOverObject;
     property OnFormPageBookmarks: TFormPageBookmarksEvent read fOnFormPageBookmarks write fOnFormPageBookmarks;
+    property OnBeforePreview : TBeforePreviewFormEvent read  fOnBeforePreview write fOnBeforePreview;
   end;
 
   TfrCompositeReport = class(TfrReport)
@@ -1452,6 +1460,11 @@ type
 
   TfrAddinInitProc = procedure;
 
+  {$IFDEF LCLNOGUI}
+  TLazreportBitmap = TVirtualBitmap;
+  {$ELSE}
+  TLazreportBitmap = TBitmap;
+  {$ENDIF}
 
 function frCreateObject(Typ: Byte; const ClassName: String; AOwnerPage:TfrPage): TfrView;
 procedure frRegisterObject(ClassRef: TFRViewClass; ButtonBmp: TBitmap;
@@ -1611,7 +1624,7 @@ var
   LRE_OLDV28_FRF_READ: Boolean = False;  // read frf v28 (lazarus 1.4.4) reports, bug 29966
 
   // variables used through report building
-  TempBmp: TBitmap;            // temporary bitmap used by TfrMemoView
+  TempBmp: TLazreportBitmap;                    // temporary bitmap used by TfrMemoView
 
 function ExportFilters:TExportFilters;
 implementation
@@ -3748,7 +3761,7 @@ begin
       fs := Round((-GetFontData(Self.Font.Handle).Height * 72 / Self.Font.PixelsPerInch))
     else
       fs := Self.Font.Size;
-    ACanvas.Font.Height := -Round(fs * Self.Font.PixelsPerInch / 72 * ScaleY);
+    ACanvas.Font.Height := -Round(fs * 96 / 72 * ScaleY);
   end;
   {$IFDEF DebugLR}
   DebugLnExit('AssignFont (%s) DONE: Self.Font.Size=%d aCanvas.Font.Size=%d',
@@ -3812,24 +3825,29 @@ var
   WCanvas: TCanvas;
   aword: string;
 
-  procedure OutLine(const str: String);
+  // Using UnicodeString in OutLine() and WrapLine() is an ugly hack.
+  // It only supports UCS-2 and does not support combining codepoints.
+  // The procedures should be written for UTF-8 properly. See issues #34871 and #37170.
+  // Anyway this is better than supporting plain ASCII.
+  procedure OutLine(const str: UnicodeString);
   var
     n, w: Word;
   begin
     n := Length(str);
     if (n > 0) and (str[n] = #1) then
-      w := WCanvas.TextWidth(Copy(str, 1, n - 1)) else
+      w := WCanvas.TextWidth(Copy(str, 1, n - 1))
+    else
       w := WCanvas.TextWidth(str);
     {$IFDEF DebugLR_detail}
     debugLn('Outline: str="%s" w/=%d w%%=%d',[copy(str,1,12),w div 256, w mod 256]);
     {$ENDIF}
-    SMemo.Add(str + Chr(w div 256) + Chr(w mod 256));
+    SMemo.Add(Utf8Encode(str) + Chr(w div 256) + Chr(w mod 256));
     Inc(size, size1);
     if Angle=0 then
       maxWidth := dx - InternalGapX - InternalGapX;
   end;
 
-  procedure WrapLine(const s: String);
+  procedure WrapLine(const s: UnicodeString);
   var
     i, cur, beg, last, len: Integer;
     WasBreak, CRLF, IsCR: Boolean;
@@ -4026,13 +4044,18 @@ begin
     size := Round((-GetFontData(WCanvas.Font.Handle).Height * 72 / WCanvas.Font.PixelsPerInch))
   else
     size := WCanvas.Font.Size;
-  WCanvas.Font.Height := -Round(size * WCanvas.Font.PixelsPerInch / 72);
+  WCanvas.Font.Height := -Round(size * 96 / 72);
   {$IFDEF DebugLR}
   DebugLnEnter('TfrMemoView.WrapMemo INI Font.PPI=%d Font.Size=%d Canvas.Font.PPI=%d WCanvas.Font.Size=%d',
     [Font.PixelsPerInch, Font.Size,Canvas.Font.PixelsPerInch,WCanvas.Font.Size]);
   {$ENDIF}
 
+  {$IFDEF LCLNOGUI}
+  // TODO: TVirtualCanvas(WCanvas).CharacterSpacing := CharacterSpacing;
+  {$ELSE}
   SetTextCharacterExtra(WCanvas.Handle, CharacterSpacing);
+  {$ENDIF}
+
   SMemo.Clear;
   if Angle<>0 then
     OutMemo90
@@ -4355,8 +4378,12 @@ begin
   if n > 2 then
     if (s[n - 1] = #13) and (s[n] = #10) then
       SetLength(s, n - 2);
+  {$IFDEF LCLNOGUI}
+  DrawTextNoGui(Canvas, s, CalcRect, DTFlags);
+  {$ELSE}
   SetTextCharacterExtra(Canvas.Handle, Round(CharacterSpacing * ScaleX));
   DrawText(Canvas.Handle, PChar(s), Length(s), CalcRect, DTFlags);
+  {$ENDIF}
   Result := CalcRect.Right + Round(2 * FrameWidth) + 2;
   {$IFDEF DebugLR}
   DebugLnExit('TfrMemoView.CalcWidth DONE Width=%d Rect=%s',[Result,dbgs(CalcRect)]);
@@ -4464,7 +4491,18 @@ begin
   begin
     Memo1.Assign(Memo);
     St:=Memo1.Text;
+    {$IFDEF DebugLR}
+    try
+      CurReport.InternalOnEnterRect(Memo1, Self);
+    except
+      on E:Exception do begin
+        DebugLnExit('TfrMemoView.Print EXIT by Exception in OnEnterRect: %s',[E.Message]);
+        raise;
+      end;
+    end;
+    {$ELSE}
     CurReport.InternalOnEnterRect(Memo1, Self);
+    {$ENDIF}
     if St<>Memo1.Text then
        CanExpandVar:= False;
   end
@@ -5708,8 +5746,12 @@ var
   r: TRect;
   kx, ky: Double;
   w, h, w1, h1, PictureHeight, PictureWidth: Integer;
+  {$IFDEF LCLNOGUI}
+  bmp: TLazreportBitmap;
+  {$ELSE}
   ClipRgn, PreviousClipRgn: HRGN;
   ClipNeeded: Boolean;
+  {$ENDIF}
 
 begin
   {$IFDEF DebugLR}
@@ -5751,7 +5793,14 @@ begin
           if (Flags and flPictCenter) <> 0 then
             OffsetRect(r, (w - w1) div 2, (h - h1) div 2);
         end;
+        {$IFDEF LCLNOGUI}
+        bmp := TLazreportBitmap.create;
+        bmp.LoadFromGraphic(Picture.Graphic);
+        TVirtualCanvas(aCanvas).StretchDraw(r, bmp);
+        bmp.Free;
+        {$ELSE}
         StretchDraw(r, Picture.Graphic);
+        {$ENDIF}
       end
       else
       begin
@@ -5759,6 +5808,12 @@ begin
         PictureHeight := Round(Picture.Height * ScaleY);
         if (Flags and flPictCenter) <> 0 then
           OffsetRect(r, (w - PictureWidth) div 2, (h - PictureHeight) div 2);
+        {$IFDEF LCLNOGUI}
+        bmp := TLazreportBitmap.create;
+        bmp.LoadFromGraphic(Picture.Graphic);
+        TVirtualCanvas(aCanvas).Draw(r.Left, r.Top, bmp);
+        bmp.Free;
+        {$ELSE}
         ClipNeeded := (PictureHeight > h) or (PictureWidth > w);
         if ClipNeeded then
         begin
@@ -5776,6 +5831,7 @@ begin
           DeleteObject(PreviousClipRgn);
           DeleteObject(ClipRgn);
         end;
+        {$ENDIF}
       end;
     end;
     ShowFrame;
@@ -6886,7 +6942,7 @@ end;
 procedure TfrBand.DrawPageBreak;
 var
   i, j, k, ty: Integer;
-  newDy, oldy, olddy, aMaxy: Integer;
+  newDy, oldy, olddy, aMaxy, newDy1: Integer;
   t: TfrView;
   Flag: Boolean;
   PgArr: array of integer;
@@ -6924,6 +6980,7 @@ begin
 
     // space left of each column after headers and footers
     newDy := Parent.CurBottomY - Parent.Bands[btColumnFooter].dy - y - 2;
+    newDy1 := Parent.CurBottomY - Parent.Bands[btColumnFooter].dy    - 2;
 
     for i := 0 to Objects.Count - 1 do
     begin
@@ -6945,7 +7002,7 @@ begin
 
         // roughly, how many columns we will need?
         k := ((t.y+t.dy) div newDy) + 2; // +2 = 1 for probable remainder + 1 extra
-        if  k > Length(pgArr) then
+        if k > Length(pgArr) then
           SetLength(pgArr, k);
       end;
     end;
@@ -6954,7 +7011,8 @@ begin
     // the granularity of "min height", some use as much space as "lines" fit
     for j:=0 to Length(pgArr)-1 do
     begin
-
+      if j>0 then
+        newDy := newDy1;
       pgArr[j] := newDy;
 
       for i := 0 to Objects.Count - 1 do
@@ -7485,6 +7543,7 @@ begin
   Clear;
   Objects.Free;
   RTObjects.Free;
+  ClearRecList;
   List.Free;
   fMargins.Free;
   if Assigned(frDesigner) and (frDesigner.Page = Self) then
@@ -9218,7 +9277,7 @@ begin
         begin
           t :=TfrView(Page.Objects[i]);
           v := True;
-
+          {$IFNDEF LCLNOGUI}
           if not IsPrinting then
           begin
             with t, DrawRect do
@@ -9229,7 +9288,7 @@ begin
                                        Round((y + dy) * sy) + Top + 10));
             end;
           end;
-
+          {$ENDIF}
           if v then
           begin
             t.ScaleX := sx;
@@ -9892,6 +9951,19 @@ begin
   inherited Create(AOwner);
   FRebuildPrinter:=false;
 
+  {$IFDEF LCLNOGUI}
+  FRInitialized := True;
+  TempBmp := TVirtualBitmap.Create;
+  FDetailReports:=TlrDetailReports.Create;
+  FPages := TfrPages.Create(Self);
+  FEMFPages := TfrEMFPages.Create(Self);
+  FVars := TStringList.Create;
+  FVal := TfrValues.Create;
+  FileName := sUntitled;
+  FComments:=TStringList.Create;
+  FScript:=TfrScriptStrings.Create;
+  UpdateObjectStringResources;
+  {$ELSE}
   if not FRInitialized then
   begin
     FRInitialized := True;
@@ -9924,6 +9996,7 @@ begin
   FComments:=TStringList.Create;
   FScript:=TfrScriptStrings.Create;
   UpdateObjectStringResources;
+  {$ENDIF}
 end;
 
 destructor TfrReport.Destroy;
@@ -10609,7 +10682,7 @@ end;
 
 procedure TfrReport.LoadFromFile(const FName: String);
 var
-  Stream: TFileStreamUtf8;
+  Stream: TFileStream;
   Ext   : String;
 begin
   Ext:=ExtractFileExt(fName);
@@ -10618,7 +10691,7 @@ begin
   else
   begin
     CheckFileExists(fName);
-    Stream := TFileStreamUtf8.Create(FName, fmOpenRead);
+    Stream := TFileStream.Create(FName, fmOpenRead);
     LoadFromStream(Stream);
     Stream.Free;
     FileName := FName;
@@ -10656,7 +10729,7 @@ end;
 
 procedure TfrReport.SaveToFile(FName: String);
 var
-  Stream: TFileStreamUtf8;
+  Stream: TFileStream;
   Ext   : string;
 begin
   Ext:=ExtractFileExt(fName);
@@ -10670,7 +10743,7 @@ begin
     SaveToXMLFile(fName)
   else
   begin
-    Stream := TFileStreamUtf8.Create(FName, fmCreate);
+    Stream := TFileStream.Create(FName, fmCreate);
     SaveToStream(Stream);
     Stream.Free;
   end;
@@ -10782,9 +10855,9 @@ end;
 
 procedure TfrReport.LoadPreparedReport(const FName: String);
 var
-  Stream: TFileStreamUtf8;
+  Stream: TFileStream;
 begin
-  Stream := TFileStreamUtf8.Create(FName, fmOpenRead);
+  Stream := TFileStream.Create(FName, fmOpenRead);
   EMFPages.LoadFromStream(Stream);
   Stream.Free;
   CanRebuild := False;
@@ -10792,9 +10865,9 @@ end;
 
 procedure TfrReport.SavePreparedReport(const FName: String);
 var
-  Stream: TFileStreamUtf8;
+  Stream: TFileStream;
 begin
-  Stream := TFileStreamUtf8.Create(FName, fmCreate);
+  Stream := TFileStream.Create(FName, fmCreate);
   if not CanRebuild and not (roDontUpgradePreparedReport in Options) then
     EMFPages.UpgradeToCurrentVersion;
   EMFPages.SaveToStream(Stream);
@@ -10804,7 +10877,7 @@ end;
 procedure TfrReport.LoadTemplate(const fname: String; comm: TStrings;
   Bmp: TBitmap; Load: Boolean);
 var
-  Stream: TFileStreamUtf8;
+  Stream: TFileStream;
   b: Byte;
   fb: TBitmap;
   fm: TStringList;
@@ -10812,7 +10885,7 @@ var
 begin
   fb := TBitmap.Create;
   fm := TStringList.Create;
-  Stream := TFileStreamUtf8.Create(FName, fmOpenRead);
+  Stream := TFileStream.Create(FName, fmOpenRead);
   if Load then
   begin
     ReadMemo(Stream, fm);
@@ -10872,14 +10945,13 @@ begin
   end;
 end;
 
-procedure TfrReport.SaveTemplate(const fname: String; comm: TStrings;
-  Bmp: TBitmap);
+procedure TfrReport.SaveTemplate(const fname: String; comm: TStrings; Bmp: TBitmap);
 var
-  Stream: TFileStreamUtf8;
+  Stream: TFileStream;
   b: Byte;
   pos, lpos: Integer;
 begin
-  Stream := TFileStreamUtf8.Create(FName, fmCreate);
+  Stream := TFileStream.Create(FName, fmCreate);
   frWriteMemo(Stream, Comm);
   b := 0;
   pos := Stream.Position;
@@ -10972,10 +11044,13 @@ begin
   DoBuildReport;
   if FinalPass then
   begin
-    if Terminated then
-      frProgressForm.ModalDone(mrCancel)
-    else
-      frProgressForm.ModalDone(mrOk);
+    if frProgressForm<>nil then
+    begin
+      if Terminated then
+        frProgressForm.ModalDone(mrCancel)
+      else
+        frProgressForm.ModalDone(mrOk);
+    end;
   end
   else
   begin
@@ -11141,7 +11216,7 @@ begin
 end;
 
 var
-  ExportStream: TFileStreamUtf8;
+  ExportStream: TFileStream;
 
 procedure TfrReport.ExportBeforeModal(Sender: TObject);
 var
@@ -11157,11 +11232,35 @@ begin
     FCurrentFilter.OnEndPage;
   end;
   FCurrentFilter.OnEndDoc;
-  frProgressForm.ModalResult := mrOk;
+  if frProgressForm<>nil then
+    frProgressForm.ModalResult := mrOk;
 end;
 
 function TfrReport.ExportTo(FilterClass: TfrExportFilterClass; aFileName: String
   ): Boolean;
+begin
+
+  if (aFileName='') and (fDefExportFileName<>'') then
+    aFileName := fDefExportFileName;
+
+  if Trim(aFilename) = '' then
+    raise Exception.create(sNoValidExportFilenameWasSupplied);
+
+  ExportStream := TFileStream.Create(aFileName, fmCreate);
+  result := ExportTo(FilterClass, exportStream, true);
+  if result then
+  begin
+    fDefExportFileName := aFileName;
+  end;
+
+end;
+
+// Export the report to exportStream using the FilterClass filter
+// if exportStream is TFileStream, freeStream should be true because when
+// Filter.AfterExport is called, the stream might not be yet written to disk
+// this decision, however, is left to the user of this routine.
+function TfrReport.ExportTo(FilterClass: TfrExportFilterClass;
+  exportStream: TStream; freeStream: boolean): boolean;
 var
   s: String;
   i: Integer;
@@ -11177,18 +11276,12 @@ begin
       end;
   end;
 
-  if (aFileName='') and (fDefExportFileName<>'') then
-    aFileName := fDefExportFileName;
-
   if FilterClass=nil then
     raise Exception.Create(sNoValidFilterClassWasSupplied);
 
-  if Trim(aFilename) = '' then
-    raise Exception.create(sNoValidExportFilenameWasSupplied);
-
-  ExportStream := TFileStreamUtf8.Create(aFileName, fmCreate);
-  FCurrentFilter := FilterClass.Create(ExportStream);
+  FCurrentFilter := FilterClass.Create(exportStream);
   try
+
     CurReport := Self;
     MasterReport := Self;
 
@@ -11216,21 +11309,31 @@ begin
         ExportBeforeModal(nil);
 
       fDefExportFilterClass := FCurrentFilter.ClassName;
-      fDefExportFileName := aFileName;
       Result:=true;
     end
     else
       Result:=false;
-  finally
-    //is necessary to destroy the file stream before calling FCurrentFilter.AfterExport
-    //to ensure the exported file is properly written to the file system
-    ExportStream.Free;
-  end;
-  FCurrentFilter.Stream := nil;
 
-  if Result then
-    FCurrentFilter.AfterExport;
-  FreeAndNil(FCurrentFilter);
+    FCurrentFilter.Stream := nil;
+
+    if freeStream then
+    begin
+      //it is necessary to destroy the file stream before calling FCurrentFilter.AfterExport
+      //to ensure the exported file is properly written to the file system
+      exportStream.free;
+    end;
+
+    if Result then
+      FCurrentFilter.AfterExport;
+
+  finally
+    if result then
+    begin
+      fDefExportFilterClass := FCurrentFilter.ClassName;
+    end;
+    FreeAndNil(FCurrentFilter);
+  end;
+
 end;
 
 procedure TfrReport.FillQueryParams;
@@ -11435,6 +11538,8 @@ begin
       p.SaveDialog.InitialDir := ExtractFilePath(ExportFileName);
       p.SaveDialog.FileName := ExportFilename;
     end;
+    if Assigned( OnBeforePreview ) then
+      OnBeforePreview( p );
     p.Show_Modal(Self);
   end;
   {$IFDEF DebugLR}
@@ -11483,8 +11588,9 @@ end;
 procedure TfrReport.DoPrintReport(const PageNumbers: String; Copies: Integer);
 var
   k, FCollateCopies: Integer;
-  f: Boolean;
+  isFirstPage: Boolean;
   pgList: TStringList;
+  printerTitle: string;
 
   procedure ParsePageNumbers;
   var
@@ -11534,17 +11640,21 @@ var
   procedure PrintPage(n: Integer);
   begin
     {$ifdef DebugLR}
-    DebugLnEnter('PrintPage: INIT ',[]);
+    DebugLnEnter('PrintPage: %d INIT',[n]);
     {$endif}
     with Printer, EMFPages[n]^ do
     begin
       if not Prn.IsEqual(pgSize, pgWidth, pgHeight, pgOr) then
       begin
         EndDoc;
+        {$ifdef DebugLR}
+        DebugLn('Page %d done ',[n]);
+        {$endif}
+        Title := Format('%s page %d',[printerTitle, n]);
         Prn.SetPrinterInfo(pgSize, pgWidth, pgHeight, pgOr);
         BeginDoc;
       end
-      else if not f then
+      else if not isFirstPage then
              NewPage;
              
       Prn.FillPrnInfo(PrnInfo);
@@ -11563,7 +11673,7 @@ var
     end;
     InternalOnProgress(n + 1);
     Application.ProcessMessages;
-    f := False;
+    isFirstPage := False;
     {$ifdef DebugLR}
     DebugLnExit('PrintPage: DONE',[]);
     {$endif}
@@ -11596,9 +11706,6 @@ var
       begin
         for j := 0 to Copies - 1 do
         begin
-          {$IFDEF DebugLR}
-          DebugPrnInfo('=== Before PrintPage('+IntToStr(i)+')');
-          {$ENDIF}
           PrintPage(i);
 
           if Terminated then
@@ -11615,7 +11722,7 @@ var
 begin
   {$ifdef DebugLR}
   DebugLnEnter('TfrReport.DoPrintReport: INIT ',[]);
-  DebugPrnInfo('=== INIT');
+  DebugPrnInfo('PageSizes');
   {$endif}
   if Prn.UseVirtualPrinter then
     ChangePrinter(Prn.PrinterIndex, Printer.PrinterIndex);
@@ -11638,16 +11745,14 @@ begin
     Prn.SetPrinterInfo(pgSize, pgWidth, pgHeight, pgOr);
     Prn.FillPrnInfo(PrnInfo);
   end;
-  {$IFDEF DebugLR}
-  DebugPrnInfo('=== AFTER EMFPages[0]^');
-  {$ENDIF}
   if Title <> '' then
-    Printer.Title:=Format('%s',[Title])
+    printerTitle:=Format('%s',[Title])
   else
-    Printer.Title:=Format('LazReport : %s',[sUntitled]);
+    printerTitle:=Format('LazReport : %s',[sUntitled]);
+  Printer.Title := printerTitle;
 
   Printer.BeginDoc;
-  f:= True;
+  isFirstPage:= True;
 
   if FDefaultCollate then
   begin
@@ -11665,7 +11770,6 @@ begin
     OnAfterPrint(Self);
 
   {$ifdef DebugLR}
-  DebugPrnInfo('=== END');
   DebugLnExit('TfrReport.DoPrintReport: DONE',[]);
   {$endif}
 end;
@@ -11688,15 +11792,18 @@ begin
   {$endif}
   if not PrintToDefault then
   begin
+    prn.DocumentUnits := puPoints;
     if Prn.Printers.IndexOf(PrnName) <> -1 then
       Prn.PrinterIndex := Prn.Printers.IndexOf(PrnName)
     else
-    if Prn.Printers.Count>0 then
-      Prn.PrinterIndex := 0 // either the system default or
-                            // own virtual default printer
-  end;
+      if Prn.Printers.Count>0 then
+        Prn.PrinterIndex := 0; // either the system default or
+                               // own virtual default printer
+  end else
+    Prn.DocumentUnits := puTenthsMM;
   {$ifdef dbgPrinter}
-  DebugLnExit('TfrReport.SetPrinterTo DONE CurPrinter="%s"',[Prn.Printer.PrinterName]);
+  DebugLnExit('TfrReport.SetPrinterTo DONE CurPrinter="%s" UseVirtualPrinter=%s',
+    [Prn.Printer.PrinterName, dbgs(Prn.UseVirtualPrinter)]);
   {$endif}
 end;
 

@@ -213,6 +213,10 @@ msgstr "Независимых переменных не может быть м�
 msgid "Expression result type must be integer or float. Got \"%s\"."
 msgstr "Тип результата выражения должен быть целым либо вещественным, но сейчас является \"%s\"."
 
+#: tachartstrconsts.rserrnumericaloverflow
+msgid "Numerical overflow."
+msgstr "Числовое переполнение."
+
 #: tachartstrconsts.rsexpressioncolormapseries
 msgid "Math expression color map series"
 msgstr "Диаграмма с картой цветов по математическому выражению"
@@ -255,7 +259,7 @@ msgstr "Количество наблюдений"
 
 #: tachartstrconsts.rsfitpvalue
 msgid "p value"
-msgstr "P-значение"
+msgstr "Значение P"
 
 #: tachartstrconsts.rsfitreducedchisquared
 msgid "Reduced Chi-squared"
@@ -272,6 +276,10 @@ msgstr "Остаточное стандартное отклонение"
 #: tachartstrconsts.rsfittotalsumofsquares
 msgid "Total sum of squares (SST)"
 msgstr "Полная сумма квадратов (SST)"
+
+#: tachartstrconsts.rsfittvalue
+msgid "t value"
+msgstr "Значение t"
 
 #: tachartstrconsts.rsfitvarianceratio
 msgid "Variance ratio F"
@@ -411,6 +419,10 @@ msgstr "Точка"
 #: tachartstrconsts.rspolarseries
 msgid "Polar series"
 msgstr "Лепестковая диаграмма"
+
+#: tachartstrconsts.rspolygonseries
+msgid "Polygon series"
+msgstr "Диаграмма с многоугольниками"
 
 #: tachartstrconsts.rspsclear
 msgctxt "tachartstrconsts.rspsclear"

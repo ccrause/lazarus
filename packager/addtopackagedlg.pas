@@ -35,13 +35,13 @@ uses
   LCLProc, LCLType, Forms, Controls, Buttons, ExtDlgs, StdCtrls, ExtCtrls,
   Dialogs, ComCtrls, ButtonPanel,
   // LazUtils
-  FileUtil, LazFileUtils,
+  FileUtil, LazFileUtils, LazUTF8,
   // IDEIntf
   NewItemIntf, PackageIntf, FormEditingIntf, IDEWindowIntf, ComponentReg,
   IDEDialogs,
   // IDE
   LazarusIDEStrConsts, InputHistory, EnvironmentOpts,
-  PackageSystem, PackageDefs;
+  PackageSystem, PackageDefs, ProjPackChecks;
   
 type
 
@@ -69,9 +69,6 @@ type
     destructor Destroy; override;
   end;
   
-  TOnGetUnitRegisterInfo = procedure(Sender: TObject; const AFilename: string;
-    out TheUnitName: string; out HasRegisterProc: boolean) of object;
-
   { TIconGuiStuff }
 
   TIconGuiStuff = class
@@ -229,7 +226,7 @@ end;
 procedure TAddToPackageDlg.FormCreate(Sender: TObject);
 begin
   Caption:=lisMenuNewComponent;
-  fPkgComponents:=TAVLTree.Create(@CompareIDEComponentByClassName);
+  fPkgComponents:=TAVLTree.Create(@CompareIDEComponentByClass);
   fPackages:=TAVLTree.Create(@CompareLazPackageID);
   fParams:=TAddToPkgResult.Create;
   IDEDialogLayoutList.ApplyLayout(Self,700,400);
@@ -414,6 +411,7 @@ var
   PkgFile: TPkgFile;
   PkgComponent: TPkgComponent;
   ARequiredPackage: TLazPackage;
+  NewDependency: TPkgDependency;
   ThePath: String;
 begin
   fParams.Clear;
@@ -494,7 +492,7 @@ begin
       exit;
   end;
   // check if classname already exists
-  PkgComponent:=TPkgComponent(IDEComponentPalette.FindComponent(fParams.NewClassname));
+  PkgComponent:=TPkgComponent(IDEComponentPalette.FindRegComponent(fParams.NewClassname));
   if PkgComponent<>nil then begin
     if IDEMessageDialog(lisA2PClassNameAlreadyExists,
       Format(lisA2PTheClassNameExistsAlreadyInPackageFile, [fParams.NewClassName, LineEnding,
@@ -504,7 +502,7 @@ begin
       exit;
   end;
   // check if unitname is a componentclass
-  if IDEComponentPalette.FindComponent(fParams.Unit_Name)<>nil then begin
+  if IDEComponentPalette.FindRegComponent(fParams.Unit_Name)<>nil then begin
     if IDEMessageDialog(lisA2PAmbiguousUnitName,
       Format(lisA2PTheUnitNameIsTheSameAsAnRegisteredComponent,[fParams.Unit_Name,LineEnding]),
       mtWarning,[mbCancel,mbIgnore])<>mrIgnore
@@ -513,15 +511,18 @@ begin
   end;
 
   // create dependency if needed
-  PkgComponent:=TPkgComponent(IDEComponentPalette.FindComponent(fParams.AncestorType));
+  PkgComponent:=TPkgComponent(IDEComponentPalette.FindRegComponent(fParams.AncestorType));
   if PkgComponent<>nil then begin
     fParams.UsedUnitname:=PkgComponent.GetUnitName;
     ARequiredPackage:=PkgComponent.PkgFile.LazPackage;
     ARequiredPackage:=TLazPackage(PackageEditingInterface.RedirectPackageDependency(ARequiredPackage));
-    if (LazPackage<>ARequiredPackage)
-    and not LazPackage.Requires(PkgComponent.PkgFile.LazPackage)
-    then
-      PackageGraph.AddDependencyToPackage(LazPackage, ARequiredPackage);
+    NewDependency:=TPkgDependency.Create;
+    NewDependency.DependencyType:=pdtLazarus;
+    NewDependency.PackageName:=ARequiredPackage.Name;
+    if TPkgFileCheck.AddingDependency(LazPackage,NewDependency,false)=mrOK then
+      PackageGraph.AddDependencyToPackage(LazPackage, NewDependency)
+    else
+      NewDependency.Free;
   end;
   ModalResult:=mrOk;
 end;
@@ -563,7 +564,7 @@ var
 begin
   fLastNewAncestorType:=AncestorComboBox.Text;
   if not IsValidIdent(fLastNewAncestorType) then exit;
-  PkgComponent:=TPkgComponent(IDEComponentPalette.FindComponent(fLastNewAncestorType));
+  PkgComponent:=TPkgComponent(IDEComponentPalette.FindRegComponent(fLastNewAncestorType));
   // create unique classname
   ClassNameEdit.Text:=IDEComponentPalette.CreateNewClassName(fLastNewAncestorType);
   // choose the same page name
@@ -607,7 +608,7 @@ end;
 procedure TAddToPackageDlg.UpdateAvailableAncestorTypes;
 var
   ANode: TAVLTreeNode;
-  sl: TStringList;
+  sl: TStringListUTF8Fast;
   OldAncestorType: String;
 begin
   // get all available registered components
@@ -619,7 +620,7 @@ begin
                                          true,true);
   end;
   // put them into a list
-  sl:=TStringList.Create;
+  sl:=TStringListUTF8Fast.Create;
   ANode:=fPkgComponents.FindLowest;
   while ANode<>nil do begin
     sl.Add(TPkgComponent(ANode.Data).ComponentClass.ClassName);
@@ -640,10 +641,10 @@ procedure TAddToPackageDlg.UpdateAvailablePageNames;
 var
   i: Integer;
   APageName: String;
-  sl: TStringList;
+  sl: TStringListUTF8Fast;
 begin
   // get all current pagenames (excluding the hidden page)
-  sl:=TStringList.Create;
+  sl:=TStringListUTF8Fast.Create;
   for i:=0 to IDEComponentPalette.Pages.Count-1 do begin
     APageName:=IDEComponentPalette.Pages[i].PageName;
     if APageName<>'' then

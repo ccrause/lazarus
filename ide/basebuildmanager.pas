@@ -32,7 +32,10 @@ unit BaseBuildManager;
 interface
 
 uses
-  Classes, SysUtils, Forms,
+  Classes, SysUtils,
+  // LCL
+  Forms,
+  // IDE
   Project;
   
 type
@@ -46,7 +49,7 @@ type
 
     // methods for building IDE (will be changed when project groups are there)
     procedure SetBuildTargetProject1; virtual; abstract;
-    procedure SetBuildTargetIDE; virtual; abstract;
+    procedure SetBuildTargetIDE(aQuiet: boolean = false); virtual; abstract;
     function BuildTargetIDEIsDefault: boolean; virtual; abstract;
 
     function GetBuildMacroOverride(const MacroName: string): string; virtual; abstract;
@@ -55,6 +58,7 @@ type
     function GetTargetCPU: string; virtual; abstract;
     function GetLCLWidgetType: string; virtual; abstract;
     function GetRunCommandLine: string; virtual; abstract;
+    procedure WriteDebug_RunCommandLine; virtual; abstract;
 
     function GetCompilerFilename: string; virtual; abstract;
     function GetFPCompilerFilename: string; virtual; abstract;

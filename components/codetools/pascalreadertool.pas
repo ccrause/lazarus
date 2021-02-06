@@ -838,7 +838,7 @@ function TPascalReaderTool.ExtractClassName(Node: TCodeTreeNode;
 var
   ParamsNode: TCodeTreeNode;
   ParamNode: TCodeTreeNode;
-  First: Boolean;
+  Params: String;
 begin
   Result:='';
   while Node<>nil do begin
@@ -856,22 +856,19 @@ begin
           // extract generic type param names
           if WithGenericParams then begin
             ParamsNode:=Node.FirstChild.NextBrother;
-            First:=true;
+            Params:='';
             while ParamsNode<>nil do begin
               if ParamsNode.Desc=ctnGenericParams then begin
-                Result:='>'+Result;
                 ParamNode:=ParamsNode.FirstChild;
                 while ParamNode<>nil do begin
                   if ParamNode.Desc=ctnGenericParameter then begin
-                    if First then
-                      First:=false
-                    else
-                      Result:=','+Result;
-                    Result:=GetIdentifier(@Src[ParamNode.StartPos])+Result;
+                    if Params<>'' then
+                      Params:=Params+',';
+                    Params:=Params+GetIdentifier(@Src[ParamNode.StartPos]);
                   end;
                   ParamNode:=ParamNode.NextBrother;
                 end;
-                Result:='<'+Result;
+                Result:='<'+Params+'>'+Result;
               end;
               ParamsNode:=ParamsNode.NextBrother;
             end;
@@ -1222,7 +1219,11 @@ begin
       +' (ProcNode=nil) or (ProcNode.Desc<>ctnProcedure)');
   end;
   //DebugLn(['TPascalReaderTool.MoveCursorToFirstProcSpecifier ',ProcNode.DescAsString,' StartPos=',CleanPosToStr(ProcNode.StartPos)]);
-  if (ProcNode.LastChild<>nil) and (ProcNode.LastChild.Desc=ctnIdentifier) then
+  if (ProcNode.LastChild<>nil)
+  and (
+    (ProcNode.LastChild.Desc=ctnIdentifier)
+    or (ProcNode.LastChild.Desc=ctnSpecialize)
+  ) then
   begin
     // jump behind function result type
     MoveCursorToCleanPos(ProcNode.LastChild.EndPos);
@@ -1598,6 +1599,8 @@ function TPascalReaderTool.ExtractNextTypeRef(Add: boolean;
 begin
   Result:=false;
   ExtractNextAtom(Add,Attr);
+  if (Scanner.CompilerMode in [cmOBJFPC]) and UpAtomIs('SPECIALIZE') then
+    ExtractNextAtom(Add,Attr);
   if not AtomIsIdentifier then exit;
   ExtractNextAtom(Add,Attr);
   repeat

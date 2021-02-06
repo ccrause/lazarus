@@ -100,6 +100,7 @@ type
   private const
     DefIncrement = 1;
     DefMaxValue = 100;
+    DefMinValue = 0;
     DefMinRepeatValue = 100;
   private
     FArrowKeys: Boolean;
@@ -119,14 +120,15 @@ type
     function GetNullValue: T;
     function GetUpDown: TUpDown;
     function GetValue: T;
+    function IncrementStored: Boolean;
     function IsLimited: Boolean;
     function IsOutOfLimits(AValue: T): Boolean;
+    function MaxValueStored: Boolean;
+    function MinValueStored: Boolean;
     procedure UpdateControl;
     procedure UpDownChangingEx(Sender: TObject; var {%H-}AllowChange: Boolean;
                                {%H-}NewValue: SmallInt; Direction: TUpDownDirection);
     procedure UpDownClick(Sender: TObject; {%H-}Button: TUDBtnType);
-    function IncrementStored: Boolean;
-    function MaxValueStored: Boolean;
   protected
     function GetBuddyClassType: TControlClass; override;
     procedure DoEnter; override;
@@ -148,6 +150,10 @@ type
     procedure FinalizeWnd; override;
     procedure Loaded; override;
 
+    procedure EditEditingDone; override;
+    procedure EditKeyPress(var Key: Char); override;
+    procedure EditUtf8KeyPress(var UTF8Key: TUTF8Char); override;
+
     property ArrowKeys: Boolean read FArrowKeys write FArrowKeys default True;
     property Edit: TGEEdit read GetEdit;
     property UpDown: TUpDown read GetUpDown;
@@ -157,11 +163,12 @@ type
     constructor Create(TheOwner: TComponent); override;
     function GetLimitedValue(const AValue: T): T; virtual;
     function ValueToStr(const AValue: T): String; virtual; abstract;
-    function StrToValue(const S: String): T; virtual; abstract;
-    procedure EditEditingDone; override;
+    function StrToValue(const S: String): T; virtual;
+    function KeyAllowed({%H-}Key: Char): Boolean; virtual;
+    function Utf8KeyAllowed({%H-}Key: TUTF8Char): Boolean; virtual;
   public
     property Increment: T read FIncrement write SetIncrement stored IncrementStored nodefault;
-    property MinValue: T read FMinValue write SetMinValue;
+    property MinValue: T read FMinValue write SetMinValue stored MinValueStored nodefault;
     property MaxValue: T read FMaxValue write SetMaxValue stored MaxValueStored nodefault;
     property NullValue: T read GetNullValue write SetNullValue;
     property NullValueBehaviour: TNullValueBehaviour read FNullValueBehaviour write FNullValueBehaviour default nvbMinValue;
@@ -170,16 +177,32 @@ type
 
   { TCustomFloatSpinEditEx }
 
+  TDisplayMode = (dmFixed,          // always fixed e.g. 1.23
+                  dmScientific,     // always scientific e.g 1.23E+10
+                  dmAuto,           // fixed if Abs(Value) < 10^ExponentialFormatLimitPos and > 10^ExponentialFormatLimitNeg, otherwise scientific
+                  dmAutoZeroFixed); // like dmAuto, but zero will be displayed as if dmFixed
+
   TCustomFloatSpinEditEx = class(specialize TSpinEditExBase<Double>)
   private const
     DefDecimals = 2;
     DefDecimalSeparator = '.';
   private
     FDecimals: Integer;
+    FDisplayMode: TDisplayMode;
+    FExponentDigits: Integer;
+    FExponentialFormatLimitNeg: Integer;
+    FExponentialFormatLimitPos: Integer;
     FFS: TFormatSettings;
+    FPrecision: Integer;
     function GetDecimalSeparator: Char;
     procedure SetDecimalSeparator(AValue: Char);
+    procedure SetDisplayMode(AValue: TDisplayMode);
+    procedure SetExponentDigits(AValue: Integer);
+    procedure SetExponentialFormatLimitNeg(AValue: Integer);
+    procedure SetExponentialFormatLimitPos(AValue: Integer);
+    procedure SetPrecision(AValue: Integer);
   protected
+    function GetFormatsettings: TFormatSettings;
     procedure EditKeyPress(var Key: char); override;
     function TextIsNumber(const S: String; out ANumber: Double): Boolean; override;
     function SafeInc(AValue: Double): Double; override;
@@ -187,10 +210,15 @@ type
     procedure SetDecimals(ADecimals: Integer); virtual;
   public
     function ValueToStr(const AValue: Double): String; override;
-    function StrToValue(const S: String): Double; override;
+    function KeyAllowed(Key: Char): Boolean; override;
     constructor Create(TheOwner: TComponent); override;
     property DecimalSeparator: Char read GetDecimalSeparator write SetDecimalSeparator default DefDecimalSeparator;
     property DecimalPlaces: Integer read FDecimals write SetDecimals default DefDecimals;
+    property DisplayMode: TDisplayMode read FDisplayMode write SetDisplayMode default dmFixed;
+    property ExponentialFormatLimitPos: Integer read FExponentialFormatLimitPos write SetExponentialFormatLimitPos default 6;  //used for scientific notation only
+    property ExponentialFormatLimitNeg: Integer read FExponentialFormatLimitNeg write SetExponentialFormatLimitNeg default -6; //used for scientific notation only
+    property Precision: Integer read FPrecision write SetPrecision default 6; //used for scientific notation only
+    property ExponentDigits: Integer read FExponentDigits write SetExponentDigits default 2; //used for scientific notation only
   end;
 
 
@@ -273,22 +301,30 @@ type
     property Spacing;
     property UpDownVisible;
     property Value;
+    property DisplayMode;
+    property ExponentialFormatLimitPos;
+    property ExponentialFormatLimitNeg;
+    property Precision;
+    property ExponentDigits;
   end;
 
 
   { TCustomSpinEditEx }
 
   TCustomSpinEditEx = class(specialize TSpinEditExBase<Int64>)
+  private
+    FThousandSeparator: String;
+    procedure SetThousandSeparator(AValue: String);
   protected
-    procedure EditKeyPress(var Key: char); override;
     function SafeInc(AValue: Int64): Int64; override;
     function SafeDec(AValue: Int64): Int64; override;
     function TextIsNumber(const S: String; out ANumber: Int64): Boolean; override;
   public
     function ValueToStr(const AValue: Int64): String; override;
-    function StrToValue(const S: String): Int64; override;
+    function KeyAllowed(Key: Char): Boolean; override;
   public
     property Increment default 1;
+    property ThousandSeparator: String read FThousandSeparator write SetThousandSeparator; //string so you can use Utf8
   end;
 
 
@@ -367,6 +403,7 @@ type
     property NullValue;
     property NullValueBehaviour;
     property Spacing;
+    property ThousandSeparator;
     property UpDownVisible;
     property Value;
   end;

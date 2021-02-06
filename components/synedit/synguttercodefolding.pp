@@ -80,6 +80,7 @@ type
     FReversePopMenuOrder: Boolean;
     FPpiPenWidth: Integer;
     procedure FPopUpOnPopup(Sender: TObject);
+    function GetFoldView: TSynEditFoldedView;
     function GetMouseActionsCollapsed: TSynEditMouseActions;
     function GetMouseActionsExpanded: TSynEditMouseActions;
     procedure SetMouseActionsCollapsed(const AValue: TSynEditMouseActions);
@@ -97,6 +98,7 @@ type
     procedure PopClicked(Sender: TObject);
     function CreateMouseActions: TSynEditMouseInternalActions; override;
     procedure SetWidth(const AValue: integer); override;
+    property FoldView: TSynEditFoldedView read GetFoldView;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -121,8 +123,6 @@ type
   end;
 
 implementation
-uses
-  SynEdit;
 
 var
   GlobalPopUpImageList: TSynGutterImageList = nil;
@@ -157,8 +157,7 @@ begin
   tmp := FoldView.FoldType[AScreenLine];
   tmp2 := FoldView.FoldType[AScreenLine-1];
   FIsFoldHidePreviousLine := False;
-
-  if (AScreenLine = 0) and (FoldView.TextIndexToViewPos(FoldView.TextIndex[0]) = 1) and
+  if (AScreenLine = 0) and (ToIdx(GutterArea.TextArea.TopLine) = 0) and
      (cfCollapsedHide in tmp2)
   then begin
     Result := cfCollapsedHide;
@@ -203,6 +202,11 @@ begin
   MonitorPPI := Screen.MonitorFromPoint(FPopUp.PopupPoint).PixelsPerInch;
   if (FPopUpImageList.Count=0) or (FPopUpImageList.InitPPI<>MonitorPPI) then
     InitPopUpImageList(MonitorPPI);
+end;
+
+function TSynGutterCodeFolding.GetFoldView: TSynEditFoldedView;
+begin
+  Result := TSynEditFoldedView(FoldedTextBuffer);
 end;
 
 function TSynGutterCodeFolding.IsFoldHidePreviousLine(AScreenLine: Integer): Boolean;
@@ -310,7 +314,7 @@ begin
   else
     APopUp.Items.Clear;
 
-  c := FoldView.OpenFoldCount(ALine-1);
+  c := Min(100, FoldView.OpenFoldCount(ALine-1));
   if c > 0 then begin
     SetLength(FMenuInf,c);
     for i := c-1 downto 0 do begin
@@ -330,10 +334,10 @@ begin
       if inf.OpenCount > 1 then
         s2 := format(' (%d/%d)', [inf.ColIndex+1, inf.OpenCount]);
 
-      if inf.FNode.IsInFold then begin
+      if inf.IsFold then begin
         m := AddPopUpItem(format('%4d %s '#9'%s', [ inf.LineNum, inf.Keyword+s2+':', s]));
         m.Tag := i;
-        if inf.FNode.IsHide then
+        if inf.IsHide then
           m.ImageIndex := 3
         else
           m.ImageIndex := 1;
@@ -426,14 +430,16 @@ function TSynGutterCodeFolding.MaybeHandleMouseAction(var AnInfo: TSynEditMouseA
   HandleActionProc: TSynEditMouseActionHandler): Boolean;
 var
   tmp: TSynEditFoldLineCapability;
+  ScrLine: Integer;
 begin
   Result := False;
-  tmp := FoldTypeForLine(FoldView.TextIndexToScreenLine(AnInfo.NewCaret.LinePos-1));
+  ScrLine := ToIdx(AnInfo.NewCaret.ViewedLinePos) - ToIdx(GutterArea.TextArea.TopLine);
+  tmp := FoldTypeForLine(ScrLine);
   case tmp of
     cfCollapsedFold, cfCollapsedHide:
-      Result := HandleActionProc(FMouseActionsCollapsed.GetActionsForOptions(TCustomSynEdit(SynEdit).MouseOptions), AnInfo);
+      Result := HandleActionProc(FMouseActionsCollapsed.GetActionsForOptions(SynEdit.MouseOptions), AnInfo);
     cfFoldStart, cfHideStart:
-      Result := HandleActionProc(FMouseActionsExpanded.GetActionsForOptions(TCustomSynEdit(SynEdit).MouseOptions), AnInfo);
+      Result := HandleActionProc(FMouseActionsExpanded.GetActionsForOptions(SynEdit.MouseOptions), AnInfo);
   end;
 
   if not Result then
@@ -452,13 +458,15 @@ begin
   ACommand := AnAction.Command;
   if (ACommand = emcNone) then exit;
   line := AnInfo.NewCaret.LinePos;
-  ScrLine := FoldView.TextIndexToScreenLine(Line-1);
+
+  ScrLine := ToIdx(AnInfo.NewCaret.ViewedLinePos) - ToIdx(GutterArea.TextArea.TopLine);
+
   KeepVisible := 1;
   if FoldTypeForLine(ScrLine) = cfHideStart then KeepVisible := 0;
 
   if (FoldTypeForLine(ScrLine) = cfCollapsedHide) then begin
     if IsFoldHidePreviousLine(ScrLine) then
-      line := FoldView.TextIndex[ScrLine-1] + 1;
+      line := ToPos(ViewedTextBuffer.DisplayView.ViewToTextIndex(ScrLine - 1 + ToIdx(GutterArea.TextArea.TopLine)));
     inc(line);
     KeepVisible := 0;
   end
@@ -523,9 +531,9 @@ end;
 procedure TSynGutterCodeFolding.ResetMouseActions;
 begin
   inherited;
-  FMouseActionsExpanded.Options := TCustomSynEdit(SynEdit).MouseOptions;
+  FMouseActionsExpanded.Options := SynEdit.MouseOptions;
   FMouseActionsExpanded.ResetUserActions;
-  FMouseActionsCollapsed.Options := TCustomSynEdit(SynEdit).MouseOptions;
+  FMouseActionsCollapsed.Options := SynEdit.MouseOptions;
   FMouseActionsCollapsed.ResetUserActions;
 end;
 
@@ -613,7 +621,7 @@ function TSynGutterCodeFolding.PreferedWidth: Integer;
 const PrefFullWidth = 10;
 begin
   Result :=
-    Max(PrefFullWidth div 2, Min(PrefFullWidth, TCustomSynEdit(SynEdit).LineHeight - cNodeOffset));
+    Max(PrefFullWidth div 2, Min(PrefFullWidth, SynEdit.LineHeight - cNodeOffset));
 end;
 
 procedure TSynGutterCodeFolding.Paint(Canvas : TCanvas; AClip : TRect; FirstLine, LastLine : integer);
@@ -718,8 +726,8 @@ var
 
 begin
   if not Visible then exit;
-  LineHeight := TCustomSynEdit(SynEdit).LineHeight;
-  TextHeight := LineHeight - Max(0, TCustomSynEdit(SynEdit).ExtraLineSpacing);
+  LineHeight := SynEdit.LineHeight;
+  TextHeight := LineHeight - Max(0, SynEdit.ExtraLineSpacing);
   LineOffset := 0;
   if (FirstLine > 0) and
      (FoldView.FoldType[FirstLine-1] - [cfFoldBody] = [cfFoldEnd]) then

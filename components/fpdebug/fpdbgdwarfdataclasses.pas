@@ -41,10 +41,11 @@ unit FpDbgDwarfDataClasses;
 interface
 
 uses
-  Classes, Types, SysUtils, FpDbgUtil, FpDbgInfo, FpDbgDwarfConst, Maps, Math,
-  FpDbgLoader, FpImgReaderBase, FpdMemoryTools, FpErrorMessages,
-  LazLoggerBase, LazClasses, LazFileUtils, LazUTF8, contnrs, DbgIntfBaseTypes,
-  FpDbgCommon;
+  Classes, Types, SysUtils, contnrs, Math,
+  Maps, LazClasses, LazFileUtils, LazLoggerBase, LazUTF8,
+  // FpDebug
+  FpDbgUtil, FpDbgInfo, FpDbgDwarfConst,
+  FpDbgLoader, FpImgReaderBase, FpdMemoryTools, FpErrorMessages, DbgIntfBaseTypes;
 
 type
   TDwarfSection = (dsAbbrev, dsARanges, dsFrame,  dsInfo, dsLine, dsLoc, dsMacinfo, dsPubNames, dsPubTypes, dsRanges, dsStr);
@@ -112,6 +113,12 @@ type
   
   {$PACKRECORDS C}
 {%endregion Dwarf Header Structures }
+
+const
+  KnownNameHashesBitMask = $7FF; // 256 bytes
+type
+  TKnownNameHashesArray = bitpacked array [0..KnownNameHashesBitMask] of Boolean;
+  PKnownNameHashesArray = ^TKnownNameHashesArray;
 
 {%region Abbreviation Data / Section "debug_abbrev"}
   { TDwarfAbbrev }
@@ -198,6 +205,11 @@ type
   end;
 {%endregion Abbreviation Data / Section "debug_abbrev"}
 
+  TNameSearchInfo = record
+    NameUpper, NameLower: String;
+    NameHash: Word;
+  end;
+
 {%region Information Entry / Section "debug_info"}
   (* Link, can either be
      - "Next Sibling" (for the parent): Link will be greater than current index
@@ -218,6 +230,7 @@ type
   TDwarfScopeInfoRec = record
     Link: Integer;
     Entry: Pointer;
+    NameHash: Word;
   end;
   PDwarfScopeInfoRec = ^TDwarfScopeInfoRec;
 
@@ -236,6 +249,7 @@ type
     FIndex: Integer;
     function GetChild: TDwarfScopeInfo; inline;
     function GetChildIndex: Integer; inline;
+    function GetCurrent: PDwarfScopeInfoRec;
     function GetEntry: Pointer; inline;
     function GetNext: TDwarfScopeInfo; inline;
     function GetNextIndex: Integer; inline;
@@ -251,6 +265,7 @@ type
     function IsValid: Boolean; inline;
     property Index: Integer read FIndex write SetIndex;
     property Entry: Pointer read GetEntry;
+    property Current: PDwarfScopeInfoRec read GetCurrent;
 
     function HasParent: Boolean; inline;
     function HasNext: Boolean; inline;
@@ -313,17 +328,25 @@ type
     function HasAttrib(AnAttrib: Cardinal): Boolean; inline;
     property AttribForm[AnIdx: Integer]: Cardinal read GetAttribForm;
 
-    function GoNamedChild(AName: String): Boolean;
-    // find in enum too // TODO: control search with a flags param, if needed
-    function GoNamedChildEx(ANameUpper, AnameLower: PChar): Boolean;
-    function GoNamedChildEx(AName: String): Boolean; inline;
+    procedure ComputeKnownHashes(AKNownHashes: PKnownNameHashesArray);
 
-    function FindNamedChild(AName: String): TDwarfInformationEntry;
+    function GoNamedChild(const AName: String): Boolean;
+    // find in enum too // TODO: control search with a flags param, if needed
+    function GoNamedChildEx(const ANameInfo: TNameSearchInfo): Boolean;
+    // GoNamedChildMatchCaseEx will use
+    // - UpperName for Hash
+    // - LowerName for compare
+    // GoNamedChildMatchCaseEx does not search in enums
+    function GoNamedChildMatchCaseEx(const ANameInfo: TNameSearchInfo): Boolean;
+    function GoNamedChildEx(const AName: String): Boolean; inline;
+
+    function FindNamedChild(const AName: String): TDwarfInformationEntry;
     function FindChildByTag(ATag: Cardinal): TDwarfInformationEntry;
     function FirstChild: TDwarfInformationEntry;
     function Clone: TDwarfInformationEntry;
 
     property AbbrevTag: Cardinal read GetAbbrevTag;
+    property InfoScope: TDwarfScopeInfo read FScope;
 
     function ReadValue(const AnAttribData: TDwarfAttribData; out AValue: Integer): Boolean; inline;
     function ReadValue(const AnAttribData: TDwarfAttribData; out AValue: Int64): Boolean; inline;
@@ -444,12 +467,12 @@ type
   protected
     procedure Init; virtual;
   public
-    constructor Create(AName: String; AnInformationEntry: TDwarfInformationEntry);
-    constructor Create(AName: String; AnInformationEntry: TDwarfInformationEntry;
+    constructor Create(const AName: String; AnInformationEntry: TDwarfInformationEntry);
+    constructor Create(const AName: String; AnInformationEntry: TDwarfInformationEntry;
                        AKind: TDbgSymbolKind; AAddress: TFpDbgMemLocation);
     destructor Destroy; override;
 
-    function CreateContext(AThreadId, AStackFrame: Integer; ADwarfInfo: TFpDwarfInfo): TFpDbgInfoContext; virtual;
+    function CreateSymbolScope(ALocationContext: TFpDbgLocationContext; ADwarfInfo: TFpDwarfInfo): TFpDbgSymbolScope; virtual; overload;
 
     property CompilationUnit: TDwarfCompilationUnit read FCU;
     property InformationEntry: TDwarfInformationEntry read FInformationEntry;
@@ -476,10 +499,12 @@ type
   public
     constructor Create(ACU: TDwarfCompilationUnit; AHelperData: Pointer); virtual;
     function GetDwarfSymbolClass(ATag: Cardinal): TDbgDwarfSymbolBaseClass; virtual; abstract;
-    function CreateContext(AThreadId, AStackFrame: Integer; AnAddress: TDbgPtr; ASymbol: TFpSymbol;
-                                 ADwarf: TFpDwarfInfo): TFpDbgInfoContext; virtual; abstract;
+    function CreateScopeForSymbol(ALocationContext: TFpDbgLocationContext; ASymbol: TFpSymbol;
+                                 ADwarf: TFpDwarfInfo): TFpDbgSymbolScope; virtual; abstract;
     function CreateProcSymbol(ACompilationUnit: TDwarfCompilationUnit;
-                                    AInfo: PDwarfAddressInfo; AAddress: TDbgPtr): TDbgDwarfSymbolBase; virtual; abstract;
+                                    AInfo: PDwarfAddressInfo; AAddress: TDbgPtr; ADbgInfo: TFpDwarfInfo): TDbgDwarfSymbolBase; virtual; abstract;
+    function CreateUnitSymbol(ACompilationUnit: TDwarfCompilationUnit;
+                                    AInfoEntry: TDwarfInformationEntry; ADbgInfo: TFpDwarfInfo): TDbgDwarfSymbolBase; virtual; abstract;
   end;
   TFpSymbolDwarfClassMapClass = class of TFpSymbolDwarfClassMap;
 
@@ -511,6 +536,29 @@ type
     AddressMapList: TDbgAddressMapList;
   end;
   PDwarfDebugFile = ^TDwarfDebugFile;
+
+  { TFpThreadWorkerComputeNameHashes }
+
+  TFpThreadWorkerComputeNameHashes = class(TFpThreadWorkerItem)
+  protected
+    FCU: TDwarfCompilationUnit;
+    FReadyToRun: Cardinal;
+    procedure DoExecute; override;
+  public
+    constructor Create(CU: TDwarfCompilationUnit);
+    procedure MarkReadyToRun; // will queue to run on the 2nd call
+  end;
+
+  { TFpThreadWorkerScanAll }
+
+  TFpThreadWorkerScanAll = class(TFpThreadWorkerItem)
+  protected
+    FCU: TDwarfCompilationUnit;
+    FCompNameHashWorker: TFpThreadWorkerComputeNameHashes;
+    procedure DoExecute; override;
+  public
+    constructor Create(CU: TDwarfCompilationUnit; ACompNameHashWorker: TFpThreadWorkerComputeNameHashes);
+  end;
 
   { TDwarfCompilationUnit }
 
@@ -560,7 +608,7 @@ type
     end;
     {$IFDEF DwarfTestAccess} private {$ENDIF}
 
-    FLineNumberMap: TStringList;
+    FLineNumberMap: TStringListUTF8Fast;
 
     FAddressMap: TMap; // Holds a key for each DW_TAG_subprogram / TFpSymbolDwarfDataProc, stores TDwarfAddressInfo
     FAddressMapBuild: Boolean;
@@ -569,10 +617,14 @@ type
     FMaxPC: QWord;  //
     FScope: TDwarfScopeInfo;
     FScopeList: TDwarfScopeList;
-    FScannedToEnd: Boolean;
+    FKnownNameHashes: TKnownNameHashesArray;
+
+    FScanAllWorker: TFpThreadWorkerScanAll;
+    FComputeNameHashesWorker: TFpThreadWorkerComputeNameHashes;
 
     procedure BuildAddressMap;
     function GetAddressMap: TMap;
+    function GetKnownNameHashes: PKnownNameHashesArray; inline;
     function GetUnitName: String;
     function  ReadTargetAddressFromDwarfSection(var AData: Pointer; AIncPointer: Boolean = False): TFpDbgMemLocation;
     function  ReadDwarfSectionOffsetOrLenFromDwarfSection(var AData: Pointer; AIncPointer: Boolean = False): TFpDbgMemLocation;
@@ -593,16 +645,15 @@ type
     function ReadValue(AAttribute: Pointer; AForm: Cardinal; out AValue: TByteDynArray; AnFormString: Boolean = False): Boolean;
     // Read a value that contains an address. The address is evaluated using MapAddressToNewValue
     function ReadAddressValue(AAttribute: Pointer; AForm: Cardinal; out AValue: QWord): Boolean;
-
   public
     constructor Create(AOwner: TFpDwarfInfo; ADebugFile: PDwarfDebugFile; ADataOffset: QWord; ALength: QWord; AVersion: Word; AAbbrevOffset: QWord; AAddressSize: Byte; AIsDwarf64: Boolean); virtual;
     destructor Destroy; override;
-    procedure ScanAllEntries; inline;
+    procedure WaitForScopeScan; inline; // MUST be called, before accessing the CU
+    procedure WaitForComputeHashes; inline;
     function GetDefinition(AAbbrevPtr: Pointer; out ADefinition: TDwarfAbbrev): Boolean; inline;
     function GetLineAddressMap(const AFileName: String): PDWarfLineMap;
     function GetLineAddresses(const AFileName: String; ALine: Cardinal; var AResultList: TDBGPtrArray): boolean;
     procedure BuildLineInfo(AAddressInfo: PDwarfAddressInfo; ADoAll: Boolean);
-    function FullFileName(const AFileName:string): String;
     // On Darwin it could be that the debug-information is not included into the executable by the linker.
     // This function is to map object-file addresses into the corresponding addresses in the executable.
     function MapAddressToNewValue(AValue: QWord): QWord;
@@ -636,27 +687,26 @@ type
     property InfoDataLength: QWord read FLength;  // length of info
     property AddressMap: TMap read GetAddressMap;
     property AbbrevList: TDwarfAbbrevList read FAbbrevList;
-
+    property KnownNameHashes: PKnownNameHashesArray read GetKnownNameHashes; // Only for TOP-LEVEL entries
   end;
   
   { TFpDwarfInfo }
 
   TFpDwarfInfo = class(TDbgInfo)
   private
+    FWorkQueue: TFpGlobalThreadWorkerQueue;
     FCompilationUnits: TList;
     FImageBase: QWord;
-    FMemManager: TFpDbgMemManager;
     FFiles: array of TDwarfDebugFile;
     function GetCompilationUnit(AIndex: Integer): TDwarfCompilationUnit;
   protected
     function GetCompilationUnitClass: TDwarfCompilationUnitClass; virtual;
     function FindCompilationUnitByOffs(AOffs: QWord): TDwarfCompilationUnit;
+    function FindDwarfUnitSymbol(AAddress: TDbgPtr): TDbgDwarfSymbolBase; inline;
   public
-    constructor Create(ALoaderList: TDbgImageLoaderList); override;
+    constructor Create(ALoaderList: TDbgImageLoaderList; AMemManager: TFpDbgMemManager); override;
     destructor Destroy; override;
-    function FindContext(AThreadId, AStackFrame: Integer; AAddress: TDbgPtr = 0): TFpDbgInfoContext; override;
-    function FindContext(AAddress: TDbgPtr): TFpDbgInfoContext; override;
-    function ContextFromProc(AThreadId, AStackFrame: Integer; AProcSym: TFpSymbol): TFpDbgInfoContext; override;
+    function FindSymbolScope(ALocationContext: TFpDbgLocationContext; AAddress: TDbgPtr = 0): TFpDbgSymbolScope; override;
     function FindDwarfProcSymbol(AAddress: TDbgPtr): TDbgDwarfSymbolBase; inline;
     function FindProcSymbol(AAddress: TDbgPtr): TFpSymbol; override; overload;
     //function FindSymbol(const AName: String): TDbgSymbol; override; overload;
@@ -666,9 +716,9 @@ type
     function PointerFromRVA(ARVA: QWord): Pointer;
     function CompilationUnitsCount: Integer;
     property CompilationUnits[AIndex: Integer]: TDwarfCompilationUnit read GetCompilationUnit;
-    property MemManager: TFpDbgMemManager read FMemManager write FMemManager;
 
     property ImageBase: QWord read FImageBase;
+    property WorkQueue: TFpGlobalThreadWorkerQueue read FWorkQueue;
   end;
 
   TDwarfLocationExpression = class;
@@ -690,6 +740,7 @@ type
     procedure PushCopy(AFromIndex: Integer);
     procedure PushConst(const AVal: TDBGPtr);
     procedure PushTargetMem(const AVal: TDBGPtr);
+    procedure PushTargetRegister(const ARegNum: Cardinal);
     function  Peek: PFpDbgMemLocation;
     function  PeekForDeref: PFpDbgMemLocation;
     function  PeekKind: TFpDbgMemLocationType; // Can be called on empty stack
@@ -702,7 +753,7 @@ type
 
   TDwarfLocationExpression = class
   private
-    FContext: TFpDbgAddressContext;
+    FContext: TFpDbgLocationContext;
     FCurrentObjectAddress: TFpDbgMemLocation;
     FFrameBase: TDbgPtr;
     FLastError: TFpError;
@@ -715,7 +766,7 @@ type
   public
   //TODO: caller keeps data, and determines livetime of data
     constructor Create(AExpressionData: Pointer; AMaxCount: Integer; ACU: TDwarfCompilationUnit;
-      AMemManager: TFpDbgMemManager; AContext: TFpDbgAddressContext);
+      AMemManager: TFpDbgMemManager; AContext: TFpDbgLocationContext);
     procedure SetLastError(ALastError: TFpError);
     procedure Evaluate;
     function ResultData: TFpDbgMemLocation;
@@ -724,7 +775,7 @@ type
     property  OnFrameBaseNeeded: TNotifyEvent read FOnFrameBaseNeeded write FOnFrameBaseNeeded;
     property LastError: TFpError read FLastError;
     property MemManager: TFpDbgMemManager read FMemManager;
-    property Context: TFpDbgAddressContext read FContext write FContext;
+    property Context: TFpDbgLocationContext read FContext write FContext;
     // for DW_OP_push_object_address
     property CurrentObjectAddress: TFpDbgMemLocation read FCurrentObjectAddress write FCurrentObjectAddress;
     end;
@@ -738,6 +789,7 @@ function Dbgs(AInfoEntry: TDwarfInformationEntry; ACompUnit: TDwarfCompilationUn
 function DbgsDump(AScope: TDwarfScopeInfo; ACompUnit: TDwarfCompilationUnit): String; overload;
 
 function GetDwarfSymbolClassMapList: TFpSymbolDwarfClassMapList; inline;
+function NameInfoForSearch(const AName: String): TNameSearchInfo;
 
 property DwarfSymbolClassMapList: TFpSymbolDwarfClassMapList read GetDwarfSymbolClassMapList;
 
@@ -757,6 +809,13 @@ const
 function GetDwarfSymbolClassMapList: TFpSymbolDwarfClassMapList;
 begin
   Result := TheDwarfSymbolClassMapList;
+end;
+
+function NameInfoForSearch(const AName: String): TNameSearchInfo;
+begin
+  Result.NameLower := QuickUtf8LowerCase(AName);
+  Result.NameUpper := QuickUtf8UpperCase(AName);
+  Result.NameHash := objpas.Hash(Result.NameUpper) and $7fff or $8000;
 end;
 
 function Dbgs(AInfoData: Pointer; ACompUnit: TDwarfCompilationUnit): String;
@@ -1617,6 +1676,13 @@ begin
     Result := -1;
 end;
 
+function TDwarfScopeInfo.GetCurrent: PDwarfScopeInfoRec;
+begin
+  Result := nil;
+  if IsValid then
+    Result := @FScopeList^.List[FIndex];
+end;
+
 function TDwarfScopeInfo.GetParent: TDwarfScopeInfo;
 var
   l: Integer;
@@ -1811,6 +1877,15 @@ begin
   inc(FCount);
 end;
 
+procedure TDwarfLocationStack.PushTargetRegister(const ARegNum: Cardinal);
+begin
+  if Length(FList) <= FCount then
+    IncCapacity;
+  FList[FCount] := Default(TFpDbgMemLocation);
+  FList[FCount] := RegisterLoc(ARegNum);
+  inc(FCount);
+end;
+
 function TDwarfLocationStack.Peek: PFpDbgMemLocation;
 begin
   Assert(0 < FCount);
@@ -1858,7 +1933,7 @@ end;
 { TDwarfLocationExpression }
 
 constructor TDwarfLocationExpression.Create(AExpressionData: Pointer; AMaxCount: Integer;
-  ACU: TDwarfCompilationUnit; AMemManager: TFpDbgMemManager; AContext: TFpDbgAddressContext);
+  ACU: TDwarfCompilationUnit; AMemManager: TFpDbgMemManager; AContext: TFpDbgLocationContext);
 begin
   FStack.Clear;
   FCU := ACU;
@@ -2026,11 +2101,7 @@ begin
           FStack.PushConst(NewValue);
         end;
       DW_OP_regx: begin
-          if not FMemManager.ReadRegister(ULEB128toOrdinal(CurData), NewValue, FContext) then begin
-            SetError;
-            exit;
-          end;
-          FStack.PushConst(NewValue);
+          FStack.PushTargetRegister(ULEB128toOrdinal(CurData));
         end;
 
       DW_OP_breg0..DW_OP_breg31: begin
@@ -2505,6 +2576,55 @@ begin
   end;
 end;
 
+procedure TDwarfInformationEntry.ComputeKnownHashes(
+  AKNownHashes: PKnownNameHashesArray);
+var
+  EntryName: PChar;
+  NextTopLevel: Integer;
+  h: LongWord;
+  InEnum: Boolean;
+begin
+  InEnum := False;
+  if not HasValidScope then
+    exit;
+
+  NextTopLevel := 0;
+  dec(FScope.FIndex);
+  while (FScope.Index < FScope.FScopeList^.HighestKnown) do begin
+    inc(FScope.FIndex);
+    ScopeChanged;
+    PrepareAbbrev;
+
+    if not (dafHasName in FAbbrev^.flags) then begin
+      if FScope.Index >= NextTopLevel then
+        NextTopLevel := FScope.GetNextIndex;
+      Continue;
+    end;
+
+    if not ReadValue(DW_AT_name, EntryName) then begin
+      if FScope.Index >= NextTopLevel then
+        NextTopLevel := FScope.GetNextIndex;
+      Continue;
+    end;
+    h := objpas.Hash(QuickUtf8UpperCase(EntryName)) and $7fff or $8000;
+    FScope.Current^.NameHash := h;
+    if (FScope.Index >= NextTopLevel) or InEnum then
+      AKNownHashes^[h and KnownNameHashesBitMask] := True;
+
+    if FScope.Index >= NextTopLevel then begin
+      InEnum := False;
+      if FAbbrev^.tag = DW_TAG_enumeration_type then begin
+        InEnum := True;
+        NextTopLevel := FScope.GetNextIndex;
+        Continue;
+      end;
+    end;
+
+    if FScope.Index >= NextTopLevel then
+      NextTopLevel := FScope.GetNextIndex;
+  end;
+end;
+
 function TDwarfInformationEntry.GetScopeIndex: Integer;
 begin
   Result := FScope.Index;
@@ -2518,7 +2638,7 @@ begin
   ScopeChanged;
 end;
 
-function TDwarfInformationEntry.GoNamedChild(AName: String): Boolean;
+function TDwarfInformationEntry.GoNamedChild(const AName: String): Boolean;
 var
   EntryName: PChar;
   s1, s2: String;
@@ -2529,7 +2649,7 @@ begin
   GoChild;
   if not HasValidScope then
     exit;
-  s1 := UTF8UpperCase(AName);
+  s1 := QuickUtf8UpperCase(AName);
   s2 := UTF8LowerCase(AName);
   while HasValidScope do begin
     PrepareAbbrev;
@@ -2553,36 +2673,47 @@ begin
   end;
 end;
 
-function TDwarfInformationEntry.GoNamedChildEx(ANameUpper, AnameLower: PChar): Boolean;
+function TDwarfInformationEntry.GoNamedChildEx(const ANameInfo: TNameSearchInfo): Boolean;
 var
   EntryName: PChar;
   InEnum: Boolean;
   ParentScopIdx: Integer;
+  sc: PDwarfScopeInfoRec;
 begin
   Result := False;
   InEnum := False;
-  if ANameUpper = nil then
+  if ANameInfo.NameUpper = '' then
     exit;
   GoChild;
   if not HasValidScope then
     exit;
   while true do begin
     while HasValidScope do begin
-      PrepareAbbrev;
-      if not (dafHasName in FAbbrev^.flags) then begin
-        GoNext;
-        Continue;
-      end;
-      if not ReadValue(DW_AT_name, EntryName) then begin
+      sc := FScope.Current;
+      if sc^.NameHash = 0 then begin
         GoNext;
         Continue;
       end;
 
-      if CompareUtf8BothCase(ANameUpper, AnameLower, EntryName) then begin
-        // TODO: check DW_AT_start_scope;
-        DebugLn(FPDBG_DWARF_SEARCH, ['GoNamedChildEX found ', dbgs(FScope, FCompUnit), '  Result=', DbgSName(Self), '  FOR ', AnameLower]);
-        Result := True;
-        exit;
+      PrepareAbbrev;
+      if not (dafHasName in FAbbrev^.flags) then begin
+        assert(false);
+        GoNext;
+        Continue;
+      end;
+
+      if (sc^.NameHash = ANameInfo.NameHash) then begin
+        if not ReadValue(DW_AT_name, EntryName) then begin
+          GoNext;
+          Continue;
+        end;
+
+        if CompareUtf8BothCase(PChar(ANameInfo.NameUpper), PChar(ANameInfo.nameLower), EntryName) then begin
+          // TODO: check DW_AT_start_scope;
+          DebugLn(FPDBG_DWARF_SEARCH, ['GoNamedChildEX found ', dbgs(FScope, FCompUnit), '  Result=', DbgSName(Self), '  FOR ', ANameInfo.nameLower]);
+          Result := True;
+          exit;
+        end;
       end;
 
       if FAbbrev^.tag = DW_TAG_enumeration_type then begin
@@ -2606,16 +2737,57 @@ begin
   end;
 end;
 
-function TDwarfInformationEntry.GoNamedChildEx(AName: String): Boolean;
+function TDwarfInformationEntry.GoNamedChildMatchCaseEx(
+  const ANameInfo: TNameSearchInfo): Boolean;
 var
-  s1, s2: String;
+  EntryName: PChar;
+  sc: PDwarfScopeInfoRec;
+begin
+  Result := False;
+  if ANameInfo.NameUpper = '' then
+    exit;
+  GoChild;
+  if not HasValidScope then
+    exit;
+
+  while HasValidScope do begin
+    sc := FScope.Current;
+    if sc^.NameHash = 0 then begin
+      GoNext;
+      Continue;
+    end;
+
+    PrepareAbbrev;
+    if not (dafHasName in FAbbrev^.flags) then begin
+      Assert(false);
+      GoNext;
+      Continue;
+    end;
+
+    if (sc^.NameHash = ANameInfo.NameHash) then begin
+      if not ReadValue(DW_AT_name, EntryName) then begin
+        GoNext;
+        Continue;
+      end;
+
+      if CompareMem(PChar(ANameInfo.nameLower), @EntryName, Length(EntryName)) then begin
+        // TODO: check DW_AT_start_scope;
+        DebugLn(FPDBG_DWARF_SEARCH, ['GoNamedChildEX found ', dbgs(FScope, FCompUnit), '  Result=', DbgSName(Self), '  FOR ', ANameInfo.nameLower]);
+        Result := True;
+        exit;
+      end;
+    end;
+
+    GoNext;
+  end;
+end;
+
+function TDwarfInformationEntry.GoNamedChildEx(const AName: String): Boolean;
 begin
   Result := False;
   if AName = '' then
     exit;
-  s1 := UTF8UpperCase(AName);
-  s2 := UTF8LowerCase(AName);
-  Result := GoNamedChildEx(@s1[1], @s2[1]);
+  Result := GoNamedChildEx(NameInfoForSearch(AName));
 end;
 
 constructor TDwarfInformationEntry.Create(ACompUnit: TDwarfCompilationUnit;
@@ -2679,7 +2851,8 @@ begin
     Result := FAbstractOrigin.GetAttribData(AnAttrib, AnAttribData);
 end;
 
-function TDwarfInformationEntry.FindNamedChild(AName: String): TDwarfInformationEntry;
+function TDwarfInformationEntry.FindNamedChild(const AName: String
+  ): TDwarfInformationEntry;
 begin
   Result := nil;
   if not MaybeSearchScope then
@@ -3161,13 +3334,17 @@ end;
 
 { TFpDwarfInfo }
 
-constructor TFpDwarfInfo.Create(ALoaderList: TDbgImageLoaderList);
+constructor TFpDwarfInfo.Create(ALoaderList: TDbgImageLoaderList;
+  AMemManager: TFpDbgMemManager);
 var
   Section: TDwarfSection;
   p: PDbgImageSection;
   i: Integer;
 begin
-  inherited Create(ALoaderList);
+  FWorkQueue := FpDbgGlobalWorkerQueue;
+  FWorkQueue.AddRef;
+
+  inherited Create(ALoaderList, AMemManager);
   FTargetInfo := ALoaderList.TargetInfo;
   FCompilationUnits := TList.Create;
   FImageBase := ALoaderList.ImageBase;
@@ -3193,45 +3370,43 @@ destructor TFpDwarfInfo.Destroy;
 var
   n: integer;
 begin
+  FWorkQueue.DecRef;
   for n := 0 to FCompilationUnits.Count - 1 do
     TObject(FCompilationUnits[n]).Free;
   FreeAndNil(FCompilationUnits);
+
   inherited Destroy;
 end;
 
-function TFpDwarfInfo.FindContext(AThreadId, AStackFrame: Integer;
-  AAddress: TDbgPtr): TFpDbgInfoContext;
+function TFpDwarfInfo.FindSymbolScope(ALocationContext: TFpDbgLocationContext;
+  AAddress: TDbgPtr): TFpDbgSymbolScope;
 var
-  Proc: TDbgDwarfSymbolBase;
+  Proc, UnitSym: TDbgDwarfSymbolBase;
 begin
   Result := nil;
   Proc := FindDwarfProcSymbol(AAddress);  // TFpSymbolDwarfDataProc
-  if Proc = nil then
-    exit;
-
-  Result := Proc.CreateContext(AThreadId, AStackFrame, Self);
-  Proc.ReleaseReference;
-end;
-
-function TFpDwarfInfo.FindContext(AAddress: TDbgPtr): TFpDbgInfoContext;
-begin
-  result := FindContext(1, 0, AAddress);
-end;
-
-function TFpDwarfInfo.ContextFromProc(AThreadId, AStackFrame: Integer;
-  AProcSym: TFpSymbol): TFpDbgInfoContext;
-begin
-  if not (AProcSym is TDbgDwarfSymbolBase) then begin
-    Result := inherited ContextFromProc(AThreadId, AStackFrame, AProcSym);
+  if Proc <> nil then begin
+    Result := Proc.CreateSymbolScope(ALocationContext, Self);
+    Proc.ReleaseReference;
     exit;
   end;
 
-  Result := TDbgDwarfSymbolBase(AProcSym).CreateContext(AThreadId, AStackFrame, Self);
+  UnitSym := FindDwarfUnitSymbol(AAddress);
+  if UnitSym <> nil then begin
+    Result := UnitSym.CreateSymbolScope(ALocationContext, Self);
+    UnitSym.ReleaseReference;
+    exit;
+  end;
+
+  if CompilationUnitsCount > 0 then
+    Result := CompilationUnits[0].DwarfSymbolClassMap.CreateScopeForSymbol
+      (ALocationContext, nil, Self);
 end;
 
 function TFpDwarfInfo.GetCompilationUnit(AIndex: Integer): TDwarfCompilationUnit;
 begin
   Result := TDwarfCompilationUnit(FCompilationUnits[Aindex]);
+  Result.WaitForScopeScan;
 end;
 
 function TFpDwarfInfo.GetCompilationUnitClass: TDwarfCompilationUnitClass;
@@ -3258,7 +3433,9 @@ begin
 
   Result := TDwarfCompilationUnit(FCompilationUnits[h]);
   if (p < Result.FInfoData) or (p > Result.FInfoData + Result.FLength) then
-    Result := nil;
+    Result := nil
+  else
+    Result.WaitForScopeScan;
 end;
 
 function TFpDwarfInfo.FindDwarfProcSymbol(AAddress: TDbgPtr
@@ -3271,7 +3448,7 @@ function TFpDwarfInfo.FindProcSymbol(AAddress: TDbgPtr): TFpSymbol;
 var
   n: Integer;
   CU: TDwarfCompilationUnit;
-  Iter: TMapIterator;
+  Iter: TLockedMapIterator;
   Info: PDwarfAddressInfo;
   MinMaxSet: boolean;
 begin
@@ -3279,6 +3456,7 @@ begin
   for n := 0 to FCompilationUnits.Count - 1 do
   begin
     CU := TDwarfCompilationUnit(FCompilationUnits[n]);
+    CU.WaitForScopeScan;
     if not CU.Valid then Continue;
     MinMaxSet := CU.FMinPC <> CU.FMaxPC;
     if MinMaxSet and ((AAddress < CU.FMinPC) or (AAddress > CU.FMaxPC))
@@ -3286,7 +3464,7 @@ begin
 
     CU.BuildAddressMap;
 
-    Iter := TMapIterator.Create(CU.FAddressMap);
+    Iter := TLockedMapIterator.Create(CU.FAddressMap);
     try
       if not Iter.Locate(AAddress)
       then begin
@@ -3303,12 +3481,38 @@ begin
       then Continue;
 
       // TDbgDwarfProcSymbol
-      Result := Cu.DwarfSymbolClassMap.CreateProcSymbol(CU, Iter.DataPtr, AAddress);
+      Result := Cu.DwarfSymbolClassMap.CreateProcSymbol(CU, Iter.DataPtr, AAddress, Self);
       if Result<>nil then
         break;
     finally
       Iter.Free;
     end;
+  end;
+end;
+
+function TFpDwarfInfo.FindDwarfUnitSymbol(AAddress: TDbgPtr
+  ): TDbgDwarfSymbolBase;
+var
+  n: Integer;
+  CU: TDwarfCompilationUnit;
+  MinMaxSet: boolean;
+  Scope: TDwarfScopeInfo;
+begin
+  Result := nil;
+  for n := 0 to FCompilationUnits.Count - 1 do
+  begin
+    CU := TDwarfCompilationUnit(FCompilationUnits[n]);
+    CU.WaitForScopeScan;
+    if not CU.Valid then Continue;
+    MinMaxSet := CU.FMinPC <> CU.FMaxPC;
+    if (not MinMaxSet) or ((AAddress < CU.FMinPC) or (AAddress > CU.FMaxPC))
+    then Continue;
+
+    if not CU.LocateEntry(DW_TAG_compile_unit, Scope) then
+      break;
+
+    Result := Cu.DwarfSymbolClassMap.CreateUnitSymbol(CU, TDwarfInformationEntry.Create(CU, Scope), Self);
+    break;
   end;
 end;
 
@@ -3322,6 +3526,7 @@ begin
   for n := 0 to FCompilationUnits.Count - 1 do
   begin
     CU := TDwarfCompilationUnit(FCompilationUnits[n]);
+    CU.WaitForScopeScan;
     Result := CU.GetLineAddresses(AFileName, ALine, AResultList) or Result;
   end;
 end;
@@ -3335,6 +3540,7 @@ begin
   for n := 0 to FCompilationUnits.Count - 1 do
   begin
     CU := TDwarfCompilationUnit(FCompilationUnits[n]);
+    CU.WaitForScopeScan;
     Result := CU.GetLineAddressMap(AFileName);
     if Result <> nil then Exit;
   end;
@@ -3392,6 +3598,9 @@ begin
     end;
   end;
   Result := FCompilationUnits.Count;
+
+  for i := 0 to Result - 1 do
+    TDwarfCompilationUnit(FCompilationUnits[i]).FComputeNameHashesWorker.MarkReadyToRun;
 end;
 
 function TFpDwarfInfo.PointerFromRVA(ARVA: QWord): Pointer;
@@ -3411,7 +3620,7 @@ begin
   //
 end;
 
-constructor TDbgDwarfSymbolBase.Create(AName: String;
+constructor TDbgDwarfSymbolBase.Create(const AName: String;
   AnInformationEntry: TDwarfInformationEntry);
 begin
   FCU := AnInformationEntry.CompUnit;
@@ -3422,7 +3631,7 @@ begin
   Init;
 end;
 
-constructor TDbgDwarfSymbolBase.Create(AName: String;
+constructor TDbgDwarfSymbolBase.Create(const AName: String;
   AnInformationEntry: TDwarfInformationEntry; AKind: TDbgSymbolKind;
   AAddress: TFpDbgMemLocation);
 begin
@@ -3440,8 +3649,9 @@ begin
   inherited Destroy;
 end;
 
-function TDbgDwarfSymbolBase.CreateContext(AThreadId, AStackFrame: Integer;
-  ADwarfInfo: TFpDwarfInfo): TFpDbgInfoContext;
+function TDbgDwarfSymbolBase.CreateSymbolScope(
+  ALocationContext: TFpDbgLocationContext; ADwarfInfo: TFpDwarfInfo
+  ): TFpDbgSymbolScope;
 begin
   Result := nil;
 end;
@@ -3619,7 +3829,7 @@ end;
 procedure TDwarfLineInfoStateMachine.SetFileName(AIndex: Cardinal);
 begin
   if (Aindex > 0) and (AIndex <= FOwner.FLineInfo.FileNames.Count)
-  then FFileName := FOwner.FullFileName(FOwner.FLineInfo.FileNames[AIndex - 1])
+  then FFileName := FOwner.FLineInfo.FileNames[AIndex - 1]
   else FFileName := Format('Unknown fileindex(%u)', [AIndex]);
 end;
 
@@ -3670,6 +3880,49 @@ end;
 procedure TFpSymbolDwarfClassMapList.SetDefaultMap(AMap: TFpSymbolDwarfClassMapClass);
 begin
   FDefaultMap := AMap;
+end;
+
+{ TFpThreadWorkerScanAll }
+
+procedure TFpThreadWorkerScanAll.DoExecute;
+var
+  ResultScope: TDwarfScopeInfo;
+begin
+  FCU.LocateEntry(0, ResultScope);
+  FCompNameHashWorker.MarkReadyToRun;
+end;
+
+constructor TFpThreadWorkerScanAll.Create(CU: TDwarfCompilationUnit;
+  ACompNameHashWorker: TFpThreadWorkerComputeNameHashes);
+begin
+  FCU := CU;
+  FCompNameHashWorker := ACompNameHashWorker;
+end;
+
+{ TFpThreadWorkerComputeNameHashes }
+
+procedure TFpThreadWorkerComputeNameHashes.DoExecute;
+var
+  InfoEntry: TDwarfInformationEntry;
+begin
+  InfoEntry := TDwarfInformationEntry.Create(FCU, nil);
+  InfoEntry.ScopeIndex := FCU.FirstScope.Index;
+  InfoEntry.ComputeKnownHashes(@FCU.FKnownNameHashes);
+  InfoEntry.ReleaseReference;
+end;
+
+constructor TFpThreadWorkerComputeNameHashes.Create(CU: TDwarfCompilationUnit);
+begin
+  FCU := CU;
+end;
+
+procedure TFpThreadWorkerComputeNameHashes.MarkReadyToRun;
+var
+  c: Cardinal;
+begin
+  c := InterLockedIncrement(FReadyToRun);
+  if c = 2 then
+    FCU.FOwner.WorkQueue.PushItem(Self);
 end;
 
 { TDwarfCompilationUnit }
@@ -3758,11 +4011,10 @@ begin
   Result := FAddressMap;
 end;
 
-function TDwarfCompilationUnit.FullFileName(const AFileName: string): String;
+function TDwarfCompilationUnit.GetKnownNameHashes: PKnownNameHashesArray;
 begin
-  Result := AFileName;
-  if FCompDir = '' then exit;
-  Result := LazFileUtils.ResolveDots(FCompDir+AFileName);
+  WaitForComputeHashes;
+  Result := @FKnownNameHashes;
 end;
 
 function TDwarfCompilationUnit.GetUnitName: String;
@@ -3779,14 +4031,22 @@ begin
   Result := FAbbrevList.FindLe128bFromPointer(AAbbrevPtr, ADefinition) <> nil;
 end;
 
-procedure TDwarfCompilationUnit.ScanAllEntries;
-var
-  ResultScope: TDwarfScopeInfo;
+procedure TDwarfCompilationUnit.WaitForScopeScan;
 begin
-  if FScannedToEnd then exit;
-  FScannedToEnd := True;
-  // scan to end
-  LocateEntry(0, ResultScope);
+  if FScanAllWorker <> nil then begin
+    FOwner.WorkQueue.WaitForItem(FScanAllWorker);
+    FScanAllWorker.DecRef;
+  end;
+  FScanAllWorker := nil;
+end;
+
+procedure TDwarfCompilationUnit.WaitForComputeHashes;
+begin
+  if FComputeNameHashesWorker <> nil then begin
+    FOwner.WorkQueue.WaitForItem(FComputeNameHashesWorker);
+    FComputeNameHashesWorker.DecRef;
+  end;
+  FComputeNameHashesWorker := nil;
 end;
 
 procedure TDwarfCompilationUnit.BuildAddressMap;
@@ -3800,8 +4060,6 @@ var
   Abbrev: TDwarfAbbrev;
 begin
   if FAddressMapBuild then Exit;
-
-  ScanAllEntries;
 
   Scope := FScope;
   ScopeIdx := Scope.Index;
@@ -3868,7 +4126,7 @@ constructor TDwarfCompilationUnit.Create(AOwner: TFpDwarfInfo; ADebugFile: PDwar
     HeaderLength: QWord;
     Name: PChar;
     diridx: Cardinal;
-    S: String;
+    S, S2: String;
     pb: PByte absolute Name;
   begin
     FLineInfo.Header := AData;
@@ -3924,9 +4182,14 @@ constructor TDwarfCompilationUnit.Create(AOwner: TFpDwarfInfo; ADebugFile: PDwar
       Inc(pb, Length(S)+1);
       //diridx
       diridx := ULEB128toOrdinal(pb);
-      if diridx < FLineInfo.Directories.Count
-      then S := FLineInfo.Directories[diridx] + S
-      else S := Format('Unknown dir(%u)', [diridx]) + DirectorySeparator + S;
+      if diridx < FLineInfo.Directories.Count then begin
+        S2 := FLineInfo.Directories[diridx] + S;
+        S := CreateAbsolutePath(S2, FCompDir);
+        if (diridx = 0) and not FileExistsUTF8(S2) and (FLineInfo.FileNames.Count > 0) then // https://bugs.freepascal.org/view.php?id=37658
+          S := S2;
+      end
+      else
+        S := Format('Unknown dir(%u)', [diridx]) + DirectorySeparator + S;
       FLineInfo.FileNames.Add(S);
       //last modified
       ULEB128toOrdinal(pb);
@@ -3982,7 +4245,7 @@ begin
 
   // use internally 64 bit target pointer
   FAddressMap := TMap.Create(itu8, SizeOf(TDwarfAddressInfo));
-  FLineNumberMap := TStringList.Create;
+  FLineNumberMap := TStringListUTF8Fast.Create;
   FLineNumberMap.Sorted := True;
   FLineNumberMap.Duplicates := dupError;
 
@@ -3999,6 +4262,13 @@ begin
     Exit;
   end;
   FValid := True;
+
+  FComputeNameHashesWorker := TFpThreadWorkerComputeNameHashes.Create(Self);
+  FComputeNameHashesWorker.AddRef;
+
+  FScanAllWorker := TFpThreadWorkerScanAll.Create(Self, FComputeNameHashesWorker);
+  FScanAllWorker.AddRef;
+  FOwner.WorkQueue.PushItem(FScanAllWorker);
 
   AttribList.EvalCount := 0;
   /// TODO: (dafHasName in Abbrev.flags)
@@ -4057,6 +4327,11 @@ destructor TDwarfCompilationUnit.Destroy;
   end;
 
 begin
+  FOwner.WorkQueue.RemoveItem(FComputeNameHashesWorker);
+  FOwner.WorkQueue.RemoveItem(FScanAllWorker);
+  FComputeNameHashesWorker.DecRef;
+  FScanAllWorker.DecRef;
+
   FreeAndNil(FAbbrevList);
   FreeAndNil(FAddressMap);
   FreeLineNumberMap;
@@ -4069,9 +4344,10 @@ begin
 end;
 
 function TDwarfCompilationUnit.GetLineAddressMap(const AFileName: String): PDWarfLineMap;
+
+  function FindIndex: Integer;
   var
     Name: String;
-  function FindIndex: Integer;
   begin
     // try fullname first
     Result := FLineNumberMap.IndexOf(AFileName);
@@ -4081,14 +4357,12 @@ function TDwarfCompilationUnit.GetLineAddressMap(const AFileName: String): PDWar
     Result := FLineNumberMap.IndexOf(Name);
     if Result <> -1 then Exit;
 
-    Name := UpperCase(Name);
     for Result := 0 to FLineNumberMap.Count - 1 do
-    begin
-      if Name = UpperCase(ExtractFileName(FLineNumberMap[Result]))
-      then Exit;
-    end;
-    Result := -1
+      if UTF8CompareLatinTextFast(Name, ExtractFileName(FLineNumberMap[Result])) = 0 then
+        Exit;
+    Result := -1;
   end;
+
 var
   idx: Integer;
 begin

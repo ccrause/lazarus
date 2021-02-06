@@ -27,10 +27,10 @@ interface
 uses
   Classes, SysUtils,
   // LCL
-  Forms, Controls, Graphics, StdCtrls, Buttons, ExtCtrls, ComCtrls, Menus, ImgList,
+  Forms, Controls, Graphics, StdCtrls, Buttons, ExtCtrls, ComCtrls, Menus,
   LCLIntf, LazConf, InterfaceBase, LCLPlatformDef, Clipbrd, LCLVersion,
   // LazUtils
-  FPCAdds, LazFileUtils, lazutf8classes,
+  FPCAdds, LazFileUtils,
   // Codetools
   DefineTemplates,
   // IDE
@@ -192,11 +192,6 @@ begin
 
   VersionLabel.Font.Color:= clWhite;
 
-  Width:= Scale96ToForm(460);
-  Height:= Scale96ToForm(380);
-  Constraints.MinWidth:= Width;
-  Constraints.MinHeight:= Height;
-
   AboutMemo.Lines.Text:=
     Format(lisAboutLazarusMsg,[DoubleLineEnding,DoubleLineEnding,DoubleLineEnding]);
 
@@ -282,7 +277,7 @@ begin
   //debugln('TAboutForm.LoadContributors ',FileExistsUTF8(ContributorsFileName),' ',ContributorsFileName);
 
   if FileExistsUTF8(ContributorsFileName) then
-    LoadStringsFromFileUTF8(Contributors.Lines,ContributorsFileName)
+    Contributors.Lines.LoadFromFile(ContributorsFileName)
   else
     Contributors.Lines.Text:=lisAboutNoContributors;
 end;
@@ -301,26 +296,15 @@ begin
     +'docs'+PathDelim+'acknowledgements.txt';
 
   if FileExistsUTF8(AcknowledgementsFileName) then
-    LoadStringsFromFileUTF8(Acknowledgements.Lines,AcknowledgementsFileName)
+    Acknowledgements.Lines.LoadFromFile(AcknowledgementsFileName)
   else
     Acknowledgements.Lines.Text:=lisAboutNoContributors;
 end;
 
 procedure TAboutForm.LoadLogo;
-var
-  pic: TPicture;
-  W, H: Integer;
 begin
-  pic := TPicture.Create;
-  try
-    pic.LoadFromResourceName(hInstance, 'splash_logo', TPortableNetworkGraphic);
-    W := LogoImage.Width;
-    H := LogoImage.Height;
-    LogoImage.Picture.Bitmap.SetSize(W, H);
-    AntiAliasedStretchDrawBitmap(pic.Bitmap, LogoImage.Picture.Bitmap, W, H);
-  finally
-    pic.Free;
-  end;
+  LogoImage.Picture.LoadFromResourceName(HInstance, 'splash_logo', TPortableNetworkGraphic);
+  ScaleImg(LogoImage.Picture.Bitmap, LogoImage.Width, LogoImage.Height)
 end;
 
 

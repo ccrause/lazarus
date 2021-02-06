@@ -27,9 +27,9 @@ uses
   qt4,
   qtprivate, qtwidgets, qtproc, QtWsControls,
   // RTL
-  math,
+  Classes, Types, SysUtils, math,
   // LCL
-  Classes, Types, Graphics, StdCtrls, Controls, Forms, SysUtils, InterfaceBase, LCLType,
+  Graphics, StdCtrls, Controls, Forms, InterfaceBase, LCLType,
   // Widgetset
   WSProc, WSStdCtrls, WSLCLClasses;
 
@@ -266,14 +266,6 @@ type
   published
   end;
 
-  { TEditHelper }
-
-  TEditHelper = class helper for TCustomEdit
-  public
-    function EmulatedTextHintStatus: TCustomEdit.TEmulatedTextHintStatus;
-    function CreateEmulatedTextHintFont: TFont;
-  end;
-
 
 implementation
 uses qtint;
@@ -299,19 +291,6 @@ const
     QFramePlain,
     QFrameSunken
   );
-
-{ TEditHelper }
-
-function TEditHelper.EmulatedTextHintStatus: TCustomEdit.TEmulatedTextHintStatus;
-begin
-  Result := FEmulatedTextHintStatus;
-end;
-
-function TEditHelper.CreateEmulatedTextHintFont: TFont;
-begin
-  Result := inherited CreateEmulatedTextHintFont;
-end;
-
 
 { TQtWSScrollBar }
 
@@ -1064,9 +1043,9 @@ begin
 
   TQtWSWinControl.ShowHide(AWinControl);
   if AWinControl.HandleObjectShouldBeVisible
-  and (TCustomEdit(AWinControl).EmulatedTextHintStatus=thsShowing) then
+  and (TCustomEdit(AWinControl).EmulatedTextHintStatus = thsShowing) then
   begin
-    EditFont := TCustomEdit(AWinControl).CreateEmulatedTextHintFont;
+    EditFont := CreateEmulatedTextHintFont(AWinControl);
     try
       SetFont(AWinControl, EditFont);
     finally
@@ -1638,12 +1617,8 @@ end;
 class procedure TQtWSCustomComboBox.SetStyle(
   const ACustomComboBox: TCustomComboBox; NewStyle: TComboBoxStyle);
 begin
-  TQtComboBox(ACustomComboBox.Handle).setEditable(NewStyle in [csDropDown, csSimple, csOwnerDrawEditableFixed, csOwnerDrawEditableVariable]);
-  TQtComboBox(ACustomComboBox.Handle).OwnerDrawn := NewStyle in
-                                                   [csOwnerDrawFixed,
-                                                    csOwnerDrawVariable,
-                                                    csOwnerDrawEditableFixed,
-                                                    csOwnerDrawEditableVariable];
+  TQtComboBox(ACustomComboBox.Handle).setEditable(NewStyle.HasEditBox);
+  TQtComboBox(ACustomComboBox.Handle).OwnerDrawn := NewStyle.IsOwnerDrawn;
   // TODO: implement styles: csSimple
   inherited SetStyle(ACustomComboBox, NewStyle);
 end;
@@ -1699,7 +1674,7 @@ begin
     ACombo := QComboBox_create(nil);
     try
       QWidget_setFont(ACombo, ComboBox.getFont);
-      QComboBox_setEditable(ACombo, not ACustomComboBox.ReadOnly);
+      QComboBox_setEditable(ACombo, ACustomComboBox.Style.HasEditBox);
       AText := 'Mtjx';
       AItems := QStringList_create(@AText);
       QComboBox_addItems(ACombo, AItems);
@@ -1718,12 +1693,12 @@ var
 begin
   if not WSCheckHandleAllocated(ACustomComboBox, 'SetItemHeight') then
     Exit;
-  {only for csOwnerDrawFixed, csOwnerDrawVariable, csOwnerDrawEditableFixed, csOwnerDrawEditableVariable}
+  {only for OwnerDrawn}
   ComboBox := TQtComboBox(ACustomComboBox.Handle);
   if ComboBox.getDroppedDown then
   begin
     ComboBox.DropList.setUniformItemSizes(False);
-    ComboBox.DropList.setUniformItemSizes(ACustomComboBox.Style in [csOwnerDrawFixed, csOwnerDrawEditableFixed]);
+    ComboBox.DropList.setUniformItemSizes(ACustomComboBox.Style.IsOwnerDrawn);
   end else
     RecreateWnd(ACustomComboBox);
 end;

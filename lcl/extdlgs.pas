@@ -21,10 +21,12 @@ unit ExtDlgs;
 interface
 
 uses
-  Types, Classes, SysUtils, LCLProc, LResources, LCLType, LCLStrConsts,
-  InterfaceBase, LCLPlatformDef,
-  FileUtil, LazFileUtils, Controls, Dialogs, GraphType, Graphics, ExtCtrls,
-  StdCtrls, Forms, Calendar, Buttons, Masks, CalcForm;
+  Types, Classes, SysUtils,
+  // LCL
+  LResources, LCLType, LCLStrConsts, LCLPlatformDef, InterfaceBase, Controls,
+  Dialogs, Graphics, ExtCtrls, StdCtrls, Forms, Calendar, Buttons, Masks, CalcForm,
+  // LazUtils
+  GraphType, FileUtil, LazFileUtils;
 
 type
 
@@ -51,6 +53,7 @@ type
   TPreviewFileDialog = class(TOpenDialog)
   private
     FPreviewFileControl: TPreviewFileControl;
+    function GetPreviewFileControl:TPreviewFileControl;
   protected
     class procedure WSRegisterClass; override;
     procedure CreatePreviewControl; virtual;
@@ -58,7 +61,7 @@ type
     function DoExecute: boolean; override;
   public
     constructor Create(TheOwner: TComponent); override;
-    property PreviewFileControl: TPreviewFileControl read FPreviewFileControl;
+    property PreviewFileControl: TPreviewFileControl read GetPreviewFileControl;
   end;
 
   { TOpenPictureDialog }
@@ -278,6 +281,13 @@ begin
 end;
 
 { TPreviewFileDialog }
+
+function TPreviewFileDialog.GetPreviewFileControl: TPreviewFileControl;
+begin
+  if not Assigned(fPreviewFileControl) then
+    Self.CreatePreviewControl;
+  Result:=fPreviewFileControl;
+end;
 
 class procedure TPreviewFileDialog.WSRegisterClass;
 begin

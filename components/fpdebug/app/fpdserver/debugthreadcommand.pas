@@ -305,7 +305,7 @@ end;
 
 function TFpDebugLocalsCommand.Execute(AController: TFpServerDbgController; out DoProcessLoop: boolean): boolean;
 var
-  AContext: TFpDbgInfoContext;
+  AContext: TFpDbgSymbolScope;
   ProcVal: TFpValue;
   i: Integer;
   m: TFpValue;
@@ -317,7 +317,7 @@ begin
      (AController.CurrentProcess.DbgInfo = nil) then
     exit;
 
-  AContext := AController.CurrentProcess.FindContext(AController.CurrentThread.ID, 0);
+  AContext := AController.CurrentProcess.FindSymbolScope(AController.CurrentThread.ID, 0);
 
   if (AContext = nil) or (AContext.SymbolAtAddress = nil) then
     exit;
@@ -610,6 +610,7 @@ function TFpDebugThreadStackTraceCommand.Execute(AController: TFpServerDbgContro
 var
   ThreadCallStack: TDbgCallstackEntryList;
   i: integer;
+  PrettyPrinter: TFpPascalPrettyPrinter;
 begin
   result := false;
   DoProcessLoop:=false;
@@ -622,11 +623,12 @@ begin
   AController.CurrentProcess.MainThread.PrepareCallStackEntryList;
   ThreadCallStack := AController.CurrentProcess.MainThread.CallStackEntryList;
   SetLength(FStackEntryArray, ThreadCallStack.Count);
+  PrettyPrinter := TFpPascalPrettyPrinter.Create(sizeof(pointer));
   for i := 0 to ThreadCallStack.Count-1 do
     begin
     FStackEntryArray[i].AnAddress:=ThreadCallStack[i].AnAddress;
     FStackEntryArray[i].FrameAdress:=ThreadCallStack[i].FrameAdress;
-    FStackEntryArray[i].FunctionName:=ThreadCallStack[i].FunctionName+ThreadCallStack[i].GetParamsAsString;
+    FStackEntryArray[i].FunctionName:=ThreadCallStack[i].FunctionName+ThreadCallStack[i].GetParamsAsString(PrettyPrinter);
     FStackEntryArray[i].Line:=ThreadCallStack[i].Line;
     FStackEntryArray[i].SourceFile:=ThreadCallStack[i].SourceFile;
     end;
@@ -634,6 +636,7 @@ begin
   // cumbersome. And the chances that this command is called twice, so that
   // caching the result is usefull, are slim.
   AController.CurrentProcess.MainThread.ClearCallStack;
+  PrettyPrinter.Free;
   result := true;
 end;
 
@@ -660,7 +663,7 @@ end;
 
 function TFpDebugThreadEvaluateCommand.Execute(AController: TFpServerDbgController; out DoProcessLoop: boolean): boolean;
 var
-  AContext: TFpDbgInfoContext;
+  AContext: TFpDbgSymbolScope;
   APasExpr: TFpPascalExpression;
   Res: Boolean;
   APrettyPrinter: TFpPascalPrettyPrinter;
@@ -675,7 +678,7 @@ begin
     exit;
     end;
 
-  AContext := AController.CurrentProcess.FindContext(AController.CurrentThread.ID, 0);
+  AContext := AController.CurrentProcess.FindSymbolScope(AController.CurrentThread.ID, 0);
   if AContext = nil then
     begin
     FValidity:=ddsInvalid;
@@ -683,7 +686,7 @@ begin
     end;
 
   Result := True;
-  AContext.MemManager.DefaultContext := AContext;
+  AContext.MemManager.DefaultContext := AContext.LocationContext;
   APasExpr := TFpPascalExpression.Create(FExpression, AContext);
   try
     APasExpr.ResultValue; // trigger full validation

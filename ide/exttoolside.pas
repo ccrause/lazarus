@@ -36,7 +36,7 @@ type
     constructor Create(aOwner: TComponent); override;
     destructor Destroy; override;
     function GetIDEObject(ToolData: TIDEExternalToolData): TObject; override;
-    procedure HandleMesages; override;
+    procedure HandleMessages; override;
   end;
 
 
@@ -51,6 +51,7 @@ end;
 
 destructor TExternalToolIDE.Destroy;
 begin
+  Application.RemoveAllHandlersOfObject(Self);
   inherited Destroy;
 end;
 
@@ -104,7 +105,7 @@ begin
   end;
 end;
 
-procedure TExternalToolsIDE.HandleMesages;
+procedure TExternalToolsIDE.HandleMessages;
 begin
   Application.ProcessMessages;
 end;

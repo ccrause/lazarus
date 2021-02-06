@@ -60,7 +60,7 @@ uses
   // LCL
   LCLProc, Buttons, Menus, ComCtrls, Controls, Graphics, Dialogs, Forms, ImgList,
   // LazUtils
-  LazFileUtils,
+  LazFileUtils, LazUTF8,
   // Codetools
   CodeToolManager,
   // SynEdit
@@ -70,7 +70,7 @@ uses
   IDECommands, IDEWindowIntf, ProjectIntf, ToolBarIntf, ObjectInspector,
   PropEdits, IDEDialogs, IDEUtils, EditorSyntaxHighlighterDef,
   // IDE
-  LazConf, LazarusIDEStrConsts, Project, BuildManager, EnvironmentOpts,
+  LazConf, LazarusIDEStrConsts, Project, EnvironmentOpts,
   EditorOptions, CompilerOptions, SourceEditor, SourceSynEditor, FindInFilesDlg,
   Splash, MainBar, MainIntf, Designer, Debugger, RunParamsOpts;
 
@@ -82,6 +82,16 @@ type
   );
   TResetToolFlags = set of TResetToolFlag;
 
+  TIdleIdeAction = (
+    iiaUpdateHighlighters,
+    iiaSaveEnvironment,
+    iiaUserInputSinceLastIdle,
+    iiaCheckFilesOnDisk,
+    iiaUpdateDefineTemplates,
+    iiaRestartWanted
+  );
+  TIdleIdeActions = set of TIdleIdeAction;
+
   { TMainIDEBase }
 
   TMainIDEBase = class(TMainIDEInterface)
@@ -89,8 +99,9 @@ type
     FWindowMenuActiveForm: TCustomForm;
     FDisplayState: TDisplayState;
     procedure SetDisplayState(AValue: TDisplayState);
+    procedure UpdateWindowMenu;
   protected
-    FNeedUpdateHighlighters: boolean;
+    FIdleIdeActions: TIdleIdeActions;
 
     function CreateMenuSeparator(Section: TIDEMenuSection): TIDEMenuCommand;
     procedure CreateMenuItem(Section: TIDEMenuSection;
@@ -134,8 +145,6 @@ type
     procedure mnuWindowSourceItemClick(Sender: TObject); virtual;
     procedure mnuBuildModeClicked(Sender: TObject); virtual; abstract;
 
-    procedure UpdateWindowMenu;
-
   public
     function DoResetToolStatus(AFlags: TResetToolFlags): boolean; virtual; abstract;
 
@@ -158,7 +167,7 @@ type
                         AComponent: TComponent): TCustomForm; virtual; abstract;
     procedure UpdateSaveMenuItemsAndButtons(UpdateSaveAll: boolean); virtual; abstract;
 
-    procedure DoMergeDefaultProjectOptions(AProject: TProject);
+    procedure DoMergeDefaultProjectOptions;
     procedure DoSwitchToFormSrc(var ActiveSourceEditor:TSourceEditor;
       var ActiveUnitInfo:TUnitInfo);
     procedure DoSwitchToFormSrc(ADesigner: TIDesigner;
@@ -201,24 +210,6 @@ type
   public
     property WindowMenuActiveForm: TCustomForm read FWindowMenuActiveForm write FWindowMenuActiveForm;
     property DisplayState: TDisplayState read FDisplayState write SetDisplayState;
-  end;
-
-  { TSetBuildModeToolButton }
-
-  TSetBuildModeToolButton = class(TIDEToolButton)
-  public type
-    TBuildModeMenuItem = class(TMenuItem)
-    public
-      BuildModeIndex: Integer;
-      procedure Click; override;
-    end;
-
-    TBuildModeMenu = class(TPopupMenu)
-    protected
-      procedure DoPopup(Sender: TObject); override;
-    end;
-  public
-    procedure DoOnAdded; override;
   end;
 
   { TOpenFileToolButton }
@@ -303,8 +294,9 @@ type
     procedure DoOnAdded; override;
   end;
 
-function  GetMainIde: TMainIDEBase;
+function GetMainIde: TMainIDEBase;
 function PrepareForCompileWithMsg: TModalResult; // Ensure starting compilation is OK.
+function UpdateTargetFilename(const ABaseFN: String): Boolean;
 
 property MainIDE: TMainIDEBase read GetMainIde;
 
@@ -331,65 +323,23 @@ begin
     Result:=MainIDE.PrepareForCompile;
 end;
 
-{ TSetBuildModeToolButton.TBuildModeMenu }
-
-procedure TSetBuildModeToolButton.TBuildModeMenu.DoPopup(Sender: TObject);
+function UpdateTargetFilename(const ABaseFN: String): Boolean;
+// Return True if Project1.TargetFilename was actually changed.
 var
-  CurIndex: Integer;
+  TargetF, StemFN, NewTargetFN: String;
   i: Integer;
-
-  procedure AddMode(BuildModeIndex: Integer; CurMode: TProjectBuildMode);
-  var
-    AMenuItem: TBuildModeMenuItem;
+begin
+  TargetF:=ExtractFileName(Project1.TargetFilename);
+  StemFN:=ExtractFileNameOnly(ABaseFN);
+  if (TargetF='') or (StemFN='') then exit(False);   // Using default -> ok
+  Result:=CompareFilenames(TargetF,StemFN)<>0;       // Names differ -> update.
+  if Result then
   begin
-    if Items.Count > CurIndex then
-      AMenuItem := Items[CurIndex] as TBuildModeMenuItem
-    else
-    begin
-      AMenuItem := TBuildModeMenuItem.Create(Self);
-      AMenuItem.Name := Name + 'Mode' + IntToStr(CurIndex);
-      Items.Add(AMenuItem);
-    end;
-    AMenuItem.BuildModeIndex := BuildModeIndex;
-    AMenuItem.Caption := CurMode.GetCaption;
-    AMenuItem.Checked := (Project1<>nil) and (Project1.ActiveBuildMode=CurMode);
-    AMenuItem.ShowAlwaysCheckable:=true;
-    inc(CurIndex);
+    NewTargetFN:=ExtractFilePath(Project1.TargetFilename) + StemFN
+               + ExtractFileExt(TargetF);
+    for i := 0 to Project1.BuildModes.Count-1 do     // Update all buildmodes.
+      Project1.BuildModes[i].CompilerOptions.TargetFilename:=NewTargetFN;
   end;
-
-begin
-  // fill the PopupMenu
-  CurIndex := 0;
-  if Project1<>nil then
-    for i:=0 to Project1.BuildModes.Count-1 do
-      AddMode(i, Project1.BuildModes[i]);
-  // remove unused menuitems
-  while Items.Count > CurIndex do
-    Items[Items.Count - 1].Free;
-
-  inherited DoPopup(Sender);
-end;
-
-{ TSetBuildModeToolButton.TBuildModeMenuItem }
-
-procedure TSetBuildModeToolButton.TBuildModeMenuItem.Click;
-var
-  NewMode: TProjectBuildMode;
-begin
-  inherited Click;
-
-  NewMode := Project1.BuildModes[BuildModeIndex];
-  if NewMode = Project1.ActiveBuildMode then exit;
-  if not (MainIDE.ToolStatus in [itNone,itDebugger]) then begin
-    IDEMessageDialog(dlgMsgWinColorUrgentError,
-      lisYouCanNotChangeTheBuildModeWhileCompiling,
-      mtError,[mbOk]);
-    exit;
-  end;
-
-  Project1.ActiveBuildMode := NewMode;
-  MainBuildBoss.SetBuildTargetProject1(false);
-  MainIDE.UpdateCaption;
 end;
 
 { TNewFormUnitToolButton }
@@ -588,16 +538,6 @@ begin
   // then add recent files
   AddFiles(EnvironmentOptions.RecentOpenFiles, EnvironmentOptions.MaxRecentOpenFiles,
            @mnuOpenFile);
-end;
-
-{ TSetBuildModeToolButton }
-
-procedure TSetBuildModeToolButton.DoOnAdded;
-begin
-  inherited DoOnAdded;
-
-  DropdownMenu := TBuildModeMenu.Create(Self);
-  Style := tbsDropDown;
 end;
 
 {$IFDEF LCLCocoa}
@@ -821,33 +761,23 @@ begin
   Result:=ToolStatus<>itCodeTools;
 end;
 
-procedure TMainIDEBase.DoMergeDefaultProjectOptions(AProject: TProject);
+procedure TMainIDEBase.DoMergeDefaultProjectOptions;
 var
   AFilename: String;
-  ShortFilename: String;
 begin
   // load default project options if exists
   AFilename:=AppendPathDelim(GetPrimaryConfigPath)+DefaultProjectOptionsFilename;
   if not FileExistsUTF8(AFilename) then
     CopySecondaryConfigFile(DefaultProjectOptionsFilename);
   if FileExistsUTF8(AFilename) then
-    if AProject.ReadProject(AFilename,nil,False)<>mrOk then
+    if Project1.ReadProject(AFilename,nil,False)<>mrOk then
       DebugLn(['TMainIDEBase.DoLoadDefaultCompilerOptions failed']);
 
   // change target file name
-  AFilename:=ExtractFileName(AProject.CompilerOptions.TargetFilename);
-  if AFilename='' then
-    exit; // using default -> ok
-  if CompareFilenames(AFilename,ExtractFilename(AProject.ProjectInfoFile))=0
-  then exit; // target file name and project name fit -> ok
-
-  // change target file to project name
-  ShortFilename:=ExtractFileNameOnly(AProject.ProjectInfoFile);
-  if ShortFilename<>'' then
-    AProject.CompilerOptions.TargetFilename:=
-      ExtractFilePath(AProject.CompilerOptions.TargetFilename)
-        +ShortFilename+ExtractFileExt(AFilename);
-  AProject.CompilerOptions.Modified:=false;
+  Assert(Project1.CompilerOptions.TargetFilename = Project1.TargetFilename,
+         'DoMergeDefaultProjectOptions: TargetFilename mismatch.');
+  if UpdateTargetFilename(Project1.ProjectInfoFile) then
+    Project1.CompilerOptions.Modified:=false;
 end;
 
 procedure TMainIDEBase.DoSwitchToFormSrc(var ActiveSourceEditor: TSourceEditor;
@@ -861,8 +791,7 @@ procedure TMainIDEBase.DoSwitchToFormSrc(ADesigner: TIDesigner;
 begin
   if (ADesigner<>nil) then
     ActiveUnitInfo:=Project1.UnitWithComponent(ADesigner.LookupRoot)
-  else if (GlobalDesignHook.LookupRoot<>nil)
-  and (GlobalDesignHook.LookupRoot is TComponent) then
+  else if GlobalDesignHook.LookupRoot is TComponent then
     ActiveUnitInfo:=Project1.UnitWithComponent(TComponent(GlobalDesignHook.LookupRoot))
   else
     ActiveUnitInfo:=nil;
@@ -1358,6 +1287,7 @@ begin
     CreateMenuItem(ParentMI,itmRunMenuStepInto,'itmRunMenuStepInto',lisMenuStepInto,'menu_stepinto');
     CreateMenuItem(ParentMI,itmRunMenuStepOver,'itmRunMenuStepOver',lisMenuStepOver,'menu_stepover');
     CreateMenuItem(ParentMI,itmRunMenuStepOut,'itmRunMenuStepOut',lisMenuStepOut,'menu_stepout');
+    CreateMenuItem(ParentMI,itmRunMenuStepToCursor,'itmRunMenuStepToCursor',lisMenuStepToCursor,'menu_step_cursor');
     CreateMenuItem(ParentMI,itmRunMenuRunToCursor,'itmRunMenuRunToCursor',lisMenuRunToCursor,'menu_run_cursor');
     CreateMenuItem(ParentMI,itmRunMenuStop,'itmRunMenuStop',lisStop,'menu_stop', False);
 
@@ -1520,38 +1450,102 @@ begin
                   [ofOnlyIfExists,ofAddToRecent,ofRegularFile,ofConvertMacros]);
 end;
 
-procedure TMainIDEBase.UpdateWindowMenu;
-
-  function GetMenuItem(Index: Integer; ASection: TIDEMenuSection): TIDEMenuItem;
-  begin
-    if ASection.Count > Index then
-      Result := ASection.Items[Index]
+function GetIconIndex(AForm: TWinControl): Integer;
+begin
+  if csDesigning in AForm.ComponentState then             // in designer
+    case AForm.ClassName of
+      'TFrameProxyDesignerForm':
+        Exit(IDEImages.GetImageIndex('frame_designer'));      // frame
+      'TNonControlProxyDesignerForm':
+        Exit(IDEImages.GetImageIndex('datamodule_designer')); // datamodule
     else
-    begin
-      Result := RegisterIDEMenuCommand(ASection,'Window'+IntToStr(Index)+ASection.Name,'');
-      Result.CreateMenuItem;
+      Exit(IDEImages.GetImageIndex('form_designer'));         // own form class (TForm1, TForm2, etc.)
     end;
-  end;
 
-  procedure ClearMenuItem(ARemainCount: Integer; ASection: TIDEMenuSection);
-  begin
-    with ASection do
-      while Count > ARemainCount do
-        Items[Count-1].Free;
+  with MainIDEBar do
+  case AForm.ClassName of
+    'TCharacterMapDialog':     Exit(-1);                      // for future icon
+    'TObjectInspectorDlg':     Exit(itmViewInspector.ImageIndex);
+    'TSourceNotebook':         Exit(itmViewSourceEditor.ImageIndex);
+    'TMessagesView':           Exit(itmViewMessage.ImageIndex);
+    'TCodeExplorerView':       Exit(itmViewCodeExplorer.ImageIndex);
+    'TFPDocEditor':            Exit(-1);                      // for future icon
+    'TCodeBrowserView':        Exit(itmViewCodeBrowser.ImageIndex);
+    'TUnitDependenciesWindow': Exit(-1);                      // for future icon
+    'TRestrictionBrowserView': Exit(itmViewRestrictionBrowser.ImageIndex);
+    'TComponentListForm':      Exit(itmViewComponents.ImageIndex);
+    'TJumpHistoryViewWin':     Exit(itmJumpHistory.ImageIndex);
+    'TMacroListView':          Exit(-1);                      // for future icon
+    'TTabOrderDialog':         Exit(itmViewTabOrder.ImageIndex);
+    'TSearchResultsView':      Exit(itmViewSearchResults.ImageIndex);
+    'TWatchesDlg':             Exit(itmViewWatches.ImageIndex);
+    'TBreakPointsDlg':         Exit(itmViewBreakPoints.ImageIndex);
+    'TLocalsDlg':              Exit(-1);                      // for future icon
+    'TRegistersDlg':           Exit(-1);                      // for future icon
+    'TCallStackDlg':           Exit(itmViewCallStack.ImageIndex);
+    'TThreadsDlg':             Exit(-1);                      // for future icon
+    'TAssemblerDlg':           Exit(-1);                      // for future icon
+    'TDbgEventsForm':          Exit(-1);                      // for future icon
+    'THistoryDialog':          Exit(-1);                      // for future icon
+    'TDbgOutputForm':          Exit(itmViewDebugOutput.ImageIndex);
+    'TProjectInspectorForm':   Exit(itmProjectInspector.ImageIndex);
+    'TPkgGraphExplorerDlg':    Exit(itmPkgPkgGraph.ImageIndex);
+    'TPackageEditorForm':      Exit(IDEImages.GetImageIndex('item_package'));
+    'TDSFieldsEditorFrm':               Exit(-1);             // for future icon
+    'TDBGridColumnsPropertyEditorForm': Exit(-1);             // for future icon
+    'TActionListEditor':                Exit(-1);             // for future icon
+    'TCollectionPropertyEditorForm':    Exit(-1);             // for future icon
+    'TSeriesEditorForm':                Exit(-1);             // for future icon
+    // In packages, may not be installed:
+    'TProjectGroupEditorForm': Exit(IDEImages.GetImageIndex('pg_item'));
+    'THeapTrcViewForm':        Exit(-1);                      // for future icon
+    'TIDETodoWindow':          Exit(IDEImages.GetImageIndex('menu_view_todo'));
+    'TAnchorDesigner':         Exit(IDEImages.GetImageIndex('menu_view_anchor_editor'));
+  else
+    Exit(-1);
   end;
+end;
 
+function GetMenuItem(Index: Integer; ASection: TIDEMenuSection): TIDEMenuItem;
+begin
+  Result := RegisterIDEMenuCommand(ASection,'Window'+IntToStr(Index)+ASection.Name,'');
+  Result.CreateMenuItem;
+end;
+
+procedure InitMenuItem(AMenuItem: TIDEMenuItem; AForm: TCustomForm; AIcon: Integer);
+begin
+  AMenuItem.ImageIndex := AIcon;
+  if not IsFormDesign(AForm) then
+    AMenuItem.Caption := AForm.Caption
+  else
+    case AForm.ClassName of
+      'TFrameProxyDesignerForm',         // frame
+      'TNonControlProxyDesignerForm':    // datamodule
+          AMenuItem.Caption := AForm.Caption;
+    else                                 // form
+      if EnvironmentOptions.Desktop.IDENameForDesignedFormList then
+        AMenuItem.Caption := AForm.Name
+      else
+        AMenuItem.Caption := AForm.Caption;
+    end;
+  AMenuItem.UserTag := {%H-}PtrUInt(AForm);
+end;
+
+procedure TMainIDEBase.UpdateWindowMenu;
 var
   WindowsList: TFPList;
-  i, j, ItemCount, ItemCountProject, ItemCountOther: Integer;
+  i, EditorIndex, ItemCountProject, ItemCountOther, IconInd: Integer;
   CurMenuItem: TIDEMenuItem;
   AForm: TForm;
-  EdList: TStringList;
-  EditorCur: TSourceEditor;
+  EdList: TStringListUTF8Fast;
+  se: TSourceEditor;
   P: TIDEPackage;
   aSection: TIDEMenuSection;
   s: String;
 begin
-  //DebugLn('TMainIDEBase.UpdateWindowMenu: enter');
+  itmWindowLists.Clear;
+  itmCenterWindowLists.Clear;
+
   WindowsList:=TFPList.Create;
   // add typical IDE windows at the start of the list
   for i := 0 to SourceEditorManager.SourceWindowCount - 1 do
@@ -1563,8 +1557,8 @@ begin
     WindowsList.Add(MainIDEBar);
   {$ENDIF}
   // add special IDE windows
-  for i:=0 to Screen.FormCount-1 do begin
-    AForm:=Screen.Forms[i];
+  for i := 0 to Screen.FormCount-1 do begin
+    AForm := Screen.Forms[i];
     //debugln(['TMainIDEBase.UpdateWindowMenu ',DbgSName(AForm),' Vis=',AForm.IsVisible,' Des=',DbgSName(AForm.Designer)]);
     if (AForm=MainIDEBar) or (AForm=SplashForm) or IsFormDesign(AForm)
     or (WindowsList.IndexOf(AForm)>=0) then
@@ -1578,66 +1572,55 @@ begin
     WindowsList.Add(AForm);
   end;
   // add designer forms and datamodule forms
-  for i:=0 to Screen.FormCount-1 do begin
-    AForm:=Screen.Forms[i];
+  for i := 0 to Screen.FormCount-1 do begin
+    AForm := Screen.Forms[i];
     if (AForm.Designer<>nil) and (WindowsList.IndexOf(AForm)<0) then
       WindowsList.Add(AForm);
   end;
   // create menuitems for all windows
-  ItemCount := WindowsList.Count;
-  for i:=0 to WindowsList.Count-1 do
+  for i := 0 to WindowsList.Count-1 do
   begin
+    IconInd := GetIconIndex(TWinControl(WindowsList[i]));
     // in the 'bring to front' list
     CurMenuItem := GetMenuItem(i, itmWindowLists);
-    if EnvironmentOptions.Desktop.IDENameForDesignedFormList
-    and IsFormDesign(TWinControl(WindowsList[i])) then
-      CurMenuItem.Caption:=TCustomForm(WindowsList[i]).Name
-    else
-      CurMenuItem.Caption:=TCustomForm(WindowsList[i]).Caption;
+    InitMenuItem(CurMenuItem, TCustomForm(WindowsList[i]), IconInd);
     CurMenuItem.Checked := WindowMenuActiveForm = TCustomForm(WindowsList[i]);
-    CurMenuItem.UserTag := {%H-}PtrUInt(WindowsList[i]);
-    CurMenuItem.OnClick:=@mnuWindowItemClick;
+    CurMenuItem.OnClick := @mnuWindowItemClick;
     // in the 'center' list
     CurMenuItem := GetMenuItem(i, itmCenterWindowLists);
-    if EnvironmentOptions.Desktop.IDENameForDesignedFormList
-    and IsFormDesign(TWinControl(WindowsList[i])) then
-      CurMenuItem.Caption:=TCustomForm(WindowsList[i]).Name
-    else
-      CurMenuItem.Caption:=TCustomForm(WindowsList[i]).Caption;
-    CurMenuItem.UserTag := {%H-}PtrUInt(WindowsList[i]);
-    CurMenuItem.OnClick:=@mnuCenterWindowItemClick;
+    InitMenuItem(CurMenuItem, TCustomForm(WindowsList[i]), IconInd);
+    CurMenuItem.OnClick := @mnuCenterWindowItemClick;
   end;
   //create source page menuitems
   itmTabListProject.Visible := False;
   itmTabListOther.Visible := False;
   itmTabListProject.Checked := False;
   itmTabListOther.Checked := False;
+
+  itmTabListProject.Clear;
   itmTabListPackage.Clear;
+  itmTabListOther.Clear;
 
   if SourceEditorManager.SourceEditorCount > 0 then begin
     ItemCountProject := 0;
     ItemCountOther := 0;
-    EdList := TStringList.Create;
+    EdList := TStringListUTF8Fast.Create;
     EdList.OwnsObjects := False;
-    EdList.Sorted := True;
-    // sort
     for i := 0 to SourceEditorManager.SourceEditorCount - 1 do begin
-      EdList.AddObject(SourceEditorManager.SourceEditors[i].PageName+' '
-                       +SourceEditorManager.SourceEditors[i].FileName
-                       +SourceEditorManager.SourceEditors[i].Owner.Name,
-                       TObject(PtrUInt(i))
-                      );
+      se := SourceEditorManager.SourceEditors[i];
+      EdList.AddObject(se.PageName+' '+se.FileName+se.Owner.Name, TObject(PtrUInt(i)));
     end;
+    EdList.Sorted := True;
     for i := 0 to EdList.Count - 1 do
     begin
-      j := PtrUInt(EdList.Objects[i]);
-      EditorCur := SourceEditorManager.SourceEditors[j];
-      if (EditorCur.GetProjectFile <> nil) and (EditorCur.GetProjectFile.IsPartOfProject) then begin
+      EditorIndex := PtrUInt(EdList.Objects[i]);
+      se := SourceEditorManager.SourceEditors[EditorIndex];
+      if (se.GetProjectFile <> nil) and (se.GetProjectFile.IsPartOfProject) then begin
         aSection := itmTabListProject;
         CurMenuItem := GetMenuItem(ItemCountProject, aSection);
         inc(ItemCountProject);
       end else begin
-        SourceEditorManager.OnPackageForSourceEditor(P, EditorCur);
+        SourceEditorManager.OnPackageForSourceEditor(P, se);
         if P <> nil then begin
           s := Format(lisTabsFor, [p.Name]);
           if itmTabListPackage.FindByName(S) is TIDEMenuSection then
@@ -1652,22 +1635,19 @@ begin
         end;
       end;
       aSection.Visible := True;
-      if EditorCur.SharedEditorCount > 1 then
-        CurMenuItem.Caption := EditorCur.PageName + ' ('+TForm(EditorCur.Owner).Caption+')'
-        //CurMenuItem.Caption := EditorCur.PageName
-        //  + ' ('+IntToStr(1+SourceEditorManager.IndexOfSourceWindow(TSourceEditorWindowInterface(EditorCur.Owner)))+')'
+      if se.SharedEditorCount > 1 then
+        CurMenuItem.Caption := se.PageName + ' ('+TForm(se.Owner).Caption+')'
       else
-        CurMenuItem.Caption := EditorCur.PageName;
+        CurMenuItem.Caption := se.PageName;
       if CurMenuItem.MenuItem <> nil then
-        CurMenuItem.Checked := SourceEditorManager.ActiveEditor = EditorCur;
-      if (SourceEditorManager.ActiveEditor = EditorCur) and (aSection.MenuItem <> nil) then
+        CurMenuItem.Checked := SourceEditorManager.ActiveEditor = se;
+      if (SourceEditorManager.ActiveEditor = se) and (aSection.MenuItem <> nil) then
         aSection.Checked := true;
       CurMenuItem.OnClick := @mnuWindowSourceItemClick;
-      CurMenuItem.Tag := j;
+      CurMenuItem.Tag := EditorIndex;
     end;
     EdList.Free;
-    ClearMenuItem(ItemCountProject, itmTabListProject);
-    ClearMenuItem(ItemCountOther, itmTabListOther);
+
     for i := 0 to itmTabListPackage.Count - 1 do begin
       if itmTabListPackage.Items[i] is TIDEMenuSection then begin
         aSection := itmTabListPackage.Items[i] as TIDEMenuSection;
@@ -1681,9 +1661,6 @@ begin
     if itmTabListOther.TopSeparator <> nil then
       itmTabListOther.TopSeparator.Visible := False;
   end;
-  // remove unused menuitems
-  ClearMenuItem(ItemCount, itmWindowLists);
-  ClearMenuItem(ItemCount, itmCenterWindowLists);
   WindowsList.Free;           // clean up
 end;
 
@@ -1751,7 +1728,7 @@ begin
   DoOpenRecentFile((Sender as TIDEMenuItem).Hint);
 end;
 
-procedure TMainIDEBase.UpdateHighlighters(Immediately: boolean = false);
+procedure TMainIDEBase.UpdateHighlighters(Immediately: boolean);
 var
   ASrcEdit: TSourceEditor;
   h: TLazSyntaxHighlighter;
@@ -1759,7 +1736,7 @@ var
   AnEditorInfo: TUnitEditorInfo;
 begin
   if Immediately then begin
-    FNeedUpdateHighlighters:=false;
+    Exclude(FIdleIdeActions, iiaUpdateHighlighters);
     for h := Low(TLazSyntaxHighlighter) to High(TLazSyntaxHighlighter) do
       if Highlighters[h]<>nil then begin
         Highlighters[h].BeginUpdate;
@@ -1774,9 +1751,9 @@ begin
           ASrcEdit.SyntaxHighlighterType := AnEditorInfo.SyntaxHighlighter;
       end;
     end;
-  end else begin
-    FNeedUpdateHighlighters:=true;
-  end;
+  end
+  else
+    Include(FIdleIdeActions, iiaUpdateHighlighters);
 end;
 
 procedure TMainIDEBase.FindInFilesPerDialog(AProject: TProject);

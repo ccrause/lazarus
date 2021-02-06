@@ -29,15 +29,20 @@
 unit PseudoTerminalDlg;
 {$IFDEF linux} {$DEFINE DBG_ENABLE_TERMINAL} {$ENDIF}
 
-
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  IDEWindowIntf, LazUTF8, Classes, Graphics, Forms, StdCtrls, DebuggerDlg,
-  BaseDebugManager, LazarusIDEStrConsts, LCLType, ComCtrls, ExtCtrls, MaskEdit,
-  PairSplitter;
+  Classes, SysUtils, StrUtils,
+  // LCL
+  Graphics, Forms, StdCtrls, LCLType, ComCtrls, ExtCtrls, MaskEdit, PairSplitter,
+  // LazUtils
+  LazStringUtils, LazLoggerBase,
+  // IdeIntf
+  IDEWindowIntf,
+  // IDE
+  DebuggerDlg, BaseDebugManager, LazarusIDEStrConsts;
 
 type
 
@@ -64,19 +69,18 @@ type
     procedure PairSplitterRawRightResize(Sender: TObject);
     procedure RadioGroupRightSelectionChanged(Sender: TObject);
   private
-    { private declarations }
     ttyHandle: System.THandle;         (* Used only by unix for console size tracking  *)
     fCharHeight: word;
     fCharWidth: word;
     fRowsPerScreen: integer;
     fColsPerRow: integer;
     fFirstLine: integer;
+    FMemoEndsInEOL: Boolean;
     procedure getCharHeightAndWidth(consoleFont: TFont; out h, w: word);
     procedure consoleSizeChanged;
   protected
     procedure DoClose(var CloseAction: TCloseAction); override;
   public
-    { public declarations }
     constructor Create(TheOwner: TComponent); override;
     procedure AddOutput(const AText: String);
     procedure Clear;
@@ -92,15 +96,13 @@ var
 
 implementation
 
-uses
-  SysUtils, StrUtils, LazLoggerBase
 {$IFDEF DBG_ENABLE_TERMINAL}
-  , Unix, BaseUnix, termio
+uses
+  BaseUnix, termio;
 {$ENDIF DBG_ENABLE_TERMINAL}
-  ;
 
 const
-  handleUnopened= THandle(-$80000000);
+  handleUnopened= System.THandle(-$80000000);
 
 var
   //DBG_VERBOSE,
@@ -285,7 +287,7 @@ begin
       getCharHeightAndWidth(Memo1.Font, fCharHeight, fCharWidth)
     end else begin                      (* Can't get pseudoterminal             *)
       DebugLn(DBG_WARNINGS, ['TPseudoConsoleDlg.AddOutput Unopened -> bad PseudoTerminal']);
-      ttyHandle := THandle(-1)
+      ttyHandle := System.THandle(-1)
     end;
 
 (* Every time we're called, provided that we were able to open the TTY, work    *)
@@ -322,7 +324,7 @@ begin
     if fpioctl(ttyHandle, TIOCSWINSZ, @winSize) < 0 then begin
       //fileclose(ttyHandle);
       DebugLn(DBG_WARNINGS, ['TPseudoConsoleDlg.AddOutput Write failed, closed handle']);
-      //ttyHandle := THandle(-1)      (* Attempted ioctl() failed                 *)
+      //ttyHandle := System.THandle(-1)    (* Attempted ioctl() failed          *)
     end
     else
     if integer(ttyHandle) >= 0 then begin (* Handle not closed by error         *)
@@ -341,7 +343,7 @@ begin
   end;
 {$ELSE       }
 begin
-  ttyHandle := THandle(-1);             (* Not used in non-unix OSes            *)
+  ttyHandle := System.THandle(-1);      (* Not used in non-unix OSes            *)
 {$ENDIF DBG_ENABLE_TERMINAL}
   Assert(ttyHandle <> handleUnopened, 'TPseudoConsoleDlg.consoleSizeChanged: TTY handle still in virgin state at exit');
   RadioGroupRightSelectionChanged(nil); (* Sort out initial state               *)
@@ -364,6 +366,7 @@ const
 var
   lineLimit, numLength, i: integer;
   buffer: TStringList;
+  TextEndsInEOL: Boolean;
 
 
   (* Translate C0 control codes to "control pictures", and optionally C1 codes
@@ -631,7 +634,7 @@ var
         //        #$7f,
         //        #$80..#$ff,
           begin
-          ReplaceSubstring(Result,j,1,dot);         (* GTK2 really doesn't like seeing this *)
+          ReplaceSubstring(Result,j,1,dot); (* GTK2 really doesn't like seeing this *)
           end;
       end;
       dec(j);
@@ -755,6 +758,7 @@ begin
 (* "interesting" behavior once the amount of text causes it to start scrolling  *)
 (* so having an intermediate that can be inspected might be useful.             *)
 
+  TextEndsInEOL := (AText <> '') and (AText[Length(AText)] in [#10]);
   buffer := TStringList.Create;
   try
     buffer.Text := AText;     (* Decides what line breaks it wants to swallow   *)
@@ -776,13 +780,21 @@ begin
         buffer[i] := PadLeft(IntToStr(fFirstLine), numLength) + ' ' + buffer[i];
       fFirstLine += 1
     end;
-    if RadioGroupRight.ItemIndex = 3 then (* Expand hex line-by-line in reverse *)
+    if RadioGroupRight.ItemIndex = 3 then begin (* Expand hex line-by-line in reverse *)
       for i := buffer.Count - 1 downto 0 do
         expandAsHex(buffer, i, numLength);
+      FMemoEndsInEOL := True;
+    end;
 
 (* Add the buffered text to the visible control(s), and clean up.               *)
 
-    Memo1.Lines.AddStrings(buffer)
+    if (not FMemoEndsInEOL) and (Memo1.Lines.Count > 0) and (AText <> '') then begin
+      Memo1.Lines[Memo1.Lines.Count-1] := Memo1.Lines[Memo1.Lines.Count-1] + buffer[0];
+      buffer.Delete(0);
+    end;
+    if (AText <> '') then
+      Memo1.Lines.AddStrings(buffer);
+    FMemoEndsInEOL := TextEndsInEOL;
   finally
     buffer.Free;
     Memo1.Lines.EndUpdate

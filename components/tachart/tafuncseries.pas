@@ -301,6 +301,7 @@ type
     FErrCode: TFitErrCode;
     FFitStatistics: TFitStatistics;
     FConfidenceLevel: Double;
+    FLockFit: Integer;
     function GetParam(AIndex: Integer): Double;
     function GetParamCount: Integer;
     function GetParamError(AIndex: Integer): Double;
@@ -308,6 +309,7 @@ type
     function GetParam_RawValue(AIndex: Integer): Double;
     function GetParam_tValue(AIndex: Integer): Double;
     function IsFixedParamsStored: Boolean;
+    procedure SetConfidenceLevel(AValue: Double);
     procedure SetDrawFitRangeOnly(AValue: Boolean);
     procedure SetFitEquation(AValue: TFitEquation);
     procedure SetFitRange(AValue: TChartRange);
@@ -337,8 +339,11 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
   public
+    procedure BeginUpdate;
     function Calculate(AX: Double): Double; virtual;
+    procedure Clear; override;
     procedure Draw(ADrawer: IChartDrawer); override;
+    procedure EndUpdate;
     function ErrorMsg: String;
     procedure ExecFit; virtual;
     function Extent: TDoubleRect; override;
@@ -364,7 +369,7 @@ type
     {$IFEND}
     property Param_tValue[AIndex: Integer]: Double read GetParam_tValue;
     property FitStatistics: TFitStatistics read FFitStatistics;
-    property ConfidenceLevel: Double read FConfidenceLevel write FConfidenceLevel;
+    property ConfidenceLevel: Double read FConfidenceLevel write SetConfidenceLevel;
     property ErrCode: TFitErrCode read FErrCode;
     property State: TFitParamsState read FState;
   published
@@ -564,7 +569,7 @@ var
 begin
   inherited Draw(ADrawer, ARect);
   with FFramePen do
-    pw := IfThen(EffVisible, (Width + 1) div 2, 0);
+    pw := Math.IfThen(EffVisible, (Width + 1) div 2, 0);
   w := ARect.Right - ARect.Left - 2 * pw;
   if w <= 0 then exit;
   for x := ARect.Left + pw to ARect.Right - pw do begin
@@ -842,7 +847,7 @@ begin
   t := ParamMin;
   pp := PointAt(ParamMin);
   ADrawer.MoveTo(pp);
-  ms := IfThen(ParamMaxStep > 0, ParamMaxStep, (ParamMax - ParamMin) / 4);
+  ms := Math.IfThen(ParamMaxStep > 0, ParamMaxStep, (ParamMax - ParamMin) / 4);
   ts := ms;
   while t < ParamMax do begin
     p := PointAt(t + ts);
@@ -940,7 +945,7 @@ end;
 
 function TBSplineSeries.Calculate(AX: Double): Double;
 var
-  p: array of TDoublePoint;
+  p: array of TDoublePoint = nil;
   startIndex: Integer;
   splineStart: Integer = 0;
   splineEnd: Integer = -2;
@@ -976,8 +981,9 @@ var
   var
     i,n: Integer;
     pp: TDoublePoint;
-    xval, yval: array of ArbFloat;
-    coeff: array of ArbFloat;
+    xval: array of ArbFloat = nil;
+    yval: array of ArbFloat = nil;
+    coeff: array of ArbFloat = nil;
     ok: Integer;
     t: ArbFloat;
   begin
@@ -1050,7 +1056,7 @@ end;
 
 procedure TBSplineSeries.Draw(ADrawer: IChartDrawer);
 var
-  p: array of TDoublePoint;
+  p: array of TDoublePoint = nil;
   startIndex: Integer;
   splineStart: Integer;
   splineEnd: Integer;
@@ -1177,8 +1183,8 @@ begin
         if Assigned(p) then lBrush := p.Brush else lBrush := nil;
         for s in Styles.Styles do
           AItems.Add(TLegendItemLinePointer.CreateWithBrush(
-            IfThen((lPen <> nil) and s.UsePen, s.Pen, lPen) as TPen,
-            IfThen(s.UseBrush, s.Brush, lBrush) as TBrush,
+            TAChartUtils.IfThen((lPen <> nil) and s.UsePen, s.Pen, lPen) as TPen,
+            TAChartUtils.IfThen(s.UseBrush, s.Brush, lBrush) as TBrush,
             p,
             LegendTextStyle(s)
           ));
@@ -1634,6 +1640,12 @@ begin
   FFitRange.SetOwner(ParentChart);
 end;
 
+procedure TFitSeries.BeginUpdate;
+begin
+  inherited BeginUpdate;
+  inc(FLockFit);
+end;
+
 function TFitSeries.Calculate(AX: Double): Double;
 var
   i: Integer;
@@ -1652,10 +1664,11 @@ begin
     feExp:
       Result := Param[0] * Exp(Param[1] * AX);
     fePower:
-      if AX < 0 then
-        Result := SafeNaN
-      else
+      begin
+        if (abs(Param[1]) < 1) and (AX < 0) then
+          exit;
         Result := Param[0] * Power(AX, Param[1]);
+      end;
     feCustom:
       begin
         Result := 0;
@@ -1688,6 +1701,12 @@ begin
     AXMin := 0;
     AXMax := Source.Count - 1;
   end;
+end;
+
+procedure TFitSeries.Clear;
+begin
+  inherited;
+  InvalidateFitResults;
 end;
 
 procedure TFitSeries.Assign(ASource: TPersistent);
@@ -1762,9 +1781,17 @@ begin
   end;
 end;
 
+procedure TFitSeries.EndUpdate;
+begin
+  inherited EndUpdate;
+  dec(FLockFit);
+  if (FLockFit = 0) and FAutoFit then
+    ExecFit;
+end;
+
 function TFitSeries.EquationText: IFitEquationText;
 var
-  basis: Array of string;
+  basis: Array of string = nil;
   i: Integer;
 begin
   if State = fpsValid then begin
@@ -1794,6 +1821,7 @@ begin
     fitNoFitParams          : Result := rsErrFitNoFitParams;
     fitSingular             : Result := rsErrFitSingular;
     fitNoBaseFunctions      : Result := rsErrFitNoBaseFunctions;
+    fitOverflow             : Result := rsErrNumericalOverflow;
   else
     raise EChartError.CreateFmt('[%s.ErrorMsg] No message text assigned to error code #%d.',
       [NameOrClassName(self), ord(ErrCode)]);
@@ -1815,7 +1843,9 @@ var
   procedure TryFit;
   var
     i, j, ns, n: Integer;
-    xv, yv, dy: array of ArbFloat;
+    xv: array of ArbFloat = nil;
+    yv: array of ArbFloat = nil;
+    dy: array of ArbFloat = nil;
     yp, yn: Double;
     fitRes: TFitResults;
     hasErrorBars: Boolean;
@@ -1834,7 +1864,7 @@ var
     SetLength(xv, n);
     SetLength(yv, n);
     hasErrorBars := Source.HasYErrorBars;
-    SetLength(dy, IfThen(hasErrorBars, n, 0));
+    SetLength(dy, Math.IfThen(hasErrorBars, n, 0));
     j := 0;
     for i := 0 to ns - 1 do
       with Source.Item[i]^ do
@@ -1856,30 +1886,35 @@ var
     end;
 
     // Execute the polynomial fit; the degree of the polynomial is np - 1.
-    fitRes := LinearFit(xv, yv, dy, FFitParams);
-    FErrCode := fitRes.ErrCode;
-    if fitRes.ErrCode <> fitOK then
-      exit;
+    try
+      fitRes := LinearFit(xv, yv, dy, FFitParams);
 
-    // Store values of fit parameters.
-    // Note: In case of exponential and power fit equations, the first fitted
-    // parameter is the logarithm of the "real" parameter. It needs to be
-    // transformed back to real units by exp function. This is done by the
-    // getter of the property
-    for i:= 0 to High(FFitParams) do
-      FFitParams[i].Value := fitRes.ParamValues[i];
+      FErrCode := fitRes.ErrCode;
+      if fitRes.ErrCode <> fitOK then
+        exit;
 
-    // Analysis of variance, variance-covariance matrix
-    FFitStatistics.Free;
-    FFitStatistics := TFitStatistics.Create(fitRes, 1 - FConfidenceLevel);
+      // Store values of fit parameters.
+      // Note: In case of exponential and power fit equations, the first fitted
+      // parameter is the logarithm of the "real" parameter. It needs to be
+      // transformed back to real units by exp function. This is done by the
+      // getter of the property
+      for i:= 0 to High(FFitParams) do
+        FFitParams[i].Value := fitRes.ParamValues[i];
 
-    // State of the fit
-    FState := fpsValid;
+     // Analysis of variance, variance-covariance matrix
+      FFitStatistics.Free;
+      FFitStatistics := TFitStatistics.Create(fitRes, 1 - FConfidenceLevel);
+
+      // State of the fit
+      FState := fpsValid;
+    except
+      FErrCode := fitOverflow;
+    end;
   end;
 
 begin
   if (State <> fpsUnknown) or not Active or IsEmpty or (FChart = nil) or
-     ([csLoading, csDestroying] * ComponentState <> [])
+     ([csLoading, csDestroying] * ComponentState <> []) or (FLockFit > 0)
   then
     exit;
   FState := fpsInvalid;
@@ -1921,7 +1956,7 @@ function TFitSeries.FitParams: TDoubleDynArray;
 var
   i: Integer;
 begin
-  SetLength(Result, ParamCount);
+  SetLength(Result{%H-}, ParamCount);
   for i := 0 to High(Result) do
     Result[i] := Param[i];
 end;
@@ -1963,10 +1998,12 @@ begin
     exit;
   end;
 
-  offs := IfThen(IsPrediction, 1, 0);
+  offs := Math.IfThen(IsPrediction, 1, 0);
   with FitStatistics do begin
     x := TransformX(AX);
+    if IsNaN(x) then exit;
     y := Calculate(AX);
+    if IsNaN(y) then exit;
     y := TransformY(y);
     dy := tValue * ResidualStdError * sqrt(offs + 1/N + sqr(x - xBar) / SSx);
     if IsUpper then
@@ -2120,7 +2157,7 @@ begin
   Result := NaN;
   if (FState = fpsValid) and Assigned(FFitStatistics) then begin
     sig2 := FFitStatistics.VarCovar[AIndex, AIndex];
-    if not IsNaN(sig2) then
+    if not IsNaN(sig2) and (sig2 >= 0) then
       Result := sqrt(sig2);
   end;
 end;
@@ -2242,6 +2279,15 @@ begin
   end;
 end;
 
+procedure TFitSeries.SetConfidenceLevel(AValue: Double);
+begin
+  if FConfidenceLevel = AValue then exit;
+  FConfidenceLevel := AValue;
+  InvalidateFitResults;
+  if FAutoFit then
+    ExecFit;
+end;
+
 procedure TFitSeries.SetDrawFitRangeOnly(AValue: Boolean);
 begin
   if FDrawFitRangeOnly = AValue then exit;
@@ -2340,18 +2386,27 @@ end;
 function TFitSeries.TransformX(AX: Double): Extended;
 begin
   if FitEquation in [fePower] then
-    Result := ln(AX)
-  else
+  begin
+    if AX > 0 then
+      Result := ln(AX)
+    else
+      Result := SafeNaN;
+  end else
     Result := AX;
 end;
 
 function TFitSeries.TransformY(AY: Double): Extended;
 begin
   if FitEquation in [feExp, fePower] then
-    Result := ln(AY)
-  else
+  begin
+    if AY > 0 then
+      Result := ln(AY)
+    else
+      Result := SafeNaN;
+  end else
     Result := AY;
 end;
+
 
 { TCustomColorMapSeries }
 
@@ -2555,8 +2610,8 @@ begin
     ADrawer.SetPenParams(psClear, clTAColor);
   end;
 
-  scaled_stepX := IfThen(StepX > 1, Max(1, ADrawer.Scale(StepX)), 1);
-  scaled_stepY := IfThen(StepY > 1, Max(1, ADrawer.Scale(StepY)), 1);
+  scaled_stepX := Math.IfThen(StepX > 1, Max(1, ADrawer.Scale(StepX)), 1);
+  scaled_stepY := Math.IfThen(StepY > 1, Max(1, ADrawer.Scale(StepY)), 1);
 
   GetZRange(r, scaled_stepX, scaled_stepY);
 
@@ -2629,7 +2684,7 @@ procedure TCustomColorMapSeries.GetLegendItems(AItems: TChartLegendItems);
 
   function PrepareFormats: TStrings;
   begin
-    Result := Split(IfThen(Legend.Format = '', DEF_COLORMAP_LEGENDFORMAT, Legend.Format));
+    Result := Split(StrUtils.IfThen(Legend.Format = '', DEF_COLORMAP_LEGENDFORMAT, Legend.Format));
     with Result do
       try
         while Count < 3 do

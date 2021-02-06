@@ -33,9 +33,13 @@ interface
 uses
   Classes, SysUtils, Math,
   // LCL
-  LCLProc, Graphics, GraphType, Forms, Controls,
+  Graphics, Forms, Controls,
+  // LazUtils
+  GraphType, LazLoggerBase,
   // IdeIntf
-  FormEditingIntf, CustomNonFormDesigner;
+  FormEditingIntf,
+  // IDE
+  CustomNonFormDesigner;
   
 type
 
@@ -103,7 +107,7 @@ procedure TNonControlDesignerForm.SetBounds(aLeft, aTop, aWidth,
   aHeight: integer);
 begin
   inherited SetBounds(ALeft, ATop, AWidth, AHeight);
-  if Mediator<>nil then
+  if (Mediator<>nil) and (LookupRoot<>nil) then
     Mediator.SetFormBounds(LookupRoot,NonFormProxyDesignerForm.BoundsRect,NonFormProxyDesignerForm.ClientRect);
 end;
 

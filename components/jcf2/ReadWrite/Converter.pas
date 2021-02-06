@@ -37,10 +37,11 @@ unit Converter;
 interface
 
 uses
-  { delphi } SysUtils, Controls, Forms,
-  { local } ConvertTypes, ParseTreeNode,
-  BuildTokenList,
-  BuildParseTree, BaseVisitor;
+  SysUtils, strutils,
+  // LCL
+  Controls, Forms,
+  // local
+  ConvertTypes, ParseTreeNode, BuildTokenList, BuildParseTree, BaseVisitor;
 
 type
 
@@ -65,7 +66,7 @@ type
     { false for commandline UI - don't put up a parse fail dialog
       This could be in  batch file on a server }
     fbGuiMessages: Boolean;
-
+    fbShowParseTree: Boolean;
     {$IFNDEF COMMAND_LINE}
     leOldCursor: TCursor;
     {$ENDIF}
@@ -89,7 +90,9 @@ type
 
     procedure Clear;
     procedure Convert;
-    procedure ConvertPart(const piStartIndex, piEndIndex: Integer);
+    procedure ConvertPart(const piStartIndex, piEndIndex: Integer;
+                          aOnlyOutputSelection: boolean=false);
+    procedure ConvertUsingFakeUnit;
 
     procedure CollectOutput(const pcRoot: TParseTreeNode);
 
@@ -105,6 +108,7 @@ type
 
     property OnStatusMessage: TStatusMessageProc Read GetOnStatusMessage Write SetOnStatusMessage;
     property SingleProcess: TTreeNodeVisitorType Read fcSingleProcess Write fcSingleProcess;
+    property ShowTree: boolean Read fbShowParseTree Write fbShowParseTree;	
   end;
 
 implementation
@@ -175,7 +179,8 @@ begin
         // make a parse tree from it
         fcBuildParseTree.TokenList := lcTokenList;
         fcBuildParseTree.BuildParseTree;
-
+        if fbShowParseTree then
+           ShowParseTree;
       except
         on E: Exception do
         begin
@@ -298,17 +303,10 @@ begin
 
   // is it a leaf with source?
   if (pcRoot is TSourceToken) then
-  begin
-    fsOutputCode := fsOutputCode + TSourceToken(pcRoot).SourceCode;
-  end
-  else
-  begin
-    // recurse, write out all child nodes
+    fsOutputCode := fsOutputCode + TSourceToken(pcRoot).SourceCode
+  else  // recurse, write out all child nodes
     for liLoop := 0 to pcRoot.ChildNodeCount - 1 do
-    begin
       CollectOutput(pcRoot.ChildNodes[liLoop]);
-    end;
-  end;
 end;
 
 function TConverter.GetOnStatusMessage: TStatusMessageProc;
@@ -328,8 +326,7 @@ var
   leParseError:  TEParseError;
   leMessageType: TStatusMessageType;
 begin
-  lsMessage := 'Exception ' + pe.ClassName +
-    '  ' + pe.Message;
+  lsMessage := 'Exception ' + pe.ClassName + '  ' + pe.Message;
 
   if pe is TEParseError then
   begin
@@ -365,7 +362,8 @@ begin
     fShowParseTree.ShowParseTree(fcBuildParseTree.Root);
 end;
 
-procedure TConverter.ConvertPart(const piStartIndex, piEndIndex: Integer);
+procedure TConverter.ConvertPart(const piStartIndex, piEndIndex: Integer;
+                                 aOnlyOutputSelection: boolean);
 const
   FORMAT_START = '{<JCF_!*$>}';
   FORMAT_END   = '{</JCF_!*$>}';
@@ -394,22 +392,122 @@ begin
 
   { put markers into the input }
   fsInputCode := StrInsert(FORMAT_END, fsInputCode, liRealInputEnd);
-  fsInputCode := StrInsert(FORMAT_START, fsInputCode, liRealInputStart);
-
+  { add a new line after FORMAT_START, prevents bad formating of first selected line. }
+  fsInputCode := StrInsert(FORMAT_START+#10, fsInputCode, liRealInputStart);
   Convert;
-
-  { locate the markers in the output,
-    and replace before and after }
+  { locate the markers in the output, and replace before and after }
   liOutputStart := Pos(FORMAT_START, fsOutputCode) + Length(FORMAT_START);
-  liOutputEnd   := Pos(FORMAT_END, fsOutputCode);
-
-
+  {remode new line added after FORMAT_START }
+  if (liOutputStart<length(fsOutputCode)) and (fsOutputCode[liOutputStart]=#13) then
+    inc(liOutputStart);
+  if (liOutputStart<length(fsOutputCode)) and (fsOutputCode[liOutputStart]=#10) then
+    inc(liOutputStart);
+  liOutputEnd   := PosEx(FORMAT_END, fsOutputCode,liOutputStart);
   { splice }
-  lsNewOutput := StrLeft(fsInputCode, liRealInputStart - 1);
-  lsNewOutput := lsNewOutput + Copy(fsOutputCode, liOutputStart, (liOutputEnd - liOutputStart));
-  lsNewOutput := lsNewOutput + StrRestOf(fsInputCode, liRealInputEnd + Length(FORMAT_START) + Length(FORMAT_END));
-
+  if aOnlyOutputSelection then
+    lsNewOutput := Copy(fsOutputCode, liOutputStart, (liOutputEnd - liOutputStart))
+  else begin
+    lsNewOutput := StrLeft(fsInputCode, liRealInputStart - 1);
+    lsNewOutput := lsNewOutput + Copy(fsOutputCode, liOutputStart, (liOutputEnd - liOutputStart));
+    lsNewOutput := lsNewOutput + StrRestOf(fsInputCode, liRealInputEnd + Length(FORMAT_START) + Length(FORMAT_END));
+  end;
   fsOutputCode := lsNewOutput;
+end;
+
+{ position on we insert selected CODE depending if the CODE contains interface
+  and/or implementation
+
+hasIterface     F      F      T      T
+hasImplemen.    F      T      F      T
+-----------------------------------------
+              +unit  +unit  +unit  +unit
+              +intf  +intf  CODE   CODE
+              +impl  CODE   +impl  +end.
+              CODE   +end.  +end.
+              +end.
+}
+
+// convert only formats complete units
+// so we wrap the selected code in a fake unit.
+// Only works if the inputCode include the full procedure,function,class or record declaration.
+// Needed for formating include files or part of a file with tokens not supported by
+// the jedi code format parser.
+// {$I %DATE%} for example.
+procedure TConverter.ConvertUsingFakeUnit;
+const
+  END_MARK_INTERFACE = 'tfaketjcf_intfc_end_mark;';        //<lower case required
+  END_MARK_IMPLEMENTATION = 'tfaketjcf_implm_end_mark;'; //<lower case required
+  FAKE_UNIT_NAME = 'fakeunitjcf;'; //<lower case required
+var
+  sourceCode: string;
+  sourceCodeLowerCase: string;
+  lcStartIndex, lcEndIndex: integer;
+  hasInterface, hasImplementation: boolean;
+
+  procedure AddFakeUnit;
+  begin
+    sourceCode := sourceCode + 'unit ' + FAKE_UNIT_NAME + #10;
+  end;
+
+  procedure AddFakeInterface;
+  begin
+    sourceCode := sourceCode + 'interface' + #10;
+    sourceCode := sourceCode + 'type' + #10;        // if there is only a class selected this is required
+    sourceCode := sourceCode + 'faketjcfifc=' + END_MARK_INTERFACE + #10;
+  end;
+
+  procedure AddFakeImplementation;
+  begin
+    sourceCode := sourceCode + 'implementation' + #10;
+    sourceCode := sourceCode + 'type' + #10;
+    sourceCode := sourceCode + 'faketjcfimpl=' + END_MARK_IMPLEMENTATION + #10;
+  end;
+
+  procedure AddFakeEnd;
+  begin
+    sourceCode := sourceCode + #10 + 'end.' + #10;
+  end;
+
+begin
+  //WRAPPING the inputCode in a fake unit
+  sourceCodeLowerCase := LowerCase(fsInputCode);
+  hasInterface := HasStringAtLineStart(sourceCodeLowerCase, 'interface');
+  hasImplementation := HasStringAtLineStart(sourceCodeLowerCase, 'implementation');
+  sourceCode := '';
+  AddFakeUnit;
+  if hasInterface = False then
+  begin
+    AddFakeInterface;
+    if hasImplementation = False then
+      AddFakeImplementation;
+  end;
+  sourceCode := sourceCode + fsInputCode;
+  if (hasInterface = True) and (hasImplementation = False) then
+    AddFakeImplementation;
+  AddFakeEnd;
+  fsInputCode:=sourceCode;
+  Convert;
+  if ConvertError = False then
+  begin
+    sourceCodeLowerCase := LowerCase(OutputCode);
+    //DELETE FAKE lines from output
+    if hasInterface then
+      lcStartIndex := Pos(FAKE_UNIT_NAME, sourceCodeLowerCase) + length(FAKE_UNIT_NAME)
+    else
+    begin
+      if hasImplementation then
+        lcStartIndex := Pos(END_MARK_INTERFACE, sourceCodeLowerCase) + length(END_MARK_INTERFACE)
+      else
+        lcStartIndex := Pos(END_MARK_IMPLEMENTATION, sourceCodeLowerCase) + length(END_MARK_IMPLEMENTATION);
+    end;
+    lcStartIndex := SkipToNextLine(sourceCodeLowerCase, lcStartIndex);
+    if hasInterface and not hasImplementation then
+      lcEndIndex := RPos('implementation', sourceCodeLowerCase)
+    else
+      lcEndIndex := RPos('end', sourceCodeLowerCase);
+    lcEndIndex := SkipLeftSpaces(sourceCodeLowerCase, lcEndIndex);
+    fsOutputCode:=Copy(OutputCode, lcStartIndex, lcEndIndex - lcStartIndex);
+  end;
 end;
 
 end.

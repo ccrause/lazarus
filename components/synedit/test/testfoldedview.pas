@@ -14,7 +14,7 @@ uses
   Classes, SysUtils, math, testregistry, TestBase, TestHighlightPas, Forms,
   LCLProc, SynEdit, SynHighlighterPas, SynEditFoldedView,
   SynEditHighlighterFoldBase, SynGutterCodeFolding, SynEditKeyCmds,
-  SynEditTypes;
+  SynEditTypes, SynEditMiscProcs;
 
 type
 
@@ -163,10 +163,10 @@ begin
   i := 0;
   while i < high(AExpectedPairs)-1 do begin
     AssertEquals(AName+' TxtIdx('+IntToStr( AExpectedPairs[i])+') to ViewPos[1-based]('+IntToStr( AExpectedPairs[i+1])+') ',
-                 AExpectedPairs[i+1], FoldedView.TextIndexToViewPos(AExpectedPairs[i]));
+                 AExpectedPairs[i+1], ToPos(FoldedView.TextToViewIndex(AExpectedPairs[i])));
     if ADoReverse then
       AssertEquals(AName+' ViewPos[1-based]('+IntToStr( AExpectedPairs[i+1])+') to TxtIdx('+IntToStr( AExpectedPairs[i])+') [R]',
-                 AExpectedPairs[i], FoldedView.ViewPosToTextIndex(AExpectedPairs[i+1]));
+                 AExpectedPairs[i], FoldedView.ViewToTextIndex(ToIdx(AExpectedPairs[i+1])));
     inc(i, 2);
   end;
 end;
@@ -178,10 +178,10 @@ begin
   i := 0;
   while i < high(AExpectedPairs)-1 do begin
     AssertEquals(AName+' ViewPos[1-based]('+IntToStr( AExpectedPairs[i])+') to TxtIdx('+IntToStr( AExpectedPairs[i+1])+')',
-                 AExpectedPairs[i+1], FoldedView.ViewPosToTextIndex(AExpectedPairs[i]));
+                 AExpectedPairs[i+1], FoldedView.ViewToTextIndex(ToIdx(AExpectedPairs[i])));
     if ADoReverse then
       AssertEquals(AName+' TxtIdx('+IntToStr( AExpectedPairs[i+1])+') to ViewPos[1-based]('+IntToStr( AExpectedPairs[i])+') [R]',
-                 AExpectedPairs[i], FoldedView.TextIndexToViewPos(AExpectedPairs[i+1]));
+                 AExpectedPairs[i], ToPos(FoldedView.TextToViewIndex(AExpectedPairs[i+1])));
     inc(i, 2);
   end;
 end;
@@ -229,7 +229,7 @@ var
   var I: Integer;
   begin
     Result :=  '';
-    for i := 0 to FoldedView.Count - 1 do  Result := Result + FoldedView[i] + LineEnding;
+    for i := 0 to FoldedView.ViewedCount - 1 do  Result := Result + FoldedView.ViewedLines[i] + LineEnding;
   end;
 begin
   PushBaseName(AName);
@@ -301,7 +301,8 @@ end;
 procedure TTestFoldedView.ReCreateEdit;
 begin
   inherited ReCreateEdit;
-  FoldedView := SynEdit.TextView;
+  //FoldedView := SynEdit.TextView;
+  FoldedView := TSynEditFoldedView(SynEdit.TextViewsManager.SynTextViewByClass[TSynEditFoldedView]);
   if DoAllowScrollPastEof then SynEdit.Options := SynEdit.Options + [eoScrollPastEof];
   EnableFolds([cfbtBeginEnd.. cfbtNone], [cfbtSlashComment]);
 end;
@@ -885,10 +886,10 @@ procedure TTestFoldedView.TestFold;
      TstFold('fold 3rd', 5, [0, 1, 2, 3, 5]);
 
    TstSetText('Text5 consecutive begin (long distance)', TestText5);
-    AssertEquals(FoldedView.Count, 4999);
+    AssertEquals(FoldedView.ViewedCount, 4999);
     FoldedView.FoldAtTextIndex(1);
     FoldedView.FoldAtTextIndex(4900);
-    AssertEquals(FoldedView.Count, 4999-2);
+    AssertEquals(FoldedView.ViewedCount, 4999-2);
   {%endregion}
 
   {%region Text7 fold at indes, skip, ...}
@@ -1655,9 +1656,9 @@ begin
      DebugLn(MyDbg(SynEdit.FoldState));
 
   TstSetText('Text5 consecutive begin (long distance)', TestText5);
-  AssertEquals(FoldedView.Count, 4999);
+  AssertEquals(FoldedView.ViewedCount, 4999);
   SynEdit.FoldState := ' T01A1 p0j*eA1i';
-  AssertEquals(FoldedView.Count, 4999-2);
+  AssertEquals(FoldedView.ViewedCount, 4999-2);
 end;
 
 procedure TTestFoldedView.TestFoldStateDesc;
@@ -1711,7 +1712,7 @@ begin
   SetLines(TestTextPlain);
   SetCaretAndSel(1,5, 2,6);
   FoldedView.FoldAtTextIndex(4, 0, 1, False, 0);
-  AssertEquals(FoldedView.Count, 8);
+  AssertEquals(FoldedView.ViewedCount, 8);
 
   FoldedView.GetFoldDescription(0, 0, -1, -1, True,  False);
   FoldedView.GetFoldDescription(0, 0, -1, -1, False, False);
@@ -1723,7 +1724,7 @@ begin
   SetLines(TestTextPlain);
   FoldedView.FoldAtTextIndex(0);
   FoldedView.FoldAtTextIndex(7);
-  AssertEquals(FoldedView.Count, 6);
+  AssertEquals(FoldedView.ViewedCount, 6);
 
   a1 := FoldedView.GetFoldDescription(0, 0, -1, -1, True,  False);
   a2 := FoldedView.GetFoldDescription(0, 0, -1, -1, False, False);
@@ -1732,7 +1733,7 @@ begin
 
   SetCaretAndSel(1,5, 2,6);
   FoldedView.FoldAtTextIndex(4, 0, 1, False, 0);
-  AssertEquals(FoldedView.Count, 4);
+  AssertEquals(FoldedView.ViewedCount, 4);
 
   TestCompareString('1', a1, FoldedView.GetFoldDescription(0, 0, -1, -1, True,  False));
   TestCompareString('2', a2, FoldedView.GetFoldDescription(0, 0, -1, -1, False, False));

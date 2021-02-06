@@ -86,6 +86,9 @@ type
     modals : NSMutableDictionary;
     inputclient : TCocoaInputClient;
     inputctx    : NSTextInputContext;
+    {$ifdef COCOAPPRUNNING_OVERRIDEPROPERTY}
+    Stopped : Boolean;
+    {$endif}
 
     procedure dealloc; override;
     {$ifdef COCOALOOPOVERRIDE}
@@ -96,6 +99,10 @@ type
 
     function runModalForWindow(theWindow: NSWindow): NSInteger; override;
     procedure lclSyncCheck(arg: id); message 'lclSyncCheck:';
+    {$ifdef COCOAPPRUNNING_OVERRIDEPROPERTY}
+    function isRunning: {$if FPC_FULLVERSION >= 30200}objc.ObjCBOOL{$else}Boolean{$endif}; override;
+    procedure stop(sender: id); override;
+    {$endif}
   end;
 
   { TModalSession }
@@ -264,6 +271,16 @@ function CocoaPromptUser(const DialogCaption, DialogMessage: String;
     DialogType: longint; Buttons: PLongint; ButtonCount, DefaultIndex,
     EscapeResult: Longint;
     sheetOfWindow: NSWindow = nil; modalSheet: Boolean = false): Longint;
+
+// The function tries to initialize the proper application class.
+// The desired application class can be specified in info.plit
+// by specifying NSPrincipalClass property.
+// If then principal class has been found (in the bundle binaries)
+// InitApplication function will try to call its "sharedApplication" method.
+// If principle class is not specified, then TCocoaApplication is used.
+// You should always specify either TCocoaApplication or
+// a class derived from TCocoaApplication, in order for LCL to fucntion properly
+function InitApplication: TCocoaApplication;
 
 implementation
 
@@ -445,6 +462,9 @@ end;
 {$ifdef COCOALOOPOVERRIDE}
 procedure TCocoaApplication.run;
 begin
+  {$ifdef COCOAPPRUNNING_SETINTPROPERTY}
+  setValue_forKey(NSNumber.numberWithBool(true), NSSTR('_running'));
+  {$endif}
   aloop();
 end;
 {$endif}
@@ -523,6 +543,7 @@ begin
           else
             wnd := nil;
 
+          {$ifndef CPUPOWERPC}
           if (theEvent.type_ = NSKeyDown)
             and not (win.firstResponder.conformsToProtocol(objcprotocol(NSTextInputClientProtocol))) then
           begin
@@ -533,6 +554,7 @@ begin
             end;
             inputctx.handleEvent(theEvent);
           end;
+          {$endif}
 
           cb.KeyEvBefore(theEvent, allowcocoa);
           if allowcocoa then
@@ -676,6 +698,18 @@ begin
   {$endif}
 end;
 
+{$ifdef COCOAPPRUNNING_OVERRIDEPROPERTY}
+function TCocoaApplication.isRunning: {$if FPC_FULLVERSION >= 30200}objc.ObjCBOOL{$else}Boolean{$endif};
+begin
+  Result:=not Stopped;
+end;
+
+procedure TCocoaApplication.stop(sender: id);
+begin
+  Stopped := true;
+  inherited stop(sender);
+end;
+{$endif}
 
 procedure InternalInit;
 begin
@@ -691,6 +725,22 @@ begin
     MainPool.release;
     MainPool := nil;
   end;
+end;
+
+type
+  AppClassMethod = objccategory external (NSObject)
+    function sharedApplication: NSApplication; message 'sharedApplication';
+  end;
+
+function InitApplication: TCocoaApplication;
+var
+  bun : NSBundle;
+begin
+  bun := NSBundle.mainBundle;
+  if Assigned(bun) and Assigned(bun.principalClass) then
+    Result := TCocoaApplication(NSObject(bun.principalClass).sharedApplication)
+  else
+    Result := TCocoaApplication(TCocoaApplication.sharedApplication);
 end;
 
 // the implementation of the utility methods

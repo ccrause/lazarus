@@ -17,8 +17,7 @@
   {enable this define if you have problems when dialogs are shown behind application}
   {.$DEFINE TQTMESSAGEBOXUSEPARENT}
   {$ENDIF}
-  {$IFDEF HASX11}
-  {.$DEFINE QtUseAccurateFrame}
-  {.$DEFINE DebugQtUseAccurateFrame}
-  {$ENDIF}
+  {enable this define if you have Qt build with "QT_NO_SESSIONMANAGER" for example Somlabs i.MX8 with Wayland }
+  {defined on Qt side in file "qtgui-config.h"}
+  {.$DEFINE QT_NO_SESSIONMANAGER}
 {$ENDIF}

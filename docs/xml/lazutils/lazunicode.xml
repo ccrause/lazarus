@@ -37,11 +37,13 @@
           Copies the specified number of codepoints starting at a character position
         </short>
         <descr>
-          Copies the number of codepoints in CharCount from s, starting at the character position in StartCharIndex. For platforms that require UTF-16, UTF16Copy is called. For other platforms, UTF8Copy is called.
+          <p>
+            Copies the number of codepoints in <var>CharCount</var> from <var>s</var>, starting at the character position in <var>StartCharIndex</var>. For platforms that require UTF-16, <var>UTF16Copy</var> is called. For other platforms, <var>UTF8Copy</var> is called.
+          </p>
         </descr>
         <seealso>
-          <link id="#lcl.LazUtils.LazUTF16.UTF16Copy">UTF16Copy</link>
-          <link id="#lcl.LazUtils.LazUTF8.UTF8Copy">UTF8Copy</link>
+          <link id="#lazutils.lazutf16.UTF16Copy">UTF16Copy</link>
+          <link id="#lazutils.lazutf8.UTF8Copy">UTF8Copy</link>
         </seealso>
       </element>
       <!-- function result Visibility: default -->
@@ -242,7 +244,7 @@
             Raises an assertion error if the number of bytes in aCount is 0 (zero). Raised with the message 'TUnicodeEnumeratorBase.UpdateCurrent: aCount=0'.
           </p>
           <p>
-            Raises an assertion error if the length of bytes copied to Current is different that the valuer in aCount. Raised with the message 'TUnicodeEnumeratorBase.UpdateCurrent: Length(fCurrent)&lt;&gt;aCount.')'.
+            Raises an assertion error if the length of bytes copied to Current is different that the value in aCount. Raised with the message 'TUnicodeEnumeratorBase.UpdateCurrent: Length(fCurrent)&lt;&gt;aCount.')'.
           </p>
         </errors>
       </element>
@@ -364,7 +366,7 @@
           Enumerator which combines diacritical marks
         </short>
         <descr>
-          Operator that allows in For ... In loops. This enumerator combines diacritical marks. It is used by default although there are more rules for combining codepoints. Diacritical marks cover rules for most western languages.
+          Operator enables For ... In loops. This enumerator combines diacritical marks. It is used by default although there are more rules for combining codepoints. Diacritical marks cover rules for most western languages.
         </descr>
       </element>
       <element name="Enumerator.Result">
@@ -373,7 +375,6 @@
       <element name="Enumerator.A">
         <short>Values to traverse in the enumerator</short>
       </element>
-
 
     </module>
     <!-- LazUnicode -->

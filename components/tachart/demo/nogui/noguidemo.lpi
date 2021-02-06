@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
-  <ProjectOptions BuildModesCount="1">
+  <ProjectOptions>
     <Version Value="12"/>
     <PathDelim Value="\"/>
     <General>
       <Flags>
         <MainUnitHasCreateFormStatements Value="False"/>
         <MainUnitHasTitleStatement Value="False"/>
+        <MainUnitHasScaledStatement Value="False"/>
+        <CompatibilityMode Value="True"/>
       </Flags>
       <SessionStorage Value="InProjectDir"/>
       <ResourceType Value="res"/>
@@ -17,8 +19,8 @@
     <MacroValues Count="1">
       <Macro1 Name="LCLWidgetType" Value="nogui"/>
     </MacroValues>
-    <BuildModes>
-      <Item1 Name="Default" Default="True"/>
+    <BuildModes Count="1">
+      <Item1 Name="default" Default="True"/>
       <SharedMatrixOptions Count="1">
         <Item1 ID="909616661520" Modes="Default" Type="IDEMacro" MacroName="LCLWidgetType" Value="nogui"/>
       </SharedMatrixOptions>
@@ -45,6 +47,7 @@
       <Unit1>
         <Filename Value="..\..\tadrawerfpcanvas.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="TADrawerFPCanvas"/>
       </Unit1>
     </Units>
   </ProjectOptions>

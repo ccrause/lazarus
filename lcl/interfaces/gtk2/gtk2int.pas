@@ -38,18 +38,36 @@ uses
     {$EndIf}
   {$EndIf}
   gdk2pixbuf, gtk2, gdk2, glib2, Pango,
-  // LazUtils
-  LazFileUtils, LazUTF8, DynHashArray, Maps, IntegerList, LazLoggerBase, LazStringUtils,
   // LCL
-  Dialogs, Controls, Forms, LCLStrConsts,
-  LMessages, LCLProc, LCLIntf, LCLType, GraphType, GraphMath,
+  LMessages, LCLProc, LCLIntf, LCLType, Dialogs, Controls, Forms, LCLStrConsts,
   Graphics, Menus, Themes, Buttons, StdCtrls, CheckLst, ComCtrls, ExtCtrls,
   LCLPlatformDef, InterfaceBase,
   WSLCLClasses, WSControls,
-  Gtk2WinApiWindow, Gtk2Globals, Gtk2Proc, Gtk2Def, Gtk2FontCache, Gtk2Extra,
-  Gtk2MsgQueue;
+  Gtk2WinApiWindow, Gtk2Globals, Gtk2Proc, Gtk2Def, Gtk2FontCache, Gtk2Extra, Gtk2MsgQueue,
+  // LazUtils
+  GraphType, GraphMath, LazFileUtils, LazUTF8, DynHashArray, Maps, IntegerList,
+  LazLoggerBase, LazTracer, LazUtilities, LazStringUtils;
 
 type
+
+{$IFDEF HASX}
+  { TDummyWidget }
+
+  TDummyWidget = class(TObject) {needed for accurate frame on x11}
+  private
+    FFrameRect: TRect;
+    FFirstPaintEvent: boolean;
+    FWidget: PGtkWidget;
+  public
+    constructor Create; overload;
+    destructor Destroy; override;
+    function GetWidgetFrame: TRect;
+    function ShowDummyWidget(const ALeft, ATop, AWidth, AHeight: integer): boolean;
+    procedure SendToBack;
+    procedure HideWidget;
+    property Widget: PGtkWidget read FWidget write FWidget;
+  end;
+{$ENDIF}
 
   { TGtk2WidgetSet }
 
@@ -248,6 +266,7 @@ type
   private
     {$IFDEF HASX}
     FDesktopWidget: PGtkWidget;
+    FWSFrameRect: TRect;
     {$ENDIF}
     procedure Gtk2Create;
     procedure Gtk2Destroy;
@@ -285,6 +304,10 @@ type
     {$I gtk2lclintfh.inc}
   public
     {$IFDEF HASX}
+    function CreateDummyWidgetFrame(const ALeft, ATop, AWidth,
+      AHeight: integer): boolean;
+    function GetDummyWidgetFrame: TRect;
+
     function compositeManagerRunning: Boolean;
     function GetDesktopWidget: PGtkWidget;
     //function X11Raise(AHandle: HWND): boolean; currently not used
@@ -527,12 +550,12 @@ end;
  ------------------------------------------------------------------------------}
 procedure TGtkListStoreStringList.Sort;
 var
-  sl: TStringList;
+  sl: TStringListUTF8Fast;
   OldSorted: Boolean;
 begin
   BeginUpdate;
   // sort internally (sorting in the widget would be slow and unpretty ;)
-  sl := TStringList.Create;
+  sl := TStringListUTF8Fast.Create;
   sl.Assign(Self);
   sl.Sort;
   OldSorted := Sorted;
@@ -600,7 +623,7 @@ begin
       // => don't change if the content is already the same
       if Sorted then
       begin
-        CmpList := TStringList.Create;
+        CmpList := TStringListUTF8Fast.Create;
         CmpList.Assign(TStrings(Source));
         TStringList(CmpList).Sort;
       end

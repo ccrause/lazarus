@@ -7,9 +7,9 @@ interface
 uses
   Classes,
   // LCL
-  Forms, ExtCtrls, Grids, StdCtrls, EditBtn, ButtonPanel,
+  Controls, Forms, ExtCtrls, Grids, StdCtrls, EditBtn, ButtonPanel,
   // ProjectTemplates
-  ProjectTemplates;
+  ProjectTemplates, ptstrconst;
 
 type
 
@@ -26,6 +26,8 @@ type
     procedure BOKClick(Sender: TObject);
     procedure FormCreate(Sender: TObject);
     procedure ProjectVariablesFormShow(Sender: TObject);
+    procedure SGVariablesSelectEditor(Sender: TObject; aCol, aRow: Integer;
+      var Editor: TWinControl);
   private
     FSChanged: Boolean;
     FTemplates: TProjectTemplates;
@@ -48,17 +50,6 @@ implementation
 
 {$R *.lfm}
 
-resourcestring
-  SVariable    = 'Variable';
-  SValue       = 'Value';
-  SDescription = 'Description';
-  SNoAdditionalVars = 'This project has no additional variables.';
-  //
-  SNameforProject = '&Name for new project:';
-  SCreateinDir    = 'Create in &directory:';
-  SThisProject    = 'This project contains some additional variables. Please provide values for these variables.';
-  STitle          = 'New project from template';
-
 { TProjectVariablesForm }
 
 procedure TProjectVariablesForm.ProjectVariablesFormShow(Sender: TObject);
@@ -66,6 +57,13 @@ begin
   SGVariables.Cells[0,0]:=SVariable;
   SGVariables.Cells[1,0]:=SValue;
   SGVariables.Cells[2,0]:=SDescription;
+end;
+
+procedure TProjectVariablesForm.SGVariablesSelectEditor(Sender: TObject; aCol,
+  aRow: Integer; var Editor: TWinControl);
+begin
+  if aCol<>1 then
+    Editor:=nil;
 end;
 
 procedure TProjectVariablesForm.BOKClick(Sender: TObject);
@@ -86,12 +84,10 @@ end;
 
 procedure TProjectVariablesForm.FormCreate(Sender: TObject);
 begin
-  Caption := STitle;
+  Caption := SNewFromTemplate;
   ProjNameLabel.Caption:= SNameforProject;
   DEDestDirLabel.Caption:= SCreateinDir;
   PDescription.Caption:= SThisProject;
-  ButtonPanel1.CancelButton.Caption:= SbtnCancel;
-  ButtonPanel1.OKButton.Caption:= SbtnOK;
 end;
 
 procedure TProjectVariablesForm.SetVariables(const AValue: TStrings);

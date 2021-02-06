@@ -76,12 +76,20 @@ function DeliverGtkPaintMessage(Target: Pointer; Widget: PGtkWidget;
   Area: PGDKRectangle; RepaintAll, IsAfterGtk: boolean): GBoolean;
 var
   Msg: TLMGtkPaint;
+  AInfo: PWidgetInfo;
 begin
   //DebugLn(['DeliverGtkPaintMessage ',DbgSName(TObject(Target)),' Widget=',GetWidgetDebugReport(Widget),' RepaintAll=',RepaintAll,' AfterGtk=',IsAfterGtk,' Area=',dbgs(Area)]);
   // default is, that a control receives the paint message after gtk (including the child paints)
   // In case of TCustomControl, there is no gtk painting only the
   // child paintings. Let the TCustomControl paint the background.
   // ToDo: Eventually there must be a 'before paint message'.
+
+  if (TObject(Target) is TCustomForm) then
+  begin
+    AInfo := GetWidgetInfo(Widget);
+    AInfo^.FirstPaint := True;
+  end;
+
   if IsAfterGtk then
   begin
     if TObject(Target) is TCustomControl then exit(false);
@@ -416,6 +424,13 @@ procedure gtkchanged_editbox_delete_text(Widget: PGtkWidget; AStartPos,
 var
   id: gPointer;
 begin
+  // delete key pressed, but nothing is deleted (eg. cursor at the end or empty text)
+  if AStartPos = AEndPos then
+  begin
+    g_signal_stop_emission_by_name(Widget, 'delete-text');
+    Exit;
+  end;
+
   id := g_object_get_data(PGObject(Widget), 'lcl-postpone-changed-signal');
   if id = nil then
   begin
@@ -424,11 +439,23 @@ begin
   end;
 end;
 
-procedure gtkchanged_editbox_insert_text(Widget: PGtkWidget; ANewText: gChar;
+procedure gtkchanged_editbox_insert_text(Widget: PGtkWidget; ANewText: PgChar;
   ANewTextLength: gint; APosition: pgint; data: gPointer); cdecl;
 var
   id: gPointer;
+  EntryText: PgChar;
+  LCLObject: TObject;
 begin
+  EntryText := gtk_entry_get_text(PGtkEntry(Widget));
+  LCLObject := TObject(data);
+  if (widget <> nil) and (LCLObject is TCustomEdit) then
+    { NumbersOnly: stop signal if inserted text is not a number }
+    if TCustomEdit(LCLObject).NumbersOnly and not IsNumber(ANewText) then
+    begin
+      gtk_entry_set_text(PGtkEntry(widget), EntryText);
+      g_signal_stop_emission_by_name(Widget, 'insert-text');
+    end;
+
   id := g_object_get_data(PGObject(Widget), 'lcl-postpone-changed-signal');
   if id <> nil then
   begin
@@ -490,20 +517,31 @@ end;
 
 function gtkchanged_editbox_delete(widget: PGtkWidget;
   AType: TGtkDeleteType; APos: gint; data: gPointer): GBoolean; cdecl;
-var
-  EntryText: PgChar;
 begin
   Result := CallBackDefaultReturn;
-  if GTK_IS_ENTRY(Widget) then
-  begin
-    EntryText := gtk_entry_get_text(PGtkEntry(Widget));
-    if (PGtkEntry(Widget)^.current_pos = PGtkEntry(Widget)^.selection_bound)
-    and (PGtkEntry(Widget)^.current_pos = UTF8Length(EntryText)) then
+end;
+
+function gtkpaste_editbox(Widget: PGtkWidget; data: gPointer): GBoolean; cdecl;
+var
+  FClipText: string;
+  FClip: gtk2.PGtkClipboard;
+  LCLObject: TObject;
+begin
+  Result := CallBackDefaultReturn;
+
+  LCLObject := TObject(data);
+  if (widget <> nil) and (LCLObject is TCustomEdit) then
+    { NumbersOnly }
+    if TCustomEdit(LCLObject).NumbersOnly then
     begin
-      g_signal_stop_emission_by_name(Widget, 'delete-from-cursor');
-      Exit;
+      { get clipboard text and stop signal if pasted text is not a number }
+      FClipText := '';
+      FClip := gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+      if (FClip <> nil) and gtk_clipboard_wait_is_text_available(FClip) then
+        FClipText := gtk_clipboard_wait_for_text(FClip);
+      if Assigned(FClip) and not IsNumber(FClipText) then
+        g_signal_stop_emission_by_name(Widget, 'paste-clipboard');
     end;
-  end;
 end;
 
 function gtkdaychanged(Widget: PGtkWidget; data: gPointer) : GBoolean; cdecl;
@@ -1001,14 +1039,20 @@ begin
 
   ResetDefaultIMContext;
 
-  FillChar(Mess{%H-},SizeOf(Mess),0);
-  Mess.msg := LM_KILLFOCUS;
-  // do not release the capture widget here
+  // do not send LM_KILLFOCUS message if widget is destroying itself
+  if Assigned(Data) and
+    not ((csDestroying in TComponent(Data).ComponentState) or
+         (csDestroyingHandle in TControl(Data).ControlState)) then
+  begin
+    FillChar(Mess{%H-},SizeOf(Mess),0);
+    Mess.msg := LM_KILLFOCUS;
+    // do not release the capture widget here
 
-  //TODO: fill in new focus
-  //DebugLn(Format('Trace:TODO: [gtkkillfocusCB] %s  finish', [TObject(Data).ClassName]));
+    //TODO: fill in new focus
+    //DebugLn(Format('Trace:TODO: [gtkkillfocusCB] %s  finish', [TObject(Data).ClassName]));
   
-  DeliverMessage(Data,  Mess);
+    DeliverMessage(Data,  Mess);
+  end;
 
   // do not show selection when widget is unfocused
   // issues #18164,#21897,#23182
@@ -1118,6 +1162,8 @@ begin
           {$ENDIF}
           SizeMsg.SizeType := SIZE_MINIMIZED;
         end
+        else if (GDK_WINDOW_STATE_FULLSCREEN and state^.new_window_state)>0 then
+          SizeMsg.SizeType := SIZE_FULLSCREEN
         else if (GDK_WINDOW_STATE_MAXIMIZED and state^.new_window_state)>0 then
         begin
           // it can be both maximized + iconified and just loose iconified state
@@ -1130,7 +1176,8 @@ begin
         // don't bother the LCL if nothing changed
         case SizeMsg.SizeType of
           SIZE_RESTORED: if TheForm.WindowState=wsNormal then exit;
-          SIZE_MINIMIZED: if TheForm.WindowState=wsMinimized then exit;
+          // Need to send LM_SIZE message to LCL if wsMinimized to trigger onWindowStateChange()
+          //SIZE_MINIMIZED: if TheForm.WindowState=wsMinimized then exit;
           SIZE_MAXIMIZED: if TheForm.WindowState=wsMaximized then exit;
           SIZE_FULLSCREEN: if TheForm.WindowState=wsFullScreen then exit;
         end;

@@ -132,7 +132,7 @@ type
 implementation
 
 uses qtint, LCLIntf
-  {$IF DEFINED(VerboseQtResize) OR DEFINED(DEBUGQTUSEACCURATEFRAME)}, LCLProc{$ENDIF}
+  {$IF DEFINED(VerboseQtResize)}, LCLProc{$ENDIF}
   ;
 
 { TQtWSCustomFrame }
@@ -186,6 +186,9 @@ var
   Str: WideString;
   APopupParent: TCustomForm;
   AForm: TCustomForm;
+  {$IFDEF HASX11}
+  AWindowManager: String;
+  {$ENDIF}
 begin
   {$ifdef VerboseQt}
     WriteLn('[TQtWSCustomForm.CreateHandle] Height: ', IntToStr(AWinControl.Height),
@@ -231,9 +234,19 @@ begin
       QtMainWindow.setRealPopupParent(TQtWidget(APopupParent.Handle).Widget);
   end;
 
-  {$IFDEF QtUseAccurateFrame}
-  if QtMainWindow.IsFramedWidget then
-    QtMainWindow.FrameMargins := QtWidgetSet.WSFrameMargins;
+  {$IFDEF HASX11}
+  if QtMainWindow.IsMainForm and not Application.HasOption('disableaccurateframe') then
+  begin
+    (*
+    AWindowManager := LowerCase(GetWindowManager);
+    //Kwin,Openbox,wmaker-common - ok
+    if Application.HasOption('hideaccurateframe') or not
+    ( (AWindowManager = 'kwin') or (AWindowManager = 'openbox') or (AWindowManager = 'wmaker-common') ) then
+      QtWidgetSet.CreateDummyWidgetFrame(AWinControl.Left, AWinControl.Top, AWinControl.Width, AWinControl.Height)
+    else
+    *)
+    QtWidgetSet.CreateDummyWidgetFrame(-1, -1, -1, -1); {only mentioned window managers literally move dummy widget out of screen - no flickering}
+  end;
   {$ENDIF}
 
   // Sets Various Events
@@ -630,9 +643,6 @@ begin
   Widget.EndUpdate;
 
   {$IFDEF HASX11}
-  if AWinControl.HandleObjectShouldBeVisible then
-    QCoreApplication_processEvents(QEventLoopAllEvents);
-
   if (Application.TaskBarBehavior = tbSingleButton) or
     (TForm(AWinControl).ShowInTaskBar <> stDefault) then
       SetShowInTaskbar(TForm(AWinControl), TForm(AWinControl).ShowInTaskBar);
@@ -1016,16 +1026,6 @@ begin
   Result := False;
   if AWinControl.HandleAllocated then
   begin
-    {$IFDEF QTUSEACCURATEFRAME}
-    if TQtMainWindow(AWinControl.Handle).IsFramedWidget then
-    begin
-      AClientRect := TQtMainWindow(AWinControl.Handle).getClientBounds;
-      {$IFDEF DEBUGQTUSEACCURATEFRAME}
-      DebugLn(Format('******TQtWSCustomForm.GetDefaultClientRect(%s): %s LCL l %d t %d w %d h %d',[dbgsName(AWinControl), dbgs(AClientRect), ALeft, ATop, aWidth, AHeight]));
-      {$ENDIF}
-      Result := True;
-    end else
-    {$ENDIF}
     if TQtMainWindow(AWinControl.Handle).testAttribute(QtWA_PendingResizeEvent) then
     begin
       if Assigned(TCustomForm(AWinControl).Menu) then

@@ -33,6 +33,10 @@ actions directory:
 	previous_word.png
 	restore_default.png
 	restore_defaults.png
+	tab_close_All.png
+	tab_close_L.png
+	tab_close_LR.png
+	tab_close_R.png
 
 debugger directory:
 	debugger_call_stack.png
@@ -53,6 +57,9 @@ designer directory:
 	tab_order.png
 
 items directory:
+	datamodule_designer.png    (used 'tdatasource.png' created by Roland Hahn)
+	form_designer.png
+	frame_designer.png
 	item_form.png
 	item_project.png
 	item_project_source.png

@@ -244,7 +244,7 @@ type
     FOnFinish: TNotifyEvent;
     procedure BreakSetSuccess(Sender: TObject);
     procedure DoFailed(Sender: TObject);
-    procedure DoFinshed(Sender: TObject);
+    procedure DoFinished(Sender: TObject);
     procedure QueueInstruction(AnInstr: TLldbInstruction);
   public
     constructor Create(AName: String; ADebugger: TLldbDebugger; ABeforePrologue: Boolean = False);
@@ -362,7 +362,7 @@ type
     function  GetTargetWidth: Byte; override;
 
     function GetIsIdle: Boolean; override;
-    function  GetSupportedCommands: TDBGCommands; override;
+    class function  GetSupportedCommands: TDBGCommands; override;
     //function  GetCommands: TDBGCommands; override;
     function  RequestCommand(const ACommand: TDBGCommand;
               const AParams: array of const;
@@ -927,7 +927,7 @@ const
       exit;
     end;
 
-    Debugger.DoException(deRunError, ExceptName, Debugger.FCurrentLocation, '', CanContinue);
+    Debugger.DoException(deRunError, ExceptName, Debugger.FCurrentLocation, Debugger.RunErrorText[ErrNo], CanContinue);
     if CanContinue
     then begin
       FState := crStoppedRaise;
@@ -1456,7 +1456,7 @@ begin
     exit;
 
   RunCmd := Debugger.CommandQueue.RunningCommand;
-  if (RunCmd <> nil) and (RunCmd is TLldbDebuggerCommandRun) then begin
+  if RunCmd is TLldbDebuggerCommandRun then begin
     Instr := TLldbDebuggerCommandRun(RunCmd).FThreadInstr;
     if (Instr <> nil) and Instr.IsSuccess then begin
       // FThreadInstr, may have the wrong thread marked. Use Debugger.FCurrentThreadId (which should not have changed since the RunCommand set it)
@@ -2616,7 +2616,7 @@ end;
 
 procedure TlldbInternalBreakPoint.QueueInstruction(AnInstr: TLldbInstruction);
 begin
-  AnInstr.OnFinish := @DoFinshed;
+  AnInstr.OnFinish := @DoFinished;
   FDebugger.DebugInstructionQueue.QueueInstruction(AnInstr);
   AnInstr.ReleaseReference;
 end;
@@ -2634,7 +2634,7 @@ begin
     OnFail(Self);
 end;
 
-procedure TlldbInternalBreakPoint.DoFinshed(Sender: TObject);
+procedure TlldbInternalBreakPoint.DoFinished(Sender: TObject);
 begin
   FDwarfLoadErrors := TLldbInstruction(Sender).DwarfLoadErrors;
   if OnFinish <> nil then
@@ -2985,11 +2985,11 @@ begin
   Result := FInIdle or ( (CommandQueue.Count = 0) and (CommandQueue.RunningCommand = nil) );
 end;
 
-function TLldbDebugger.GetSupportedCommands: TDBGCommands;
+class function TLldbDebugger.GetSupportedCommands: TDBGCommands;
 begin
   Result := [dcRun, dcStop, dcStepOver, dcStepInto, dcStepOut, dcEvaluate,
              dcStepOverInstr, dcStepIntoInstr, dcPause, dcEnvironment];
-//  Result := [dcRunTo, dcAttach, dcDetach, dcJumpto,
+//  Result := [dcStepTo, dcAttach, dcDetach, dcJumpto,
 //             dcBreak, dcWatch, dcLocal, dcEvaluate, dcModify,
 //             dcSetStackFrame, dcDisassemble
 //            ];
@@ -3018,7 +3018,7 @@ begin
                        Result := LldbEvaluate(String(AParams[0].VAnsiString),
                          EvalFlags, TDBGEvaluateResultCallback(ACallback));
                      end;
-//      dcRunTo:       Result := GDBRunTo(String(AParams[0].VAnsiString), AParams[1].VInteger);
+//      dcStepTo:       Result := GDBRunTo(String(AParams[0].VAnsiString), AParams[1].VInteger);
 //      dcJumpto:      Result := GDBJumpTo(String(AParams[0].VAnsiString), AParams[1].VInteger);
 //      dcAttach:      Result := GDBAttach(String(AParams[0].VAnsiString));
 //      dcDetach:      Result := GDBDetach;

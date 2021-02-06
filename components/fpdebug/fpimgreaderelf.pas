@@ -32,10 +32,10 @@ interface
 
 uses
   Classes, SysUtils,
-  FpImgReaderBase,
-  fpDbgSymTable, DbgIntfBaseTypes,
-  FpImgReaderElfTypes, LCLProc,  // these files are part of
-  FpDbgCommon;
+  LazUTF8, LazLoggerBase,
+  DbgIntfBaseTypes,
+  // FpDebug
+  FpImgReaderBase, fpDbgSymTable, FpImgReaderElfTypes, FpDbgCommon;
 
 type
   TElfSection = packed record
@@ -44,6 +44,7 @@ type
     Address   : QWord;
     Size      : QWord;
   end;
+  PElfSection = ^TElfSection;
 
   { TElfFile }
 
@@ -66,7 +67,7 @@ type
 
   TElfDbgSource = class(TDbgImageReader) // executable parser
   private
-    FSections: TStringList;
+    FSections: TStringListUTF8Fast;
     FFileLoader     : TDbgFileLoader;
     fOwnSource  : Boolean;
     fElfFile    : TElfFile;
@@ -345,7 +346,7 @@ var
   i: Integer;
   fs: TElfSection;
 begin
-  FSections := TStringList.Create;
+  FSections := TStringListUTF8Fast.Create;
   FSections.Sorted := True;
   //FSections.Duplicates := dupError;
   FSections.CaseSensitive := False;
@@ -393,7 +394,10 @@ var
   i: integer;
   SymbolCount: integer;
   SymbolName: AnsiString;
+  SectIdx: Word;
+  Sect: PElfSection;
 begin
+  AfpSymbolInfo.SetAddressBounds(1, High(AFpSymbolInfo.HighAddr)); // always search / TODO: iterate all sections for bounds
   p := Section[_symbol];
   ps := Section[_symbolstrings];
   if assigned(p) and assigned(ps) then
@@ -410,8 +414,16 @@ begin
           {$R-}
           if SymbolArr64^[i].st_name<>0 then
             begin
+            SectIdx := SymbolArr64^[i].st_shndx;
+            if (SectIdx < 0) or (SectIdx >= fElfFile.seccount) then
+              continue;
+            Sect := @fElfFile.sections[SectIdx];
+            if Sect^.Address = 0 then
+              continue; // not loaded, symbol not in memory
+
             SymbolName:=pchar(SymbolStr+SymbolArr64^[i].st_name);
-            AfpSymbolInfo.Add(SymbolName, TDbgPtr(SymbolArr64^[i].st_value+ImageBase));
+            AfpSymbolInfo.Add(SymbolName, TDbgPtr(SymbolArr64^[i].st_value+ImageBase),
+              Sect^.Address + Sect^.Size);
             end;
           {$pop}
         end
@@ -426,8 +438,16 @@ begin
         begin
           if SymbolArr32^[i].st_name<>0 then
             begin
+            SectIdx := SymbolArr64^[i].st_shndx;
+            if (SectIdx < 0) or (SectIdx >= fElfFile.seccount) then
+              continue;
+            Sect := @fElfFile.sections[SectIdx];
+            if Sect^.Address = 0 then
+              continue; // not loaded, symbol not in memory
+
             SymbolName:=pchar(SymbolStr+SymbolArr32^[i].st_name);
-            AfpSymbolInfo.Add(SymbolName, TDBGPtr(SymbolArr32^[i].st_value+ImageBase));
+            AfpSymbolInfo.Add(SymbolName, TDBGPtr(SymbolArr32^[i].st_value+ImageBase),
+              Sect^.Address + Sect^.Size);
             end;
         end
       end;

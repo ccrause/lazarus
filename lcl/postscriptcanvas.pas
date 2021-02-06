@@ -45,10 +45,10 @@ uses
   // RTL + FCL
   Classes, SysUtils, strutils, Math, Types, FPImage,
   // LCL
-  Graphics, Forms, GraphMath, GraphType, IntfGraphics, Printers,
-  LCLType, LCLIntf, LCLProc, PostScriptUnicode,
+  LCLType, LCLIntf, LCLProc,
+  Graphics, Forms, IntfGraphics, Printers, PostScriptUnicode,
   // LazUtils
-  LazFileUtils, IntegerList, LazUTF8, LazUTF8Classes;
+  GraphType, GraphMath, LazFileUtils, IntegerList, LazUTF8;
   
 Type
 
@@ -1248,7 +1248,7 @@ begin
   fcPenWidth  :=0;
   fcPenStyle  :=psSolid;
   
-  fHeader:=TStringList.Create;
+  fHeader:=TStringListUTF8Fast.Create;
   fBuffer:=TstringList.Create;
   fDocument:=TStringList.Create;
 
@@ -1270,9 +1270,10 @@ begin
 end;
 
 procedure TPostScriptPrinterCanvas.SaveToFile(aFileName: string);
-Var Lst : TStringListUTF8;
+Var
+  Lst : TStringList;
 begin
-  Lst:=TStringListUTF8.Create;
+  Lst:=TStringList.Create;
   try
      Lst.AddStrings(fHeader);
      Lst.AddStrings(fDocument);

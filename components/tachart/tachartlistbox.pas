@@ -29,8 +29,11 @@ unit TAChartListbox;
 interface
 
 uses
-  Classes, Controls, StdCtrls, Types,
-  TAChartUtils, TACustomSeries, TALegend, TAGraph;
+  Classes, Controls, SysUtils, Types, Math,
+  StdCtrls, Graphics, LCLIntf, LCLType, Themes,
+  IntegerList, LazUTF8,
+  TAChartUtils, TACustomSeries, TALegend, TAGraph,
+  TACustomSource, TADrawerCanvas, TADrawUtils, TAEnumerators, TAGeometry;
 
 
 type
@@ -97,15 +100,17 @@ type
     procedure ClickedSeriesIcon(AIndex: Integer); virtual;
     function CreateLegendItems: TChartLegendItems;
     procedure Notification(AComponent: TComponent; AOperation: TOperation); override;
-    procedure Populate;
 
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
+    procedure ExchangeSeries(AIndex1, AIndex2: Integer);
     function FindSeriesIndex(ASeries: TCustomChartSeries): Integer;
     procedure MeasureItem(AIndex: Integer; var AHeight: Integer); override;
+    procedure Populate;
     procedure RemoveSeries(ASeries: TCustomChartSeries);
     procedure SeriesChanged(ASender: TObject);
+    procedure Sort(Descending: Boolean = false);
 
     property Checked[AIndex: Integer]: Boolean read GetChecked write SetChecked;
     property Series[AIndex: Integer]: TCustomChartSeries read GetSeries;
@@ -190,10 +195,6 @@ procedure Register;
 
 
 implementation
-
-uses
-  Graphics, Math, LCLIntf, LCLType, SysUtils, Themes,
-  TACustomSource, TADrawerCanvas, TADrawUtils, TAEnumerators, TAGeometry;
 
 type
   TThemedStatesUsed = {%H-}tbRadioButtonUnCheckedNormal..tbCheckboxCheckedDisabled;
@@ -435,6 +436,20 @@ begin
   end;
 end;
 
+{ Exchanges the series at the specified listbox indices . }
+procedure TChartListbox.ExchangeSeries(AIndex1, AIndex2: Integer);
+var
+  serIndex1, serIndex2: Integer;
+begin
+  FChart.DisableRedrawing;
+  serIndex1 := Series[AIndex1].Index;
+  serIndex2 := Series[AIndex2].Index;
+  Series[AIndex1].Index := serIndex2;
+  Series[AIndex2].Index := serIndex1;
+  Populate;
+  FChart.EnableRedrawing;
+end;
+
 function TChartListbox.FindSeriesIndex(ASeries: TCustomChartSeries): Integer;
 { searches the internal legend items list for the specified series }
 begin
@@ -560,27 +575,21 @@ begin
 end;
 
 procedure TChartListbox.Populate;
-{ populates the listbox with all series contained in the chart. Use the event
+{ Populates the listbox with all series contained in the chart. Use the event
   OnPopulate if you don't omit special series from the listbox (RemoveSeries) }
 var
   li: TLegendItem;
-  list: TFPList;
-  ser: TCustomChartSeries;
+  list: TIntegerList;
   i, idx: Integer;
 begin
   Items.BeginUpdate;
-  list := TFPList.Create;
+  list := TIntegerList.Create;
   try
     // In case of multiselect, the selected items would get lost here.
     // Store series belonging to selected items in temporary list
     for i:=0 to Items.Count-1 do
-      if Selected[i] then begin
-        li := TLegendItem(Items.Objects[i]);
-        if (li <> nil) and (li.Owner is TCustomChartSeries) then begin
-          ser := TCustomChartSeries(li.Owner);
-          list.Add(ser);
-        end;
-      end;
+      if Selected[i] then
+        list.Add(i);
 
     Items.Clear;
     if (FChart = nil) or (FChart.Series = nil) then exit;
@@ -591,10 +600,8 @@ begin
       // The caption is owner-drawn, but add it anyway for user convenience.
       idx := Items.AddObject(li.Text, li);
       // Restore selected state from temporary list
-      if (li.Owner is TCustomChartSeries) then begin
-        ser := TCustomChartSeries(li.Owner);
-        if list.IndexOf(ser) <> -1 then Selected[idx] := true;
-      end;
+      if (li.Owner is TCustomChartSeries) and (list.IndexOf(idx) <> -1) then
+        Selected[idx] := true;
     end;
     if Assigned(OnPopulate) then
       OnPopulate(Self);
@@ -699,6 +706,42 @@ begin
   FOptions := AValue;
   EnsureSingleChecked;
   Invalidate;
+end;
+
+{ Sorts the listbox by the series names in ascending or descending order.
+  Note that only series with Legend.Order = -1 are considered, i.e.
+  series having a given legend position are ignored. }
+procedure TChartListbox.Sort(Descending: Boolean = false);
+var
+  list: TStringListUTF8Fast;
+  ser: TCustomChartSeries;
+  i: Integer;
+  selSeries: TCustomChartSeries = nil;
+begin
+  if ItemIndex > -1 then
+    selSeries := Series[ItemIndex];
+
+  list := TStringListUTF8Fast.Create;
+  try
+    for ser in CustomSeries(FChart) do
+      list.AddObject(ser.Title, ser);
+    list.Sort;
+
+    FChart.DisableRedrawing;
+    try
+      for i := 0 to list.Count-1 do
+      begin
+        ser := TCustomChartSeries(list.Objects[i]);
+        ser.Index := IfThen(Descending, list.Count - 1 - i, i);
+      end;
+      Populate;
+      if selSeries <> nil then ItemIndex := FindSeriesIndex(selSeries);
+    finally
+      FChart.EnableRedrawing;
+    end;
+  finally
+    list.Free;
+  end
 end;
 
 procedure Register;

@@ -96,6 +96,7 @@ resourceString
   rsMacOSMenuQuit = 'Quit %s';
   rsMacOSMenuServices = 'Services';
   rsMacOSMenuShowAll = 'Show All';
+  rsMacOSFileFormat = 'File Format:'; // used of FileDialog
 
   // gtk interface
   rsWarningUnremovedPaintMessages = ' WARNING: There are %s unremoved LM_'
@@ -203,6 +204,10 @@ resourceString
     +'into the given widget, e.g. onTheSpot makes the input appear directly '
     +'in the widget, while overTheSpot makes the input appear in a box '
     +'floating over the widget and is not inserted until the editing is done.';
+
+  rsqtOptionDisableAccurateFrame = '-disableaccurateframe, disables fully accurate '
+    +'window frame under X11. This feature is implemented for Qt, Qt5 and Gtk2 interfaces '
+    +'and used mostly by GetWindowRect().';
 
   // win32 interface
   rsWin32Warning = 'Warning:';

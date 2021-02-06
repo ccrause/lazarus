@@ -151,6 +151,10 @@ msgstr ""
 msgid "Property type suffix"
 msgstr ""
 
+#: tcreatecodeform.letoplevelclassname.caption
+msgid "Toplevel class name"
+msgstr ""
+
 #: tcreatecodeform.leunitname.caption
 msgid "Unit name"
 msgstr ""
@@ -407,6 +411,10 @@ msgstr ""
 
 #: tmainform.misaveformatted.caption
 msgid "Save Formatted JSON"
+msgstr ""
+
+#: tmainform.mishowrest.caption
+msgid "Show REST panel"
 msgstr ""
 
 #: tmainform.misortmembers.caption

@@ -26,9 +26,13 @@ unit AskCompNameDlg;
 interface
 
 uses
-  Classes, SysUtils, LCLProc, FileUtil, Forms, Controls, Graphics,
-  Dialogs, StdCtrls, ButtonPanel, ExtCtrls, PropEdits, LazarusIDEStrConsts,
-  TypInfo, LCLType;
+  Classes, SysUtils, TypInfo,
+  // LCL
+  LCLType, Forms, Controls, Graphics, Dialogs, StdCtrls, ButtonPanel, ExtCtrls,
+  // IdeIntf
+  PropEdits,
+  // IDE
+  LazarusIDEStrConsts;
 
 type
 
@@ -286,13 +290,16 @@ begin
       ErrorMsg:=lisThereIsAlreadyAComponentWithThisName;
       exit;
     end;
-    if SysUtils.CompareText(AName,FLookupRoot.Name)=0 then begin
-      ErrorMsg:=lisTheOwnerHasThisName;
-      exit;
-    end;
-    if SysUtils.CompareText(AName,FLookupRoot.ClassName)=0 then begin
-      ErrorMsg:=lisTheOwnerClassHasThisName;
-      exit;
+    if FLookupRoot<>FNewComponent then
+    begin
+      if SysUtils.CompareText(AName,FLookupRoot.Name)=0 then begin
+        ErrorMsg:=lisTheOwnerHasThisName;
+        exit;
+      end;
+      if SysUtils.CompareText(AName,FLookupRoot.ClassName)=0 then begin
+        ErrorMsg:=lisTheOwnerClassHasThisName;
+        exit;
+      end;
     end;
     if SysUtils.CompareText(AName,GetClassUnitName(FLookupRoot.ClassType))=0 then begin
       ErrorMsg:=lisTheUnitHasThisName;

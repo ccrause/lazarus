@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils, TASources, TASeries, TAGraph, CheckLst, Spin,
-  ExtCtrls, StdCtrls, FileUtil, Forms, Controls, Graphics, Dialogs,
+  ExtCtrls, StdCtrls, FileUtil, Forms, Controls, Graphics, Dialogs, Buttons,
   TAChartListbox, TACustomSeries, TALegend;
 
 type
@@ -14,8 +14,8 @@ type
   { TForm1 }
 
   TForm1 = class(TForm)
+    ApplicationProperties: TApplicationProperties;
     Bevel1: TBevel;
-    Bevel2: TBevel;
     BtnAddSeries: TButton;
     BtnDeleteSeries: TButton;
     BtnToggleCOS: TButton;
@@ -27,24 +27,37 @@ type
     CbShowSeriesIcon: TCheckBox;
     CbCheckStyle: TCheckBox;
     CbKeepSeriesOut: TCheckBox;
+    CbInverted: TCheckBox;
+    GaussSeries: TLineSeries;
+    ExpSeries: TLineSeries;
     ChartListbox: TChartListbox;
     ColorDialog: TColorDialog;
+    ImageList: TImageList;
     Label1: TLabel;
     Label2: TLabel;
     Memo: TMemo;
+    Panel2: TPanel;
     SinSeries: TLineSeries;
     CosSeries: TLineSeries;
     ListboxPanel: TPanel;
     Panel1: TPanel;
     RandomChartSource: TRandomChartSource;
     EdColumns: TSpinEdit;
+    BtnUp: TSpeedButton;
+    BtnDown: TSpeedButton;
+    BtnSort: TSpeedButton;
     Splitter: TSplitter;
+    procedure ApplicationPropertiesIdle(Sender: TObject; var Done: Boolean);
     procedure BtnAddSeriesClick(Sender: TObject);
     procedure BtnDeleteSeriesClick(Sender: TObject);
+    procedure BtnDownClick(Sender: TObject);
+    procedure BtnSortClick(Sender: TObject);
     procedure BtnToggleCOSClick(Sender: TObject);
     procedure BtnToggleChartClick(Sender: TObject);
     procedure BtnToggleSINClick(Sender: TObject);
     procedure BtnAddPointClick(Sender: TObject);
+    procedure BtnUpClick(Sender: TObject);
+    procedure CbInvertedChange(Sender: TObject);
     procedure CbShowCheckboxesChange(Sender: TObject);
     procedure CbShowSeriesIconChange(Sender: TObject);
     procedure CbCheckStyleChange(Sender: TObject);
@@ -88,6 +101,8 @@ begin
     x := mn + (mx - mn) / (n - 1) * i;
     SinSeries.AddXY(x, sin(x));
     CosSeries.AddXY(x, cos(x));
+    ExpSeries.AddXY(x, exp(-x));
+    GaussSeries.AddXY(x, exp(-x*x));
   end;
 end;
 
@@ -142,6 +157,40 @@ end;
 procedure TForm1.BtnAddPointClick(Sender: TObject);
 begin
   SinSeries.Add(Random(5), '', clRed);
+end;
+
+procedure TForm1.BtnDownClick(Sender: TObject);
+var
+  indx: Integer;
+begin
+  indx := ChartListbox.ItemIndex;
+  if (indx > -1) and (indx < ChartListbox.SeriesCount-1) then
+  begin
+    ChartListbox.ExchangeSeries(indx, indx + 1);
+    ChartListbox.ItemIndex := indx + 1;
+  end;
+end;
+
+procedure TForm1.BtnSortClick(Sender: TObject);
+begin
+  ChartListbox.Sort;  // Do use the descending parameter because sort order is already given by Legend.Inverted
+end;
+
+procedure TForm1.BtnUpClick(Sender: TObject);
+var
+  indx: Integer;
+begin
+  indx := ChartListbox.ItemIndex;
+  if indx > 0 then
+  begin
+    ChartListbox.ExchangeSeries(indx, indx-1);
+    ChartListbox.ItemIndex := indx - 1;
+  end;
+end;
+
+procedure TForm1.CbInvertedChange(Sender: TObject);
+begin
+  Chart.Legend.Inverted := CbInverted.Checked;
 end;
 
 procedure TForm1.CbShowCheckboxesChange(Sender: TObject);
@@ -209,6 +258,12 @@ begin
   ser.Pointer.Style :=
     TSeriesPointerStyle(Random(Ord(High(TSeriesPointerStyle))));
   Chart.AddSeries(ser);
+end;
+
+procedure TForm1.ApplicationPropertiesIdle(Sender: TObject; var Done: Boolean);
+begin
+  BtnUp.Enabled := ChartListbox.ItemIndex > 0;
+  BtnDown.Enabled := (ChartListbox.ItemIndex > -1) and (ChartListbox.ItemIndex < ChartListbox.SeriesCount-1);
 end;
 
 procedure TForm1.BtnDeleteSeriesClick(Sender: TObject);

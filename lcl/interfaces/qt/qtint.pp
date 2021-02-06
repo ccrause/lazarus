@@ -38,12 +38,15 @@ uses
   // FPC
   Classes, SysUtils, Math, Types,
   // LazUtils
-  LazUTF8, Maps, LazStringUtils,
+  GraphType, LazUTF8, Maps, LazUtilities, LazStringUtils,
   // LCL
   LCLPlatformDef, InterfaceBase, LCLProc, LCLType, LCLIntf,
   LMessages, LCLMessageGlue, LCLStrConsts,
-  Controls, ExtCtrls, Forms, StdCtrls, GraphType, GraphUtil, Themes,
+  Controls, ExtCtrls, Forms, StdCtrls, GraphUtil, Themes,
   // WS
+  {$IFDEF HASX11}
+  qtx11dummywidget,
+  {$ENDIF}
   qtproc;
 
 type
@@ -56,9 +59,6 @@ type
     App: QApplicationH;
     {$IFDEF QtUseNativeEventLoop}
     FMainTimerID: integer;
-    {$ENDIF}
-    {$IFDEF QtUseAccurateFrame}
-    FWSFrameMargins: TRect;
     {$ENDIF}
     FIsLibraryInstance: Boolean;
 
@@ -101,9 +101,6 @@ type
     // qt style does not have pixel metric for themed menubar (menu) height
     // so we must calculate it somehow.
     FCachedMenuBarHeight: Integer;
-    {$IFDEF QtUseAccurateFrame}
-    function GetFrameMargins: TRect;
-    {$ENDIF}
     function GetMenuHeight: Integer;
 
     procedure ClearCachedColors;
@@ -113,6 +110,9 @@ type
     procedure QtRestoreStayOnTop(const ASystemTopAlso: Boolean = False);
     procedure SetDefaultAppFontName;
   protected
+    FPenForSetPixel: QPenH;
+    FInGetPixel: boolean;
+
     FStockNullBrush: HBRUSH;
     FStockBlackBrush: HBRUSH;
     FStockLtGrayBrush: HBRUSH;
@@ -125,6 +125,9 @@ type
     FStockWhitePen: HPEN;
     FStockSystemFont: HFONT;
     FStockDefaultDC: HDC;
+    {$IFDEF HASX11}
+    FWSFrameRect: TRect;
+    {$ENDIF}
     
     function CreateThemeServices: TThemeServices; override;
     function EventFilter(Sender: QObjectH; Event: QEventH): Boolean; cdecl;
@@ -148,6 +151,10 @@ type
     procedure AppSetTitle(const ATitle: string); override;
     function AppRemoveStayOnTopFlags(const ASystemTopAlso: Boolean = False): Boolean; override;
     function AppRestoreStayOnTopFlags(const ASystemTopAlso: Boolean = False): Boolean; override;
+    {$IFDEF HASX11}
+    function CreateDummyWidgetFrame(const ALeft, ATop, AWidth, AHeight: integer): boolean;
+    function GetDummyWidgetFrame: TRect;
+    {$ENDIF}
   public
     constructor Create; override;
     destructor Destroy; override;
@@ -224,10 +231,6 @@ type
     property AppActive: Boolean read FAppActive;
     property DragImageLock: Boolean read FDragImageLock write FDragImageLock;
 
-    {$IFDEF QtUseAccurateFrame}
-    property WSFrameMargins: TRect read GetFrameMargins write FWSFrameMargins;
-    {$ENDIF}
-
     {do not create new QApplication object if we are called from library }
     property IsLibraryInstance: Boolean read FIsLibraryInstance;
 
@@ -278,7 +281,7 @@ type
   function GetKdeSessionVersion: integer;
   {force mapping}
   procedure MapX11Window(AWinID: LongWord);
-  {$IFDEF QtUseAccurateFrame}
+  {$IFDEF QtUseX11Extras}
   function GetX11WindowRealized(AWinID: LongWord): boolean;
   function GetX11WindowAttributes(AWinID: LongWord; out ALeft, ATop, AWidth, AHeight, ABorder: integer): boolean;
   function GetX11SupportedAtoms(AWinID: LongWord; AList: TStrings): boolean;

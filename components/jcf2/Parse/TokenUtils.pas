@@ -36,7 +36,9 @@ See http://www.gnu.org/licenses/gpl.html
 
 interface
 
-uses ParseTreeNode, SourceToken, SettingsTypes;
+uses
+  SysUtils,
+  ParseTreeNode, SourceToken, SettingsTypes;
 
 { make a new return token }
 function NewReturn: TSourceToken;
@@ -66,6 +68,7 @@ function ExtractNameFromFunctionHeading(const pcNode: TParseTreeNode;
   const pbFullName: boolean): string;
 
 function IsClassFunctionOrProperty(const pt: TSourceToken): boolean;
+function IsGenericFunctionOrProperty(const pt: TSourceToken): boolean;
 
 function RHSExprEquals(const pt: TSourceToken): boolean;
 
@@ -172,8 +175,6 @@ function HasAsmCaps(const pt: TSourceToken): boolean;
 implementation
 
 uses
-  { delphi }
-  {$IFNDEF FPC}Windows,{$ENDIF} SysUtils, 
   { local }
   JcfSettings,
   JcfStringUtils,
@@ -254,8 +255,12 @@ var
   lcNameToken: TSourceToken;
   lcPriorToken1, lcPriorToken2: TSourceToken;
 begin
+  if pcNode=nil then
+  begin
+    Result:='';
+    exit;
+  end;
   lcNameToken := nil;
-
   { function heading is of one of these forms
       function foo(param: integer): integer;
       function foo: integer;
@@ -378,6 +383,10 @@ begin
   Result := pt.IsOnRightOf(ProcedureHeadings + [nProperty], [ttClass]);
 end;
 
+function IsGenericFunctionOrProperty(const pt: TSourceToken): boolean;
+begin
+  Result := pt.IsOnRightOf(ProcedureHeadings + [nProperty], [ttGeneric]);
+end;
 
 function RHSExprEquals(const pt: TSourceToken): boolean;
 begin
@@ -631,9 +640,12 @@ begin
 end;
 
 function IsDfmIncludeDirective(const pt: TSourceToken): boolean;
+var
+  lsToken:string;
 begin
   // form dfm comment
-  Result := (pt.TokenType = ttComment) and AnsiSameText(pt.SourceCode, '{$R *.dfm}') and
+  lsToken:=UpperCase(pt.SourceCode);
+  Result := (pt.TokenType = ttComment) and ((lsToken = '{$R *.DFM}') or (lsToken = '[$R *.LFM}')) and
     pt.HasParentNode(nImplementationSection, 4);
 end;
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
-  <Package Version="4">
+  <Package Version="5">
     <PathDelim Value="\"/>
     <Name Value="DebuggerIntf"/>
     <Type Value="RunAndDesignTime"/>
@@ -27,32 +27,40 @@
 Provides an interface to add debuggers to the IDE"/>
     <License Value="GPL-2"/>
     <Version Minor="1"/>
-    <Files Count="5">
-      <Item1>
+    <Files>
+      <Item>
         <Filename Value="dbgintfbasetypes.pas"/>
         <UnitName Value="DbgIntfBaseTypes"/>
-      </Item1>
-      <Item2>
+      </Item>
+      <Item>
         <Filename Value="dbgintfdebuggerbase.pp"/>
         <UnitName Value="DbgIntfDebuggerBase"/>
-      </Item2>
-      <Item3>
+      </Item>
+      <Item>
         <Filename Value="dbgintfmiscclasses.pas"/>
         <UnitName Value="DbgIntfMiscClasses"/>
-      </Item3>
-      <Item4>
+      </Item>
+      <Item>
         <Filename Value="ideminilibc.pas"/>
         <UnitName Value="IDEMiniLibC"/>
-      </Item4>
-      <Item5>
+      </Item>
+      <Item>
         <Filename Value="dbgintfpseudoterminal.pas"/>
-        <UnitName Value="dbgintfpseudoterminal"/>
-      </Item5>
+        <UnitName Value="DbgIntfPseudoTerminal"/>
+      </Item>
+      <Item>
+        <Filename Value="dbgintfcommonstrings.pas"/>
+        <UnitName Value="DbgIntfCommonStrings"/>
+      </Item>
     </Files>
-    <RequiredPkgs Count="1">
-      <Item1>
+    <i18n>
+      <EnableI18N Value="True"/>
+      <OutDir Value="languages"/>
+    </i18n>
+    <RequiredPkgs>
+      <Item>
         <PackageName Value="LCLBase"/>
-      </Item1>
+      </Item>
     </RequiredPkgs>
     <UsageOptions>
       <UnitPath Value="$(PkgOutDir)"/>

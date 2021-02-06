@@ -38,7 +38,7 @@ uses
   LResources, StdCtrls, Buttons, ComCtrls, Controls, Dialogs,
   ExtCtrls, Forms, Graphics, LCLType, LCLProc,
   // Synedit
-  SynEdit, SynHighlighterXML,
+  SynEdit, SynHighlighterXML, SynEditFoldedView, SynEditWrappedView,
   // codetools
   FileProcs, CodeCache, CodeToolManager, CTXMLFixFragment,
   // IDEIntf
@@ -182,6 +182,7 @@ type
     procedure OpenXML;
     function GUIModified: boolean;
     procedure DoEditorUpdate(Sender: TObject);
+    procedure DoEditorMouseUp(Sender: TObject);
   private
     FFollowCursor: boolean;
     FIdleConnected: boolean;
@@ -247,6 +248,15 @@ begin
 end;
 
 procedure TFPDocEditor.FormCreate(Sender: TObject);
+  procedure UpdateSynEdit(ASynEd: TSynEdit);
+  var
+    fld: TSynEditFoldedView;
+  begin
+    fld := TSynEditFoldedView(ASynEd.TextViewsManager.SynTextViewByClass[TSynEditFoldedView]);
+    if fld <> nil then
+      fld.FoldProvider.Enabled := False;
+    TLazSynEditLineWrapPlugin.Create(ASynEd);
+  end;
 begin
   Caption := lisCodeHelpMainFormCaption;
 
@@ -304,6 +314,12 @@ begin
 
   SourceEditorManagerIntf.RegisterChangeEvent(semEditorActivate, @DoEditorUpdate);
   SourceEditorManagerIntf.RegisterChangeEvent(semEditorStatus, @DoEditorUpdate);
+  SourceEditorManagerIntf.RegisterChangeEvent(semEditorMouseUp, @DoEditorMouseUp);
+
+  UpdateSynEdit(TopicDescrSynEdit);
+  UpdateSynEdit(DescrSynEdit);
+  UpdateSynEdit(ErrorsSynEdit);
+  UpdateSynEdit(SeeAlsoSynEdit);
 
   FollowCursor:=true;
   IdleConnected:=true;
@@ -1050,6 +1066,14 @@ begin
 end;
 
 procedure TFPDocEditor.DoEditorUpdate(Sender: TObject);
+begin
+  if GetCaptureControl <> nil then // If SynEdit has Capture the user may be selecting by Mouse. https://bugs.freepascal.org/view.php?id=37150
+    exit;
+  if FollowCursor then
+    LoadIdentifierAtCursor;
+end;
+
+procedure TFPDocEditor.DoEditorMouseUp(Sender: TObject);
 begin
   if FollowCursor then
     LoadIdentifierAtCursor;

@@ -41,14 +41,9 @@ unit SynMacroRecorder;
 interface
 
 uses
-  Classes, SysUtils, FileUtil, LazUTF8Classes, Types, LCLType, Menus,
-  SynEdit, SynEditKeyCmds, SynEditPlugins;
-
-resourcestring
-  sCannotRecord = 'Cannot record macro when recording';
-  sCannotPlay = 'Cannot playback macro when recording';
-  sCannotPause = 'Can only pause when recording';
-  sCannotResume = 'Can only resume when paused';
+  Classes, SysUtils, Types,
+  FileUtil, LCLType, Menus,
+  SynEdit, SynEditKeyCmds, SynEditPlugins, SynEditStrConst, SynEditTypes;
 
 type
   TSynMacroState = (msStopped, msRecording, msPlaying, msPaused); // msPaused = paused recording
@@ -940,7 +935,7 @@ procedure TCustomSynMacroRecorder.LoadFromFile(aFilename: string);
 var
   F : TFileStream;
 begin
-  F := TFileStreamUTF8.Create(aFilename, fmOpenRead);
+  F := TFileStream.Create(aFilename, fmOpenRead);
   try
     LoadFromStream(F);
     MacroName := ChangeFileExt(ExtractFileName(aFilename), '');
@@ -953,7 +948,7 @@ procedure TCustomSynMacroRecorder.SaveToFile(aFilename: string);
 var
   F : TFileStream;
 begin
-  F := TFileStreamUTF8.Create(aFilename, fmCreate);
+  F := TFileStream.Create(aFilename, fmCreate);
   try
     SaveToStream(F);
   finally

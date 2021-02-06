@@ -17,17 +17,59 @@
     - Enable Escaped '&' Shortcut to focus FocusControl
     - Compare/Match AutoSize to Delphi/Kylix's
     - ?? Check For Full Delphi/Kylix Compatibility
+    - Support of rotated multiline/wordwrapped text.
 
 }
 
 const
   cMaxLabelSize = 10000;
 
+// AAngle is in radians, counter-clockwise = positive. But: y points down!
+function RotatePoint(const APoint: TPoint; AAngle: Double): TPoint;
+var
+  sa, ca: Double;
+begin
+  sa := sin(AAngle);
+  ca := cos(AAngle);
+  Result.X := Round( ca * APoint.X + sa * APoint.Y);
+  Result.Y := Round(-sa * APoint.X + ca * APoint.Y);
+end;
+
+procedure GetMinMax(x: Integer; var min, max: Integer);
+begin
+  if x < min then min := x;
+  if x > max then max := x;
+end;
+
+function RotateRect(AWidth, AHeight: Integer; AAngle: Double): TRect;
+var
+  P1, P2, P3: TPoint;
+begin
+  if AAngle = 0 then
+    Result := Rect(0, 0, AWidth, AHeight)
+  else
+  begin
+    P1 := RotatePoint(Point(AWidth, 0), AAngle);
+    P2 := RotatePoint(Point(0, AHeight), AAngle);
+    P3 := Point(P1.X+P2.X, P1.Y+P2.Y);
+
+    Result := Rect(0, 0, 0, 0);
+    GetMinMax(P1.X, Result.Left, Result.Right);
+    GetMinMax(P2.X, Result.Left, Result.Right);
+    GetMinMax(P3.X, Result.Left, Result.Right);
+    GetMinMax(P1.Y, Result.Top, Result.Bottom);
+    GetMinMax(P2.Y, Result.Top, Result.Bottom);
+    GetMinMax(P3.Y, Result.Top, Result.Bottom);
+  end;
+end;
+
 procedure TCustomLabel.CalculatePreferredSize(
   var PreferredWidth, PreferredHeight: integer; WithThemeSpace: Boolean);
 // assumes: (Parent <> nil) and Parent.HandleAllocated
 var
   AWidth: Integer;
+  R: TRect;
+  angle: Double;
 begin
   if (Parent = nil) or (not Parent.HandleAllocated) then Exit;
   if WidthIsAnchored and WordWrap then
@@ -36,12 +78,20 @@ begin
     AWidth:=cMaxLabelSize;
   AWidth:=Constraints.MinMaxWidth(AWidth);
   CalculateSize(AWidth,PreferredWidth,PreferredHeight);
+
+  if Font.Orientation <> 0 then
+  begin
+    angle := Font.Orientation / 10 * pi / 180;
+    R := RotateRect(PreferredWidth, PreferredHeight, angle);
+    PreferredWidth := R.Right - R.Left;
+    PreferredHeight := R.Bottom - R.Top;
+  end;
 end;
 
 procedure TCustomLabel.CalculateSize(MaxWidth: integer; var NeededWidth,
   NeededHeight: integer);
 var
-  DC: HDC;
+  DC, OldHandle: HDC;
   R: TRect;
   OldFont: HGDIOBJ;
   Flags: cardinal;
@@ -54,8 +104,10 @@ begin
     exit;
   end;
 
-  DC := GetDC(Parent.Handle);
+  DC := GetDC(0);
   try
+    OldHandle := Canvas.Handle;
+    Canvas.Handle := DC;
     R := Rect(0, 0, MaxWidth, cMaxLabelSize);
     OldFont := SelectObject(DC, HGDIOBJ(Font.Reference.Handle));
     Flags := DT_CALCRECT or DT_EXPANDTABS;
@@ -64,17 +116,19 @@ begin
     else
     if not HasMultiLine then
       Flags := Flags or DT_SINGLELINE;
-
     if not ShowAccelChar then
       Flags := Flags or DT_NOPREFIX;
+    if UseRightToLeftReading then
+      Flags := Flags or DT_RTLREADING;
 
-    DrawText(DC, PChar(LabelText), Length(LabelText), R, Flags);
+    DoDrawText(R, Flags);
     SelectObject(DC, OldFont);
     NeededWidth := R.Right - R.Left;
     NeededHeight := R.Bottom - R.Top;
+    Canvas.Handle := OldHandle;
     //DebugLn(['TCustomLabel.CalculatePreferredSize ',DbgSName(Self),' R=',dbgs(R),' MaxWidth=',MaxWidth,' DT_WORDBREAK=',(DT_WORDBREAK and Flags)>0,' LabelText="',LabelText,'"']);
   finally
-    ReleaseDC(Parent.Handle, DC);
+    ReleaseDC(0, DC);
   end;
 end;
 
@@ -102,6 +156,29 @@ procedure TCustomLabel.DoAutoSize;
 begin
   inherited DoAutoSize;
   //debugln('TCustomLabel.DoAutoSize ',DbgSName(Self),' AutoSizing=',dbgs(AutoSizing),' AutoSize=',dbgs(AutoSize),' Parent=',DbgSName(Parent),' csLoading=',dbgs(csLoading in ComponentState),' Parnet.HandleAllocated=',dbgs((Parent<>nil) and (Parent.HandleAllocated)));
+end;
+
+procedure TCustomLabel.DoDrawText(var Rect: TRect; Flags: Longint);
+var
+  LabelText: string;
+  OldFontColor: TColor;
+  Rect2: TRect;
+begin
+  LabelText := GetLabelText;
+  OldFontColor := Canvas.Font.Color;
+  if not IsEnabled and (Flags and DT_CALCRECT = 0) then
+    if ThemeServices.ThemesEnabled then
+      Canvas.Font.Color := clGrayText
+    else
+    begin
+      Canvas.Font.Color := clBtnHighlight;
+      Rect2 := Rect;
+      OffsetRect(Rect2, 1, 1);
+      DrawText(Canvas.Handle, PChar(LabelText), Length(LabelText), Rect2, Flags);
+      Canvas.Font.Color := clBtnShadow;
+    end;
+  DrawText(Canvas.Handle, PChar(LabelText), Length(LabelText), Rect, Flags or DT_NOCLIP);
+  Canvas.Font.Color := OldFontColor;
 end;
 
 procedure TCustomLabel.SetAlignment(Value : TAlignment);
@@ -177,26 +254,6 @@ end;
 function TCustomLabel.CanTab: boolean;
 begin
   Result := False;
-end;
-
-procedure TCustomLabel.DoMeasureTextPosition(var TextTop: integer;
-  var TextLeft: integer);
-var
-  lTextHeight: integer;
-  lTextWidth: integer;
-begin
-  TextLeft := 0;
-  if Layout = tlTop then
-  begin
-    TextTop := 0;
-  end else
-  begin
-    CalculateSize(Width, lTextWidth, lTextHeight);
-    case Layout of
-      tlCenter: TextTop := (Height - lTextHeight) div 2;
-      tlBottom: TextTop := Height - lTextHeight;
-    end;
-  end;
 end;
 
 constructor TCustomLabel.Create(TheOwner: TComponent);
@@ -417,77 +474,70 @@ end;
 
 procedure TCustomLabel.Paint;
 var
-  TR : TTextStyle;
-  R : TRect;
+  R, CalcRect: TRect;
   TextLeft, TextTop: integer;
-  LabelText: string;
-  OldFontColor: TColor;
+  Flags: Longint;
+  angle: Double;
+const
+  cAlignment: array[TAlignment] of Longint = (DT_LEFT, DT_RIGHT, DT_CENTER);
 begin
   R := Rect(0,0,Width,Height);
-  with Canvas do
+  Canvas.Brush.Color := Color;
+  if (Color<>clNone) and not Transparent then
   begin
-    Brush.Color := Self.Color;
-    if (Color<>clNone) and not Transparent then
-    begin
-      Brush.Style:=bsSolid;
-      FillRect(R);
-    end;
-    Brush.Style:=bsClear;
-    Font := Self.Font;
-{
-    If BorderStyle <> sbsNone then begin
-      InflateRect(R,-2,-2);
-      Pen.Style := psSolid;
-      If BorderStyle = sbsSunken then
-        Pen.Color := clBtnShadow
-      else
-        Pen.Color := clBtnHighlight;
-      MoveTo(0, 0);
-      LineTo(Width - 1,0);
-      MoveTo(0, 0);
-      LineTo(0,Height - 1);
-      If BorderStyle = sbsSunken then
-        Pen.Color := clBtnHighlight
-      else
-        Pen.Color := clBtnShadow;
-      MoveTo(0,Height - 1);
-      LineTo(Width - 1,Height - 1);
-      MoveTo(Width - 1, 0);
-      LineTo(Width - 1,Height);
-    end;
-}
-    //Brush.Color:=clRed;
-    //FillRect(R);
-    FillChar(TR,SizeOf(TR),0);
-    with TR do
-    begin
-      Alignment := BidiFlipAlignment(Self.Alignment, UseRightToLeftAlignment);
-      Layout := Self.Layout;
-      Opaque := (Color<>clNone) and not Transparent;
-      WordBreak := wordWrap;
-      SingleLine:= not WordWrap and not HasMultiLine;
-      Clipping := True;
-      ShowPrefix := ShowAccelChar;
-      SystemFont := False;
-      RightToLeft := UseRightToLeftReading;
-      ExpandTabs := True;
-    end;
-    DoMeasureTextPosition(TextTop, TextLeft);
-    //debugln('TCustomLabel.Paint ',dbgs(Alignment=tacenter),' ',dbgs(Layout=tlCenter),' ',dbgs(TextLeft),' TextTop=',dbgs(TextTop),' ',dbgs(R));
-    LabelText := GetLabelText;
-    OldFontColor := Font.Color;
-    if not IsEnabled then
-      if ThemeServices.ThemesEnabled then
-        Font.Color := clGrayText
-      else
-      begin
-        Font.Color := clBtnHighlight;
-        TextRect(R, TextLeft + 1, TextTop + 1, LabelText, TR);
-        Font.Color := clBtnShadow;
-      end;
-    TextRect(R, TextLeft, TextTop, LabelText, TR);
-    Font.Color := OldFontColor;
+    Canvas.Brush.Style:=bsSolid;
+    Canvas.FillRect(R);
   end;
+  Canvas.Brush.Style:=bsClear;
+  Canvas.Font := Font;
+
+  Flags := DT_EXPANDTABS;
+  if WordWrap then
+    Flags := Flags or DT_WORDBREAK
+  else
+  if not HasMultiLine then
+    Flags := Flags or DT_SINGLELINE;
+  if not ShowAccelChar then
+    Flags := Flags or DT_NOPREFIX;
+  if UseRightToLeftReading then
+    Flags := Flags or DT_RTLREADING;
+
+  CalcRect := R;
+  if Font.Orientation = 0 then
+  begin
+    Flags := Flags or cAlignment[BidiFlipAlignment(Self.Alignment, UseRightToLeftAlignment)];
+    DoDrawText(CalcRect, Flags or DT_CALCRECT);
+    if FLayout<>tlTop then
+    begin
+      case FLayout of
+        tlTop: ; // nothing
+        tlCenter: OffsetRect(R, 0, (R.Height-CalcRect.Height) div 2);
+        tlBottom: OffsetRect(R, 0, R.Height-CalcRect.Height)
+      end;
+      R.Height := CalcRect.Height;
+    end;
+  end else
+  begin
+    // Rotated text. Must be drawn as taLeftJustify/tlTop. No wordbreak and multiline ATM.
+    Flags := Flags or DT_SINGLELINE and not DT_WORDBREAK;
+    DoDrawText(CalcRect, Flags or DT_CALCRECT);
+    angle := Font.Orientation * 0.1 * pi/180;
+    CalcRect := RotateRect(CalcRect.Width, CalcRect.Height, angle);
+    R := CalcRect;
+    case FAlignment of
+      taLeftJustify: OffsetRect(R, -CalcRect.Left, 0);
+      taCenter: OffsetRect(R, (Width - CalcRect.Width) div 2 - CalcRect.Left, 0);
+      taRightJustify: OffsetRect(r, Width - CalcRect.Right, 0);
+    end;
+    case FLayout of
+      tlTop: OffsetRect(R, 0, -CalcRect.Top);
+      tlCenter: OffsetRect(R, 0, (Height - CalcRect.Height) div 2 - CalcRect.Top);
+      tlBottom: OffsetRect(R, 0, Height - CalcRect.Bottom);
+    end;
+    OffsetRect(R, -CalcRect.Left-1, -CalcRect.Top-1);
+  end;
+  //debugln('TCustomLabel.Paint ',dbgs(Alignment=tacenter),' ',dbgs(Layout=tlCenter),' ',dbgs(TextLeft),' TextTop=',dbgs(TextTop),' ',dbgs(R));
+  DoDrawText(R, Flags);
 end;
 
 procedure TCustomLabel.SetBounds(aLeft, aTop, aWidth, aHeight: integer);

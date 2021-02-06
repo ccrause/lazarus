@@ -49,8 +49,8 @@ unit SynHighlighterLFM;
 interface
 
 uses
-  SysUtils, Classes, FileUtil, LazUTF8Classes, Graphics,
-  SynEditTypes, SynEditHighlighter, SynEditHighlighterFoldBase;
+  SysUtils, Classes, FileUtil, Graphics,
+  SynEditTypes, SynEditHighlighter, SynEditHighlighterFoldBase, SynEditStrConst;
 
 type
   TtkTokenKind = (tkComment, tkIdentifier, tkKey, tkNull, tkNumber, tkSpace,
@@ -167,9 +167,6 @@ function SaveStrings2LFMFile(AStrings: TStrings; const AFile: string): integer;
 
 implementation
 
-uses
-  SynEditStrConst;
-
 { A couple of useful Lazarus Form functions }
 
 function LoadLFMFile2Strings(const AFile: string; AStrings: TStrings;
@@ -181,7 +178,7 @@ begin
   WasText := FALSE;
   AStrings.Clear;
   try
-    Src := TFileStreamUTF8.Create(AFile, fmOpenRead or fmShareDenyWrite);
+    Src := TFileStream.Create(AFile, fmOpenRead or fmShareDenyWrite);
     try
       Dest := TMemoryStream.Create;
       try
@@ -210,7 +207,7 @@ begin
     try
       AStrings.SaveToStream(Src);
       Src.Seek(0, soFromBeginning);
-      Dest := TFileStreamUTF8.Create(AFile, fmCreate);
+      Dest := TFileStream.Create(AFile, fmCreate);
       try
         ObjectTextToResource(Src, Dest);
       finally

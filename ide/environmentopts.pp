@@ -300,6 +300,7 @@ type
     FFLags: set of (dpcLoaded, dpcDeleted);
     FActive: Boolean;
     FConfigClass: String;
+    FConfigClassInOldXml: String; // The ConfigClass in the xml file. In case the class in memory is changed
     FConfigName: String;
     FDebuggerClass: TDebuggerClass;
     FDebuggerFilename: string;
@@ -524,7 +525,7 @@ type
 
   { TDebuggerPropertiesConfigList }
 
-  TDebuggerPropertiesConfigList = class(TStringList)
+  TDebuggerPropertiesConfigList = class(TStringListUTF8Fast)
   private
     function GetOpt(Index: Integer): TDebuggerPropertiesConfig;
   public
@@ -542,6 +543,7 @@ type
     XML_PATH_DEBUGGER_CONF_OLD = 'EnvironmentOptions/Debugger/Class%s/%s/';
   private
     FCurrentDebuggerPropertiesConfig: TDebuggerPropertiesConfig;
+    FDebuggerShowExitCodeMessage: boolean;
     FHasActiveDebuggerEntry: Boolean;
     fRegisteredSubConfig: TObjectList;
     FDebuggerAutoCloseAsm: boolean;
@@ -611,7 +613,6 @@ type
     // hints
     FAskSaveSessionOnly: boolean;
     FCheckDiskChangesWithLoading: boolean;
-    FDiskChangesAutoCheckModified: boolean;
     FShowHintsForComponentPalette: boolean;
     FShowHintsForMainSpeedButtons: boolean;
     
@@ -714,6 +715,7 @@ type
 
     //component list
     FComponentListKeepOpen: Boolean;
+    FComponentListPageIndex: Integer;
 
     // Desktop
     FDesktops: TDesktopOptList;
@@ -885,8 +887,6 @@ type
     // hints
     property CheckDiskChangesWithLoading: boolean read FCheckDiskChangesWithLoading
                                                  write FCheckDiskChangesWithLoading;
-    property DiskChangesAutoCheckModified: boolean read FDiskChangesAutoCheckModified
-                                                  write FDiskChangesAutoCheckModified;
     property ShowHintsForComponentPalette: boolean read FShowHintsForComponentPalette
                                                   write FShowHintsForComponentPalette;
     property ShowHintsForMainSpeedButtons: boolean read FShowHintsForMainSpeedButtons
@@ -904,6 +904,7 @@ type
     property DebuggerFileHistory[AnIndex: String]: TStringList read GetNamedDebuggerFileHistory;
     property DebuggerSearchPath: string read GetDebuggerSearchPath write SetDebuggerSearchPath;
     property DebuggerShowStopMessage: boolean read FDebuggerShowStopMessage write FDebuggerShowStopMessage;
+    property DebuggerShowExitCodeMessage: boolean read FDebuggerShowExitCodeMessage write FDebuggerShowExitCodeMessage;
     property DebuggerResetAfterRun: boolean read FDebuggerResetAfterRun write FDebuggerResetAfterRun;
     property DebuggerAutoCloseAsm: boolean read FDebuggerAutoCloseAsm write FDebuggerAutoCloseAsm;
     property FppkgConfigFile: string read GetFppkgConfigFile write SetFppkgConfigFile;
@@ -1039,6 +1040,7 @@ type
 
     //component list
     property ComponentListKeepOpen: Boolean read FComponentListKeepOpen write FComponentListKeepOpen;
+    property ComponentListPageIndex: Integer read FComponentListPageIndex write FComponentListPageIndex;
 
     // glyphs
     property ShowButtonGlyphs: TApplicationShowGlyphs read FShowButtonGlyphs write FShowButtonGlyphs;
@@ -1198,8 +1200,7 @@ end;
 
 { TDebuggerPropertiesConfigList }
 
-function TDebuggerPropertiesConfigList.GetOpt(Index: Integer
-  ): TDebuggerPropertiesConfig;
+function TDebuggerPropertiesConfigList.GetOpt(Index: Integer): TDebuggerPropertiesConfig;
 begin
   Result := TDebuggerPropertiesConfig(Objects[Index]);
 end;
@@ -1217,18 +1218,20 @@ function TDebuggerPropertiesConfigList.EntryByName(AConfName, AConfClass: String
   ): TDebuggerPropertiesConfig;
 var
   i: Integer;
+  dpCfg: TDebuggerPropertiesConfig;
 begin
   Result := nil;
   i := Count - 1;
-  while (i >= 0) and (
-    Opt[i].IsDeleted or (not Opt[i].IsLoaded) or
-    (Opt[i].ConfigName <> AConfName) or
-    (Opt[i].ConfigClass <> AConfClass)
-  )
-  do
+  while i >= 0 do begin
+    dpCfg := Opt[i];
+    if (not dpCfg.IsDeleted) and dpCfg.IsLoaded
+    and (dpCfg.ConfigName = AConfName)
+    and (dpCfg.ConfigClass = AConfClass) then
+      Break;
     dec(i);
+  end;
   if i >= 0 then
-    Result := Opt[i];
+    Result := dpCfg;
 end;
 
 function TDebuggerPropertiesConfigList.EntryByUid(AnUid: String
@@ -1303,6 +1306,7 @@ begin
   AXMLCfg.ReadObject(p, Self);  // read FDebuggerFilename;
 
   FConfigClass := ADebuggerClass.ClassName;
+  FConfigClassInOldXml := FConfigClass;
   FConfigName := '';
   FXmlIndex := -1;
 
@@ -1334,6 +1338,7 @@ begin
   AXMLCfg.ReadObject(p, Self);  // read FDebuggerFilename;
 
   FConfigClass := ADebuggerClassName;
+  FConfigClassInOldXml := FConfigClass;
   FConfigName := '';
   FXmlIndex := -1;
 
@@ -1384,7 +1389,8 @@ end;
 procedure TDebuggerPropertiesConfig.CopyFrom(
   ASource: TDebuggerPropertiesConfig; ACopyPropValues: Boolean);
 begin
-  FConfigClass      := ASource.FConfigClass;
+  FConfigClass         := ASource.FConfigClass;
+  FConfigClassInOldXml := ASource.FConfigClassInOldXml;
   FConfigName       := ASource.FConfigName;
   FDebuggerClass    := ASource.FDebuggerClass;
   FDebuggerFilename := ASource.FDebuggerFilename;
@@ -1478,8 +1484,19 @@ end;
 procedure TDebuggerPropertiesConfig.DeleteFromOldXml(AXMLCfg: TRttiXMLConfig;
   APath: String);
 begin
-  AXMLCfg.DeletePath(Format(APath, [FConfigClass, 'Config']));
-  AXMLCfg.DeletePath(Format(APath, [FConfigClass, 'Properties']));
+  if FConfigClassInOldXml = '' then begin
+    debugln(['Debugger was loaded, but has no ConfigClass in XML', DebugText]);
+    FConfigClassInOldXml := FConfigClass;
+  end;
+
+  AXMLCfg.DeletePath(Format(APath, [FConfigClassInOldXml, 'Config']));
+  AXMLCfg.DeletePath(Format(APath, [FConfigClassInOldXml, 'Properties']));
+
+  if FConfigClassInOldXml <> FConfigClass then begin
+    AXMLCfg.DeletePath(Format(APath, [FConfigClass, 'Config']));
+    AXMLCfg.DeletePath(Format(APath, [FConfigClass, 'Properties']));
+  end;
+  FConfigClassInOldXml := FConfigClass;
   FXmlIndex := -1;
   FIsFromOldXml := False;
 end;
@@ -1512,6 +1529,7 @@ var
   OptDef: TDebuggerPropertiesConfig;
 begin
   FIsFromOldXml := True;
+  FConfigClassInOldXml := FConfigClass;
   FXmlIndex := -1;
 
   OptDef := TDebuggerPropertiesConfig.Create;
@@ -2132,7 +2150,6 @@ begin
 
   // hints
   FCheckDiskChangesWithLoading:=false;
-  FDiskChangesAutoCheckModified:=false;
   FShowHintsForComponentPalette:=true;
   FShowHintsForMainSpeedButtons:=true;
   
@@ -2273,8 +2290,8 @@ begin
   try
     if AutoSaveActiveDesktop and Assigned(DebugDesktop) then
     begin
-      Desktop.ImportSettingsFromIDE(Self);
-      DebugDesktop.Assign(Desktop);
+      FDesktop.ImportSettingsFromIDE(Self);
+      DebugDesktop.Assign(FDesktop);
     end;
 
     UseDesktop(FLastDesktopBeforeDebug);
@@ -2337,8 +2354,8 @@ begin
   begin
     FLastDesktopBeforeDebug := TDesktopOpt.Create(ActiveDesktopName);
     if AutoSaveActiveDesktop then
-      Desktop.ImportSettingsFromIDE(Self);
-    FLastDesktopBeforeDebug.Assign(Desktop, False);
+      FDesktop.ImportSettingsFromIDE(Self);
+    FLastDesktopBeforeDebug.Assign(FDesktop, False);
     EnvironmentOptions.UseDesktop(DebugDesktop);
   end;
 end;
@@ -2464,6 +2481,7 @@ begin
   DebuggerSearchPath:=FXMLCfg.GetValue(Path+'DebuggerSearchPath/Value','');
   // Debugger General Options
   DebuggerShowStopMessage:=FXMLCfg.GetValue(Path+'DebuggerOptions/ShowStopMessage/Value', True);
+  DebuggerShowExitCodeMessage:=FXMLCfg.GetValue(Path+'DebuggerOptions/DebuggerShowExitCodeMessage/Value', True);
   DebuggerResetAfterRun :=FXMLCfg.GetValue(Path+'DebuggerOptions/DebuggerResetAfterRun/Value', False);
   FDebuggerAutoCloseAsm :=FXMLCfg.GetValue(Path+'DebuggerOptions/DebuggerAutoCloseAsm/Value', False);
   FDebuggerEventLogClearOnRun := FXMLCfg.GetValue(Path+'Debugger/EventLogClearOnRun', True);
@@ -2620,7 +2638,6 @@ begin
 
     // hints
     FCheckDiskChangesWithLoading:=FXMLCfg.GetValue(Path+'CheckDiskChangesWithLoading/Value',false);
-    FDiskChangesAutoCheckModified:=FXMLCfg.GetValue(Path+'DiskChangesAutoCheckModified/Value',false);
     FShowHintsForComponentPalette:=FXMLCfg.GetValue(Path+'ShowHintsForComponentPalette/Value',true);
     FShowHintsForMainSpeedButtons:=FXMLCfg.GetValue(Path+'ShowHintsForMainSpeedButtons/Value',true);
 
@@ -2644,6 +2661,7 @@ begin
 
     //component list
     FComponentListKeepOpen:=FXMLCfg.GetValue(Path+'ComponentList/KeepOpen',false);
+    FComponentListPageIndex:=FXMLCfg.GetValue(Path+'ComponentList/PageIndex',0);
 
     // glyphs
     FShowButtonGlyphs := TApplicationShowGlyphs(FXMLCfg.GetValue(Path+'ShowButtonGlyphs/Value',
@@ -2772,8 +2790,8 @@ begin
       FXMLCfg.DeletePath(CurPath+'Desktop');
     end;
 
-    Desktop.Assign(ActiveDesktop, False);
-    Desktop.ExportSettingsToIDE(Self);
+    FDesktop.Assign(ActiveDesktop, False);
+    FDesktop.ExportSettingsToIDE(Self);
 
     for i := 0 to SubConfigCount - 1 do
       SubConfig[i].ReadFromXml(FXMLCfg);
@@ -2855,6 +2873,8 @@ begin
   SaveDebuggerPropertiesList;
   FXMLCfg.SetDeleteValue(Path+'DebuggerOptions/ShowStopMessage/Value',
       FDebuggerShowStopMessage, True);
+  FXMLCfg.SetDeleteValue(Path+'DebuggerOptions/DebuggerShowExitCodeMessage/Value',
+      FDebuggerShowExitCodeMessage, True);
   FXMLCfg.SetDeleteValue(Path+'DebuggerOptions/DebuggerResetAfterRun/Value',
       FDebuggerResetAfterRun, False);
   FXMLCfg.SetDeleteValue(Path+'DebuggerOptions/DebuggerAutoCloseAsm/Value',
@@ -2986,7 +3006,6 @@ begin
 
     // hints
     FXMLCfg.SetDeleteValue(Path+'CheckDiskChangesWithLoading/Value',FCheckDiskChangesWithLoading,false);
-    FXMLCfg.SetDeleteValue(Path+'DiskChangesAutoCheckModified/Value',FDiskChangesAutoCheckModified,false);
     FXMLCfg.SetDeleteValue(Path+'ShowHintsForComponentPalette/Value',FShowHintsForComponentPalette,true);
     FXMLCfg.SetDeleteValue(Path+'ShowHintsForMainSpeedButtons/Value',FShowHintsForMainSpeedButtons,true);
 
@@ -3011,6 +3030,7 @@ begin
 
     //component list
     FXMLCfg.SetDeleteValue(Path+'ComponentList/KeepOpen',FComponentListKeepOpen,false);
+    FXMLCfg.SetDeleteValue(Path+'ComponentList/PageIndex',FComponentListPageIndex,0);
 
     // glyphs
     FXMLCfg.SetDeleteValue(Path+'ShowButtonGlyphs/Value',Ord(FShowButtonGlyphs), Ord(sbgSystem));
@@ -3092,8 +3112,8 @@ begin
     and (Application.MainForm<>nil) and Application.MainForm.Visible then
     begin
       //save active desktop
-      Desktop.ImportSettingsFromIDE(Self);
-      ActiveDesktop.Assign(Desktop);
+      FDesktop.ImportSettingsFromIDE(Self);
+      ActiveDesktop.Assign(FDesktop);
 
       if Assigned(FLastDesktopBeforeDebug) then//are we in debug session?
       begin
@@ -3450,6 +3470,13 @@ var
   i, ConfCount: Integer;
   Entry: TDebuggerPropertiesConfig;
 begin
+  (* Delete old entries
+     If an entry was loaded for a DebuggerClass that is currently unknown (package not compiled into IDE)
+     then the entry did not load its properties. Therefore such entries "not Entry.IsLoaded"
+     must not be deleted.
+     Loop from the highest Index, so deleting an entry will not change the Xml-Index of
+     the Indexes still to loop over.
+   *)
   for i := FDebuggerProperties.Count - 1 downto 0 do begin
     // Delete last entry first
     Entry := FDebuggerProperties.Opt[i];
@@ -3460,7 +3487,8 @@ begin
       Entry.DeleteFromXml(FXMLCfg, XML_PATH_DEBUGGER_CONF) // will be rewritten
     else
     if Entry.IsDeleted or
-       (Entry.ConfigName <> '') // Moved to named list
+       (Entry.ConfigName <> '') or // Moved to named list
+       (Entry.ConfigClass <> Entry.FConfigClassInOldXml)
     then
       Entry.DeleteFromOldXml(FXMLCfg, XML_PATH_DEBUGGER_CONF_OLD);
 
@@ -3559,12 +3587,15 @@ begin
 end;
 
 function TEnvironmentOptions.CurrentDebuggerClass(TheProject: TLazProject): TDebuggerClass;
+var
+  Cfg: TDebuggerPropertiesConfig;
 begin
   LoadDebuggerProperties;
 
   Result := nil;
-  if CurrentDebuggerPropertiesConfigEx(TheProject) <> nil then
-    Result := CurrentDebuggerPropertiesConfigEx(TheProject).DebuggerClass;
+  Cfg := CurrentDebuggerPropertiesConfigEx(TheProject);
+  if  Cfg<> nil then
+    Result := Cfg.DebuggerClass;
 end;
 
 function TEnvironmentOptions.GetCurrentDebuggerPropertiesConfig: TDebuggerPropertiesConfig;
@@ -3648,10 +3679,8 @@ function TEnvironmentOptions.GetActiveDesktop: TDesktopOpt;
   end;
 
 var
-  OldActiveDesktop: TDesktopOpt;
   OldActiveDesktopName: string;
-  lDskTpOpt: TCustomDesktopOpt;
-
+  OldActiveDesktop, lDskTpOpt: TCustomDesktopOpt;
 begin
   Result := nil;
   if FActiveDesktopName <> '' then
@@ -3678,11 +3707,11 @@ begin
 
   Result := TDesktopOpt.Create(FActiveDesktopName);
   FDesktops.Add(Result);
-  Result.Assign(Desktop);
+  Result.Assign(FDesktop);
   if Assigned(IDEDockMaster) then
     Result.FDockedOpt.LoadDefaults;
-  OldActiveDesktop := TDesktopOpt(FDesktops.Find(OldActiveDesktopName));
-  if not Assigned(OldActiveDesktop) then
+  OldActiveDesktop := FDesktops.Find(OldActiveDesktopName);
+  if not (OldActiveDesktop is TDesktopOpt) then
   begin
     lDskTpOpt := FDesktops.Find('default');
     if Assigned(lDskTpOpt) and lDskTpOpt.InheritsFrom(TDesktopOpt) and lDskTpOpt.Compatible then
@@ -3691,7 +3720,7 @@ begin
       OldActiveDesktop := nil;
   end;
   if Assigned(OldActiveDesktop) then
-    Result.Assign(OldActiveDesktop, False, False);
+    Result.Assign(TDesktopOpt(OldActiveDesktop), False, False);
 end;
 
 procedure TEnvironmentOptions.SetTestBuildDirectory(const AValue: string);
@@ -3724,13 +3753,13 @@ begin
   xLastFocusControl := Screen.ActiveControl;
   xLastFocusForm := Screen.ActiveCustomForm;
   DoBeforeWrite(False);  //this is needed to get the EditorToolBar refreshed!!! - needed only here in UseDesktop()
-  Desktop.Assign(ADesktop);
+  FDesktop.Assign(ADesktop);
   ActiveDesktopName := ADesktop.Name;
   if ADesktop.AssociatedDebugDesktopName<>'' then
     DebugDesktopName := ADesktop.AssociatedDebugDesktopName;
-  Desktop.ExportSettingsToIDE(Self);
+  FDesktop.ExportSettingsToIDE(Self);
   DoAfterWrite(False);  //this is needed to get the EditorToolBar refreshed!!! - needed only here in UseDesktop()
-  Desktop.RestoreDesktop;
+  FDesktop.RestoreDesktop;
 
   //set focus back to the previously focused control
   if Screen.CustomFormIndex(xLastFocusForm) >= 0 then//check if form hasn't been destroyed

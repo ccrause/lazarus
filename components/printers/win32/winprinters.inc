@@ -326,9 +326,9 @@ begin
     Windows.EndPage(fDC);
 end;
 
-procedure TWinPrinter.DoEndDoc(aAborded: Boolean);
+procedure TWinPrinter.DoEndDoc(aAborted: Boolean);
 begin
-  inherited DoEndDoc(aAborded);
+  inherited DoEndDoc(aAborted);
 
   if RawMode then begin
 
@@ -340,7 +340,7 @@ begin
     }
   end else begin
     Windows.EndPage(fDC);
-    if not aAborded then
+    if not aAborted then
       WinUtilPrn.EndDoc(fDC);
   end;
 end;
@@ -644,6 +644,10 @@ begin
     if i<>-1 then begin
       if not Printing then
         ClearDC;
+
+      dmW^.dmFields := dmW^.dmFields and not DM_PAPERLENGTH;
+      dmW^.dmFields := dmW^.dmFields and not DM_PAPERWIDTH;
+      dmW^.dmFields := dmW^.dmFields or DM_PAPERSIZE;
       dmW^.dmPaperSize := SHORT(ptrint(PaperSize.SupportedPapers.Objects[i]));
       if Printing then
         ResetDCW(fDC, dmW^);
@@ -709,6 +713,23 @@ begin
       end;
     end;
     Result:=1;
+  end;
+end;
+
+function TWinPrinter.DoSetPaperRect(aPaperRc: TPaperRect): boolean;
+var
+  dmW  : PDeviceModeW;
+begin
+  result := GetCurrentDevModeW(dmW);
+  if result then begin
+    if not Printing then
+      ClearDC;
+    dmW^.dmFields := dmW^.dmFields or DM_PAPERLENGTH or DM_PAPERWIDTH or DM_PAPERSIZE;
+    dmW^.dmPaperSize := DMPAPER_USER;
+    dmW^.dmPaperWidth := round(aPaperRC.PhysicalRect.Width * 254 / XDPI);
+    dmW^.dmPaperLength := round(aPaperRC.PhysicalRect.Height * 254 / YDPI);
+    if Printing then
+      ResetDCW(fDC, dmW^);
   end;
 end;
 

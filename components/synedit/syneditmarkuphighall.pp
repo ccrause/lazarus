@@ -32,8 +32,9 @@ uses
   // LazUtils
   LazClasses, LazUTF8, LazMethodList,
   // SynEdit
-  SynEditMarkup, SynEditTypes, SynEditSearch, SynEditMiscClasses, SynEditHighlighter,
-  SynEditPointClasses, SynEditMiscProcs, SynEditFoldedView, SynEditTextBase;
+  SynEditMarkup, SynEditTypes, SynEditSearch, SynEditMiscClasses,
+  SynEditHighlighter, SynEditPointClasses, SynEditMiscProcs,
+  SynEditTextBase, LazSynEditText;
 
 type
 
@@ -121,7 +122,6 @@ type
 
   TSynEditMarkupHighlightAllBase = class(TSynEditMarkupHighlightMatches)
   private
-    FFoldView: TSynEditFoldedView;
     FNeedValidate, FNeedValidatePaint: Boolean;
     FMarkupEnabled: Boolean;
 
@@ -131,13 +131,13 @@ type
     FHideSingleMatch: Boolean;
 
     function GetMatchCount: Integer;
-    procedure SetFoldView(AValue: TSynEditFoldedView);
     procedure SetHideSingleMatch(AValue: Boolean);
-    procedure DoFoldChanged(aLine: Integer);
+    procedure DoFoldChanged(Sender: TSynEditStrings; aIndex, aCount: Integer);
 
     Procedure ValidateMatches(SkipPaint: Boolean = False);
 
   protected
+    procedure SetLines(const AValue: TSynEditStringsLinked); override;
     function  HasSearchData: Boolean; virtual; abstract;
     function HasDisplayAbleMatches: Boolean; override;
     function  SearchStringMaxLines: Integer; virtual; abstract;
@@ -167,8 +167,6 @@ type
     Procedure Invalidate(SkipPaint: Boolean = False);
     Procedure InvalidateLines(AFirstLine: Integer = 0; ALastLine: Integer = 0; SkipPaint: Boolean = False);
     Procedure SendLineInvalidation(AFirstIndex: Integer = -1;ALastIndex: Integer = -1);
-
-    property FoldView: TSynEditFoldedView read FFoldView write SetFoldView;
 
     property HideSingleMatch: Boolean read FHideSingleMatch write SetHideSingleMatch;
   end;
@@ -442,7 +440,6 @@ type
   end;
 
 implementation
-uses SynEdit;
 
 const
   SEARCH_START_OFFS = 100; // Search n lises before/after visible area. (Before applies only, if no exact offset can not be calculated from searchtext)
@@ -1942,7 +1939,8 @@ end;
 
 destructor TSynEditMarkupHighlightAllBase.Destroy;
 begin
-  FoldView := nil;
+  if Lines <> nil then
+    Lines.RemoveChangeHandler(senrLineMappingChanged, @DoFoldChanged);
   inherited Destroy;
 end;
 
@@ -1984,19 +1982,6 @@ begin
   Result := fMatches.Count;
 end;
 
-procedure TSynEditMarkupHighlightAllBase.SetFoldView(AValue: TSynEditFoldedView);
-begin
-  if FFoldView = AValue then Exit;
-
-  if FFoldView <> nil then
-    FFoldView.RemoveFoldChangedHandler(@DoFoldChanged);
-
-  FFoldView := AValue;
-
-  if FFoldView <> nil then
-    FFoldView.AddFoldChangedHandler(@DoFoldChanged);
-end;
-
 procedure TSynEditMarkupHighlightAllBase.SetHideSingleMatch(AValue: Boolean);
 begin
   if FHideSingleMatch = AValue then Exit;
@@ -2009,9 +1994,10 @@ begin
       SendLineInvalidation; // Show the existing match
 end;
 
-procedure TSynEditMarkupHighlightAllBase.DoFoldChanged(aLine: Integer);
+procedure TSynEditMarkupHighlightAllBase.DoFoldChanged(Sender: TSynEditStrings;
+  aIndex, aCount: Integer);
 begin
-  InvalidateLines(aLine+1, MaxInt, True);
+  InvalidateLines(aIndex+1, MaxInt, True);
 end;
 
 procedure TSynEditMarkupHighlightAllBase.ValidateMatches(SkipPaint: Boolean);
@@ -2452,6 +2438,16 @@ begin
   //finally  DebugLnExit(['  < ValidateMatches Cnt=',FMatches.Count, '  <<< # ', dbgs(FStartPoint), ' - ', dbgs(FSearchedEnd)]); end;
 end;
 
+procedure TSynEditMarkupHighlightAllBase.SetLines(
+  const AValue: TSynEditStringsLinked);
+begin
+  if Lines <> nil then
+    Lines.RemoveChangeHandler(senrLineMappingChanged, @DoFoldChanged);
+  inherited SetLines(AValue);
+  if Lines <> nil then
+    Lines.AddChangeHandler(senrLineMappingChanged, @DoFoldChanged);
+end;
+
 function TSynEditMarkupHighlightAllBase.HasDisplayAbleMatches: Boolean;
 begin
   Result := (inherited HasDisplayAbleMatches) and
@@ -2729,27 +2725,27 @@ begin
     exit('');
   if FToggledWord <> '' then
     exit(FToggledWord);
-  If TCustomSynEdit(SynEdit).SelAvail then begin
-    LowBnd := TCustomSynEdit(SynEdit).BlockBegin;
-    UpBnd := TCustomSynEdit(SynEdit).BlockEnd;
+  If SynEdit.SelAvail then begin
+    LowBnd := SynEdit.BlockBegin;
+    UpBnd := SynEdit.BlockEnd;
     i := UpBnd.y - LowBnd.y + 1;
     if (i > LowBnd.y) and (i > Lines.Count - UpBnd.y) then
       exit('');
     if FTrim then
-      Result := TrimS(TCustomSynEdit(SynEdit).SelText)
+      Result := TrimS(SynEdit.SelText)
     else
-      Result := TCustomSynEdit(SynEdit).SelText;
+      Result := SynEdit.SelText;
     if TrimS(Result) = '' then Result := '';
     FLowBound := LowBnd;
     FUpBound := UpBnd;
   end else begin
-    Result :=  TCustomSynEdit(SynEdit).GetWordAtRowCol(Caret.LineBytePos);
+    Result :=  SynEdit.GetWordAtRowCol(Caret.LineBytePos);
     if FIgnoreKeywords and assigned(FHighlighter)
        and FHighlighter.IsKeyword(Result) then
       Result := '';
     FLowBound.Y := Caret.LinePos;
     FUpBound.Y := Caret.LinePos;
-    TCustomSynEdit(SynEdit).GetWordBoundsAtRowCol(Caret.LineBytePos, FLowBound.X, FUpBound.X);
+    SynEdit.GetWordBoundsAtRowCol(Caret.LineBytePos, FLowBound.X, FUpBound.X);
   end;
 end;
 
@@ -2765,7 +2761,7 @@ function TSynEditMarkupHighlightAllCaret.GetCurrentOption: TSynSearchOptions;
 begin
   if FToggledWord <> '' then
     exit(FToggledOption);
-  If TCustomSynEdit(SynEdit).SelAvail or not(FFullWord) then
+  If SynEdit.SelAvail or not(FFullWord) then
     Result := []
   else
     if (FFullWordMaxLen >0) and (UTF8Length(GetCurrentText) > FFullWordMaxLen) then

@@ -4,7 +4,7 @@
   for details about the license.
  *****************************************************************************
 
-  Axises for TAChart series.
+  Axes for TAChart series.
 
   Authors: Alexander Klenin
 
@@ -769,7 +769,7 @@ begin
   Result.FMin := AMin;
   Result.FMax := AMax;
   Result.FFormat := Marks.Format;
-  Result.FUseY := IsVertical;
+  Result.FUseY := IsVertical xor Marks.SourceExchangeXY;
   Result.FAxisToGraph := @GetTransform.AxisToGraph;
   Result.FGraphToAxis := @GetTransform.GraphToAxis;
   Result.FGraphToImage := @FHelper.GraphToImage;

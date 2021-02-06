@@ -15,7 +15,7 @@ uses
   DbgIntfDebuggerBase,
   lazCollections,
   syncobjs,
-  lazfglhash,
+  LazFglHash,
   fpjson,
   FpDbgClasses;
 
@@ -105,7 +105,7 @@ type
     FBreakPointIdCnt: Integer;
     FBreakPointIdMap: TBreakPointIdMap;
   public
-    constructor Create; override;
+    constructor Create(AMemManager: TFpDbgMemManager); override;
     destructor Destroy; override;
     function AddInternalBreakPointToId(ABrkPoint: TFpInternalBreakpoint): Integer;
     function GetInternalBreakPointFromId(AnId: Integer): TFpDbgBreakpoint;
@@ -166,7 +166,8 @@ type
     procedure FreeConsoleOutputThread;
   protected
     // Handlers for the FController-events
-    procedure FControllerHitBreakpointEvent(var continue: boolean; const Breakpoint: TFpDbgBreakpoint);
+    procedure FControllerHitBreakpointEvent(var continue: boolean; const Breakpoint: TFpDbgBreakpoint;
+      AnEventType: TFPDEvent; AMoreHitEventsPending: Boolean);
     procedure FControllerProcessExitEvent(ExitCode: DWord);
     procedure FControllerCreateProcessEvent(var continue: boolean);
     procedure FControllerDebugInfoLoaded(Sender: TObject);
@@ -242,11 +243,11 @@ begin
   Result := PPointer(Key1)^ - PPointer(Key1)^;
 end;
 
-constructor TFpServerDbgController.Create;
+constructor TFpServerDbgController.Create(AMemManager: TFpDbgMemManager);
 begin
   FBreakPointIdMap := TBreakPointIdMap.Create;
   FBreakPointIdMap.OnDataPtrCompare := @DoBreakPointCompare;
-  inherited Create;
+  inherited Create(AMemManager);
 end;
 
 destructor TFpServerDbgController.Destroy;
@@ -415,7 +416,7 @@ end;
 
 procedure TFpDebugThread.FControllerDebugInfoLoaded(Sender: TObject);
 begin
-  TFpDwarfInfo(FController.CurrentProcess.DbgInfo).MemManager := FMemManager;
+  //TFpDwarfInfo(FController.CurrentProcess.DbgInfo).MemManager := FMemManager;
 end;
 
 procedure TFpDebugThread.FreeConsoleOutputThread;
@@ -434,7 +435,7 @@ begin
 end;
 
 procedure TFpDebugThread.FControllerHitBreakpointEvent(var continue: boolean;
-  const Breakpoint: TFpDbgBreakpoint);
+  const Breakpoint: TFpDbgBreakpoint; AnEventType: TFPDEvent; AMoreHitEventsPending: Boolean);
 var
   ADebugEvent: TFpDebugEvent;
   AnId: Integer;
@@ -492,7 +493,7 @@ var
   ARunLoop: boolean;
   AnEvent: TFpDebugEvent;
 begin
-  FController := TFpServerDbgController.Create;
+  FController := TFpServerDbgController.Create(FMemManager);
   FController.RedirectConsoleOutput:=true;
   FController.OnCreateProcessEvent:=@FControllerCreateProcessEvent;
   FController.OnProcessExitEvent:=@FControllerProcessExitEvent;

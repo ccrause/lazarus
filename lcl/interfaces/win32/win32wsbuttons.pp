@@ -460,22 +460,25 @@ begin
         DrawBitmap(BitBtnEnabledToButtonState[IsWindowEnabled(BitBtnHandle) or (csDesigning in BitBtn.ComponentState)], True, False);
         ImageList_AddMasked(ButtonImageList.himl, NewBitmap, GetSysColor(COLOR_BTNFACE));
       end;
+      if NewBitmap <> 0 then
+        DeleteObject(NewBitmap);
     end
     else
     begin
       ButtonImageList.himl := 0;
     end;
     Windows.SendMessage(BitBtnHandle, BCM_SETIMAGELIST, 0, LPARAM(@ButtonImageList));
-    if NewBitmap <> 0 then
-      DeleteObject(NewBitmap);
   end else
   begin
+    //unthemed
     OldBitmap := HBITMAP(Windows.SendMessage(BitBtnHandle, BM_GETIMAGE, IMAGE_BITMAP, 0));
     if NewBitmap <> 0 then
       DrawBitmap(BitBtnEnabledToButtonState[IsWindowEnabled(BitBtnHandle) or (csDesigning in BitBtn.ComponentState)], False, False);
     Windows.SendMessage(BitBtnHandle, BM_SETIMAGE, IMAGE_BITMAP, LPARAM(NewBitmap));
     if OldBitmap <> 0 then
       DeleteObject(OldBitmap);
+    //Don't do a DeleteObject(NewBitmap) here: if you do, there will be no glyph and caption on the button.
+    //We release the bitmap upon WM_Destroy. Issue #0037105
   end;
   DeleteDC(hdcNewBitmap);
   ReleaseDC(BitBtnHandle, BitBtnDC);
@@ -489,6 +492,7 @@ var
   Control: TWinControl;
   ButtonImageList: BUTTON_IMAGELIST;
   ImageList: HIMAGELIST;
+  OldBitmap: HBITMAP;
   LMessage: TLMessage;
 begin
   Info := GetWin32WindowInfo(Window);
@@ -514,6 +518,12 @@ begin
             Windows.SendMessage(Window, BCM_SETIMAGELIST, 0, Windows.LPARAM(@ButtonImageList));
             ImageList_Destroy(ImageList);
           end;
+        end else
+        begin
+          //unthemed BitBtn
+          OldBitmap := HBITMAP(Windows.SendMessage(Window, BM_GETIMAGE, IMAGE_BITMAP, 0));
+          if OldBitmap <> 0 then
+            DeleteObject(OldBitmap);
         end;
         Result := WindowProc(Window, Msg, WParam, LParam);
       end;

@@ -244,6 +244,8 @@ type
     function ExtentList: TDoubleRect; virtual;
     function ExtentXYList: TDoubleRect; virtual;
     procedure FindBounds(AXMin, AXMax: Double; out ALB, AUB: Integer);
+    procedure FindYRange(AXMin, AXMax: Double; Stacked: Boolean;
+      var AYMin, AYMax: Double);
     function FormatItem(
       const AFormat: String; AIndex, AYIndex: Integer): String; inline;
     function FormatItemXYText(
@@ -476,7 +478,7 @@ var
   parts: TStrings;
   i: Integer;
 begin
-  parts := Split(IfThen(NiceSteps = '', DEF_INTERVAL_STEPS, NiceSteps));
+  parts := Split(StrUtils.IfThen(NiceSteps = '', DEF_INTERVAL_STEPS, NiceSteps));
   try
     SetLength(FStepValues, parts.Count);
     for i := 0 to parts.Count - 1 do
@@ -1158,11 +1160,39 @@ begin
   end;
 end;
 
+procedure TCustomChartSource.FindYRange(AXMin, AXMax: Double; Stacked: Boolean;
+  var AYMin, AYMax: Double);
+var
+  lb, ub: Integer;
+  i, j: Integer;
+  sum: Double;
+begin
+  FindBounds(AXMin, AXMax, lb, ub);
+  for i := lb to ub do
+  begin
+    if YCount = 1 then
+      UpdateMinMax(Item[i]^.Y, AYMin, AYMax)
+    else
+      if Stacked then
+      begin
+        sum := Item[i]^.Y;
+        for j := 0 to YCount-2 do
+          sum := sum + Item[i]^.YList[j];
+        UpdateMinMax(sum, AYMin, AYMax);
+      end else
+      begin
+        UpdateMinMax(Item[i]^.Y, AYMin, AYMax);
+        for j := 0 to YCount-2 do
+          UpdateMinMax(Item[i]^.YList[j], AYMin, AYMax);
+      end;
+  end
+end;
+
 function TCustomChartSource.FormatItem(
   const AFormat: String; AIndex, AYIndex: Integer): String;
 begin
   with Item[AIndex]^ do
-    Result := FormatItemXYText(AFormat, IfThen(XCount > 0, X, Double(AIndex)), GetY(AYIndex), Text);
+    Result := FormatItemXYText(AFormat, Math.IfThen(XCount > 0, X, Double(AIndex)), GetY(AYIndex), Text);
 end;
 
 function TCustomChartSource.FormatItemXYText(
@@ -1204,7 +1234,7 @@ begin
   ALowerDelta := 0;
 
   if Which = 0 then
-    v := IfThen(XCount > 0, Item[APointIndex]^.X, APointIndex)
+    v := Math.IfThen(XCount > 0, Item[APointIndex]^.X, APointIndex)
   else
     v := Item[APointIndex]^.Y;
 
@@ -1266,7 +1296,7 @@ var
   v, dxp, dxn: Double;
 begin
   Result := GetErrorBarValues(APointIndex, 0, dxp, dxn);
-  v := IfThen(XCount > 0, Item[APointIndex]^.X, APointIndex);
+  v := Math.IfThen(XCount > 0, Item[APointIndex]^.X, APointIndex);
   if Result and not IsNaN(v) then begin
     AUpperLimit := v + dxp;
     ALowerLimit := v - dxn;
@@ -1461,7 +1491,7 @@ procedure TCustomChartSource.ValuesInRange(
     ADest.FValue := AValue;
     with Item[AIndex]^ do begin
       if AParams.FUseY then begin
-        nx := IfThen(XCount > 0, X, AIndex);
+        nx := Math.IfThen(XCount > 0, X, AIndex);
         ny := AValue;
       end
       else begin
@@ -1518,7 +1548,7 @@ begin
   AValues[start].FValue := SafeNan;
   for i := 0 to Count - 1 do begin
     with Item[I]^ do
-      v := IfThen(AParams.FUseY, Y, IfThen(XCount > 0, X, I));
+      v := Math.IfThen(AParams.FUseY, Y, Math.IfThen(XCount > 0, X, I));
     if IsNan(v) then continue;
     if v < AParams.FMin then begin
       if v > lo.FValue then
@@ -1583,7 +1613,7 @@ var
 begin
   for i := 0 to Count - 1 do
     with Item[i]^ do
-      if Y = Extent.b.Y then begin
+      if not IsNaN(Y) and (Y = Extent.b.Y) then begin
         if XCount > 0 then
           exit(GetX(AIndex))
         else
@@ -1598,7 +1628,7 @@ var
 begin
   for i := 0 to Count - 1 do
     with Item[i]^ do
-      if Y = Extent.a.Y then begin
+      if not IsNaN(Y) and (Y = Extent.a.Y) then begin
         if XCount > 0 then
           exit(GetX(AIndex))
         else

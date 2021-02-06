@@ -39,11 +39,10 @@ interface
 uses
   Classes, SysUtils, TypInfo, Types, Laz_AVL_Tree,
   // LCL
-  LCLStrConsts, LCLType, LCLProc, GraphType, Graphics, LMessages, LCLIntf,
-  InterfaceBase, ImgList, PropertyStorage, Menus, ActnList, LCLClasses,
-  LResources, LCLPlatformDef,
+  LCLStrConsts, LCLType, LCLProc, Graphics, LMessages, LCLIntf, InterfaceBase,
+  ImgList, PropertyStorage, Menus, ActnList, LCLClasses, LResources, LCLPlatformDef,
   // LazUtils
-  LazMethodList, LazLoggerBase, LazUtilities, UITypes;
+  GraphType, UITypes, LazMethodList, LazLoggerBase, LazTracer, LazUtilities;
 
 {$I controlconsts.inc}
 
@@ -1946,7 +1945,9 @@ type
     wcfUpdateShowing,
     wcfHandleVisible,
     wcfAdjustedLogicalClientRectValid,
-    wcfKillIntfSetBounds
+    wcfKillIntfSetBounds,
+    wcfDesignerDeleting,     // Only used for PairSplitter which should be redesigned
+    wcfSpecialSubControl     // Only set by PairSplitterSide
     );
   TWinControlFlags = set of TWinControlFlag;
 
@@ -2032,7 +2033,6 @@ type
     FShowing: Boolean;
     FDockSite: Boolean;
     FUseDockManager: Boolean;
-    FDesignerDeleting: Boolean;
     procedure AlignControl(AControl: TControl);
     function DoubleBufferedIsStored: Boolean;
     function GetBrush: TBrush;
@@ -2042,9 +2042,11 @@ type
     function GetDockClients(Index: Integer): TControl;
     function GetHandle: HWND;
     function GetIsResizing: boolean;
+    function GetIsSpecialSubControl: Boolean;
     function GetTabOrder: TTabOrder;
     function GetVisibleDockClientCount: Integer;
     procedure SetChildSizing(const AValue: TControlChildSizing);
+    procedure SetDesignerDeleting(AValue: Boolean);
     procedure SetDockSite(const NewDockSite: Boolean);
     procedure SetDoubleBuffered(Value: Boolean);
     procedure SetHandle(NewHandle: HWND);
@@ -2274,7 +2276,8 @@ type
     property Showing: Boolean read FShowing; // handle visible
     property UseDockManager: Boolean read FUseDockManager
                                      write SetUseDockManager default False;
-    property DesignerDeleting: Boolean read FDesignerDeleting write FDesignerDeleting;
+    property DesignerDeleting: Boolean write SetDesignerDeleting;
+    property IsSpecialSubControl: Boolean read GetIsSpecialSubControl;
     property VisibleDockClientCount: Integer read GetVisibleDockClientCount;
   public
     // size, position, bounds
@@ -3121,7 +3124,7 @@ begin
         begin
           NewFrmControl := NewFrm.ControlAtPos(NewFrm.ScreenToClient(MousePos),
             [capfAllowWinControls, capfRecursive, capfOnlyWinControls]);
-          if (NewFrmControl<>nil) and (NewFrmControl is TWinControl) then
+          if NewFrmControl is TWinControl then
             NewWinControl := TWinControl(NewFrmControl)
           else
             NewWinControl := NewFrm;

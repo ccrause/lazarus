@@ -1187,6 +1187,7 @@ const
     QtWA_WState_WindowOpacitySet = 119 { $77 };
     QtWA_TranslucentBackground = 120 { $78 };
     QtWA_AttributeCount = 121 { $79 };
+    QtWA_X11DoNotAcceptFocus = 132;
 
 type
   QtKey = cardinal; //  Qt::Key (4)
@@ -1776,6 +1777,7 @@ const
     QEventUngrabKeyboard = 189 { $bd };
     QEventCocoaRequestModal = 190 { $be };
     QEventMacGLClearDrawable = 191 { $bf };
+    QEventWinIdChange = 203 { $cb };
     QEventUser = 1000 { $3e8 };
     QEventMaxUser = 65535 { $ffff };
 

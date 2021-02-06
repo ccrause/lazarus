@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils,
   // LazUtils
-  LazLogger,
+  LazLogger, LazUtilities,
   // IDEIntf
   IDEExternToolIntf,
   // IDE
@@ -46,15 +46,11 @@ type
 
   { TExternalToolConsole }
 
-  // ToDo: Replace TLazExtToolConsole with this TExternalToolConsole somehow.
   TExternalToolConsole = class(TExternalTool)
-  private
   protected
     procedure CreateView; override;
     procedure QueueAsyncAutoFree; override;
   public
-    constructor Create(aOwner: TComponent); override;
-    destructor Destroy; override;
   end;
 
   { TExternalToolsConsole }
@@ -64,7 +60,7 @@ type
     constructor Create(aOwner: TComponent); override;
     destructor Destroy; override;
     function GetIDEObject({%H-}ToolData: TIDEExternalToolData): TObject; override;
-    procedure HandleMesages; override;
+    procedure HandleMessages; override;
   end;
 
 var
@@ -183,16 +179,6 @@ end;
 
 { TExternalToolConsole }
 
-constructor TExternalToolConsole.Create(aOwner: TComponent);
-begin
-  inherited Create(aOwner);
-end;
-
-destructor TExternalToolConsole.Destroy;
-begin
-  inherited Destroy;
-end;
-
 procedure TExternalToolConsole.CreateView;
 // in console mode all output goes unparsed to console
 var
@@ -210,7 +196,7 @@ end;
 
 procedure TExternalToolConsole.QueueAsyncAutoFree;
 begin
-  debugln(['WARNING: TExternalTool.SetThread can not call AutoFree from other thread']);
+  DebugLn(['WARNING: TExternalTool.SetThread can not call AutoFree from other thread']);
 end;
 
 { TExternalToolsConsole }
@@ -232,10 +218,13 @@ begin
   Result:=nil;
 end;
 
-procedure TExternalToolsConsole.HandleMesages;
+procedure TExternalToolsConsole.HandleMessages;
 begin
-  if IsMultiThread then
+  if IsMultiThread then begin
+    if ConsoleVerbosity>0 then
+      DebugLn('TExternalToolsConsole.HandleMesages: Calling CheckSynchronize!');
     CheckSynchronize;
+  end;
 end;
 
 end.

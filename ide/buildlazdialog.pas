@@ -51,14 +51,14 @@ uses
   LCLProc, Forms, Controls, LCLType, StdCtrls, ExtCtrls, Buttons, Dialogs,
   LCLPlatformDef, CheckLst, Menus, ComCtrls,
   // LazUtils
-  FileUtil, LazFileUtils, LazUTF8, LazLoggerBase, lazutf8classes, LazFileCache,
+  FileUtil, LazFileUtils, LazUTF8, LazLoggerBase, LazFileCache,
   // LazControls
   DividerBevel,
   // Codetools
   CodeToolManager, DefineTemplates,
   // IDEIntf
-  LazIDEIntf, IDEMsgIntf, IDEHelpIntf, IDEImagesIntf, IDEWindowIntf, IDEDialogs,
-  PackageIntf, IDEExternToolIntf,
+  LazIDEIntf, IDEMsgIntf, IDEHelpIntf, IDEImagesIntf, IDEWindowIntf,
+  PackageIntf, IDEExternToolIntf, IDEDialogs, IDEUtils,
   // IDE
   LazarusIDEStrConsts, TransferMacros, LazConf, DialogProcs,
   MainBar, EnvironmentOpts,
@@ -317,7 +317,7 @@ begin
   CleanDir(fWorkingDir+PathDelim+'ide');
   CleanDir(fWorkingDir+PathDelim+'packager');
   CleanDir(fWorkingDir+PathDelim+'lcl');
-  CleanDir(fWorkingDir+PathDelim+'ideintf');
+  CleanDir(fWorkingDir+PathDelim+'ideintf'); // from very old lazarus
   CleanDir(fWorkingDir+PathDelim+'tools');
   CleanDir(fWorkingDir+PathDelim+'test');
 
@@ -430,7 +430,7 @@ begin
   IdeBuildMode:=Profile.IdeBuildMode;
 
   EnvironmentOverrides:=TStringList.Create;
-  CmdLineParams:=TStringListUTF8.Create;
+  CmdLineParams:=TStringList.Create;
   Tool:=nil;
   try
     // setup external tool
@@ -948,7 +948,7 @@ function TLazarusBuilder.SaveIDEMakeOptions(Profile: TBuildLazarusProfile;
   Flags: TBuildLazarusFlags): TModalResult;
 var
   Filename: String;
-  fs: TFileStreamUTF8;
+  fs: TFileStream;
   OptionsAsText: String;
 begin
   Result:=mrCancel;
@@ -960,7 +960,7 @@ begin
   Filename:=GetMakeIDEConfigFilename;
   try
     InvalidateFileStateCache;
-    fs:=TFileStreamUTF8.Create(Filename,fmCreate);
+    fs:=TFileStream.Create(Filename,fmCreate);
     try
       if fExtraOptions<>'' then begin
         // FPC expects console codepage for command line params
@@ -1093,6 +1093,7 @@ begin
       Add('Symbian');
       Add('MSDOS');
       Add('Wii');
+      Add('iOS');
     end;
     ItemIndex:=0;
   end;
@@ -1145,17 +1146,29 @@ end;
 
 procedure TConfigureBuildLazarusDlg.TargetDirectoryButtonClick(Sender: TObject);
 var
-  AFilename: String;
   DirDialog: TSelectDirectoryDialog;
+  lExpandedName: string;
+  lDirName, lDirNameF: string;
 begin
   DirDialog:=TSelectDirectoryDialog.Create(nil);
   try
     DirDialog.Options:=DirDialog.Options+[ofPathMustExist];
     DirDialog.Title:=lisLazBuildABOChooseOutputDir+'(lazarus'+
                       GetExecutableExt(fProfiles.Current.FPCTargetOS)+')';
+
+    { Setup directory path }
+    lDirName:=EnvironmentOptions.GetParsedValue(eopLazarusDirectory, TargetDirectoryComboBox.Text);
+    lExpandedName:=CleanAndExpandDirectory(lDirName);
+    lDirName:=GetValidDirectoryAndFilename(lDirName, lDirNameF);
+
+    DirDialog.InitialDir:=IncludeTrailingBackslash(lDirName);
+    DirDialog.FileName:=lDirNameF;
+
     if DirDialog.Execute then begin
-      AFilename:=CleanAndExpandDirectory(DirDialog.Filename);
-      TargetDirectoryComboBox.AddHistoryItem(AFilename,10,true,true);
+      lDirName:=CleanAndExpandDirectory(DirDialog.Filename);
+      { ~bk Here I wanted to keeep Macros but it doesn't seem to work
+      if UpperCase(lDirName)<>UpperCase(lExpandedName) then }
+      TargetDirectoryComboBox.AddHistoryItem(lDirName,10,true,true);
     end;
   finally
     DirDialog.Free;

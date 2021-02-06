@@ -518,7 +518,7 @@ procedure TGtkDeviceContext.SetWidget(AWidget: PGtkWidget; AWindow: PGdkWindow;
 
 var
   ClientWidget: PGtkWidget;
-  W: PGtkWidget;
+  W, TopLvlW: PGtkWidget;
 begin
   if FWidget <> nil then
     RaiseWidgetAlreadySet;
@@ -552,14 +552,19 @@ begin
         if AWindow = nil then
         begin
           W := gtk_widget_get_parent(AWidget);
-          //we are forcing window creation but not for GtkNotebook
-          //see issue #18754 and #20126
-          //Zeljko:This part should be NOT BE REMOVED since TToolbar, TFrame
-          //TGroupBox etc...depend on this. eg.TToolbar will lock
-          //mouse without realizing clientWidget.Also if THintWindow is
-          //visible it crashes sometimes. SO JUST NOTEBOOK !
-          if (W <> nil) and not GTK_IS_NOTEBOOK(W) then
-            gtk_widget_realize(ClientWidget);
+          TopLvlW := gtk_widget_get_toplevel(AWidget);
+          if (W <> nil) and GTK_IS_WINDOW(TopLvlW) then
+          begin
+            //debugln(['TGtkDeviceContext.SetWidget gtk-class=',GetWidgetClassName(W),' lcl-obj=',DbgSName(GetLCLObject(W))]);
+            //we are forcing window creation but not for GtkNotebook
+            //see issue #18754 and #20126
+            //Zeljko:This part should be NOT BE REMOVED since TToolbar, TFrame
+            //TGroupBox etc...depend on this. eg.TToolbar will lock
+            //mouse without realizing clientWidget.Also if THintWindow is
+            //visible it crashes sometimes. SO JUST NOTEBOOK !
+            if not GTK_IS_NOTEBOOK(W) then
+              gtk_widget_realize(ClientWidget);
+          end;
 
           AWindow := GetControlWindow(ClientWidget);
           // Don't raise an exception. Not all operations needs drawable. For example font metrics:
@@ -1251,7 +1256,7 @@ begin
   if ClipRegion <> nil then
   begin
     RGNType := RegionType(ClipRegion^.GDIRegionObject);
-    if (RGNType <> ERROR) and (RGNType <> NULLREGION) then
+    if RGNType <> ERROR then
       gdk_gc_set_clip_region(FGC,  ClipRegion^.GDIRegionObject);
   end;
 

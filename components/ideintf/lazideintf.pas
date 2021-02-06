@@ -18,12 +18,13 @@ interface
 uses
   Classes, SysUtils,
   // LCL
-  LCLProc, Forms, Controls, Dialogs, LazHelpHTML,
+  Forms, Controls, LazHelpHTML,
   // LazUtils
-  LazMethodList,
+  UITypes, LazMethodList,
+  // BuildIntf
+  BaseIDEIntf, IDEOptionsIntf, CompOptsIntf, ProjectIntf, IDEExternToolIntf,
   // IdeIntf
-  BaseIDEIntf, IDEOptionsIntf, IDEOptEditorIntf, CompOptsIntf, ProjectIntf,
-  IDEExternToolIntf, SrcEditorIntf, IDEWindowIntf, PropEdits;
+  IDEOptEditorIntf, SrcEditorIntf, IDEWindowIntf;
 
 type
   TIDEDirective = (
@@ -235,6 +236,7 @@ type
     lihtSaveAsEditorFile, // called after user selected a new filename for an editor file
     lihtIDERestoreWindows, // called when IDE is restoring the windows (before opening the first project)
     lihtIDEClose, // called when IDE is shutting down (after closequery, so no more interactivity)
+    lihtProjectOpening,// called before IDE opens a project
     lihtProjectOpened,// called after IDE opened a project
     lihtProjectClose, // called before IDE closes a project
     lihtProjectBuilding, // called before IDE builds the project
@@ -249,7 +251,8 @@ type
     lihtShowDesignerFormOfSource, // called after showing a designer form for code editor (AEditor can be nil!)
     lihtShowSourceOfActiveDesignerForm, // called after showing a code of designer form
     lihtChangeToolStatus, //called when IDEToolStatus has changed (e.g. itNone->itBuilder etc.)
-    lihtRunDebug, // called when Run was clicked, after building, before starting the debugger
+    lihtRunDebugInit, // called when Run was clicked, after building, before debugger class is initialized
+    lihtRunDebug, // called when Run was clicked, after building, after debugger class was initialized, before starting the debugger
     lihtRunWithoutDebugBuilding, // called when Run a project without debugger was clicked, before building
     lihtRunWithoutDebugInit, // called when Run a project without debugger was clicked, after building
     lihtRunFinished //called when ran program finishes
@@ -381,6 +384,7 @@ type
     function GetProjectFileForProjectEditor(AEditor: TSourceEditorInterface): TLazProjectFile; virtual; abstract;
     function DoCallProjectChangedHandler(HandlerType: TLazarusIDEHandlerType;
                                          AProject: TLazProject): TModalResult;
+    function DoCallRunDebugInit(var Handled: boolean): TModalResult;
     function DoCallRunDebug(var Handled: boolean): TModalResult;
     function DoCallRunWithoutDebugBuilding(var Handled: boolean): TModalResult;
     function DoCallRunWithoutDebugInit(var Handled: boolean): TModalResult;
@@ -469,6 +473,11 @@ type
     procedure AddHandlerOnIDEClose(const OnIDECloseEvent: TNotifyEvent;
                                    AsLast: boolean = false);
     procedure RemoveHandlerOnIDEClose(const OnIDECloseEvent: TNotifyEvent);
+    procedure AddHandlerOnProjectOpening(
+                         const OnProjectOpeningEvent: TLazProjectChangedFunction;
+                         AsLast: boolean = false);
+    procedure RemoveHandlerOnProjectOpening(
+                        const OnProjectOpeningEvent: TLazProjectChangedFunction);
     procedure AddHandlerOnProjectOpened(
                          const OnProjectOpenedEvent: TLazProjectChangedFunction;
                          AsLast: boolean = false);
@@ -538,6 +547,9 @@ type
                            AsLast: boolean = false);
     procedure RemoveHandlerOnChangeToolStatus(
                                const OnChangeToolStatus: TLazToolStatusChangeEvent);
+    procedure AddHandlerOnRunDebugInit(const Event: TModalHandledFunction;
+                                   AsLast: boolean = false);
+    procedure RemoveHandlerOnRunDebugInit(const Event: TModalHandledFunction);
     procedure AddHandlerOnRunDebug(const Event: TModalHandledFunction;
                                    AsLast: boolean = false);
     procedure RemoveHandlerOnRunDebug(const Event: TModalHandledFunction);
@@ -785,6 +797,12 @@ begin
   end;
 end;
 
+function TLazIDEInterface.DoCallRunDebugInit(var Handled: boolean
+  ): TModalResult;
+begin
+  Result:=DoCallModalHandledHandler(lihtRunDebugInit,Handled);
+end;
+
 function TLazIDEInterface.DoCallRunDebug(var Handled: boolean): TModalResult;
 begin
   Result:=DoCallModalHandledHandler(lihtRunDebug,Handled);
@@ -897,6 +915,18 @@ procedure TLazIDEInterface.RemoveHandlerOnIDEClose(
   const OnIDECloseEvent: TNotifyEvent);
 begin
   RemoveHandler(lihtIDEClose,TMethod(OnIDECloseEvent));
+end;
+
+procedure TLazIDEInterface.AddHandlerOnProjectOpening(
+  const OnProjectOpeningEvent: TLazProjectChangedFunction; AsLast: boolean);
+begin
+  AddHandler(lihtProjectOpening,TMethod(OnProjectOpeningEvent),AsLast);
+end;
+
+procedure TLazIDEInterface.RemoveHandlerOnProjectOpening(
+  const OnProjectOpeningEvent: TLazProjectChangedFunction);
+begin
+  RemoveHandler(lihtProjectOpening,TMethod(OnProjectOpeningEvent));
 end;
 
 procedure TLazIDEInterface.AddHandlerOnProjectOpened(
@@ -1037,6 +1067,18 @@ begin
   RemoveHandler(lihtChangeToolStatus,TMethod(OnChangeToolStatus));
 end;
 
+procedure TLazIDEInterface.AddHandlerOnRunDebugInit(
+  const Event: TModalHandledFunction; AsLast: boolean);
+begin
+  AddHandler(lihtRunDebugInit,TMethod(Event),AsLast);
+end;
+
+procedure TLazIDEInterface.RemoveHandlerOnRunDebugInit(
+  const Event: TModalHandledFunction);
+begin
+  RemoveHandler(lihtRunDebugInit,TMethod(Event));
+end;
+
 procedure TLazIDEInterface.AddHandlerOnRunDebug(
   const Event: TModalHandledFunction; AsLast: boolean);
 begin
@@ -1122,10 +1164,6 @@ procedure TLazIDEInterface.RemoveHandlerOnShowSourceOfActiveDesignerForm(
 begin
   RemoveHandler(lihtShowSourceOfActiveDesignerForm,TMethod(OnShowSourceOfActiveDesignerForm));
 end;
-
-initialization
-  RegisterPropertyEditor(TypeInfo(AnsiString),
-    THTMLBrowserHelpViewer,'BrowserPath',TFileNamePropertyEditor);
 
 end.
 

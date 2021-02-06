@@ -298,15 +298,41 @@ msgstr "IfNDef"
 msgid "Set value"
 msgstr "Değer ayarla"
 
-#: objinspstrconsts.lisunabletofindparserfortool
-#, object-pascal-format
-msgid "Unable to find parser for tool \"%s\""
-msgstr "\"%s\" aracı için çözümleyici bulunamadı."
+#: objinspstrconsts.lrsbufdsfilters
+msgid "XML data files|*.xml;Binary data files|*.dat"
+msgstr ""
 
-#: objinspstrconsts.lisunabletofindparserwithname
-#, object-pascal-format
-msgid "Unable to find parser with name \"%s\""
-msgstr "\"%s\" adında ayrıştırıcı bulunamadı"
+#: objinspstrconsts.lrscopyfromdataset
+msgid "Copy data from other dataset"
+msgstr ""
+
+#: objinspstrconsts.lrscreatedataset
+msgid "Create dataset"
+msgstr ""
+
+#: objinspstrconsts.lrsdatasetactive
+msgid "Dataset is already active, close it first."
+msgstr ""
+
+#: objinspstrconsts.lrsloadfromfile
+msgid "Load data from file"
+msgstr ""
+
+#: objinspstrconsts.lrsnodatasetsavailableforcopy
+msgid "No dataset available to copy data from."
+msgstr ""
+
+#: objinspstrconsts.lrsprovidedatafilename
+msgid "Select a data file to save data to"
+msgstr ""
+
+#: objinspstrconsts.lrssavetofile
+msgid "Save data to file"
+msgstr ""
+
+#: objinspstrconsts.lrsselectdatafilename
+msgid "Select a file with data to load into dataset"
+msgstr ""
 
 #: objinspstrconsts.nbcesaddpage
 msgctxt "objinspstrconsts.nbcesaddpage"
@@ -482,10 +508,6 @@ msgstr "Silmeyi onayla"
 msgctxt "objinspstrconsts.oiscopycomponents"
 msgid "&Copy"
 msgstr "&Kopyala"
-
-#: objinspstrconsts.oiscreateanewpascalunit
-msgid "Create a new pascal unit."
-msgstr "Yeni pascal birimi oluştur."
 
 #: objinspstrconsts.oiscreatedefaultevent
 msgid "Create default event"
@@ -866,10 +888,6 @@ msgstr "Varsayılan olarak ayarla :%s"
 #: objinspstrconsts.oissettodefaulthint
 msgid "Set property value to Default"
 msgstr "Özellik değerini Varsayılan olarak ayarla"
-
-#: objinspstrconsts.oisshowalloutputlines
-msgid "Show all output lines"
-msgstr "Tüm çıktı satırlarını göster"
 
 #: objinspstrconsts.oisshowclasses
 msgid "Show classes"
@@ -1279,10 +1297,6 @@ msgstr "Filtre düzenleyici"
 #: objinspstrconsts.pefiltername
 msgid "Filter name"
 msgstr "Filtre adı"
-
-#: objinspstrconsts.pirsunit
-msgid "Pascal unit"
-msgstr "Pascal birimi"
 
 #: objinspstrconsts.rscdalignment
 msgid "Alignment"

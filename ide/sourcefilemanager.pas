@@ -45,11 +45,11 @@ uses
   {$ENDIF}
   BasicCodeTools, CodeToolsStructs, CodeToolManager, FileProcs, DefineTemplates,
   CodeCache, CodeTree, FindDeclarationTool, KeywordFuncLists,
+  // BuildIntf
+  NewItemIntf, ProjectIntf, PackageIntf, PackageDependencyIntf, IDEExternToolIntf,
   // IdeIntf
-  IDEDialogs, PropEdits, IDEMsgIntf, LazIDEIntf, MenuIntf, NewItemIntf,
-  IDEWindowIntf, ProjectIntf, PackageIntf, PackageDependencyIntf, FormEditingIntf,
-  IDEExternToolIntf, ObjectInspector, UnitResources, ComponentReg,
-  SrcEditorIntf, EditorSyntaxHighlighterDef,
+  IDEDialogs, PropEdits, IDEMsgIntf, LazIDEIntf, MenuIntf, IDEWindowIntf, FormEditingIntf,
+  ObjectInspector, ComponentReg, SrcEditorIntf, EditorSyntaxHighlighterDef,
   // IDE
   IDEProcs, DialogProcs, IDEProtocol, LazarusIDEStrConsts, NewDialog, NewProjectDlg,
   MainBase, MainBar, MainIntf, Project, ProjectDefs, ProjectInspector, CompilerOptions,
@@ -312,11 +312,7 @@ function CreateSrcEditPageName(const AnUnitName, AFilename: string;
 begin
   Result:=AnUnitName;
   if Result='' then
-    Result:=AFilename;
-  if FilenameIsPascalUnit(Result) then
-    Result:=ExtractFileNameOnly(Result)
-  else
-    Result:=ExtractFileName(Result);
+    Result:=ExtractFileName(AFilename);
   Result:=SourceEditorManager.FindUniquePageName(Result,IgnoreEditor);
 end;
 
@@ -616,7 +612,7 @@ begin
 
     NewSrcEdit.IsLocked := AnEditorInfo.IsLocked;
     AnEditorInfo.EditorComponent := NewSrcEdit;
-    //debugln(['TFileOpener.OpenFileInSourceEditor ',AnUnitInfo.Filename,' ',AnUnitInfo.EditorIndex]);
+    //debugln(['TFileOpener.OpenFileInSourceEditor ',AnUnitInfo.Filename]);
 
     // restore source editor settings
     DebugBoss.DoRestoreDebuggerMarks(AnUnitInfo);
@@ -1255,7 +1251,7 @@ begin
   if ([ofRegularFile,ofRevert,ofProjectLoading]*FFlags=[])
   and FilenameIsAbsolute(FFilename) and FileExistsCached(FFilename) then begin
     // check if file is a lazarus project (.lpi)
-    if (CompareFileExt(FFilename,'.lpi',false)=0) then
+    if (CompareFileExt(FFilename,'lpi',true)=0) then
     begin
       case
         IDEQuestionDialog(lisOpenProject, Format(lisOpenTheProject, [FFilename]),
@@ -1273,7 +1269,7 @@ begin
     end;
 
     // check if file is a lazarus package (.lpk)
-    if (CompareFileExt(FFilename,'.lpk',false)=0) then
+    if (CompareFileExt(FFilename,'lpk',true)=0) then
     begin
       case
         IDEQuestionDialog(lisOpenPackage,
@@ -1309,10 +1305,7 @@ begin
 
   if (FNewEditorInfo <> nil) and (FFlags * [ofProjectLoading, ofRevert] = [])
   and (FNewEditorInfo.EditorComponent <> nil) then
-  begin
-    Result := ChangeEditorPage;
-    exit;
-  end;
+    exit(ChangeEditorPage);
 
   Reverting:=ofRevert in FFlags;
   if Reverting then
@@ -1768,7 +1761,7 @@ var
   ActiveSourceEditor: TSourceEditor;
   ActiveUnitInfo: TUnitInfo;
   s, ShortUnitName, LFMFilename, LFMType, LFMComponentName, LFMClassName: string;
-  OkToAdd: boolean;
+  OkToAdd, IsPascal: boolean;
   Owners: TFPList;
   i: Integer;
   APackage: TLazPackage;
@@ -1836,8 +1829,8 @@ begin
     Owners.Free;
   end;
 
-  if FilenameIsPascalUnit(ActiveUnitInfo.Filename)
-  and (EnvironmentOptions.CharcaseFileAction<>ccfaIgnore) then
+  IsPascal:=FilenameIsPascalUnit(ActiveUnitInfo.Filename);
+  if IsPascal and (EnvironmentOptions.CharcaseFileAction<>ccfaIgnore) then
   begin
     // ask user to apply naming conventions
     Result:=RenameUnitLowerCase(ActiveUnitInfo,true);
@@ -1852,16 +1845,15 @@ begin
     mtConfirmation, [mbYes, mbCancel]) in [mrOk, mrYes]
   then begin
     OkToAdd:=True;
-    if FilenameIsPascalUnit(ActiveUnitInfo.Filename) then
+    if IsPascal then
       OkToAdd:=CheckDirIsInSearchPath(ActiveUnitInfo,False)
-    else if CompareFileExt(ActiveUnitInfo.Filename,'inc',false)=0 then
+    else if CompareFileExtQuick(ActiveUnitInfo.Filename,'inc')=0 then
       OkToAdd:=CheckDirIsInSearchPath(ActiveUnitInfo,True);
     if OkToAdd then begin
       ActiveUnitInfo.IsPartOfProject:=true;
       Project1.Modified:=true;
-      if (FilenameIsPascalUnit(ActiveUnitInfo.Filename))
-      and (pfMainUnitHasUsesSectionForAllUnits in Project1.Flags)
-      then begin
+      if IsPascal and (pfMainUnitHasUsesSectionForAllUnits in Project1.Flags) then
+      begin
         ActiveUnitInfo.ReadUnitNameFromSource(false);
         ShortUnitName:=ActiveUnitInfo.CreateUnitName;
         if (ShortUnitName<>'') then begin
@@ -1873,9 +1865,8 @@ begin
     end;
   end;
 
-  if Project1.AutoCreateForms
-  and (pfMainUnitHasCreateFormStatements in Project1.Flags)
-  and FilenameIsPascalUnit(ActiveUnitInfo.Filename) then
+  if Project1.AutoCreateForms and IsPascal
+  and (pfMainUnitHasCreateFormStatements in Project1.Flags) then
   begin
     UpdateUnitInfoResourceBaseClass(ActiveUnitInfo,true);
     if ActiveUnitInfo.ResourceBaseClass in [pfcbcForm,pfcbcCustomForm,pfcbcDataModule] then
@@ -1968,18 +1959,17 @@ function FileExistsInIDE(const Filename: string;
   SearchFlags: TProjectFileSearchFlags): boolean;
 begin
   Result:=FileExistsCached(Filename)
-          or ((Project1<>nil) and (Project1.UnitInfoWithFilename(Filename,SearchFlags)<>nil));
+    or ((Project1<>nil) and (Project1.UnitInfoWithFilename(Filename,SearchFlags)<>nil));
+end;
+
+function BeautifySrc(const s: string): string;
+begin
+  Result:=CodeToolBoss.SourceChangeCache.BeautifyCodeOptions.BeautifyStatement(s,0);
 end;
 
 function NewFile(NewFileDescriptor: TProjectFileDescriptor;
   var NewFilename: string; NewSource: string;
   NewFlags: TNewFlags; NewOwner: TObject): TModalResult;
-
-  function BeautifySrc(const s: string): string;
-  begin
-    Result:=CodeToolBoss.SourceChangeCache.BeautifyCodeOptions.BeautifyStatement(s,0);
-  end;
-
 var
   NewUnitInfo: TUnitInfo;
   NewSrcEdit: TSourceEditor;
@@ -2125,7 +2115,7 @@ begin
       NewUnitInfo.ComponentResourceName:='';
     end;
     Src:=NewFileDescriptor.CreateSource(NewUnitInfo.Filename,NewUnitName,NewUnitInfo.ComponentName);
-    Src:=SourceEditorManager.Beautify(Src);
+    Src:=SourceEditorManager.Beautify(Src,[sembfNotBreakDots]);
     //debugln(['NewFile ',dbgtext(Src)]);
     Src:=CodeToolBoss.SourceChangeCache.BeautifyCodeOptions.BeautifyStatement(Src,0);
     NewUnitInfo.Source.Source:=Src;
@@ -2196,7 +2186,7 @@ begin
           LRSFilename:=ChangeFileExt(NewUnitInfo.Filename,'.lrs');
           CodeToolBoss.CreateFile(LRSFilename);
         end;
-        if (NewUnitInfo.Component<>nil)
+        if (NewUnitInfo.Component is TCustomForm)
         and NewFileDescriptor.UseCreateFormStatements
         and NewUnitInfo.IsPartOfProject
         and AProject.AutoCreateForms
@@ -2499,8 +2489,8 @@ begin
     // Note: When removing published methods, the source, the lfm, the lrs
     //       and the form must be changed. At the moment editing the lfm without
     //       the component is not yet implemented.
-    Result:=RemoveEmptyMethods(AnUnitInfo.Source,
-                   AnUnitInfo.Component.ClassName,0,0,false,[pcsPublished]);
+    Result:=RemoveEmptyMethodsInUnit(AnUnitInfo.Source, AnUnitInfo.Component.ClassName,
+                                     0,0,[pcsPublished]);
     if Result=mrAbort then exit;
   end;
 
@@ -3608,19 +3598,21 @@ begin
       if Project1.CompilerOptions.CompilerPath='' then
         Project1.CompilerOptions.CompilerPath:=DefaultCompilerPath;
       if pfUseDefaultCompilerOptions in Project1.Flags then begin
-        MainIDE.DoMergeDefaultProjectOptions(Project1);
+        MainIDE.DoMergeDefaultProjectOptions;
         Project1.Flags:=Project1.Flags-[pfUseDefaultCompilerOptions];
       end;
       Project1.AutoAddOutputDirToIncPath;
+      // call ProjectOpening handlers
+      HandlerResult:=MainIDE.DoCallProjectChangedHandler(lihtProjectOpening, Project1);
       MainIDE.UpdateCaption;
-      if ProjInspector<>nil then ProjInspector.LazProject:=Project1;
+      if ProjInspector<>nil then
+        ProjInspector.LazProject:=Project1;
       // add and load default required packages
       PkgBoss.OpenProjectDependencies(Project1,true);
       // rebuild codetools defines
       MainBuildBoss.SetBuildTargetProject1(false);
       // (i.e. remove old project specific things and create new)
       IncreaseCompilerParseStamp;
-      Project1.DefineTemplates.AllChanged;
       Project1.DefineTemplates.Active:=true;
       DebugBoss.Reset;
     finally
@@ -3654,7 +3646,7 @@ begin
     for i:=0 to Project1.UnitCount-1 do
       Project1.Units[i].ClearModifieds;
     Project1.Modified:=false;
-    // call handlers
+    // call ProjectOpened handlers
     HandlerResult:=MainIDE.DoCallProjectChangedHandler(lihtProjectOpened, Project1);
     if not (HandlerResult in [mrOk,mrCancel,mrAbort]) then
       HandlerResult:=mrCancel;
@@ -3677,7 +3669,10 @@ begin
   try
     Project1.BeginUpdate(true);
     try
-      if ProjInspector<>nil then ProjInspector.LazProject:=Project1;
+      // call ProjectOpening handlers
+      HandlerResult:=MainIDE.DoCallProjectChangedHandler(lihtProjectOpening, Project1);
+      if ProjInspector<>nil then
+        ProjInspector.LazProject:=Project1;
 
       // read project info file
       {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('InitOpenedProjectFile B3');{$ENDIF}
@@ -3792,9 +3787,7 @@ begin
       LastDesigner.SelectOnlyThisComponent(LastDesigner.LookupRoot);
     end;
 
-    // set all modified to false
     Project1.UpdateAllVisibleUnits;
-    Project1.ClearModifieds(true);
 
     IncreaseCompilerParseStamp;
     IDEProtocolOpts.LastProjectLoadingCrashed := False;
@@ -3811,7 +3804,11 @@ begin
           AnUnitInfo.Loaded := false;
       end;
     end;
-    // call handlers
+
+    // set all modified to false
+    Project1.ClearModifieds(true);
+
+    // call ProjectOpened handlers
     HandlerResult:=MainIDE.DoCallProjectChangedHandler(lihtProjectOpened, Project1);
     if not (HandlerResult in [mrOk,mrCancel,mrAbort]) then
       HandlerResult:=mrCancel;
@@ -3847,11 +3844,9 @@ Begin
           mtError,[mbOk],'');
         exit;
       end;
-      if mrOk<>LoadCodeBuffer(PreReadBuf,AFileName,
-                              [lbfCheckIfText,lbfUpdateFromDisk,lbfRevert],false)
-      then
-        exit;
-      if CreateProjectForProgram(PreReadBuf)=mrOk then
+      if (LoadCodeBuffer(PreReadBuf,AFileName,
+                       [lbfCheckIfText,lbfUpdateFromDisk,lbfRevert],false)<>mrOk)
+      or (CreateProjectForProgram(PreReadBuf)=mrOk) then
         exit;
     end;
   finally
@@ -3902,12 +3897,13 @@ var
 begin
   Project1.BeginUpdate(true);
   try
-    if ProjInspector<>nil then ProjInspector.LazProject:=Project1;
+    if ProjInspector<>nil then
+      ProjInspector.LazProject:=Project1;
     MainUnitInfo:=Project1.MainUnitInfo;
     MainUnitInfo.Source:=ProgramBuf;
     Project1.ProjectInfoFile:=ChangeFileExt(ProgramBuf.Filename,'.lpi');
     Project1.CompilerOptions.TargetFilename:=ExtractFileNameOnly(ProgramBuf.Filename);
-    MainIDE.DoMergeDefaultProjectOptions(Project1);
+    MainIDE.DoMergeDefaultProjectOptions;
     MainIDE.UpdateCaption;
     IncreaseCompilerParseStamp;
     // add and load default required packages
@@ -4140,7 +4136,7 @@ begin
                           +dlgFilterAll+'|'+GetAllFilesMask;
       if OpenDialog.Execute then begin
         AFilename:=GetPhysicalFilenameCached(ExpandFileNameUTF8(OpenDialog.Filename),false);
-        if CompareFileExt(AFilename,'.lpi')<>0 then begin
+        if CompareFileExt(AFilename,'lpi',true)<>0 then begin
           // not a lpi file
           // check if it is a program source
 
@@ -4520,15 +4516,14 @@ begin
 
   NewUnitInfo.ComponentName:=NewComponent.Name;
   NewUnitInfo.ComponentResourceName:=NewUnitInfo.ComponentName;
-  if UseCreateFormStatements and
-     NewUnitInfo.IsPartOfProject and
-     Project1.AutoCreateForms and
-     (pfMainUnitHasCreateFormStatements in Project1.Flags) then
+  if UseCreateFormStatements and (NewComponent is TCustomForm)
+  and NewUnitInfo.IsPartOfProject
+  and Project1.AutoCreateForms
+  and (pfMainUnitHasCreateFormStatements in Project1.Flags) then
   begin
     Project1.AddCreateFormToProjectFile(NewComponent.ClassName,
                                         NewComponent.Name);
   end;
-
   Result:=mrOk;
 end;
 
@@ -4783,7 +4778,9 @@ begin
   end;
 
   // check overwrite existing file
-  if ((not FilenameIsAbsolute(AFilename)) or (CompareFilenames(NewFilename,AFilename)<>0))
+  if IDESaveDialogClass.NeedOverwritePrompt
+      and ((not FilenameIsAbsolute(AFilename))
+          or (CompareFilenames(NewFilename,AFilename)<>0))
       and FileExistsUTF8(NewFilename) then
   begin
     ACaption:=lisOverwriteFile;
@@ -5135,7 +5132,7 @@ begin
               ,'T'+AnUnitInfo.ComponentName,'FORMDATA');
             AnUnitInfo.ComponentLastLRSStreamSize:=MemStream.Size;
             MemStream.Position:=0;
-            SetLength(CompResourceCode,MemStream.Size);
+            SetLength(CompResourceCode{%H-},MemStream.Size);
             MemStream.Read(CompResourceCode[1],length(CompResourceCode));
           finally
             MemStream.Free;
@@ -5387,7 +5384,7 @@ begin
     OldFilePath:=ExtractFilePath(OldFilename);
     OldLFMFilename:='';
     // ToDo: use UnitResources
-    if FilenameIsPascalUnit(OldFilename) then begin
+    if FilenameHasPascalExt(OldFilename) then begin
       OldLFMFilename:=ChangeFileExt(OldFilename,'.lfm');
       if not FileExistsUTF8(OldLFMFilename) then
         OldLFMFilename:=ChangeFileExt(OldFilename,'.dfm');
@@ -5398,7 +5395,7 @@ begin
 
     // check new resource file
     NewLFMFilename:='';
-    if FilenameIsPascalUnit(NewFilename) then
+    if FilenameHasPascalExt(NewFilename) then
        NewLFMFilename:=ChangeFileExt(NewFilename,'.lfm');
     if AnUnitInfo.ComponentName='' then begin
       // unit has no component
@@ -5437,8 +5434,7 @@ begin
     MainIDE.SetRecentFilesMenu;
 
     // add new path to unit path
-    if AnUnitInfo.IsPartOfProject
-    and (FilenameIsPascalUnit(NewFilename))
+    if AnUnitInfo.IsPartOfProject and FilenameHasPascalExt(NewFilename)
     and (CompareFilenames(NewFilePath,Project1.Directory)<>0) then begin
       OldUnitPath:=Project1.CompilerOptions.GetUnitPath(false);
       if SearchDirectoryInSearchPath(OldUnitPath,NewFilePath,1)<1 then
@@ -5614,8 +5610,7 @@ begin
     end;
 
     // remove old path from unit path
-    if AnUnitInfo.IsPartOfProject
-    and (FilenameIsPascalUnit(OldFilename))
+    if AnUnitInfo.IsPartOfProject and FilenameHasPascalExt(OldFilename)
     and (OldFilePath<>'') then begin
       //DebugLn('RenameUnit OldFilePath="',OldFilePath,'" SourceDirs="',Project1.SourceDirectories.CreateSearchPathFromAllFiles,'"');
       if (SearchDirectoryInSearchPath(
@@ -5768,7 +5763,7 @@ var
   SrcEdit: TSourceEditor;
 begin
   if (LFMUnitInfo<>nil)
-  and FilenameIsPascalUnit(LFMUnitInfo.Filename) then begin
+  and FilenameHasPascalExt(LFMUnitInfo.Filename) then begin
     LFMFilename:=ChangeFileExt(LFMUnitInfo.Filename,'.lfm');
     if FileExistsInIDE(LFMFilename,[])
     and (OpenEditorFile(LFMFilename,-1,-1,nil,[])=mrOk)
@@ -5781,8 +5776,8 @@ begin
 
   // check, if a .lfm file is opened in the source editor
   if (LFMUnitInfo=nil) or
-    ((CompareFileExt(LFMUnitInfo.Filename,'.lfm',false)<>0) and
-     (CompareFileExt(LFMUnitInfo.Filename,'.dfm',false)<>0)) then
+    ((CompareFileExt(LFMUnitInfo.Filename,'lfm',true)<>0) and
+     (CompareFileExtQuick(LFMUnitInfo.Filename,'dfm')<>0)) then
   begin
     if not Quiet then
     begin
@@ -5897,28 +5892,23 @@ function LoadLFM(AnUnitInfo: TUnitInfo; OpenFlags: TOpenFlags;
   CloseFlags: TCloseFlags): TModalResult;
 // if there is a .lfm file, open the resource
 var
-  UnitResourceFilename: string;
-  UnitResourceFileformat: TUnitResourcefileFormatClass;
+  ResFilename: string;
   LFMBuf: TCodeBuffer;
   CanAbort: boolean;
 begin
   CanAbort:=[ofProjectLoading,ofMultiOpen]*OpenFlags<>[];
-
-  UnitResourceFileformat:=AnUnitInfo.UnitResourceFileformat;
   // Note: think about virtual and normal .lfm files.
-  UnitResourceFilename:=UnitResourceFileformat.GetUnitResourceFilename(AnUnitInfo.Filename,true);
+  with AnUnitInfo.UnitResourceFileformat do
+    ResFilename:=GetUnitResourceFilename(AnUnitInfo.Filename,true);
   LFMBuf:=nil;
-  if not FileExistsInIDE(UnitResourceFilename,[pfsfOnlyEditorFiles]) then begin
-    // there is no LFM file -> ok
+  if not FileExistsInIDE(ResFilename,[pfsfOnlyEditorFiles]) then begin
     {$IFDEF IDE_DEBUG}
     debugln('LoadLFM there is no LFM file for "',AnUnitInfo.Filename,'"');
     {$ENDIF}
-    Result:=mrOk;
-    exit;
+    exit(mrOk);       // there is no LFM file -> ok
   end;
-
   // there is a lazarus form text file -> load it
-  Result:=LoadIDECodeBuffer(LFMBuf,UnitResourceFilename,[lbfUpdateFromDisk],CanAbort);
+  Result:=LoadIDECodeBuffer(LFMBuf,ResFilename,[lbfUpdateFromDisk],CanAbort);
   if Result<>mrOk then begin
     DebugLn(['LoadLFM LoadIDECodeBuffer failed']);
     exit;
@@ -6152,8 +6142,8 @@ begin
           begin
             DsgControl.AutoAdjustLayout(lapAutoAdjustForDPI, DsgControl.DesignTimePPI, Screen.PixelsPerInch, 0, 0);
             DesignerProcs.ScaleNonVisual(DsgControl, DsgControl.DesignTimePPI, Screen.PixelsPerInch);
+            DsgControl.DesignTimePPI := Screen.PixelsPerInch;
           end;
-          DsgControl.DesignTimePPI := Screen.PixelsPerInch;
           DsgControl.PixelsPerInch := Screen.PixelsPerInch;
         end;
         {$IF (FPC_FULLVERSION >= 30003)} // TDataModule.DesignPPI was added in FPC 3.0.3
@@ -6284,15 +6274,13 @@ function OpenComponent(const UnitFilename: string;
   OpenFlags: TOpenFlags; CloseFlags: TCloseFlags; out Component: TComponent): TModalResult;
 var
   AnUnitInfo: TUnitInfo;
-  LFMFilename: String;
-  UnitCode: TCodeBuffer;
-  LFMCode: TCodeBuffer;
-  AFilename: String;
+  AFilename, LFMFilename: String;
+  UnitCode, LFMCode: TCodeBuffer;
 begin
   if Project1=nil then exit(mrCancel);
   // try to find a unit name without expaning the path. this is required if unit is virtual
   // in other case file name will be expanded with the wrong path
-  AFilename := UnitFilename;
+  AFilename:=UnitFilename;
   AnUnitInfo:=Project1.UnitInfoWithFilename(AFilename);
   if AnUnitInfo = nil then
   begin
@@ -6307,8 +6295,7 @@ begin
   and (AnUnitInfo<>nil) and (AnUnitInfo.Component<>nil) then begin
     // already open
     Component:=AnUnitInfo.Component;
-    Result:=mrOk;
-    exit;
+    exit(mrOk);
   end;
 
   // ToDo: use UnitResources
@@ -6390,7 +6377,7 @@ begin
     end;
   end;
   try
-    if (CompareFileExt(LFMFilename,'lfm')<>0) then
+    if (CompareFileExt(LFMFilename,'lfm',true)<>0) then
     begin
       // no lfm format -> keep old info
       exit(true);
@@ -6557,7 +6544,7 @@ begin
     if Result<>mrOk then begin
       DebugLn(['LoadAncestorDependencyHidden DoLoadComponentDependencyHidden failed AnUnitInfo=',AnUnitInfo.Filename]);
     end;
-    case  Result of
+    case Result of
     mrAbort: exit;
     mrOk: ;
     mrIgnore:
@@ -6656,7 +6643,7 @@ var
       FoundComponentClass:=AnUnitInfo.UnitResourceFileformat.FindComponentClass(aClassName);
     if FoundComponentClass=nil then
     begin
-      RegComp:=IDEComponentPalette.FindComponent(aClassName);
+      RegComp:=IDEComponentPalette.FindRegComponent(aClassName);
       if RegComp<>nil then
         FoundComponentClass:=RegComp.ComponentClass;
     end;
@@ -7010,7 +6997,7 @@ function LoadComponentDependencyHidden(AnUnitInfo: TUnitInfo;
     not found, user wants to skip this step and continue
 }
 
-  function TryLFM(LFMFilename: string; out TheModalResult: TModalResult): boolean;
+  function TryLFM(LFMFilename: string): TModalResult;
   var
     UnitFilename: String;
     CurUnitInfo: TUnitInfo;
@@ -7019,15 +7006,13 @@ function LoadComponentDependencyHidden(AnUnitInfo: TUnitInfo;
     LFMType: String;
     UnitCode: TCodeBuffer;
   begin
-    Result:=false;
-    TheModalResult:=mrCancel;
     // load lfm
-    TheModalResult:=LoadCodeBuffer(LFMCode,LFMFilename,[lbfCheckIfText],true);
-    if TheModalResult<>mrOk then begin
+    Result:=LoadCodeBuffer(LFMCode,LFMFilename,[lbfCheckIfText],true);
+    if Result<>mrOk then begin
       {$IFDEF VerboseLFMSearch}
       debugln(['  TryLFM LoadCodeBuffer failed ',LFMFilename]);
       {$ENDIF}
-      exit(TheModalResult=mrAbort);
+      exit;
     end;
     // check if the unit component is already loaded
     UnitFilename:=ChangeFileExt(LFMFilename,'.pas');
@@ -7037,54 +7022,52 @@ function LoadComponentDependencyHidden(AnUnitInfo: TUnitInfo;
       CurUnitInfo:=Project1.UnitInfoWithFilename(UnitFilename);
     end;
     ReadLFMHeader(LFMCode.Source,LFMClassName,LFMType);
-    if CurUnitInfo<>nil then begin
-      if (CurUnitInfo.Component<>nil) then begin
-        // component already loaded
-        if SysUtils.CompareText(CurUnitInfo.Component.ClassName,LFMClassName)<>0
-        then begin
-          {$IFDEF VerboseLFMSearch}
-          debugln(['  TryLFM ERROR lfmclass=',LFMClassName,' unit.component=',DbgSName(CurUnitInfo.Component)]);
-          {$ENDIF}
-          IDEMessageDialog('Error','Unable to load "'+LFMFilename+'".'
-            +' The component '+DbgSName(CurUnitInfo.Component)
-            +' is already loaded for unit "'+CurUnitInfo.Filename+'"'#13
-            +'LFM contains a different class name "'+LFMClassName+'".',
-            mtError,[mbCancel]);
-          TheModalResult:=mrAbort;
-          exit(true);
-        end;
-        ComponentUnitInfo:=CurUnitInfo;
-        AComponentClass:=TComponentClass(ComponentUnitInfo.Component.ClassType);
-        TheModalResult:=mrOK;
-        exit(true);
-      end;
-    end else begin
+    if CurUnitInfo=nil then
+    begin
       // load unit source
       UnitFilename:=ChangeFileExt(LFMFilename,'.pas');
       if not FileExistsCached(UnitFilename) then
         UnitFilename:=ChangeFileExt(LFMFilename,'.pp');
-      TheModalResult:=LoadCodeBuffer(UnitCode,UnitFilename,[lbfCheckIfText],true);
-      if TheModalResult<>mrOk then exit(TheModalResult=mrAbort);
+      Result:=LoadCodeBuffer(UnitCode,UnitFilename,[lbfCheckIfText],true);
+      if Result<>mrOk then
+        exit;
       // create unit info
       CurUnitInfo:=TUnitInfo.Create(UnitCode);
       CurUnitInfo.ReadUnitNameFromSource(true);
       Project1.AddFile(CurUnitInfo,false);
+    end
+    else if (CurUnitInfo.Component<>nil) then
+    begin
+      // component already loaded
+      if SysUtils.CompareText(CurUnitInfo.Component.ClassName,LFMClassName)<>0
+      then begin
+        {$IFDEF VerboseLFMSearch}
+        debugln(['  TryLFM ERROR lfmclass=',LFMClassName,' unit.component=',DbgSName(CurUnitInfo.Component)]);
+        {$ENDIF}
+        IDEMessageDialog('Error','Unable to load "'+LFMFilename+'".'
+          +' The component '+DbgSName(CurUnitInfo.Component)
+          +' is already loaded for unit "'+CurUnitInfo.Filename+'"'#13
+          +'LFM contains a different class name "'+LFMClassName+'".',
+          mtError,[mbCancel]);
+        exit(mrAbort);
+      end;
+      ComponentUnitInfo:=CurUnitInfo;
+      AComponentClass:=TComponentClass(ComponentUnitInfo.Component.ClassType);
+      exit(mrOK);
     end;
 
     // load resource hidden
-    TheModalResult:=LoadLFM(CurUnitInfo,LFMCode,
-                              Flags+[ofLoadHiddenResource],[]);
-    if (TheModalResult=mrOk) then begin
+    Result:=LoadLFM(CurUnitInfo,LFMCode,Flags+[ofLoadHiddenResource],[]);
+    if Result=mrOk then
+    begin
       ComponentUnitInfo:=CurUnitInfo;
       AComponentClass:=TComponentClass(ComponentUnitInfo.Component.ClassType);
       {$if defined(VerboseFormEditor) or defined(VerboseLFMSearch)}
       debugln('LoadComponentDependencyHidden Wanted=',AComponentClassName,' Class=',AComponentClass.ClassName);
       {$endif}
-      TheModalResult:=mrOk;
-      exit(true);
     end else begin
       debugln('LoadComponentDependencyHidden Failed to load component ',AComponentClassName);
-      TheModalResult:=mrCancel;
+      Result:=mrCancel;
     end;
   end;
 
@@ -7115,12 +7098,14 @@ begin
   try
     // search component lfm
     {$if defined(VerboseFormEditor) or defined(VerboseLFMSearch)}
-    debugln('LoadComponentDependencyHidden ',AnUnitInfo.Filename,' AComponentClassName=',AComponentClassName,' AComponentClass=',dbgsName(AComponentClass));
+    debugln('LoadComponentDependencyHidden ',AnUnitInfo.Filename,' AComponentClassName=',AComponentClassName,
+      ' AComponentClass=',dbgsName(AComponentClass));
     {$endif}
     Result:=FindComponentClass(AnUnitInfo,AComponentClassName,Quiet,
       ComponentUnitInfo,AComponentClass,LFMFilename,AncestorClass);
     { $if defined(VerboseFormEditor) or defined(VerboseLFMSearch)}
-    debugln('LoadComponentDependencyHidden ',AnUnitInfo.Filename,' AComponentClassName=',AComponentClassName,' AComponentClass=',dbgsName(AComponentClass),' AncestorClass=',DbgSName(AncestorClass),' LFMFilename=',LFMFilename);
+    debugln('LoadComponentDependencyHidden ',AnUnitInfo.Filename,' AComponentClassName=',AComponentClassName,
+      ' AComponentClass=',dbgsName(AComponentClass),' AncestorClass=',DbgSName(AncestorClass),' LFMFilename=',LFMFilename);
     { $endif}
 
     //- AComponentClass<>nil and ComponentUnitInfo<>nil
@@ -7132,10 +7117,8 @@ begin
     //- AncestorClass<>nil
     //   componentclass does not exist, but the ancestor is a registered class
 
-    if (Result=mrOk) and (AComponentClass=nil) and (LFMFilename<>'') then begin
-      TryLFM(LFMFilename,Result);
-      exit;
-    end;
+    if (Result=mrOk) and (AComponentClass=nil) and (LFMFilename<>'') then
+      exit(TryLFM(LFMFilename));
 
     if MustHaveLFM and (AComponentClass=nil) then
       Result:=mrCancel;
@@ -7416,7 +7399,7 @@ begin
           // Do not care if this fails. A user may have removed the line from source.
           Project1.RemoveCreateFormFromProjectFile(AnUnitInfo.ComponentName);
       end;
-      if CompareFileExt(AnUnitInfo.Filename,'.inc',false)=0 then
+      if CompareFileExtQuick(AnUnitInfo.Filename,'inc')=0 then
         // include file
         if FilenameIsAbsolute(AnUnitInfo.Filename) then
           ObsoleteIncPaths:=MergeSearchPaths(ObsoleteIncPaths,UnitPath);
@@ -7430,7 +7413,7 @@ begin
         UnitPath:=ChompPathDelim(ExtractFilePath(AnUnitInfo.Filename));
         if FilenameIsPascalUnit(AnUnitInfo.Filename) then
           ObsoleteUnitPaths:=RemoveSearchPaths(ObsoleteUnitPaths,UnitPath);
-        if CompareFileExt(AnUnitInfo.Filename,'.inc',false)=0 then
+        if CompareFileExtQuick(AnUnitInfo.Filename,'inc')=0 then
           ObsoleteIncPaths:=RemoveSearchPaths(ObsoleteIncPaths,UnitPath);
       end;
       AnUnitInfo:=AnUnitInfo.NextPartOfProject;
@@ -7462,9 +7445,8 @@ begin
   MainBuildBoss.SetBuildTargetProject1(false);
 
   // load required packages
-  PkgBoss.OpenProjectDependencies(Project1,true);
+  PkgBoss.OpenProjectDependencies(Project1, MainIDE.IDEStarted);
 
-  Project1.DefineTemplates.AllChanged;
   //DebugLn('CompleteLoadingProjectInfo ',Project1.IDAsString);
   Project1.DefineTemplates.Active:=true;
 
@@ -7609,7 +7591,7 @@ begin
   AnUnitInfo:=Project1.FirstPartOfProject;
   while AnUnitInfo<>nil do begin
     if (not AnUnitInfo.HasResources)
-    and (not AnUnitInfo.IsVirtual) and FilenameIsPascalUnit(AnUnitInfo.Filename)
+    and (not AnUnitInfo.IsVirtual) and FilenameHasPascalExt(AnUnitInfo.Filename)
     then begin
       LFMFilename:=ChangeFileExt(AnUnitInfo.Filename,'.lfm');
       if not FileExistsCached(LFMFilename) then
@@ -7627,10 +7609,9 @@ var
   SaveDialog: TSaveDialog;
   NewBuf, OldBuf: TCodeBuffer;
   TitleWasDefault: Boolean;
-  NewLPIFilename, NewProgramFN, NewProgramName, AFilename, NewTargetFN: String;
+  NewLPIFilename, NewProgramFN, NewProgramName, AFilename: String;
   AText, ACaption, Ext: string;
   OldSourceCode, OldProjectDir, prDir: string;
-  i: Integer;
 begin
   Project1.BeginUpdate(false);
   try
@@ -7697,9 +7678,8 @@ begin
 
         // append default extension
         if UseMainSourceFile then
-        begin
-          NewLPIFilename:=ChangeFileExt(AFilename,'.lpi');
-        end else
+          NewLPIFilename:=ChangeFileExt(AFilename,'.lpi')
+        else
         begin
           NewLPIFilename:=AFilename;
           if ExtractFileExt(NewLPIFilename)='' then
@@ -7727,8 +7707,7 @@ begin
             if Result=mrAbort then exit;
             continue; // try again
           end;
-          // check programname
-          //if FilenameIsPascalUnit(NewProgramFN)
+          // check program name
           if (Project1.IndexOfUnitWithName(NewProgramName,true,
                                            Project1.MainUnitInfo)>=0) then
           begin
@@ -7755,13 +7734,15 @@ begin
     // Note: if user confirms overwriting .lpi do not ask for overwriting .lpr
     if FileExistsUTF8(NewLPIFilename) then
     begin
-      ACaption:=lisOverwriteFile;
-      AText:=Format(lisAFileAlreadyExistsReplaceIt, [NewLPIFilename, LineEnding]);
-      Result:=IDEMessageDialog(ACaption, AText, mtConfirmation, [mbOk, mbCancel]);
-      if Result=mrCancel then exit;
+      if IDESaveDialogClass.NeedOverwritePrompt then
+      begin
+        ACaption:=lisOverwriteFile;
+        AText:=Format(lisAFileAlreadyExistsReplaceIt, [NewLPIFilename, LineEnding]);
+        Result:=IDEMessageDialog(ACaption, AText, mtConfirmation, [mbOk, mbCancel]);
+        if Result=mrCancel then exit;
+      end;
     end
-    else
-    begin
+    else begin
       if FileExistsUTF8(NewProgramFN) then
       begin
         ACaption:=lisOverwriteFile;
@@ -7772,21 +7753,7 @@ begin
     end;
 
     TitleWasDefault := Project1.TitleIsDefault(true);
-
-    // set new project target filename
-    if (Project1.TargetFilename<>'')
-    and ( (CompareText(ExtractFileNameOnly(Project1.TargetFilename),
-                       ExtractFileNameOnly(Project1.ProjectInfoFile))=0)
-        or (Project1.ProjectInfoFile='') ) then
-    begin
-      // target file is default => change to all build modes, but keep sub directories
-      // And keep old extension.
-      NewTargetFN:=ExtractFilePath(Project1.TargetFilename)+ExtractFileNameOnly(NewProgramFN)
-        +ExtractFileExt(Project1.TargetFilename);
-      for i := 0 to Project1.BuildModes.Count-1 do
-        Project1.BuildModes[i].CompilerOptions.TargetFilename:=NewTargetFN;
-      //DebugLn(['ShowSaveProjectAsDialog changed targetfilename to ',Project1.TargetFilename]);
-    end;
+    UpdateTargetFilename(NewProgramFN);   // set new project target filename
 
     // set new project filename
     Project1.ProjectInfoFile:=NewLPIFilename;
@@ -7872,7 +7839,7 @@ begin
   if Project1=nil then exit(mrOk);
   if not SomethingOfProjectIsModified then exit(mrOk);
 
-  DataModified:=Project1.SomeDataModified(false);
+  DataModified:=Project1.SomeDataModified(false) or Project1.HasProjectInfoFileChangedOnDisk;
   SrcModified:=SourceEditorManager.SomethingModified(false);
 
   if Project1.IsVirtual

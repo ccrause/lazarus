@@ -44,8 +44,7 @@ uses
   // LCL
   Graphics, LCLProc, LResources, Forms, Dialogs, ComCtrls, LCLType, Controls,
   // LazUtils
-  FileUtil, LazFileUtils, LazUTF8, LazClasses, LazUTF8Classes, Laz2_XMLCfg,
-  LazStringUtils,
+  FileUtil, LazFileUtils, LazUTF8, LazClasses, Laz2_XMLCfg, LazStringUtils,
   // Synedit
   SynEdit, SynEditAutoComplete, SynEditKeyCmds, SynEditTypes,
   SynEditMiscClasses, SynBeautifier, SynEditTextTrimmer, SynEditMouseCmds,
@@ -62,7 +61,7 @@ uses
   SynHighlighterPython, SynHighlighterUNIXShellScript, SynHighlighterXML,
   SynHighlighterJScript, SynHighlighterDiff, SynHighlighterBat,
   SynHighlighterIni, SynHighlighterPo, SynHighlighterPike, SynPluginMultiCaret,
-  SynEditMarkupFoldColoring, SynEditMarkup, SynGutterLineOverview,
+  SynEditMarkupFoldColoring, SynEditMarkup, SynGutterLineOverview, SynBeautifierPascal,
   // codetools
   LinkScanner, CodeToolManager,
   // IDEIntf
@@ -81,7 +80,7 @@ type
   TSynHighlightElement = TSynHighlighterAttributes;
   TCustomSynClass = class of TSrcIDEHighlighter;
 
-  TLazSynPluginTemplateMultiCaret = class(TForm)     end;
+  TLazSynPluginTemplateMultiCaret = class(TForm)   end;
   TLazSynPluginTemplateEditForm = class(TForm)     end;
   TLazSynPluginTemplateEditFormOff = class(TForm)  end;
   TLazSynPluginSyncroEditFormSel = class(TForm)    end;
@@ -274,16 +273,18 @@ type
     FMarkupFoldLineColor: TColor;
     FMarkupFoldLineStyle: TSynLineStyle;
     FOwner: TColorSchemeLanguage;
+    FAlreadyGotSchemeGlobal: Boolean;
+    FSchemeGlobalCache: TColorSchemeAttribute;
     FUseSchemeGlobals: Boolean;
     function GetIsUsingSchemeGlobals: Boolean;
-    function OldAdditionalAttributeName(NewAha: String): string;
     procedure SetMarkupFoldLineAlpha(AValue: Byte);
     procedure SetMarkupFoldLineColor(AValue: TColor);
     procedure SetMarkupFoldLineStyle(AValue: TSynLineStyle);
   protected
     procedure Init; override;
   public
-    constructor Create(ASchemeLang: TColorSchemeLanguage; attribName: PString; aStoredName: String = '');
+    constructor Create(ASchemeLang: TColorSchemeLanguage; attribName: PString;
+                       const aStoredName: String = '');
     function IsEnabled: boolean; override;
     procedure ApplyTo(aDest: TSynHighlighterAttributes; aDefault: TColorSchemeAttribute = nil);
     procedure Assign(Src: TPersistent); override;
@@ -292,8 +293,6 @@ type
     function GetSchemeGlobal: TColorSchemeAttribute;
     procedure LoadFromXml(aXMLConfig: TRttiXMLConfig; aPath: String;
                           Defaults: TColorSchemeAttribute; Version: Integer);
-    procedure LoadFromXmlV1(aXMLConfig: TRttiXMLConfig; aPath: String;
-                            Defaults: TColorSchemeAttribute);
     procedure SaveToXml(aXMLConfig: TRttiXMLConfig; aPath: String;
                         Defaults: TColorSchemeAttribute);
     property Group: TAhaGroupName read FGroup write FGroup;
@@ -323,22 +322,23 @@ type
     function GetAttributeAtPos(Index: Integer): TColorSchemeAttribute;
     function GetAttributeByEnum(Index: TAdditionalHilightAttribute): TColorSchemeAttribute;
     function GetName: String;
-    function AhaToStoredName(aha: TAdditionalHilightAttribute): String;
   public
-    constructor Create(const AGroup: TColorScheme; const ALang: TLazSyntaxHighlighter;
-                       IsSchemeDefault: Boolean = False);
-    constructor CreateFromXml(const AGroup: TColorScheme; const ALang: TLazSyntaxHighlighter;
-                              aXMLConfig: TRttiXMLConfig; aPath: String;
-                              IsSchemeDefault: Boolean = False);
+    constructor Create(AGroup: TColorScheme; ALang: TLazSyntaxHighlighter;
+      IsSchemeDefault: Boolean);
+    constructor CreateWithDefColor(AGroup: TColorScheme; ALang: TLazSyntaxHighlighter;
+      IsSchemeDefault: Boolean);
+    constructor CreateFromXml(AGroup: TColorScheme; ALang: TLazSyntaxHighlighter;
+      aXMLConfig: TRttiXMLConfig; const aPath: String; IsSchemeDefault: Boolean);
     destructor  Destroy; override;
     procedure Clear;
     procedure Assign(Src: TColorSchemeLanguage); reintroduce;
     function Equals(Other: TColorSchemeLanguage): Boolean; reintroduce;
     function GetStoredValuesForLanguage: TColorSchemeLanguage; // The IDE default colors from the resources
     function IndexOfAttr(AnAttr: TColorSchemeAttribute): Integer;
-    procedure LoadFromXml(aXMLConfig: TRttiXMLConfig; aPath: String; Defaults: TColorSchemeLanguage;
-              ColorVersion: Integer; aOldPath: String = '');
-    procedure SaveToXml(aXMLConfig: TRttiXMLConfig; aPath: String; Defaults: TColorSchemeLanguage);
+    procedure LoadFromXml(aXMLConfig: TRttiXMLConfig; const aPath: String;
+      Defaults: TColorSchemeLanguage; ColorVersion: Integer; const aOldPath: String = '');
+    procedure SaveToXml(aXMLConfig: TRttiXMLConfig; aPath: String;
+      Defaults: TColorSchemeLanguage);
     procedure ApplyTo(ASynEdit: TSynEdit); // Write markup, etc
     procedure ApplyTo(AHLighter: TSynCustomHighlighter);
     function  AttributeCount: Integer;
@@ -363,7 +363,7 @@ type
     function GetColorScheme(Index: TLazSyntaxHighlighter): TColorSchemeLanguage;
     function GetColorSchemeBySynClass(Index: TClass): TColorSchemeLanguage;
   public
-    constructor Create(AName: String);
+    constructor Create(const AName: String);
     constructor CreateFromXml(aXMLConfig: TRttiXMLConfig; const AName, aPath: String);
     destructor  Destroy; override;
     procedure Assign(Src: TColorScheme); reintroduce;
@@ -389,9 +389,10 @@ type
     destructor  Destroy; override;
     procedure Clear;
     procedure Assign(Src: TColorSchemeFactory); reintroduce;
-    procedure LoadFromXml(aXMLConfig: TRttiXMLConfig; aPath: String;
-                          Defaults: TColorSchemeFactory; aOldPath: String = '');
-    procedure SaveToXml(aXMLConfig: TRttiXMLConfig; aPath: String; Defaults: TColorSchemeFactory);
+    procedure LoadFromXml(aXMLConfig: TRttiXMLConfig; const aPath: String;
+      Defaults: TColorSchemeFactory; const aOldPath: String = '');
+    procedure SaveToXml(aXMLConfig: TRttiXMLConfig; const aPath: String;
+      Defaults: TColorSchemeFactory);
     procedure RegisterScheme(aXMLConfig: TRttiXMLConfig; AName, aPath: String);
     procedure GetRegisteredSchemes(AList: TStrings);
     property  ColorSchemeGroup[Index: String]: TColorScheme read GetColorSchemeGroup;
@@ -799,7 +800,6 @@ type
     property Items[Index: Integer]: TEditOptLanguageInfo read GetInfos; default;
   end;
 
-  TEditorOptions = class;
   TMouseOptGutterLeftType = (
     moGLDownClick,
     moglUpClickAndSelect,
@@ -1138,11 +1138,8 @@ type
   { TEditorMouseOptionPresets }
 
   TEditorMouseOptionPresets = class
-  private
-    FPreset: TQuickStringlist;
   public
     constructor Create;
-    destructor Destroy; override;
   end;
 
   TEditorOptionsEditAccessInViewState =
@@ -1267,8 +1264,7 @@ type
     property IsFallback: Boolean read FIsFallback;
     property Desc: String read FDesc write FDesc;
   //published
-    property Caption: String
-             read FCaption write FCaption;
+    property Caption: String read FCaption write FCaption;
   published
     property Enabled: Boolean
              read FEnabled write SetEnabled;
@@ -1401,108 +1397,38 @@ type
     property UseGlobalIDECommandList: Boolean read FUseGlobalIDECommandList write FUseGlobalIDECommandList;
   end;
 
-  { TEditorOptions - Editor Options object used to hold the editor options }
+  { TEditorOptionsBase }
 
-  TEditorOptions = class(TIDEEditorOptions)
+  TEditorOptionsBase = class(TIDEEditorOptions)
   private
-    FBlockTabIndent: Integer;
-    FCompletionLongLineHintInMSec: Integer;
-    FCompletionLongLineHintType: TSynCompletionLongHintType;
-    FMiddleTabClickClosesOthersModifier: TShiftState;
-    FMiddleTabClickClosesToRightModifier: TShiftState;
-    FMultiCaretDefaultColumnSelectMode: TSynPluginMultiCaretDefaultMode;
-    FMultiCaretDefaultMode: TSynPluginMultiCaretDefaultMode;
-    FMultiCaretDeleteSkipLineBreak: Boolean;
-    FPasExtendedKeywordsMode: Boolean;
-    FHideSingleTabInWindow: Boolean;
-    FPasStringKeywordMode: TSynPasStringMode;
-    FTopInfoView: boolean;
     {$IFDEF WinIME}
     FUseMinimumIme: Boolean;
     {$ENDIF}
-    xmlconfig: TRttiXMLConfig;
-
-    // general options
-    fFindTextAtCursor: Boolean;
-    fShowTabCloseButtons: Boolean;
-    FMultiLineTab: Boolean;
-    fShowTabNumbers: Boolean;
-    fUseTabHistory: Boolean;
+    // General options
+    fMultiLineTab: Boolean;
     fTabPosition: TTabPosition;
-    fSynEditOptions: TSynEditorOptions;
-    fSynEditOptions2: TSynEditorOptions2;
-    fUndoAfterSave: Boolean;
-    fUseSyntaxHighlight: Boolean;
-    FCopyWordAtCursorOnCopyNone: Boolean;
-    FShowGutterHints: Boolean;
-    fBlockIndent: Integer;
-    fBlockIndentType: TSynBeautifierIndentType;
-    FTrimSpaceType: TSynEditStringTrimmingType;
-    fUndoLimit: Integer;
-    fTabWidth:  Integer;
-    FBracketHighlightStyle: TSynEditBracketHighlightStyle;
-    FMultiCaretOnColumnSelect: Boolean;
-
     // Display options
-    fVisibleRightMargin: Boolean;
-    fVisibleGutter: Boolean;
-    fShowLineNumbers: Boolean;
-    fShowOnlyLineNumbersMultiplesOf: integer;
-    FShowOverviewGutter: boolean;
-    fGutterWidth: Integer;
-    FGutterSeparatorIndex: Integer;
-    fRightMargin: Integer;
-    fEditorFont:  String;
-    fEditorFontSize:   Integer;
-    fExtraCharSpacing: Integer;
-    fExtraLineSpacing: Integer;
-    fDisableAntialiasing: Boolean;
-    FDoNotWarnForFont: string;
-
-    // Key Mappings options
-    fKeyMappingScheme: String;
-    fKeyMap: TKeyCommandRelationList;
-
-    // Mouse Mappings options
-    FUserMouseSettings: TEditorMouseOptions;
-    FTempMouseSettings: TEditorMouseOptions;
-
-    // Color options
-    fHighlighterList: TEditOptLangList;
-    FUserColorSchemeSettings: TColorSchemeFactory;
-    FUserDefinedColors: TEditorUserDefinedWordsList;
-
-    // Markup Current Word
-    FMarkupCurWordTime: Integer;
-    FMarkupCurWordFullLen: Integer;
-    FMarkupCurWordNoKeyword: Boolean;
-    FMarkupCurWordTrim: Boolean;
-    FMarkupCurWordNoTimer: Boolean;
-
-    // Code tools options (MG: these will move to an unit of their own)
-    fAutoBlockCompletion: Boolean;
-    fAutoCodeParameters: Boolean;
-    fAutoDelayInMSec: Integer;
-    fAutoHintDelayInMSec: Integer;
-    FAutoRemoveEmptyMethods: Boolean;
-    fAutoToolTipExprEval: Boolean;
-    fAutoToolTipSymbTools: Boolean;
-    FDbgHintAutoTypeCastClass: Boolean;
-    fCodeTemplateFileNameRaw: String;
-    fCTemplIndentToTokenStart: Boolean;
-    fAutoDisplayFuncPrototypes: Boolean;
-
+    fShowOverviewGutter: boolean;
+    fTopInfoView: boolean;
+    // Code tools options
+    fDbgHintAutoTypeCastClass: Boolean;
+    fCompletionLongLineHintType: TSynCompletionLongHintType;
     // Code Folding
-    FUseCodeFolding: Boolean;
-    FUseMarkupWordBracket: Boolean;
-    FUseMarkupOutline: Boolean;
-    FReverseFoldPopUpOrder: Boolean;
+    fReverseFoldPopUpOrder: Boolean;
+    fUseTabHistory: Boolean;
 
+    fMultiCaretOnColumnSelect: Boolean;
+    fMultiCaretDefaultMode: TSynPluginMultiCaretDefaultMode;
+    fMultiCaretDeleteSkipLineBreak: Boolean;
+    fMultiCaretDefaultColumnSelectMode: TSynPluginMultiCaretDefaultMode;
+    // Highlighter Pas
+    fPasExtendedKeywordsMode: Boolean;
+    fPasStringKeywordMode: TSynPasStringMode;
     // Multi window
-    FMultiWinEditAccessOrder: TEditorOptionsEditAccessOrderList;
-    FCtrlMiddleTabClickClosesOthers: Boolean;
-    FShowFileNameInCaption: Boolean;
-
+    fCtrlMiddleTabClickClosesOthers: Boolean;
+    fMiddleTabClickClosesOthersModifier: TShiftState;
+    fMiddleTabClickClosesToRightModifier: TShiftState;
+    fShowFileNameInCaption: Boolean;
     // Comment Continue
     FAnsiCommentContinueEnabled: Boolean;
     FAnsiCommentMatch: String;
@@ -1510,14 +1436,12 @@ type
     FAnsiCommentPrefix: String;
     FAnsiIndentMode: TSynCommentIndentFlags;
     FAnsiIndentAlignMax: integer;
-
     FCurlyCommentContinueEnabled: Boolean;
     FCurlyCommentMatch: String;
     FCurlyCommentMatchMode: TSynCommentMatchMode;
     FCurlyCommentPrefix: String;
     FCurlyIndentMode: TSynCommentIndentFlags;
     FCurlyIndentAlignMax: integer;
-
     FSlashCommentContinueEnabled: Boolean;
     FSlashCommentMatch: String;
     FSlashCommentMatchMode: TSynCommentMatchMode;
@@ -1525,272 +1449,84 @@ type
     FSlashIndentMode: TSynCommentIndentFlags;
     FSlashCommentExtend: TSynCommentExtendMode;
     FSlashIndentAlignMax: integer;
-
     FStringBreakAppend: String;
     FStringBreakEnabled: Boolean;
     FStringBreakPrefix: String;
-
-    FDefaultValues: TEditorOptions;
-    function GetCodeTemplateFileNameExpand:String;
+    // Scroll
+    FScrollOnEditLeftOptions: TSynScrollOnEditLeftOptions;
+    FScrollOnEditRightOptions: TSynScrollOnEditRightOptions;
+    procedure InitForRttiXmlConf;
   protected
     function GetTabPosition: TTabPosition; override;
   public
-    class function GetGroupCaption:string; override;
-    class function GetInstance: TAbstractIDEOptions; override;
-    procedure DoAfterWrite(Restore: boolean); override;
-  public
     constructor Create;
-    constructor CreateDefaultOnly;
     destructor Destroy; override;
-    procedure Init;
-    procedure Load;
-    procedure Save;
-    function LoadCodeTemplates(AnAutoComplete: TSynEditAutoComplete): TModalResult;
-    function SaveCodeTemplates(AnAutoComplete: TSynEditAutoComplete): TModalResult;
-    procedure TranslateResourceStrings;
-    function GetAdditionalAttributeName(aha:TAdditionalHilightAttribute): string;
-    function GetSynEditOptionName(SynOption: TSynEditorOption): string;
-    function GetSynBeautifierIndentName(IndentType: TSynBeautifierIndentType): string;
-    function GetSynBeautifierIndentType(IndentName: String): TSynBeautifierIndentType;
-    function GetTrimSpaceName(IndentType: TSynEditStringTrimmingType): string;
-    function GetTrimSpaceType(IndentName: String): TSynEditStringTrimmingType;
-
-    procedure AssignKeyMapTo(ASynEdit: TSynEdit; SimilarEdit: TSynEdit = nil); // Or copy fromSimilarEdit
-    procedure GetHighlighterSettings(Syn: TSrcIDEHighlighter); // read highlight settings from config file
-    procedure GetSynEditSettings(ASynEdit: TSynEdit; SimilarEdit: TSynEdit = nil); // read synedit settings from config file
-    procedure GetSynEditPreviewSettings(APreviewEditor: TObject);
-    procedure ApplyFontSettingsTo(ASynEdit: TSynEdit);
-
-    function ExtensionToLazSyntaxHighlighter(Ext: String): TLazSyntaxHighlighter; override;
-    function CreateSyn(LazSynHilighter: TLazSyntaxHighlighter): TSrcIDEHighlighter;
-    function ReadColorScheme(const LanguageName: String): String; // TODO: rename ReadColorSchemeName
-    function GetColorSchemeLanguage(aHighLighter: TSynCustomHighlighter; SynColorSchemeName: String = ''): TColorSchemeLanguage;
-    function ReadPascalColorScheme: String;
-    procedure WriteColorScheme(const LanguageName, SynColorScheme: String);
-    procedure ReadHighlighterSettings(Syn: TSrcIDEHighlighter;
-                                      SynColorScheme: String);
-
-    procedure ReadHighlighterFoldSettings(Syn: TSrcIDEHighlighter; ReadForOptions: Boolean = False);
-    procedure ReadDefaultsForHighlighterFoldSettings(Syn: TSrcIDEHighlighter);
-    procedure WriteHighlighterFoldSettings(Syn: TSrcIDEHighlighter);
-
-    procedure ReadHighlighterDivDrawSettings(Syn: TSrcIDEHighlighter);
-    procedure ReadDefaultsForHighlighterDivDrawSettings(Syn: TSrcIDEHighlighter);
-    procedure WriteHighlighterDivDrawSettings(Syn: TSrcIDEHighlighter);
-
-    procedure SetMarkupColor(Syn: TSrcIDEHighlighter;
-                             AddHilightAttr: TAdditionalHilightAttribute;
-                             aMarkup: TSynSelectedColor);
-    procedure SetMarkupColors(aSynEd: TSynEdit);
-  public
-    // general options
-    property SynEditOptions: TSynEditorOptions
-      read fSynEditOptions write fSynEditOptions default SynEditDefaultOptions;
-    property SynEditOptions2: TSynEditorOptions2
-      read fSynEditOptions2 write fSynEditOptions2 default SynEditDefaultOptions2;
-    property ShowTabCloseButtons: Boolean
-      read fShowTabCloseButtons write fShowTabCloseButtons;
-  published
-    property MultiLineTab: Boolean
-      read FMultiLineTab write FMultiLineTab default False;
-  public
-    property HideSingleTabInWindow: Boolean
-      read FHideSingleTabInWindow write FHideSingleTabInWindow;
-    property ShowTabNumbers: Boolean read fShowTabNumbers write fShowTabNumbers;
-    property UndoAfterSave: Boolean read fUndoAfterSave
-      write fUndoAfterSave default True;
-    property FindTextAtCursor: Boolean
-      read fFindTextAtCursor write fFindTextAtCursor default True;
-    property UseSyntaxHighlight: Boolean
-      read fUseSyntaxHighlight write fUseSyntaxHighlight default True;
-    property CopyWordAtCursorOnCopyNone: Boolean
-      read FCopyWordAtCursorOnCopyNone write FCopyWordAtCursorOnCopyNone;
-    property ShowGutterHints: Boolean read FShowGutterHints
-      write FShowGutterHints;
-    property BlockIndent: Integer
-      read fBlockIndent write fBlockIndent default 2;
-    property BlockTabIndent: Integer
-      read FBlockTabIndent write FBlockTabIndent default 0;
-    property BlockIndentType: TSynBeautifierIndentType
-      read fBlockIndentType write fBlockIndentType default sbitCopySpaceTab;
-    property TrimSpaceType: TSynEditStringTrimmingType
-      read FTrimSpaceType write FTrimSpaceType default settLeaveLine;
-    property UndoLimit: Integer read fUndoLimit write fUndoLimit default 32767;
-    property TabWidth: Integer read fTabWidth write fTabWidth default 8;
-    property BracketHighlightStyle: TSynEditBracketHighlightStyle read FBracketHighlightStyle write FBracketHighlightStyle default sbhsBoth;
-
-    // Display options
-    property VisibleRightMargin: Boolean
-      read fVisibleRightMargin write fVisibleRightMargin default True;
-    property VisibleGutter: Boolean read fVisibleGutter
-      write fVisibleGutter default True;
-    property ShowLineNumbers: Boolean read fShowLineNumbers
-      write fShowLineNumbers default False;
-    property ShowOnlyLineNumbersMultiplesOf: integer read fShowOnlyLineNumbersMultiplesOf
-      write fShowOnlyLineNumbersMultiplesOf;
-    property GutterWidth: Integer
-      read fGutterWidth write fGutterWidth default 30;
-    property GutterSeparatorIndex: Integer read FGutterSeparatorIndex
-      write FGutterSeparatorIndex default 3;
-    property RightMargin: Integer
-      read fRightMargin write fRightMargin default 80;
-    property EditorFont: String read fEditorFont write fEditorFont;
-    property EditorFontSize: Integer
-      read fEditorFontSize write fEditorFontSize;
-    property ExtraCharSpacing: Integer
-      read fExtraCharSpacing write fExtraCharSpacing default 0;
-    property ExtraLineSpacing: Integer
-      read fExtraLineSpacing write fExtraLineSpacing default 1;
-    property DisableAntialiasing: Boolean
-      read fDisableAntialiasing write fDisableAntialiasing default DefaultEditorDisableAntiAliasing;
-    property DoNotWarnForFont: string
-      read FDoNotWarnForFont write FDoNotWarnForFont;
-
-    // Key Mappings
-    property KeyMappingScheme: String
-      read fKeyMappingScheme write fKeyMappingScheme;
-    property KeyMap: TKeyCommandRelationList read fKeyMap;
-
-    // Mouse Mappings
-    // Current saved config
-    property UserMouseSettings: TEditorMouseOptions read FUserMouseSettings;
-    // Used by the 2 Mouse-option pages, so they share data (un-saved)
-    property TempMouseSettings: TEditorMouseOptions read FTempMouseSettings;
-
-    // Color options
-    property HighlighterList: TEditOptLangList read fHighlighterList;
-    property UserColorSchemeGroup: TColorSchemeFactory read FUserColorSchemeSettings;
-    property UserDefinedColors: TEditorUserDefinedWordsList read FUserDefinedColors;
-
-    // Markup Current Word
-    property MarkupCurWordTime: Integer
-      read FMarkupCurWordTime write FMarkupCurWordTime default 1500;
-    property MarkupCurWordFullLen: Integer
-      read FMarkupCurWordFullLen write FMarkupCurWordFullLen default 3;
-    property MarkupCurWordNoKeyword: Boolean
-      read FMarkupCurWordNoKeyword write FMarkupCurWordNoKeyword default False;
-    property MarkupCurWordTrim: Boolean
-      read FMarkupCurWordTrim write FMarkupCurWordTrim default True;
-    property MarkupCurWordNoTimer: Boolean
-      read FMarkupCurWordNoTimer write FMarkupCurWordNoTimer default False;
-
-    // Code Tools options
-    property AutoBlockCompletion: Boolean
-      read fAutoBlockCompletion write FAutoBlockCompletion default True;
-    property AutoCodeParameters: Boolean
-      read fAutoCodeParameters write fAutoCodeParameters default True;
-    property AutoToolTipExprEval: Boolean
-      read fAutoToolTipExprEval write fAutoToolTipExprEval default True; // debugger hints
-    property AutoToolTipSymbTools: Boolean
-      read fAutoToolTipSymbTools write fAutoToolTipSymbTools default True; // declaration hints
-    property AutoDisplayFunctionPrototypes: Boolean
-      read fAutoDisplayFuncPrototypes write fAutoDisplayFuncPrototypes default True;
-
-  published
-    property DbgHintAutoTypeCastClass: Boolean
-      read FDbgHintAutoTypeCastClass write FDbgHintAutoTypeCastClass default True; // declaration hints
-  public
-    property AutoDelayInMSec: Integer read fAutoDelayInMSec
-      write fAutoDelayInMSec default 1000;
-    property AutoHintDelayInMSec: Integer read fAutoHintDelayInMSec
-      write fAutoHintDelayInMSec default 1000;
-    property CodeTemplateFileNameRaw: String
-      read fCodeTemplateFileNameRaw write fCodeTemplateFileNameRaw;
-    property CodeTemplateFileNameExpand:String
-      read GetCodeTemplateFileNameExpand;
-    property CodeTemplateIndentToTokenStart: Boolean
-      read fCTemplIndentToTokenStart write fCTemplIndentToTokenStart;
-    property AutoRemoveEmptyMethods: Boolean read FAutoRemoveEmptyMethods
-      write FAutoRemoveEmptyMethods default False;
-    property CompletionLongLineHintInMSec: Integer
-             read FCompletionLongLineHintInMSec write FCompletionLongLineHintInMSec;
-  published
-    property CompletionLongLineHintType: TSynCompletionLongHintType
-             read FCompletionLongLineHintType write FCompletionLongLineHintType
-             default sclpExtendRightOnly;
-
-  public
-    // Code Folding
-    property UseCodeFolding: Boolean
-        read FUseCodeFolding write FUseCodeFolding default True;
-    property UseMarkupWordBracket: Boolean
-        read FUseMarkupWordBracket write FUseMarkupWordBracket default True;
-    property UseMarkupOutline: Boolean
-        read FUseMarkupOutline write FUseMarkupOutline default False;
-
-    // Multi window
-    property MultiWinEditAccessOrder: TEditorOptionsEditAccessOrderList
-        read FMultiWinEditAccessOrder write FMultiWinEditAccessOrder;
-
   published { use RTTIConf}
-    property TabPosition: TTabPosition
-      read fTabPosition write fTabPosition default tpTop;
+    // general options
+    property MultiLineTab: Boolean read fMultiLineTab write fMultiLineTab default False;
+    property TabPosition: TTabPosition read fTabPosition write fTabPosition default tpTop;
+    // Code Tools options
+    property DbgHintAutoTypeCastClass: Boolean              // declaration hints
+      read fDbgHintAutoTypeCastClass write fDbgHintAutoTypeCastClass default True;
+    property CompletionLongLineHintType: TSynCompletionLongHintType
+      read fCompletionLongLineHintType write fCompletionLongLineHintType
+      default sclpExtendRightOnly;
     // General - Misc
     {$IFDEF WinIME}
     property UseMinimumIme: Boolean read FUseMinimumIme write FUseMinimumIme default False;
     {$ENDIF}
     // Display
     property ShowOverviewGutter: boolean
-      read FShowOverviewGutter write FShowOverviewGutter default True;
-    property TopInfoView: boolean
-      read FTopInfoView write FTopInfoView default True;
+      read fShowOverviewGutter write fShowOverviewGutter default True;
+    property TopInfoView: boolean read fTopInfoView write fTopInfoView default True;
     // Code Folding
     property ReverseFoldPopUpOrder: Boolean
-        read FReverseFoldPopUpOrder write FReverseFoldPopUpOrder default True;
+      read fReverseFoldPopUpOrder write fReverseFoldPopUpOrder default True;
     property UseTabHistory: Boolean read fUseTabHistory write fUseTabHistory;
-    property MultiCaretOnColumnSelect: Boolean
-      read FMultiCaretOnColumnSelect write FMultiCaretOnColumnSelect default True;
-    property MultiCaretDefaultMode: TSynPluginMultiCaretDefaultMode
-             read FMultiCaretDefaultMode write FMultiCaretDefaultMode default mcmMoveAllCarets;
-    property MultiCaretDeleteSkipLineBreak: Boolean
-             read FMultiCaretDeleteSkipLineBreak write FMultiCaretDeleteSkipLineBreak default False;
-    property MultiCaretDefaultColumnSelectMode: TSynPluginMultiCaretDefaultMode
-             read FMultiCaretDefaultColumnSelectMode write FMultiCaretDefaultColumnSelectMode default mcmCancelOnCaretMove;
 
+    property MultiCaretOnColumnSelect: Boolean
+      read fMultiCaretOnColumnSelect write fMultiCaretOnColumnSelect default True;
+    property MultiCaretDefaultMode: TSynPluginMultiCaretDefaultMode
+      read fMultiCaretDefaultMode write fMultiCaretDefaultMode default mcmMoveAllCarets;
+    property MultiCaretDeleteSkipLineBreak: Boolean
+      read fMultiCaretDeleteSkipLineBreak write fMultiCaretDeleteSkipLineBreak default False;
+    property MultiCaretDefaultColumnSelectMode: TSynPluginMultiCaretDefaultMode
+      read fMultiCaretDefaultColumnSelectMode write fMultiCaretDefaultColumnSelectMode default mcmCancelOnCaretMove;
     // Highlighter Pas
     property PasExtendedKeywordsMode: Boolean
-             read FPasExtendedKeywordsMode write FPasExtendedKeywordsMode default False;
+      read fPasExtendedKeywordsMode write fPasExtendedKeywordsMode default False;
     property PasStringKeywordMode: TSynPasStringMode
-             read FPasStringKeywordMode write FPasStringKeywordMode default spsmDefault;
-
+      read fPasStringKeywordMode write fPasStringKeywordMode default spsmDefault;
     // Multi window
     property CtrlMiddleTabClickClosesOthers: Boolean
-      read FCtrlMiddleTabClickClosesOthers write FCtrlMiddleTabClickClosesOthers stored False default True;
+      read fCtrlMiddleTabClickClosesOthers write fCtrlMiddleTabClickClosesOthers stored False default True;
     property MiddleTabClickClosesOthersModifier: TShiftState
-      read FMiddleTabClickClosesOthersModifier write FMiddleTabClickClosesOthersModifier default [ssCtrl];
+      read fMiddleTabClickClosesOthersModifier write fMiddleTabClickClosesOthersModifier default [ssCtrl];
     property MiddleTabClickClosesToRightModifier: TShiftState
-      read FMiddleTabClickClosesToRightModifier write FMiddleTabClickClosesToRightModifier default [];
-
+      read fMiddleTabClickClosesToRightModifier write fMiddleTabClickClosesToRightModifier default [];
     property ShowFileNameInCaption: Boolean
-      read FShowFileNameInCaption write FShowFileNameInCaption default False;
-
-    // Commend Continue
+      read fShowFileNameInCaption write fShowFileNameInCaption default False;
+    // Comment Continue
     property AnsiCommentContinueEnabled: Boolean
       read FAnsiCommentContinueEnabled write FAnsiCommentContinueEnabled;
-    property AnsiCommentMatch: String
-      read FAnsiCommentMatch write FAnsiCommentMatch;
-    property AnsiCommentPrefix: String
-      read FAnsiCommentPrefix write FAnsiCommentPrefix;
+    property AnsiCommentMatch: String read FAnsiCommentMatch write FAnsiCommentMatch;
+    property AnsiCommentPrefix: String read FAnsiCommentPrefix write FAnsiCommentPrefix;
     property AnsiCommentMatchMode: TSynCommentMatchMode
       read FAnsiCommentMatchMode write FAnsiCommentMatchMode;
     property AnsiIndentMode: TSynCommentIndentFlags
       read FAnsiIndentMode write FAnsiIndentMode;
     property AnsiIndentAlignMax: integer
       read FAnsiIndentAlignMax write FAnsiIndentAlignMax;
-
     property CurlyCommentContinueEnabled: Boolean
       read FCurlyCommentContinueEnabled write FCurlyCommentContinueEnabled;
-    property CurlyCommentMatch: String
-      read FCurlyCommentMatch write FCurlyCommentMatch;
-    property CurlyCommentPrefix: String
-      read FCurlyCommentPrefix write FCurlyCommentPrefix;
+    property CurlyCommentMatch: String read FCurlyCommentMatch write FCurlyCommentMatch;
+    property CurlyCommentPrefix: String read FCurlyCommentPrefix write FCurlyCommentPrefix;
     property CurlyCommentMatchMode: TSynCommentMatchMode
       read FCurlyCommentMatchMode write FCurlyCommentMatchMode;
     property CurlyIndentMode: TSynCommentIndentFlags
       read FCurlyIndentMode write FCurlyIndentMode;
     property CurlyIndentAlignMax: integer
       read FCurlyIndentAlignMax write FCurlyIndentAlignMax;
-
     property SlashCommentContinueEnabled: Boolean
       read FSlashCommentContinueEnabled write FSlashCommentContinueEnabled;
     property SlashCommentMatch: String
@@ -1805,22 +1541,252 @@ type
       read FSlashCommentExtend write FSlashCommentExtend;
     property SlashIndentAlignMax: integer
       read FSlashIndentAlignMax write FSlashIndentAlignMax;
-
     property StringBreakEnabled: Boolean read FStringBreakEnabled write FStringBreakEnabled;
     property StringBreakAppend: String read FStringBreakAppend write FStringBreakAppend;
     property StringBreakPrefix: String read FStringBreakPrefix write FStringBreakPrefix;
+    // Scroll
+    property ScrollOnEditLeftOptions: TSynScrollOnEditLeftOptions
+      read FScrollOnEditLeftOptions write FScrollOnEditLeftOptions;
+    property ScrollOnEditRightOptions: TSynScrollOnEditRightOptions
+      read FScrollOnEditRightOptions write FScrollOnEditRightOptions;
+  end;
+
+  { TEditorOptionsDefaults }
+
+  TEditorOptionsDefaults = class(TEditorOptionsBase)
+  private
+  protected
+  public
+    constructor Create;
+  end;
+
+  { TEditorOptions }
+
+  TEditorOptions = class(TEditorOptionsBase)
+  private
+    XMLConfig: TRttiXMLConfig;
+    // General options
+    fSynEditOptions: TSynEditorOptions;
+    fSynEditOptions2: TSynEditorOptions2;
+    fShowTabCloseButtons: Boolean;
+    fHideSingleTabInWindow: Boolean;
+    fShowTabNumbers: Boolean;
+    fUndoAfterSave: Boolean;
+    fFindTextAtCursor: Boolean;
+    fUseSyntaxHighlight: Boolean;
+    fCopyWordAtCursorOnCopyNone: Boolean;
+    fShowGutterHints: Boolean;
+    fBlockIndent: Integer;
+    fBlockTabIndent: Integer;
+    fBlockIndentType: TSynBeautifierIndentType;
+    fTrimSpaceType: TSynEditStringTrimmingType;
+    fUndoLimit: Integer;
+    fTabWidth:  Integer;
+    fBracketHighlightStyle: TSynEditBracketHighlightStyle;
+    // Display options
+    fVisibleRightMargin: Boolean;
+    fVisibleGutter: Boolean;
+    fShowLineNumbers: Boolean;
+    fShowOnlyLineNumbersMultiplesOf: integer;
+    fGutterWidth: Integer;
+    fGutterSeparatorIndex: Integer;
+    fRightMargin: Integer;
+    fEditorFont:  String;
+    fEditorFontSize:   Integer;
+    fExtraCharSpacing: Integer;
+    fExtraLineSpacing: Integer;
+    fDisableAntialiasing: Boolean;
+    fDoNotWarnForFont: string;
+    // Key Mappings
+    fKeyMappingScheme: String;
+    fKeyMap: TKeyCommandRelationList;
+    // Mouse Mappings
+    fUserMouseSettings: TEditorMouseOptions;
+    fTempMouseSettings: TEditorMouseOptions;
+    // Color options
+    fHighlighterList: TEditOptLangList;
+    fUserColorSchemeGroup: TColorSchemeFactory;
+    fUserDefinedColors: TEditorUserDefinedWordsList;
+    // Markup Current Word
+    fMarkupCurWordTime: Integer;
+    fMarkupCurWordFullLen: Integer;
+    fMarkupCurWordNoKeyword: Boolean;
+    fMarkupCurWordTrim: Boolean;
+    fMarkupCurWordNoTimer: Boolean;
+    // Code Tools options
+    fAutoBlockCompletion: Boolean;
+    fAutoCodeParameters: Boolean;
+    fAutoToolTipExprEval: Boolean;
+    fAutoToolTipSymbTools: Boolean;
+    fAutoDisplayFuncPrototypes: Boolean;
+    fAutoDelayInMSec: Integer;
+    fAutoHintDelayInMSec: Integer;
+    fCodeTemplateFileNameRaw: String;
+    fCTemplIndentToTokenStart: Boolean;
+    fAutoRemoveEmptyMethods: Boolean;
+    fCompletionLongLineHintInMSec: Integer;
+    // Code Folding
+    fUseCodeFolding: Boolean;
+    fUseMarkupWordBracket: Boolean;
+    fUseMarkupOutline: Boolean;
+    // Multi window
+    fMultiWinEditAccessOrder: TEditorOptionsEditAccessOrderList;
+    // Default values for RttiXmlConfig using published properties.
+    FDefaultValues: TEditorOptionsDefaults;
+    procedure Init;
+    function GetCodeTemplateFileNameExpand: String;
+    function GetColorSchemeLanguage(aHighLighter: TSynCustomHighlighter;
+                          SynColorSchemeName: String = ''): TColorSchemeLanguage;
+  protected
+  public
+    class function GetGroupCaption: string; override;
+    class function GetInstance: TAbstractIDEOptions; override;
+    procedure DoAfterWrite(Restore: boolean); override;
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure Load;
+    procedure Save;
+    function LoadCodeTemplates(AnAutoComplete: TSynEditAutoComplete): TModalResult;
+    function SaveCodeTemplates(AnAutoComplete: TSynEditAutoComplete): TModalResult;
+    procedure AssignKeyMapTo(ASynEdit: TSynEdit; SimilarEdit: TSynEdit = nil); // Or copy fromSimilarEdit
+    function ReadColorScheme(const LanguageName: String): String; // TODO: rename ReadColorSchemeName
+    function ReadPascalColorScheme: String;
+    procedure WriteColorScheme(const LanguageName, SynColorScheme: String);
+    procedure ReadHighlighterSettings(Syn: TSrcIDEHighlighter; SynColorScheme: String);
+    procedure ReadHighlighterFoldSettings(Syn: TSrcIDEHighlighter; ReadForOptions: Boolean = False);
+    procedure ReadDefaultsForHighlighterFoldSettings(Syn: TSrcIDEHighlighter);
+    procedure WriteHighlighterFoldSettings(Syn: TSrcIDEHighlighter);
+    procedure ReadHighlighterDivDrawSettings(Syn: TSrcIDEHighlighter);
+    procedure ReadDefaultsForHighlighterDivDrawSettings(Syn: TSrcIDEHighlighter);
+    procedure WriteHighlighterDivDrawSettings(Syn: TSrcIDEHighlighter);
+    procedure GetHighlighterSettings(Syn: TSrcIDEHighlighter); // read highlight settings from config file
+    procedure GetSynEditSettings(ASynEdit: TSynEdit; SimilarEdit: TSynEdit = nil); // read synedit settings from config file
+    function CreateSyn(LazSynHilighter: TLazSyntaxHighlighter): TSrcIDEHighlighter;
+    function CreateSynHighlighter(LazSynHilighter: TLazSyntaxHighlighter): TObject; override;
+    procedure GetSynEditPreviewSettings(APreviewEditor: TObject);
+    procedure SetMarkupColor(Syn: TSrcIDEHighlighter;
+                             AddHilightAttr: TAdditionalHilightAttribute;
+                             aMarkup: TSynSelectedColor);
+    procedure SetMarkupColors(aSynEd: TSynEdit);
+    procedure ApplyFontSettingsTo(ASynEdit: TSynEdit);
+    function ExtensionToLazSyntaxHighlighter(Ext: String): TLazSyntaxHighlighter; override;
+  public
+    // general options
+    property SynEditOptions: TSynEditorOptions
+      read fSynEditOptions write fSynEditOptions default SynEditDefaultOptions;
+    property SynEditOptions2: TSynEditorOptions2
+      read fSynEditOptions2 write fSynEditOptions2 default SynEditDefaultOptions2;
+    property ShowTabCloseButtons: Boolean
+      read fShowTabCloseButtons write fShowTabCloseButtons;
+    property HideSingleTabInWindow: Boolean
+      read FHideSingleTabInWindow write FHideSingleTabInWindow;
+    property ShowTabNumbers: Boolean read fShowTabNumbers write fShowTabNumbers;
+    property UndoAfterSave: Boolean read fUndoAfterSave write fUndoAfterSave default True;
+    property FindTextAtCursor: Boolean
+      read fFindTextAtCursor write fFindTextAtCursor default True;
+    property UseSyntaxHighlight: Boolean
+      read fUseSyntaxHighlight write fUseSyntaxHighlight default True;
+    property CopyWordAtCursorOnCopyNone: Boolean
+      read FCopyWordAtCursorOnCopyNone write FCopyWordAtCursorOnCopyNone;
+    property ShowGutterHints: Boolean read FShowGutterHints write FShowGutterHints;
+    property BlockIndent: Integer read fBlockIndent write fBlockIndent default 2;
+    property BlockTabIndent: Integer read FBlockTabIndent write FBlockTabIndent default 0;
+    property BlockIndentType: TSynBeautifierIndentType
+      read fBlockIndentType write fBlockIndentType default sbitCopySpaceTab;
+    property TrimSpaceType: TSynEditStringTrimmingType
+      read fTrimSpaceType write fTrimSpaceType default settLeaveLine;
+    property UndoLimit: Integer read fUndoLimit write fUndoLimit default 32767;
+    property TabWidth: Integer read fTabWidth write fTabWidth default 8;
+    property BracketHighlightStyle: TSynEditBracketHighlightStyle
+      read fBracketHighlightStyle write fBracketHighlightStyle default sbhsBoth;
+    // Display options
+    property VisibleRightMargin: Boolean
+      read fVisibleRightMargin write fVisibleRightMargin default True;
+    property VisibleGutter: Boolean read fVisibleGutter write fVisibleGutter default True;
+    property ShowLineNumbers: Boolean read fShowLineNumbers
+      write fShowLineNumbers default False;
+    property ShowOnlyLineNumbersMultiplesOf: integer read fShowOnlyLineNumbersMultiplesOf
+      write fShowOnlyLineNumbersMultiplesOf;
+    property GutterWidth: Integer read fGutterWidth write fGutterWidth default 30;
+    property GutterSeparatorIndex: Integer read FGutterSeparatorIndex
+      write FGutterSeparatorIndex default 3;
+    property RightMargin: Integer read fRightMargin write fRightMargin default 80;
+    property EditorFont: String read fEditorFont write fEditorFont;
+    property EditorFontSize: Integer read fEditorFontSize write fEditorFontSize;
+    property ExtraCharSpacing: Integer
+      read fExtraCharSpacing write fExtraCharSpacing default 0;
+    property ExtraLineSpacing: Integer
+      read fExtraLineSpacing write fExtraLineSpacing default 1;
+    property DisableAntialiasing: Boolean read fDisableAntialiasing
+      write fDisableAntialiasing default DefaultEditorDisableAntiAliasing;
+    property DoNotWarnForFont: string read FDoNotWarnForFont write FDoNotWarnForFont;
+    // Key Mappings
+    property KeyMappingScheme: String read fKeyMappingScheme write fKeyMappingScheme;
+    property KeyMap: TKeyCommandRelationList read fKeyMap;
+    // Mouse Mappings
+    // Current saved config
+    property UserMouseSettings: TEditorMouseOptions read FUserMouseSettings;
+    // Used by the 2 Mouse-option pages, so they share data (un-saved)
+    property TempMouseSettings: TEditorMouseOptions read FTempMouseSettings;
+    // Color options
+    property HighlighterList: TEditOptLangList read fHighlighterList;
+    property UserColorSchemeGroup: TColorSchemeFactory read fUserColorSchemeGroup;
+    property UserDefinedColors: TEditorUserDefinedWordsList read fUserDefinedColors;
+    // Markup Current Word
+    property MarkupCurWordTime: Integer
+      read fMarkupCurWordTime write fMarkupCurWordTime default 1500;
+    property MarkupCurWordFullLen: Integer
+      read fMarkupCurWordFullLen write fMarkupCurWordFullLen default 3;
+    property MarkupCurWordNoKeyword: Boolean
+      read fMarkupCurWordNoKeyword write fMarkupCurWordNoKeyword default False;
+    property MarkupCurWordTrim: Boolean
+      read fMarkupCurWordTrim write fMarkupCurWordTrim default True;
+    property MarkupCurWordNoTimer: Boolean
+      read fMarkupCurWordNoTimer write fMarkupCurWordNoTimer default False;
+    // Code Tools options
+    property AutoBlockCompletion: Boolean
+      read fAutoBlockCompletion write FAutoBlockCompletion default True;
+    property AutoCodeParameters: Boolean
+      read fAutoCodeParameters write fAutoCodeParameters default True;
+    property AutoToolTipExprEval: Boolean
+      read fAutoToolTipExprEval write fAutoToolTipExprEval default True; // debugger hints
+    property AutoToolTipSymbTools: Boolean
+      read fAutoToolTipSymbTools write fAutoToolTipSymbTools default True; // declaration hints
+    property AutoDisplayFunctionPrototypes: Boolean
+      read fAutoDisplayFuncPrototypes write fAutoDisplayFuncPrototypes default True;
+    property AutoDelayInMSec: Integer read fAutoDelayInMSec
+      write fAutoDelayInMSec default 1000;
+    property AutoHintDelayInMSec: Integer read fAutoHintDelayInMSec
+      write fAutoHintDelayInMSec default 1000;
+    property CodeTemplateFileNameRaw: String
+      read fCodeTemplateFileNameRaw write fCodeTemplateFileNameRaw;
+    property CodeTemplateFileNameExpand: String read GetCodeTemplateFileNameExpand;
+    property CodeTemplateIndentToTokenStart: Boolean
+      read fCTemplIndentToTokenStart write fCTemplIndentToTokenStart;
+    property AutoRemoveEmptyMethods: Boolean
+      read fAutoRemoveEmptyMethods write fAutoRemoveEmptyMethods default False;
+    property CompletionLongLineHintInMSec: Integer
+      read fCompletionLongLineHintInMSec write fCompletionLongLineHintInMSec;
+    // Code Folding
+    property UseCodeFolding: Boolean
+      read fUseCodeFolding write fUseCodeFolding default True;
+    property UseMarkupWordBracket: Boolean
+      read fUseMarkupWordBracket write fUseMarkupWordBracket default True;
+    property UseMarkupOutline: Boolean
+      read fUseMarkupOutline write fUseMarkupOutline default False;
+    // Multi window
+    property MultiWinEditAccessOrder: TEditorOptionsEditAccessOrderList
+        read FMultiWinEditAccessOrder write FMultiWinEditAccessOrder;
   end;
 
 var
   EditorOpts: TEditorOptions;
 
 procedure RepairEditorFontSize(var FontSize: integer);
-
 function BuildBorlandDCIFile(ACustomSynAutoComplete: TCustomSynAutoComplete): Boolean;
 function ColorSchemeFactory: TColorSchemeFactory;
 function UserSchemeDirectory(CreateIfNotExists: Boolean = False): String;
-//function HighlighterListSingleton: TEditOptLangList;
-
 procedure InitLocale;
 
 implementation
@@ -1833,8 +1799,7 @@ const
   // several language types can be redirected. For example there are FreePascal
   // and Delphi, but currently both are hilighted with the FreePascal
   // highlighter
-  CompatibleLazSyntaxHilighter: array[TLazSyntaxHighlighter] of
-    TLazSyntaxHighlighter = (
+  CompatibleLazSyntaxHilighter: array[TLazSyntaxHighlighter] of TLazSyntaxHighlighter = (
     lshNone,
     lshText,
     lshFreePascal,
@@ -1869,6 +1834,122 @@ begin
   AFont.Height := Height;
   Result := AFont.Size;
   AFont.Free;
+end;
+
+function OldAdditionalAttributeName(NewAha: String): string;
+var
+  AttriIdx: Integer;
+begin
+  AttriIdx := GetEnumValue(TypeInfo(TAdditionalHilightAttribute), NewAha);
+  if AttriIdx < 0 then
+    Result := NewAha
+  else
+    Result := ahaXmlNames[TAdditionalHilightAttribute(AttriIdx)];
+end;
+
+function GetAddiHilightAttrName(aha: TAdditionalHilightAttribute): String;
+begin
+  Result := GetEnumName(TypeInfo(TAdditionalHilightAttribute), ord(aha));
+end;
+
+function GetSynEditOptionName(SynOption: TSynEditorOption): string;
+begin
+  case SynOption of
+    eoAutoIndent:
+      Result := 'AutoIndent';
+    eoBracketHighlight:
+      Result := 'BracketHighlight';
+    eoEnhanceHomeKey:
+      Result := 'EnhanceHomeKey';
+    eoGroupUndo:
+      Result := 'GroupUndo';
+    eoHalfPageScroll:
+      Result := 'HalfPageScroll';
+    eoKeepCaretX:
+      Result := 'KeepCaretX';
+    eoPersistentCaret:
+      Result := 'PersistentCaret';
+    eoScrollByOneLess:
+      Result := 'ScrollByOneLess';
+    eoScrollPastEof:
+      Result := 'ScrollPastEof';
+    eoScrollPastEol:
+      Result := 'ScrollPastEol';
+    eoShowScrollHint:
+      Result := 'ShowScrollHint';
+    eoShowSpecialChars:
+      Result := 'ShowSpecialChars';
+    eoSmartTabs:
+      Result := 'SmartTabs';
+    eoTabsToSpaces:
+      Result := 'TabsToSpaces';
+    eoTabIndent:
+      Result := 'TabIndent';
+    eoTrimTrailingSpaces:
+      Result := 'TrimTrailingSpaces';
+    else
+      Result := '';
+  end;
+end;
+
+function GetSynBeautifierIndentName(IndentType: TSynBeautifierIndentType): string;
+begin
+  case IndentType of
+    sbitSpace:
+      Result := 'SpaceIndent';
+    sbitCopySpaceTab:
+      Result := 'CopySpaceTabIndent';
+    sbitPositionCaret:
+      Result := 'PositionIndent';
+    else
+      WriteStr(Result, IndentType);
+  end;
+end;
+
+function GetSynBeautifierIndentType(IndentName: String): TSynBeautifierIndentType;
+begin
+  case IndentName of
+    'CopySpaceTabIndent':
+      Result := sbitCopySpaceTab;
+    'PositionIndent':
+      Result := sbitPositionCaret;
+    'sbitConvertToTabSpace':
+      Result := sbitConvertToTabSpace;
+    'sbitConvertToTabOnly':
+      Result := sbitConvertToTabOnly;
+    else
+      Result := sbitSpace;
+  end;
+end;
+
+function GetTrimSpaceName(IndentType: TSynEditStringTrimmingType): string;
+begin
+  case IndentType of
+    settLeaveLine:
+      Result := 'LeaveLine';
+    settEditLine:
+      Result := 'EditLine';
+    settMoveCaret:
+      Result := 'MoveCaret';
+    settIgnoreAll:
+      Result := 'PosOnly';
+    else
+      Result := '';
+  end;
+end;
+
+function GetTrimSpaceType(IndentName: String): TSynEditStringTrimmingType;
+begin
+  case IndentName of
+    'EditLine':
+      Result := settEditLine;
+    'MoveCaret':
+      Result := settMoveCaret;
+    'PosOnly':
+      Result := settIgnoreAll;
+    else
+      Result := settLeaveLine;
+  end;
 end;
 
 { TEditorUserDefinedWordsList }
@@ -2134,22 +2215,23 @@ begin
 end;
 
 procedure TEditorUserDefinedWords.Assign(Source: TPersistent);
+var
+  SrcWords: TEditorUserDefinedWords;
 begin
   inherited Assign(Source);
-  if not(Source is TEditorUserDefinedWords) then
-    exit;
+  if not (Source is TEditorUserDefinedWords) then exit;
   ClearIdeCommands;
+  SrcWords := TEditorUserDefinedWords(Source);
+  FId                      := SrcWords.FId;
+  FName                    := SrcWords.FName;
+  FGlobalList              := SrcWords.FGlobalList;
+  FKeyAddCase              := SrcWords.FKeyAddCase;
+  FKeyAddSelectBoundMaxLen := SrcWords.FKeyAddSelectBoundMaxLen;
+  FKeyAddSelectSmart       := SrcWords.FKeyAddSelectSmart;
+  FKeyAddTermBounds        := SrcWords.FKeyAddTermBounds;
+  FKeyAddWordBoundMaxLen   := SrcWords.FKeyAddWordBoundMaxLen;
 
-  FId                      := TEditorUserDefinedWords(Source).FId;
-  FName                    := TEditorUserDefinedWords(Source).FName;
-  FGlobalList              := TEditorUserDefinedWords(Source).FGlobalList;
-  FKeyAddCase              := TEditorUserDefinedWords(Source).FKeyAddCase;
-  FKeyAddSelectBoundMaxLen := TEditorUserDefinedWords(Source).FKeyAddSelectBoundMaxLen;
-  FKeyAddSelectSmart       := TEditorUserDefinedWords(Source).FKeyAddSelectSmart;
-  FKeyAddTermBounds        := TEditorUserDefinedWords(Source).FKeyAddTermBounds;
-  FKeyAddWordBoundMaxLen   := TEditorUserDefinedWords(Source).FKeyAddWordBoundMaxLen;
-
-  FColorAttr.Assign(TEditorUserDefinedWords(Source).FColorAttr);
+  FColorAttr.Assign(SrcWords.FColorAttr);
   UpdateIdeCommands;
 end;
 
@@ -2321,7 +2403,6 @@ begin
   inherited Option := AValue;
 end;
 
-
 procedure RepairEditorFontSize(var FontSize: integer);
 begin
   if ((FontSize>=0) and (FontSize<=EditorOptionsMinimumFontSize))
@@ -2418,6 +2499,7 @@ var
     FreeAndNil(XMLConfig);
     FreeAndNil(Stream);
   end;
+
 begin
   if not Assigned(Singleton) then begin
     InitLocale;
@@ -2438,8 +2520,8 @@ begin
         try
           XMLConfig := TRttiXMLConfig.Create(FileList[i]);
           c := XMLConfig.GetValue('Lazarus/ColorSchemes/Names/Count', 0);
-          for j := 0 to c-1 do begin
-            n := XMLConfig.GetValue('Lazarus/ColorSchemes/Names/Item'+IntToStr(j+1)+'/Value', '');
+          for j := 1 to c do begin
+            n := XMLConfig.GetValue('Lazarus/ColorSchemes/Names/Item'+IntToStr(j)+'/Value', '');
             if n <> '' then
               Singleton.RegisterScheme(XMLConfig, n, 'Lazarus/ColorSchemes/');
           end;
@@ -2494,7 +2576,6 @@ begin
   EditorOptionsEditAccessDefaults[7].Desc    := dlgEditAccessDescIgnLockedOnlyActWin;
   EditorOptionsEditAccessDefaults[8].Caption := dlgEditAccessCaptionUnLockedOpenNewInAnyWin;
   EditorOptionsEditAccessDefaults[8].Desc    := dlgEditAccessDescUnLockedOpenNewInAnyWin;
-
 
   // update translation
   EditorOptionsFoldInfoPas[ 0].Name := dlgFoldPasProcedure;
@@ -2642,13 +2723,11 @@ begin
   inherited Destroy;
 end;
 
-function TEditOptLanguageInfo.SampleLineToAddAttr(
-  Line: Integer): TAdditionalHilightAttribute;
+function TEditOptLanguageInfo.SampleLineToAddAttr(Line: Integer): TAdditionalHilightAttribute;
 begin
   if Line < 1 then
     exit(ahaNone);
-  for Result := Low(TAdditionalHilightAttribute)
-    to High(TAdditionalHilightAttribute) do
+  for Result := Low(TAdditionalHilightAttribute) to High(TAdditionalHilightAttribute) do
     if (Result <> ahaNone) and (AddAttrSampleLines[Result] = Line) then
       exit;
   Result := ahaNone;
@@ -3129,8 +3208,6 @@ begin
   NewInfo.Prepare(lshCss);
   Add(NewInfo);
 
-
-
   // create info for JScript
   NewInfo := TEditOptLanguageInfo.Create;
   with NewInfo do
@@ -3323,21 +3400,19 @@ end;
 function TEditOptLangList.FindByName(const Name: String): Integer;
 begin
   Result := Count - 1;
-  while (Result >= 0) and (UTF8CompareText(
+  while (Result >= 0) and (UTF8CompareLatinTextFast(
       Items[Result].SynClass.GetLanguageName, Name) <> 0) do
     dec(Result);
 end;
 
-function TEditOptLangList.FindByClass(
-  CustomSynClass: TCustomSynClass): Integer;
+function TEditOptLangList.FindByClass(CustomSynClass: TCustomSynClass): Integer;
 begin
   Result := Count - 1;
   while (Result >= 0) and (Items[Result].SynClass <> CustomSynClass) do
     dec(Result);
 end;
 
-function TEditOptLangList.FindByHighlighter(Hilighter:
-  TSynCustomHighlighter): Integer;
+function TEditOptLangList.FindByHighlighter(Hilighter: TSynCustomHighlighter): Integer;
 begin
   if Hilighter <> Nil then
     Result := FindByClass(TCustomSynClass(Hilighter.ClassType))
@@ -3365,8 +3440,7 @@ begin
     Result := '';
 end;
 
-function TEditOptLangList.GetInfoByType(AType: TLazSyntaxHighlighter
-  ): TEditOptLanguageInfo;
+function TEditOptLangList.GetInfoByType(AType: TLazSyntaxHighlighter): TEditOptLanguageInfo;
 var
   i: LongInt;
 begin
@@ -3518,7 +3592,6 @@ begin
   FTextShiftAltExtra2Click := mbaNone;
   FTextShiftCtrlExtra2Click := mbaNone;
   FTextShiftExtra2Click := mbaNone;
-
 
   FTextRightMoveCaret  := False;
   FTextDrag            := True;
@@ -3919,10 +3992,9 @@ begin
   AddWheelAct(FShiftAltCtrlHorizWheel, [ssShift, ssAlt, ssCtrl], ModKeys, True);
 
   if FTextDrag then
-    with FSelActions do begin
-      AddCommand(emcStartDragMove, False, mbXLeft, ccSingle, cdDown, [], [], emcoNotDragedNoCaretOnUp);
-    end;
-    FTextActions.AddCommand(emcNone, True, mbXLeft, ccSingle, cdUp, [], [], 0, 99);
+    FSelActions.AddCommand(emcStartDragMove, False, mbXLeft, ccSingle, cdDown,
+                           [], [ssShift], emcoNotDragedNoCaretOnUp);
+  FTextActions.AddCommand(emcNone, True, mbXLeft, ccSingle, cdUp, [], [], 0, 99);
 end;
 
 procedure TEditorMouseOptions.ResetToUserScheme;
@@ -3970,9 +4042,9 @@ end;
 procedure TEditorMouseOptions.AssignEx(Src: TEditorMouseOptions; WithUserSchemes: Boolean);
 var
   i: Integer;
+  Opt: TEditorMouseOptions;
 begin
   FName                 := Src.FName;
-
   FGutterLeft           := Src.GutterLeft;
   FSelectOnLineNumbers  := Src.SelectOnLineNumbers;
   FTextDrag             := Src.TextDrag;
@@ -3981,7 +4053,7 @@ begin
 
     // left multi click
   FTextDoubleLeftClick       := Src.TextDoubleLeftClick;
-  FTextTripleLeftClick      := Src.TextTripleLeftClick;
+  FTextTripleLeftClick       := Src.TextTripleLeftClick;
   FTextQuadLeftClick         := Src.TextQuadLeftClick;
   FTextShiftDoubleLeftClick  := Src.TextShiftDoubleLeftClick;
   FTextAltDoubleLeftClick    := Src.TextAltDoubleLeftClick;
@@ -4049,16 +4121,14 @@ begin
   FTextShiftCtrlExtra2Click := Src.TextShiftCtrlExtra2Click;
   FTextShiftExtra2Click := Src.TextShiftExtra2Click;
 
-
-
   AssignActions(Src);
 
   if WithUserSchemes then begin
     ClearUserSchemes;
     for i := 0 to Src.FUserSchemes.Count - 1 do begin
-      FUserSchemes.AddObject(Src.FUserSchemes[i], TEditorMouseOptions.Create);
-      TEditorMouseOptions(FUserSchemes.Objects[i]).Assign
-        ( TEditorMouseOptions(Src.FUserSchemes.Objects[i]) );
+      Opt := TEditorMouseOptions.Create;
+      Opt.Assign(TEditorMouseOptions(Src.FUserSchemes.Objects[i]));
+      FUserSchemes.AddObject(Src.FUserSchemes[i], Opt);
     end;
   end;
 end;
@@ -4357,10 +4427,11 @@ end;
 
 procedure TEditorMouseOptions.LoadUserSchemes;
 var
-  i, j, k, c: Integer;
+  i, j, c: Integer;
   FileList: TStringList;
   XMLConfig: TRttiXMLConfig;
   n: String;
+  mo: TEditorMouseOptions;
 begin
   ClearUserSchemes;
   if DirectoryExistsUTF8(UserSchemeDirectory(False)) then begin
@@ -4370,13 +4441,13 @@ begin
       try
         XMLConfig := TRttiXMLConfig.Create(FileList[i]);
         c := XMLConfig.GetValue('Lazarus/MouseSchemes/Names/Count', 0);
-        for j := 0 to c-1 do begin
-          n := XMLConfig.GetValue('Lazarus/MouseSchemes/Names/Item'+IntToStr(j+1)+'/Value', '');
+        for j := 1 to c do begin
+          n := XMLConfig.GetValue('Lazarus/MouseSchemes/Names/Item'+IntToStr(j)+'/Value', '');
           if n <> '' then begin
-            k := FUserSchemes.AddObject(UTF8UpperCase(n), TEditorMouseOptions.Create);
-            TEditorMouseOptions(FUserSchemes.Objects[k]).FName := n;
-            TEditorMouseOptions(FUserSchemes.Objects[k]).ImportFromXml
-              (XMLConfig, 'Lazarus/MouseSchemes/Scheme' + n + '/');
+            mo := TEditorMouseOptions.Create;
+            mo.FName := n;
+            mo.ImportFromXml(XMLConfig, 'Lazarus/MouseSchemes/Scheme' + n + '/');
+            FUserSchemes.AddObject(n, mo);
           end;
         end;
       except
@@ -4395,7 +4466,7 @@ end;
 
 function TEditorMouseOptions.IndexOfUserScheme(SchemeName: String): Integer;
 begin
-  Result := FUserSchemes.IndexOf(UTF8UpperCase(SchemeName));
+  Result := FUserSchemes.IndexOf(SchemeName);
 end;
 
 function TEditorMouseOptions.GetSelectedUserSchemeIndex: Integer;
@@ -4430,8 +4501,6 @@ var
   i, j, c: Integer;
   n: String;
 begin
-  FPreset := TQuickStringlist.Create;
-
   if DirectoryExistsUTF8(UserSchemeDirectory(False)) then begin
     FileList := FindAllFiles(UserSchemeDirectory(False), '*.xml', False);
     for i := 0 to FileList.Count - 1 do begin
@@ -4439,11 +4508,10 @@ begin
       try
         XMLConfig := TRttiXMLConfig.Create(FileList[i]);
         c := XMLConfig.GetValue('Lazarus/MouseSchemes/Names/Count', 0);
-        for j := 0 to c-1 do begin
-          n := XMLConfig.GetValue('Lazarus/MouseSchemes/Names/Item'+IntToStr(j+1)+'/Value', '');
+        for j := 1 to c do begin
+          n := XMLConfig.GetValue('Lazarus/MouseSchemes/Names/Item'+IntToStr(j)+'/Value', '');
           if n <> '' then begin
             //NewMouse := TEditorMouseOptions.Create;
-
             //Singleton.RegisterScheme(XMLConfig, n, 'Lazarus/MouseSchemes/');
           end;
         end;
@@ -4454,13 +4522,6 @@ begin
     end;
     FileList.Free;
   end;
-
-end;
-
-destructor TEditorMouseOptionPresets.Destroy;
-begin
-  inherited Destroy;
-  FreeAndNil(FPreset);
 end;
 
 { TEditorOptionsEditAccessOrderList }
@@ -4618,140 +4679,48 @@ begin
   end;
 end;
 
-{ TEditorOptions }
+{ TEditorOptionsBase }
 
-constructor TEditorOptions.Create;
-var
-  ConfFileName: String;
+constructor TEditorOptionsBase.Create;
 begin
   inherited Create;
-  InitLocale;
-
-  ConfFileName := AppendPathDelim(GetPrimaryConfigPath) + EditOptsConfFileName;
-  CopySecondaryConfigFile(EditOptsConfFileName);
-  try
-    if (not FileExistsUTF8(ConfFileName)) then
-    begin
-      DebugLn('NOTE: editor options config file not found - using defaults');
-      XMLConfig := TRttiXMLConfig.CreateClean(ConfFileName);
-    end
-    else
-      XMLConfig := TRttiXMLConfig.Create(ConfFileName);
-  except
-    on E: Exception do
-    begin
-      DebugLn('WARNING: unable to read ', ConfFileName, ' ', E.Message);
-      XMLConfig := Nil;
-    end;
-  end;
-
-  // set defaults
-  Init;
-
-  // code templates (dci file)
-  fCodeTemplateFileNameRaw :=
-    TrimFilename(AppendPathDelim(GetPrimaryConfigPath)+DefaultCodeTemplatesFilename);
-  CopySecondaryConfigFile(DefaultCodeTemplatesFilename);
-
-  FMultiWinEditAccessOrder := TEditorOptionsEditAccessOrderList.Create;
-  FMultiWinEditAccessOrder.InitDefaults;
-
-  FDefaultValues := TEditorOptions.CreateDefaultOnly;
+  FScrollOnEditLeftOptions := TSynScrollOnEditLeftOptions.Create;
+  FScrollOnEditRightOptions := TSynScrollOnEditRightOptions.Create;
 end;
 
-constructor TEditorOptions.CreateDefaultOnly;
+destructor TEditorOptionsBase.Destroy;
 begin
-  inherited Create;
-  Init;
-  FDefaultValues := nil;
-end;
-
-destructor TEditorOptions.Destroy;
-begin
-  FreeAndNil(FUserColorSchemeSettings);
-  FreeAndNil(FUserDefinedColors);
-  fKeyMap.Free;
-  FreeAndNil(FMultiWinEditAccessOrder);
-  XMLConfig.Free;
-  FUserMouseSettings.Free;
-  FTempMouseSettings.Free;
-  FreeAndNil(FDefaultValues);
+  FreeAndNil(FScrollOnEditLeftOptions);
+  FreeAndNil(FScrollOnEditRightOptions);
   inherited Destroy;
 end;
 
-procedure TEditorOptions.Init;
+procedure TEditorOptionsBase.InitForRttiXmlConf;
 begin
   // General options
-  fShowTabCloseButtons := True;
-  FMultiLineTab := False;
-  FHideSingleTabInWindow := False;
+  fMultiLineTab := False;
   fTabPosition := tpTop;
-  FCopyWordAtCursorOnCopyNone := True;
-  FShowGutterHints := True;
-  fBlockIndent := 2;
-  FBlockTabIndent := 0;
-  fBlockIndentType := sbitSpace;
-  FTrimSpaceType := settEditLine;
-  fUndoLimit := 32767;
-  fTabWidth := 8;
-  FBracketHighlightStyle := sbhsBoth;
-  FGutterSeparatorIndex := 3;
-  fSynEditOptions := SynEditDefaultOptions;
-  fSynEditOptions2 := SynEditDefaultOptions2;
-  FMultiCaretOnColumnSelect := True;
-  FMultiCaretDefaultMode := mcmMoveAllCarets;
-  FMultiCaretDefaultColumnSelectMode := mcmCancelOnCaretMove;
-  FMultiCaretDeleteSkipLineBreak := False;
-
+  fMultiCaretOnColumnSelect := True;
+  fMultiCaretDefaultMode := mcmMoveAllCarets;
+  fMultiCaretDefaultColumnSelectMode := mcmCancelOnCaretMove;
+  fMultiCaretDeleteSkipLineBreak := False;
   // Display options
-  fEditorFont := SynDefaultFontName;
-  fEditorFontSize := SynDefaultFontSize;
-  fDisableAntialiasing := DefaultEditorDisableAntiAliasing;
-  FShowOverviewGutter := True;
-  FTopInfoView := True;
-
-  // Key Mappings
-  fKeyMappingScheme := KeyMapSchemeNames[kmsLazarus];
-  fKeyMap := TKeyCommandRelationList.Create;
-
-  // Mouse Mappings
-  FUserMouseSettings := TEditorMouseOptions.Create;
-  FTempMouseSettings := TEditorMouseOptions.Create;
-  FUserMouseSettings.LoadUserSchemes;
-
-  // Color options
-  fHighlighterList := HighlighterListSingleton;
-  FUserColorSchemeSettings := TColorSchemeFactory.Create;
-  FUserColorSchemeSettings.Assign(ColorSchemeFactory);
-  FUserDefinedColors := TEditorUserDefinedWordsList.Create;
-  FUserDefinedColors.UseGlobalIDECommandList := True;
-
-  FMarkupCurWordTime := 1500;
-  FMarkupCurWordFullLen := 3;
-  FMarkupCurWordNoKeyword := True;
-  FMarkupCurWordTrim := True;
-  FMarkupCurWordNoTimer := False;
-
+  fShowOverviewGutter := True;
+  fTopInfoView := True;
   // hints
-  FDbgHintAutoTypeCastClass := True;
-
+  fDbgHintAutoTypeCastClass := True;
   // Code Tools options
-  FCompletionLongLineHintType := DefaultCompletionLongLineHintType;
-  FAutoDisplayFuncPrototypes := True;
-
+  fCompletionLongLineHintType := DefaultCompletionLongLineHintType;
   // Code folding
-  FReverseFoldPopUpOrder := True;
-
+  fReverseFoldPopUpOrder := True;
   // pas highlighter
-  FPasExtendedKeywordsMode := False;
-  FPasStringKeywordMode := spsmDefault;
-
+  fPasExtendedKeywordsMode := False;
+  fPasStringKeywordMode := spsmDefault;
   // Multi window
-  FCtrlMiddleTabClickClosesOthers := True;
-  FMiddleTabClickClosesOthersModifier := [ssCtrl];
-  FMiddleTabClickClosesToRightModifier := [];
-  FShowFileNameInCaption := False;
-
+  fCtrlMiddleTabClickClosesOthers := True;
+  fMiddleTabClickClosesOthersModifier := [ssCtrl];
+  fMiddleTabClickClosesToRightModifier := [];
+  fShowFileNameInCaption := False;
   // Comment
   FAnsiCommentContinueEnabled := False;
   FAnsiCommentMatch := '^\s?(\*)';
@@ -4762,7 +4731,6 @@ begin
                       sciMatchOnlyPastTokenIndent
                      ];
   FAnsiIndentAlignMax := 40;
-
 
   FCurlyCommentContinueEnabled := False;
   FCurlyCommentMatch := '^\s?(\*)';
@@ -4790,6 +4758,137 @@ begin
   FStringBreakPrefix  := '';
 end;
 
+function TEditorOptionsBase.GetTabPosition: TTabPosition;
+begin
+  Result := fTabPosition;
+end;
+
+{ TEditorOptionsDefaults }
+
+constructor TEditorOptionsDefaults.Create;
+begin
+  inherited Create;
+  InitForRttiXmlConf;
+end;
+
+{ TEditorOptions }
+
+class function TEditorOptions.GetGroupCaption: string;
+begin
+  Result := dlgGroupEditor;
+end;
+
+class function TEditorOptions.GetInstance: TAbstractIDEOptions;
+begin
+  Result := EditorOpts;
+end;
+
+procedure TEditorOptions.DoAfterWrite(Restore: boolean);
+begin
+  if not Restore then
+    Save;
+  inherited;
+end;
+
+constructor TEditorOptions.Create;
+var
+  ConfFileName: String;
+begin
+  inherited Create;
+  InitLocale;
+  ConfFileName := AppendPathDelim(GetPrimaryConfigPath) + EditOptsConfFileName;
+  CopySecondaryConfigFile(EditOptsConfFileName);
+  try
+    if not FileExistsUTF8(ConfFileName) then
+    begin
+      DebugLn('NOTE: editor options config file not found - using defaults');
+      XMLConfig := TRttiXMLConfig.CreateClean(ConfFileName);
+    end
+    else
+      XMLConfig := TRttiXMLConfig.Create(ConfFileName);
+  except
+    on E: Exception do
+    begin
+      DebugLn('WARNING: unable to read ', ConfFileName, ' ', E.Message);
+      XMLConfig := Nil;
+    end;
+  end;
+  // set defaults
+  InitForRttiXmlConf;
+  Init;
+  // code templates (dci file)
+  fCodeTemplateFileNameRaw :=
+    TrimFilename(AppendPathDelim(GetPrimaryConfigPath)+DefaultCodeTemplatesFilename);
+  CopySecondaryConfigFile(DefaultCodeTemplatesFilename);
+  FMultiWinEditAccessOrder := TEditorOptionsEditAccessOrderList.Create;
+  FMultiWinEditAccessOrder.InitDefaults;
+  // Default values for RttiXmlConfig
+  FDefaultValues := TEditorOptionsDefaults.Create;
+end;
+
+destructor TEditorOptions.Destroy;
+begin
+  FreeAndNil(FDefaultValues);
+  FreeAndNil(fMultiWinEditAccessOrder);
+  FreeAndNil(fUserDefinedColors);
+  FreeAndNil(fUserColorSchemeGroup);
+  fUserMouseSettings.Free;
+  fTempMouseSettings.Free;
+  fKeyMap.Free;
+  XMLConfig.Free;
+  inherited Destroy;
+end;
+
+procedure TEditorOptions.Init;
+begin
+  // General options
+  fSynEditOptions := SynEditDefaultOptions;
+  fSynEditOptions2 := SynEditDefaultOptions2;
+  fShowTabCloseButtons := True;
+  fHideSingleTabInWindow := False;
+  fCopyWordAtCursorOnCopyNone := True;
+  fShowGutterHints := True;
+  fBlockIndent := 2;
+  FBlockTabIndent := 0;
+  fBlockIndentType := sbitSpace;
+  fTrimSpaceType := settEditLine;
+  fUndoLimit := 32767;
+  fTabWidth := 8;
+  fBracketHighlightStyle := sbhsBoth;
+  // Display options
+  fGutterSeparatorIndex := 3;
+  fEditorFont := SynDefaultFontName;
+  fEditorFontSize := SynDefaultFontSize;
+  fDisableAntialiasing := DefaultEditorDisableAntiAliasing;
+  // Key Mappings
+  fKeyMappingScheme := KeyMapSchemeNames[kmsLazarus];
+  fKeyMap := TKeyCommandRelationList.Create;
+  // Mouse Mappings
+  fUserMouseSettings := TEditorMouseOptions.Create;
+  fTempMouseSettings := TEditorMouseOptions.Create;
+  fUserMouseSettings.LoadUserSchemes;
+  // Color options
+  fHighlighterList := HighlighterListSingleton;
+  FUserColorSchemeGroup := TColorSchemeFactory.Create;
+  FUserColorSchemeGroup.Assign(ColorSchemeFactory); // Copy from global singleton.
+  fUserDefinedColors := TEditorUserDefinedWordsList.Create;
+  fUserDefinedColors.UseGlobalIDECommandList := True;
+  // Markup Current Word
+  fMarkupCurWordTime := 1500;
+  fMarkupCurWordFullLen := 3;
+  fMarkupCurWordNoKeyword := True;
+  fMarkupCurWordTrim := True;
+  fMarkupCurWordNoTimer := False;
+  // Code Tools
+  fAutoDisplayFuncPrototypes := True;
+end;
+
+function TEditorOptions.GetCodeTemplateFileNameExpand: String;
+begin
+  Result := fCodeTemplateFileNameRaw;
+  IDEMacros.SubstituteMacros(result);
+end;
+
 procedure TEditorOptions.Load;
 // load options from XML file
 var
@@ -4812,8 +4911,7 @@ begin
     begin
       SynEditOptName := GetSynEditOptionName(SynEditOpt);
       if SynEditOptName <> '' then
-        if XMLConfig.GetValue('EditorOptions/General/Editor/' + SynEditOptName,
-          SynEditOpt in DefOpts) then
+        if XMLConfig.GetValue('EditorOptions/General/Editor/'+SynEditOptName,SynEditOpt in DefOpts) then
           Include(fSynEditOptions, SynEditOpt)
         else
           Exclude(fSynEditOptions, SynEditOpt);
@@ -4851,16 +4949,13 @@ begin
     end;
 
     fShowTabCloseButtons :=
-      XMLConfig.GetValue(
-      'EditorOptions/General/Editor/ShowTabCloseButtons', True);
+      XMLConfig.GetValue('EditorOptions/General/Editor/ShowTabCloseButtons', True);
     FHideSingleTabInWindow :=
-      XMLConfig.GetValue(
-      'EditorOptions/General/Editor/HideSingleTabInWindow', False);
+      XMLConfig.GetValue('EditorOptions/General/Editor/HideSingleTabInWindow', False);
     fShowTabNumbers :=
       XMLConfig.GetValue('EditorOptions/General/Editor/ShowTabNumbers', False);
     FCopyWordAtCursorOnCopyNone :=
-      XMLConfig.GetValue(
-      'EditorOptions/General/Editor/CopyWordAtCursorOnCopyNone', True);
+      XMLConfig.GetValue('EditorOptions/General/Editor/CopyWordAtCursorOnCopyNone', True);
     FShowGutterHints :=
       XMLConfig.GetValue('EditorOptions/General/Editor/ShowGutterHints', True);
     fUndoAfterSave :=
@@ -4868,8 +4963,7 @@ begin
     fFindTextAtCursor :=
       XMLConfig.GetValue('EditorOptions/General/Editor/FindTextAtCursor', True);
     fUseSyntaxHighlight :=
-      XMLConfig.GetValue(
-      'EditorOptions/General/Editor/UseSyntaxHighlight', True);
+      XMLConfig.GetValue('EditorOptions/General/Editor/UseSyntaxHighlight', True);
     fBlockIndent :=
       XMLConfig.GetValue('EditorOptions/General/Editor/BlockIndent', 2);
     FBlockTabIndent :=
@@ -4913,13 +5007,11 @@ begin
       XMLConfig.GetValue('EditorOptions/Display/EditorFont', SynDefaultFontName);
     if FileVersion < 8 then begin
       fEditorFontSize :=
-        XMLConfig.GetValue('EditorOptions/Display/EditorFontHeight',
-        SynDefaultFontHeight);
+        XMLConfig.GetValue('EditorOptions/Display/EditorFontHeight', SynDefaultFontHeight);
       fEditorFontSize := FontHeightToSize(fEditorFontSize);
     end else begin
       fEditorFontSize :=
-        XMLConfig.GetValue('EditorOptions/Display/EditorFontSize',
-        SynDefaultFontSize);
+        XMLConfig.GetValue('EditorOptions/Display/EditorFontSize', SynDefaultFontSize);
     end;
     RepairEditorFontSize(fEditorFontSize);
     fExtraCharSpacing :=
@@ -4927,15 +5019,13 @@ begin
     fExtraLineSpacing :=
       XMLConfig.GetValue('EditorOptions/Display/ExtraLineSpacing', 1);
     fDisableAntialiasing :=
-      XMLConfig.GetValue('EditorOptions/Display/DisableAntialiasing',
-                         FileVersion<7);
+      XMLConfig.GetValue('EditorOptions/Display/DisableAntialiasing', FileVersion<7);
     FDoNotWarnForFont :=
       XMLConfig.GetValue('EditorOptions/Display/DoNotWarnForFont', '');
 
     // Key Mappings options
     fKeyMappingScheme :=
-      XMLConfig.GetValue('EditorOptions/KeyMapping/Scheme',
-      StrToValidXMLName(KeyMapSchemeNames[kmsLazarus]));
+      XMLConfig.GetValue('EditorOptions/KeyMapping/Scheme', KeyMapSchemeNames[kmsLazarus]);
     fKeyMap.LoadFromXMLConfig(XMLConfig
       , 'EditorOptions/KeyMapping/' + fKeyMappingScheme + '/');
 
@@ -4951,35 +5041,27 @@ begin
     FUserDefinedColors.LoadFromXMLConfig(xmlconfig, 'EditorOptions/UserDefinedColors');
 
     FMarkupCurWordTime :=
-      XMLConfig.GetValue(
-      'EditorOptions/Display/MarkupCurrentWord/Time', 1500);
+      XMLConfig.GetValue('EditorOptions/Display/MarkupCurrentWord/Time', 1500);
     FMarkupCurWordFullLen :=
-      XMLConfig.GetValue(
-      'EditorOptions/Display/MarkupCurrentWord/FullLen', 3);
+      XMLConfig.GetValue('EditorOptions/Display/MarkupCurrentWord/FullLen', 3);
     // check deprecated value
     if not XMLConfig.GetValue('EditorOptions/Display/MarkupCurrentWord/FullWord', True) then
       FMarkupCurWordFullLen := 0;
     XMLConfig.DeleteValue('EditorOptions/Display/MarkupCurrentWord/FullWord');
     FMarkupCurWordNoKeyword :=
-      XMLConfig.GetValue(
-      'EditorOptions/Display/MarkupCurrentWord/NoKeyword', True);
+      XMLConfig.GetValue('EditorOptions/Display/MarkupCurrentWord/NoKeyword', True);
     FMarkupCurWordTrim :=
-      XMLConfig.GetValue(
-      'EditorOptions/Display/MarkupCurrentWord/Trim', True);
+      XMLConfig.GetValue('EditorOptions/Display/MarkupCurrentWord/Trim', True);
     FMarkupCurWordNoTimer :=
-      XMLConfig.GetValue(
-      'EditorOptions/Display/MarkupCurrentWord/NoTimer', False);
+      XMLConfig.GetValue('EditorOptions/Display/MarkupCurrentWord/NoTimer', False);
     FShowFileNameInCaption :=
-      XMLConfig.GetValue(
-      'EditorOptions/Display/ShowFileNameInCaption', False);
+      XMLConfig.GetValue('EditorOptions/Display/ShowFileNameInCaption', False);
 
     // Code Tools options
     fAutoBlockCompletion :=
-      XMLConfig.GetValue(
-      'EditorOptions/CodeTools/AutoBlockCompletion', True);
+      XMLConfig.GetValue('EditorOptions/CodeTools/AutoBlockCompletion', True);
     fAutoDisplayFuncPrototypes :=
-      XMLConfig.GetValue(
-      'EditorOptions/CodeTools/AutoDisplayFuncPrototypes', True);
+      XMLConfig.GetValue('EditorOptions/CodeTools/AutoDisplayFuncPrototypes', True);
     fAutoCodeParameters :=
       XMLConfig.GetValue('EditorOptions/CodeTools/AutoCodeParameters', True);
     fAutoToolTipExprEval :=
@@ -4994,8 +5076,7 @@ begin
       XMLConfig.GetValue('EditorOptions/CodeTools/CodeTemplateFileName'
       , TrimFilename(AppendPathDelim(GetPrimaryConfigPath) + DefaultCodeTemplatesFilename));
     fCTemplIndentToTokenStart :=
-      XMLConfig.GetValue(
-      'EditorOptions/CodeTools/CodeTemplateIndentToTokenStart/Value', False);
+      XMLConfig.GetValue('EditorOptions/CodeTools/CodeTemplateIndentToTokenStart/Value', False);
     fAutoRemoveEmptyMethods :=
       XMLConfig.GetValue('EditorOptions/CodeTools/AutoRemoveEmptyMethods', False);
     FCompletionLongLineHintInMSec :=
@@ -5006,14 +5087,11 @@ begin
 
     // Code Folding
     FUseCodeFolding :=
-      XMLConfig.GetValue(
-      'EditorOptions/CodeFolding/UseCodeFolding', True);
+      XMLConfig.GetValue('EditorOptions/CodeFolding/UseCodeFolding', True);
     FUseMarkupWordBracket :=
-      XMLConfig.GetValue(
-      'EditorOptions/CodeFolding/UseMarkupWordBracket', True);
+      XMLConfig.GetValue('EditorOptions/CodeFolding/UseMarkupWordBracket', True);
     FUseMarkupOutline :=
-      XMLConfig.GetValue(
-      'EditorOptions/CodeFolding/UseMarkupOutline', False);
+      XMLConfig.GetValue('EditorOptions/CodeFolding/UseMarkupOutline', False);
 
     FUserMouseSettings.LoadFromXml(XMLConfig, 'EditorOptions/Mouse/',
                                   'EditorOptions/General/Editor/', FileVersion);
@@ -5235,10 +5313,9 @@ function TEditorOptions.LoadCodeTemplates(AnAutoComplete: TSynEditAutoComplete
   begin
     data := TResourceStream.Create(HInstance, PChar('lazarus_dci_file'), PChar(RT_RCDATA));
     i := data.Size;
-    if i > 0 then begin
-      SetLength(Result, i);
+    SetLength(Result, i);
+    if i > 0 then
       data.Read(Result[1], i);
-    end;
     data.Free;
   end;
 
@@ -5246,14 +5323,14 @@ var
   s: String;
   FileVersion, i, j, v: Integer;
   NewAutoComplete: TSynEditAutoComplete;
-  Attr: TStringList;
+  Attr, ExAtr: TStrings;
   Added: Boolean;
 begin
   s := CodeTemplateFileNameExpand;
   Result := mrAbort;
   if FileExistsUTF8(s) then begin
     try
-      LoadStringsFromFileUTF8(AnAutoComplete.AutoCompleteList, s);
+      AnAutoComplete.AutoCompleteList.LoadFromFile(s);
       Result := mrOK;
     except
       Result := mrAbort;
@@ -5263,9 +5340,10 @@ begin
 
     FileVersion := AnAutoComplete.Completions.Count;
     if (FileVersion > 0) then begin
-      FileVersion := AnAutoComplete.CompletionAttributes[0].IndexOfName(DciFileVersionName);
+      ExAtr := AnAutoComplete.CompletionAttributes[0];
+      FileVersion := ExAtr.IndexOfName(DciFileVersionName);
       if (FileVersion >= 0) then
-        FileVersion := StrToIntDef(AnAutoComplete.CompletionAttributes[0][FileVersion], 0);
+        FileVersion := StrToIntDef(ExAtr.ValueFromIndex[FileVersion], 0);
     end;
     if FileVersion < DciFileVersion then begin
       // Merge new entries
@@ -5273,16 +5351,17 @@ begin
       NewAutoComplete.AutoCompleteList.Text := ResourceDCIAsText;
       Added := False;
       for i := 0 to NewAutoComplete.Completions.Count - 1 do begin
-        j := NewAutoComplete.CompletionAttributes[i].IndexOfName(DciVersionName);
+        ExAtr := NewAutoComplete.CompletionAttributes[i];
+        j := ExAtr.IndexOfName(DciVersionName);
         if j < 0 then
           continue;
-        v := StrToIntDef(NewAutoComplete.CompletionAttributes[i][j], 0);
+        v := StrToIntDef(ExAtr.ValueFromIndex[j], 0);
         if v <= FileVersion then
           continue;
         if AnAutoComplete.Completions.IndexOf(NewAutoComplete.Completions[i]) >= 0 then
           continue;
-        Attr := TStringList.Create;
-        Attr.Assign(NewAutoComplete.CompletionAttributes[i]); // will be owned by AnAutoComplete;
+        Attr := TStringListUTF8Fast.Create;
+        Attr.Assign(ExAtr); // will be owned by AnAutoComplete;
         AnAutoComplete.AddCompletion(
           NewAutoComplete.Completions[i],
           NewAutoComplete.CompletionValues[i],
@@ -5305,134 +5384,11 @@ function TEditorOptions.SaveCodeTemplates(AnAutoComplete: TSynEditAutoComplete
   ): TModalResult;
 begin
   try
-    SaveStringsToFileUTF8(AnAutoComplete.AutoCompleteList, CodeTemplateFileNameExpand);
+    AnAutoComplete.AutoCompleteList.SaveToFile(CodeTemplateFileNameExpand);
     Result := mrOK;
   except
     Result := mrAbort;
   end;
-end;
-
-procedure TEditorOptions.TranslateResourceStrings;
-begin
-
-end;
-
-function TEditorOptions.GetAdditionalAttributeName(aha:TAdditionalHilightAttribute): string;
-begin
-  Result:=GetEnumName(TypeInfo(TAdditionalHilightAttribute), ord(aha));
-end;
-
-class function TEditorOptions.GetGroupCaption: string;
-begin
-  Result := dlgGroupEditor;
-end;
-
-class function TEditorOptions.GetInstance: TAbstractIDEOptions;
-begin
-  Result := EditorOpts;
-end;
-
-procedure TEditorOptions.DoAfterWrite(Restore: boolean);
-begin
-  if not Restore then
-    Save;
-  inherited;
-end;
-
-function TEditorOptions.GetSynEditOptionName(SynOption: TSynEditorOption): string;
-begin
-  case SynOption of
-    eoAutoIndent:
-      Result := 'AutoIndent';
-    eoBracketHighlight:
-      Result := 'BracketHighlight';
-    eoEnhanceHomeKey:
-      Result := 'EnhanceHomeKey';
-    eoGroupUndo:
-      Result := 'GroupUndo';
-    eoHalfPageScroll:
-      Result := 'HalfPageScroll';
-    eoKeepCaretX:
-      Result := 'KeepCaretX';
-    eoPersistentCaret:
-      Result := 'PersistentCaret';
-    eoScrollByOneLess:
-      Result := 'ScrollByOneLess';
-    eoScrollPastEof:
-      Result := 'ScrollPastEof';
-    eoScrollPastEol:
-      Result := 'ScrollPastEol';
-    eoShowScrollHint:
-      Result := 'ShowScrollHint';
-    eoShowSpecialChars:
-      Result := 'ShowSpecialChars';
-    eoSmartTabs:
-      Result := 'SmartTabs';
-    eoTabsToSpaces:
-      Result := 'TabsToSpaces';
-    eoTabIndent:
-      Result := 'TabIndent';
-    eoTrimTrailingSpaces:
-      Result := 'TrimTrailingSpaces';
-    else
-      Result := '';
-  end;
-end;
-
-function TEditorOptions.GetSynBeautifierIndentName(IndentType: TSynBeautifierIndentType): string;
-begin
-  case IndentType of
-    sbitSpace:
-      Result := 'SpaceIndent';
-    sbitCopySpaceTab:
-      Result := 'CopySpaceTabIndent';
-    sbitPositionCaret:
-      Result := 'PositionIndent';
-    else
-      WriteStr(Result, IndentType);
-  end;
-end;
-
-function TEditorOptions.GetSynBeautifierIndentType(IndentName: String): TSynBeautifierIndentType;
-begin
-  Result := sbitSpace;
-  if IndentName = 'CopySpaceTabIndent' then
-    Result := sbitCopySpaceTab
-  else
-  if IndentName = 'PositionIndent' then
-    Result := sbitPositionCaret
-  else
-  if IndentName = 'sbitConvertToTabSpace' then
-    Result := sbitConvertToTabSpace
-  else
-  if IndentName = 'sbitConvertToTabOnly' then
-    Result := sbitConvertToTabOnly;
-end;
-
-function TEditorOptions.GetTrimSpaceName(IndentType: TSynEditStringTrimmingType): string;
-begin
-  Result := '';
-  case IndentType of
-    settLeaveLine:
-      Result := 'LeaveLine';
-    settEditLine:
-      Result := 'EditLine';
-    settMoveCaret:
-      Result := 'MoveCaret';
-    settIgnoreAll:
-      Result := 'PosOnly';
-  end;
-end;
-
-function TEditorOptions.GetTrimSpaceType(IndentName: String): TSynEditStringTrimmingType;
-begin
-  Result := settLeaveLine;
-  if IndentName = 'EditLine' then
-    Result := settEditLine
-  else if IndentName = 'MoveCaret' then
-    Result := settMoveCaret
-  else if IndentName = 'PosOnly' then
-    Result := settIgnoreAll;
 end;
 
 procedure TEditorOptions.AssignKeyMapTo(ASynEdit: TSynEdit; SimilarEdit: TSynEdit);
@@ -5446,7 +5402,6 @@ begin
 
   c := ASynEdit.PluginCount - 1;
   while (c >= 0) do begin
-
     if SimilarEdit<>nil then begin
       i := SimilarEdit.PluginCount - 1;
       while (i >= 0) and not (SimilarEdit.Plugin[i].ClassType = ASynEdit.Plugin[c].ClassType) do
@@ -5509,29 +5464,31 @@ begin
   end;
 end;
 
-function TEditorOptions.CreateSyn(LazSynHilighter: TLazSyntaxHighlighter): TSrcIDEHighlighter;
+function TEditorOptions.GetColorSchemeLanguage(aHighLighter: TSynCustomHighlighter;
+  SynColorSchemeName: String): TColorSchemeLanguage;
+var
+  Scheme: TColorScheme;
 begin
-  if LazSyntaxHighlighterClasses[LazSynHilighter] <> Nil then
-  begin
-    Result := LazSyntaxHighlighterClasses[LazSynHilighter].Create(Nil);
-    GetHighlighterSettings(Result);
-  end
-  else
-    Result := Nil;
+  Result := nil;
+  // initialize with defaults
+  if SynColorSchemeName = '' then
+    SynColorSchemeName := ReadColorScheme(aHighLighter.LanguageName);
+  if (SynColorSchemeName = '') then
+    exit;
+  Scheme := UserColorSchemeGroup.ColorSchemeGroup[SynColorSchemeName];
+  if Scheme = nil then
+    exit;
+  Result := Scheme.ColorSchemeBySynClass[aHighLighter.ClassType];
 end;
 
 function TEditorOptions.ReadColorScheme(const LanguageName: String): String;
 (* The name of the currently chosen color-scheme for that language *)
 begin
   if LanguageName = '' then
-  begin
-    Result := ColorSchemeFactory.ColorSchemeGroupAtPos[0].Name;
-    exit;
-  end;
+    Exit(ColorSchemeFactory.ColorSchemeGroupAtPos[0].Name);
   if LanguageName <> TPreviewPasSyn.GetLanguageName then
     Result := XMLConfig.GetValue(
-      'EditorOptions/Color/Lang' + StrToValidXMLName(LanguageName) +
-      '/ColorScheme/Value', '')
+      'EditorOptions/Color/Lang' + StrToValidXMLName(LanguageName) + '/ColorScheme/Value', '')
   else
     Result := '';
   if ColorSchemeFactory.ColorSchemeGroup[Result] = nil then
@@ -5547,9 +5504,8 @@ var
 begin
   FormatVersion := XMLConfig.GetValue('EditorOptions/Color/Version', EditorOptsFormatVersion);
   if FormatVersion > 1 then
-    Result := XMLConfig.GetValue(
-      'EditorOptions/Color/Lang' + StrToValidXMLName(
-      TPreviewPasSyn.GetLanguageName) + '/ColorScheme/Value', '')
+    Result := XMLConfig.GetValue('EditorOptions/Color/Lang' +
+      StrToValidXMLName(TPreviewPasSyn.GetLanguageName) + '/ColorScheme/Value', '')
   else
     Result := XMLConfig.GetValue('EditorOptions/Color/ColorScheme', '');
   if ColorSchemeFactory.ColorSchemeGroup[Result] = nil then
@@ -5562,33 +5518,14 @@ begin
   end;
 end;
 
-function TEditorOptions.GetColorSchemeLanguage(aHighLighter: TSynCustomHighlighter;
-  SynColorSchemeName: String): TColorSchemeLanguage;
-var
-  Scheme: TColorScheme;
-begin
-  Result := nil;
-  // initialize with defaults
-  if SynColorSchemeName = '' then
-    SynColorSchemeName := ReadColorScheme(aHighLighter.LanguageName);
-  if (SynColorSchemeName = '') then
-    exit;
-
-  Scheme := UserColorSchemeGroup.ColorSchemeGroup[SynColorSchemeName];
-  if Scheme = nil then
-    exit;
-  Result := Scheme.ColorSchemeBySynClass[aHighLighter.ClassType];
-end;
-
 procedure TEditorOptions.WriteColorScheme(const LanguageName, SynColorScheme: String);
 begin
   if (LanguageName = '') or (SynColorScheme = '') then
     exit;
-  XMLConfig.SetValue('EditorOptions/Color/Lang' + StrToValidXMLName(
-    LanguageName) + '/ColorScheme/Value', SynColorScheme);
+  XMLConfig.SetValue('EditorOptions/Color/Lang' + StrToValidXMLName(LanguageName) +
+                     '/ColorScheme/Value', SynColorScheme);
   XMLConfig.SetValue('EditorOptions/Color/Version', EditorOptsFormatVersion);
 end;
-
 
 procedure TEditorOptions.ReadHighlighterSettings(Syn: TSrcIDEHighlighter;
   SynColorScheme: String);
@@ -5599,17 +5536,16 @@ begin
   LangScheme := GetColorSchemeLanguage(Syn, SynColorScheme);
   if LangScheme = nil then
     exit;
-
   LangScheme.ApplyTo(Syn);
 end;
 
 procedure TEditorOptions.ReadHighlighterFoldSettings(Syn: TSrcIDEHighlighter;
   ReadForOptions: Boolean);
 var
-  ConfName: String;
-  Path: String;
+  Path, ValidLang: String;
   i, h, idx: Integer;
-  TheFoldInfo: TEditorOptionsFoldRecord;
+  FoldRec: TEditorOptionsFoldRecord;
+  FoldInf: TEditorOptionsFoldInfo;
   DefHl, FoldHl: TSynCustomFoldHighlighter;
 begin
   h := HighlighterList.FindByHighlighter(Syn);
@@ -5617,21 +5553,21 @@ begin
     h := HighlighterList.FindByName(Syn.LanguageName);
   if h < 0 then exit;
 
-  if (syn is TSynCustomFoldHighlighter) then begin
+  if Syn is TSynCustomFoldHighlighter then begin
+    FoldHl := TSynCustomFoldHighlighter(Syn);
     DefHl := TSynCustomFoldHighlighter(TCustomSynClass(Syn.ClassType).Create(nil));
     try
       ReadDefaultsForHighlighterFoldSettings(DefHl);
-      FoldHl := TSynCustomFoldHighlighter(Syn);
-      TheFoldInfo := EditorOptionsFoldDefaults[HighlighterList[h].TheType];
-      for i := 0 to TheFoldInfo.Count - 1 do begin
-        idx := TheFoldInfo.Info^[i].Index;
-        ConfName := TheFoldInfo.Info^[i].Xml;
-        Path := 'EditorOptions/FoldConfig/Lang' +
-          StrToValidXMLName(Syn.LanguageName) + '/Type' + ConfName + '/' ;
-      // try reading the old config first
-      FoldHl.FoldConfig[idx].Enabled :=
-        XMLConfig.GetValue(Path + 'Enabled/Value', FoldHl.FoldConfig[idx].Enabled);
-      XMLConfig.ReadObject(Path + 'Settings/', FoldHl.FoldConfig[idx], DefHl.FoldConfig[idx]);
+      ValidLang := StrToValidXMLName(Syn.LanguageName);
+      FoldRec := EditorOptionsFoldDefaults[HighlighterList[h].TheType];
+      for i := 0 to FoldRec.Count - 1 do begin
+        FoldInf := FoldRec.Info^[i];
+        idx := FoldInf.Index;
+        Path := 'EditorOptions/FoldConfig/Lang' + ValidLang + '/Type' + FoldInf.Xml + '/' ;
+        // try reading the old config first
+        FoldHl.FoldConfig[idx].Enabled :=
+          XMLConfig.GetValue(Path + 'Enabled/Value', FoldHl.FoldConfig[idx].Enabled);
+        XMLConfig.ReadObject(Path + 'Settings/', FoldHl.FoldConfig[idx], DefHl.FoldConfig[idx]);
 
         (* if ReadForOptions=True then Enabled appies only to fmFold,fmHide.
            This allows to store what selection was previously active *)
@@ -5670,9 +5606,8 @@ begin
   if (syn is TSynCustomFoldHighlighter) then begin
     TheFoldInfo := EditorOptionsFoldDefaults[HighlighterList[h].TheType];
     for i := 0 to TheFoldInfo.Count - 1 do
-      with TSynCustomFoldHighlighter(Syn).FoldConfig[TheFoldInfo.Info^[i].Index] do begin
+      with TSynCustomFoldHighlighter(Syn).FoldConfig[TheFoldInfo.Info^[i].Index] do
         Enabled := TheFoldInfo.Info^[i].Enabled;
-      end;
   end;
 end;
 
@@ -5731,14 +5666,10 @@ begin
   for i := 0 to TheInfo.Count - 1 do begin
     Conf := Syn.DividerDrawConfig[i];
     ConfName := TheInfo.Info^[i].Xml;
-    Path := 'EditorOptions/DividerDraw/Lang' + StrToValidXMLName(Syn.LanguageName) +
-      '/Type' + ConfName + '/' ;
-    Conf.MaxDrawDepth := XMLConfig.GetValue(Path + 'MaxDepth/Value',
-        Conf.MaxDrawDepth);
-    Conf.TopColor := XMLConfig.GetValue(Path + 'TopColor/Value',
-        Conf.TopColor);
-    Conf.NestColor := XMLConfig.GetValue(Path + 'NestColor/Value',
-        Conf.NestColor);
+    Path := 'EditorOptions/DividerDraw/Lang' + Syn.LanguageName + '/Type' + ConfName + '/' ;
+    Conf.MaxDrawDepth := XMLConfig.GetValue(Path + 'MaxDepth/Value', Conf.MaxDrawDepth);
+    Conf.TopColor := XMLConfig.GetValue(Path + 'TopColor/Value', Conf.TopColor);
+    Conf.NestColor := XMLConfig.GetValue(Path + 'NestColor/Value', Conf.NestColor);
   end;
 end;
 
@@ -5808,23 +5739,6 @@ begin
   end;;
 end;
 
-procedure TEditorOptions.SetMarkupColors(aSynEd: TSynEdit);
-var
-  Scheme: TColorSchemeLanguage;
-begin
-  // Find current color scheme for default colors
-  if (aSynEd.Highlighter = nil) then begin
-    aSynEd.Color := clWhite;
-    aSynEd.Font.Color := clBlack;
-    exit;
-  end;
-
-  // get current colorscheme:
-  Scheme := GetColorSchemeLanguage(aSynEd.Highlighter);
-
-  if Assigned(Scheme) then Scheme.ApplyTo(aSynEd);
-end;
-
 procedure TEditorOptions.SetMarkupColor(Syn : TSrcIDEHighlighter;
   AddHilightAttr : TAdditionalHilightAttribute; aMarkup : TSynSelectedColor);
 var
@@ -5855,6 +5769,21 @@ begin
   aMarkup.FrameStyle := slsSolid;
   aMarkup.Style := [];
   aMarkup.StyleMask := [];
+end;
+
+procedure TEditorOptions.SetMarkupColors(aSynEd: TSynEdit);
+var
+  Scheme: TColorSchemeLanguage;
+begin
+  // Find current color scheme for default colors
+  if (aSynEd.Highlighter = nil) then begin
+    aSynEd.Color := clWhite;
+    aSynEd.Font.Color := clBlack;
+    exit;
+  end;
+  // get current colorscheme:
+  Scheme := GetColorSchemeLanguage(aSynEd.Highlighter);
+  if Assigned(Scheme) then Scheme.ApplyTo(aSynEd);
 end;
 
 procedure TEditorOptions.ApplyFontSettingsTo(ASynEdit: TSynEdit);
@@ -5902,8 +5831,7 @@ begin
   end;
 end;
 
-procedure TEditorOptions.GetSynEditSettings(ASynEdit: TSynEdit;
-  SimilarEdit: TSynEdit);
+procedure TEditorOptions.GetSynEditSettings(ASynEdit: TSynEdit; SimilarEdit: TSynEdit);
 // read synedit settings from config file
 // if SimilarEdit is given it is used for speed up
 var
@@ -6116,20 +6044,29 @@ begin
       ASynEdit.RightGutter.LineOverviewPart.MouseActions.Assign(FUserMouseSettings.GutterActionsOverView);
       ASynEdit.RightGutter.LineOverviewPart.MouseActionsForMarks.Assign(FUserMouseSettings.GutterActionsOverViewMarks);
     end;
+
+    ASynEdit.ScrollOnEditLeftOptions.Assign(ScrollOnEditLeftOptions);
+    ASynEdit.ScrollOnEditRightOptions.Assign(ScrollOnEditRightOptions);
   finally
     ASynEdit.EndUpdate;
   end;
 end;
 
-function TEditorOptions.GetCodeTemplateFileNameExpand:String;
+function TEditorOptions.CreateSyn(LazSynHilighter: TLazSyntaxHighlighter): TSrcIDEHighlighter;
 begin
-  result:=fCodeTemplateFileNameRaw;
-  IDEMacros.SubstituteMacros(result);
+  if LazSyntaxHighlighterClasses[LazSynHilighter] <> Nil then
+  begin
+    Result := LazSyntaxHighlighterClasses[LazSynHilighter].Create(Nil);
+    GetHighlighterSettings(Result);
+  end
+  else
+    Result := Nil;
 end;
 
-function TEditorOptions.GetTabPosition: TTabPosition;
+function TEditorOptions.CreateSynHighlighter(
+  LazSynHilighter: TLazSyntaxHighlighter): TObject;
 begin
-  Result := fTabPosition;
+  Result := CreateSyn(LazSynHilighter);
 end;
 
 procedure TEditorOptions.GetSynEditPreviewSettings(APreviewEditor: TObject);
@@ -6152,16 +6089,6 @@ begin
 end;
 
 { TColorSchemeAttribute }
-
-function TColorSchemeAttribute.OldAdditionalAttributeName(NewAha: String): string;
-var
-  AttriIdx: Integer;
-begin
-  AttriIdx := GetEnumValue(TypeInfo(TAdditionalHilightAttribute), NewAha);
-  if AttriIdx < 0
-    then Result := NewAha
-    else Result := ahaXmlNames[TAdditionalHilightAttribute(AttriIdx)];
-end;
 
 procedure TColorSchemeAttribute.SetMarkupFoldLineAlpha(AValue: Byte);
 begin
@@ -6187,7 +6114,7 @@ end;
 procedure TColorSchemeAttribute.Init;
 begin
   inherited Init;
-  FFeatures := [hafBackColor, hafForeColor, hafFrameColor, hafStyle, hafFrameStyle, hafFrameEdges];
+  FFeatures := [hafBackColor, hafForeColor, hafFrameColor, hafStyle, hafFrameStyle, hafFrameEdges, hafPrior];
   FMarkupFoldLineColor := clNone;
   FMarkupFoldLineStyle := slsSolid;
   FMarkupFoldLineAlpha := 0;
@@ -6200,17 +6127,23 @@ end;
 
 function TColorSchemeAttribute.GetSchemeGlobal: TColorSchemeAttribute;
 begin
-  Result := nil;
-  if (FOwner <> nil) and (FOwner.FOwner<> nil) and
-     (FOwner.FOwner.FDefaultColors <> nil)
-  then
-    Result := FOwner.FOwner.FDefaultColors.Attribute[StoredName];
-  if Result = Self then
+  if FAlreadyGotSchemeGlobal then
+    Result := FSchemeGlobalCache
+  else begin
     Result := nil;
+    if (FOwner <> nil) and (FOwner.FOwner <> nil) and
+       (FOwner.FOwner.FDefaultColors <> nil)
+    then
+      Result := FOwner.FOwner.FDefaultColors.Attribute[StoredName];
+    if Result = Self then
+      Result := nil;
+    FSchemeGlobalCache := Result;
+    FAlreadyGotSchemeGlobal := True;
+  end;
 end;
 
 constructor TColorSchemeAttribute.Create(ASchemeLang: TColorSchemeLanguage;
-  attribName: PString; aStoredName: String = '');
+  attribName: PString; const aStoredName: String);
 begin
   inherited Create(attribName, aStoredName);
   FOwner := ASchemeLang;
@@ -6224,7 +6157,7 @@ end;
 
 procedure TColorSchemeAttribute.ApplyTo(aDest: TSynHighlighterAttributes;
   aDefault: TColorSchemeAttribute);
-// aDefault (if supplied) is usuallythe Schemes agnDefault / DefaultAttribute
+// aDefault (if supplied) is usually the Schemes agnDefault / DefaultAttribute
 var
   Src: TColorSchemeAttribute;
 begin
@@ -6248,15 +6181,15 @@ begin
       TSynHighlighterAttributesModifier(aDest).ForeAlpha := Src.ForeAlpha;
       TSynHighlighterAttributesModifier(aDest).BackAlpha := Src.BackAlpha;
       TSynHighlighterAttributesModifier(aDest).FrameAlpha := Src.FrameAlpha;
+    end;
 
-      if hafPrior in Src.Features then begin
-        TSynHighlighterAttributesModifier(aDest).ForePriority      := Src.ForePriority;
-        TSynHighlighterAttributesModifier(aDest).BackPriority      := Src.BackPriority;
-        TSynHighlighterAttributesModifier(aDest).FramePriority     := Src.FramePriority;
-        TSynHighlighterAttributesModifier(aDest).BoldPriority      := Src.BoldPriority;
-        TSynHighlighterAttributesModifier(aDest).ItalicPriority    := Src.ItalicPriority;
-        TSynHighlighterAttributesModifier(aDest).UnderlinePriority := Src.UnderlinePriority;
-      end;
+    if hafPrior in Src.Features then begin
+      aDest.ForePriority      := Src.ForePriority;
+      aDest.BackPriority      := Src.BackPriority;
+      aDest.FramePriority     := Src.FramePriority;
+      aDest.BoldPriority      := Src.BoldPriority;
+      aDest.ItalicPriority    := Src.ItalicPriority;
+      aDest.UnderlinePriority := Src.UnderlinePriority;
     end;
 
     if not (aDest is TSynSelectedColor) then begin
@@ -6274,9 +6207,6 @@ begin
         end;
       end;
 
-      //if aDest is TSynHighlighterAttributesModifier then begin
-      //end
-
       if aDest is TColorSchemeAttribute then
         TColorSchemeAttribute(aDest).Group := Src.Group;
     end;
@@ -6286,23 +6216,24 @@ begin
 end;
 
 procedure TColorSchemeAttribute.Assign(Src: TPersistent);
+var
+  SrcAttr: TColorSchemeAttribute;
 begin
   inherited Assign(Src);
-
-  FFeatures := [hafBackColor, hafForeColor, hafFrameColor, hafStyle, hafFrameStyle, hafFrameEdges];
+  FFeatures := [hafBackColor, hafForeColor, hafFrameColor,
+                hafStyle, hafFrameStyle, hafFrameEdges, hafPrior];
   if Src is TSynHighlighterAttributesModifier then
-    FFeatures := FFeatures + [hafAlpha, hafPrior,hafStyleMask];
+    FFeatures := FFeatures + [hafAlpha, hafStyleMask];
 
   if Src is TColorSchemeAttribute then begin
-    FGroup := TColorSchemeAttribute(Src).FGroup;
-    FUseSchemeGlobals := TColorSchemeAttribute(Src).FUseSchemeGlobals;
-    FFeatures := TColorSchemeAttribute(Src).FFeatures;
-
-    FMarkupFoldLineColor := TColorSchemeAttribute(Src).FMarkupFoldLineColor;;
-    FMarkupFoldLineStyle := TColorSchemeAttribute(Src).FMarkupFoldLineStyle;;
-    FMarkupFoldLineAlpha := TColorSchemeAttribute(Src).FMarkupFoldLineAlpha;;
+    SrcAttr := TColorSchemeAttribute(Src);
+    FGroup               := SrcAttr.FGroup;
+    FUseSchemeGlobals    := SrcAttr.FUseSchemeGlobals;
+    FFeatures            := SrcAttr.FFeatures;
+    FMarkupFoldLineColor := SrcAttr.FMarkupFoldLineColor;
+    FMarkupFoldLineStyle := SrcAttr.FMarkupFoldLineStyle;
+    FMarkupFoldLineAlpha := SrcAttr.FMarkupFoldLineAlpha;
   end;
-
 end;
 
 function TColorSchemeAttribute.Equals(Other: TColorSchemeAttribute): Boolean;
@@ -6310,7 +6241,7 @@ begin
   Result := (FGroup      = Other.FGroup) and
             (FUseSchemeGlobals = Other.FUseSchemeGlobals) and
             // ignore resourcestring Name and Caption
-            (StoredName = Other.StoredName) and
+            (StoredName  = Other.StoredName) and
             (Background  = Other.Background) and
             (Foreground  = Other.Foreground) and
             (FrameColor  = Other.FrameColor) and
@@ -6322,66 +6253,32 @@ begin
             (Style       = Other.Style) and
             (StyleMask   = Other.StyleMask) and
             (Features   = Other.Features);
-  end;
+end;
 
 function TColorSchemeAttribute.GetStoredValuesForAttrib: TColorSchemeAttribute;
+var
+  csl: TColorSchemeLanguage;
 begin
   Result := nil;
-  if (FOwner <> nil) and (FOwner.GetStoredValuesForLanguage <> nil) then
-    Result := FOwner.GetStoredValuesForLanguage.Attribute[StoredName];
+  if FOwner <> nil then begin
+    csl := FOwner.GetStoredValuesForLanguage;
+    if csl <> nil then
+      Result := csl.Attribute[StoredName];
+  end;
 end;
 
 procedure TColorSchemeAttribute.LoadFromXml(aXMLConfig: TRttiXMLConfig; aPath: String;
   Defaults: TColorSchemeAttribute; Version: Integer);
 var
-  AttriName, Path: String;
-  fs: TFontStyles;
+  Path: String;
 begin
-  // FormatVersion >= 2
+  // FormatVersion >= 5
   (* Note: This is currently always called with a default, so the nil handling isn't needed*)
-  AttriName := OldAdditionalAttributeName(StoredName);
-  if (Version < 5) and (AttriName <> '') then begin
-    // Read Version 2-4, 4 if exist, or keep values
-    Path := aPath + StrToValidXMLName(AttriName) + '/';
-
-    if aXMLConfig.HasChildPaths(Path) then begin
-      if (Defaults <> nil) then
-        self.Assign(Defaults);
-      Defaults := Self;
-
-      BackGround := aXMLConfig.GetValue(Path + 'BackgroundColor/Value', Defaults.Background);
-      ForeGround := aXMLConfig.GetValue(Path + 'ForegroundColor/Value', Defaults.Foreground);
-      FrameColor := aXMLConfig.GetValue(Path + 'FrameColor/Value',      Defaults.FrameColor);
-      fs   := [];
-      if aXMLConfig.GetValue(Path + 'Style/Bold', fsBold in Defaults.Style) then
-        Include(fs, fsBold);
-      if aXMLConfig.GetValue(Path + 'Style/Italic', fsItalic in Defaults.Style) then
-        Include(fs, fsItalic);
-      if aXMLConfig.GetValue(Path + 'Style/Underline', fsUnderline in Defaults.Style) then
-        Include(fs, fsUnderline);
-      Style := fs;
-      fs   := [];
-      if aXMLConfig.GetValue(Path + 'StyleMask/Bold', fsBold in Defaults.StyleMask) then
-        Include(fs, fsBold);
-      if aXMLConfig.GetValue(Path + 'StyleMask/Italic', fsItalic in Defaults.StyleMask) then
-        Include(fs, fsItalic);
-      if aXMLConfig.GetValue(Path + 'StyleMask/Underline', fsUnderline in Defaults.StyleMask) then
-        Include(fs, fsUnderline);
-      StyleMask := fs;
-    end;
-  end;
-
-  // Read the Version >= 5 if exist, or keep values
+  Assert(Version > 4, 'TColorSchemeAttribute.LoadFromXml: Version ('+IntToStr(Version)+' < 5.');
   if StoredName = '' then exit;
   Path := aPath + StrToValidXMLName(StoredName) + '/';
-  if (Version <= 5) and (Defaults = nil) then
-    Defaults := GetSchemeGlobal;
-
-  if aXMLConfig.HasPath(Path, False) then begin
-    aXMLConfig.ReadObject(Path, Self, Defaults);
-    if (Version <= 5) then
-      UseSchemeGlobals := False;
-  end
+  if aXMLConfig.HasPath(Path, False) then
+    aXMLConfig.ReadObject(Path, Self, Defaults)
   else begin
     if (Defaults <> Self) and (Defaults <> nil) then begin
       // do not copy (Stored)Name or Features ...
@@ -6392,7 +6289,7 @@ begin
       FrameStyle := Defaults.FrameStyle;
       Style      := Defaults.Style;
       StyleMask  := Defaults.StyleMask;
-      UseSchemeGlobals := Defaults.UseSchemeGlobals;
+      UseSchemeGlobals  := Defaults.UseSchemeGlobals;
       ForePriority      := Defaults.ForePriority;
       BackPriority      := Defaults.BackPriority;
       FramePriority     := Defaults.FramePriority;
@@ -6400,33 +6297,7 @@ begin
       ItalicPriority    := Defaults.ItalicPriority;
       UnderlinePriority := Defaults.UnderlinePriority;
     end;
-    if (Version <= 5) and (Defaults = Self) then     // Data was loaded above (Vers < 5)
-      UseSchemeGlobals := False;
   end;
-end;
-
-procedure TColorSchemeAttribute.LoadFromXmlV1(aXMLConfig: TRttiXMLConfig; aPath: String;
-  Defaults: TColorSchemeAttribute);
-var
-  fs: TFontStyles;
-begin
-  // FormatVersion = 1 (only pascal colors)
-  if Defaults = nil then
-    Defaults := Self;
-  if StoredName = '' then exit;
-  aPath := aPath + StrToValidXMLName(StoredName) + '/';
-  BackGround := aXMLConfig.GetValue(aPath + 'BackgroundColor', Defaults.Background);
-  ForeGround := aXMLConfig.GetValue(aPath + 'ForegroundColor', Defaults.Foreground);
-  FrameColor := aXMLConfig.GetValue(aPath + 'FrameColorColor', Defaults.FrameColor);
-  fs := [];
-  if aXMLConfig.GetValue(aPath + 'Bold', fsBold in Defaults.Style) then
-    Include(fs, fsBold);
-  if aXMLConfig.GetValue(aPath + 'Italic', fsItalic in Defaults.Style) then
-    Include(fs, fsItalic);
-  if aXMLConfig.GetValue(aPath + 'Underline', fsUnderline in Defaults.Style) then
-    Include(fs, fsUnderline);
-  Style := fs;
-  StyleMask := [];
 end;
 
 procedure TColorSchemeAttribute.SaveToXml(aXMLConfig: TRttiXMLConfig; aPath: String;
@@ -6450,7 +6321,7 @@ function TColorSchemeLanguage.GetAttribute(Index: String): TColorSchemeAttribute
 var
   Idx: Integer;
 begin
-  Idx := FAttributes.IndexOf(UpperCase(Index));
+  Idx := FAttributes.IndexOf(Index);
   if Idx = -1 then
     Result := nil
   else
@@ -6464,7 +6335,7 @@ end;
 
 function TColorSchemeLanguage.GetAttributeByEnum(Index: TAdditionalHilightAttribute): TColorSchemeAttribute;
 begin
-  Result := Attribute[AhaToStoredName(Index)];
+  Result := Attribute[GetAddiHilightAttrName(Index)];
 end;
 
 function TColorSchemeLanguage.GetName: String;
@@ -6472,20 +6343,20 @@ begin
   Result := FOwner.Name;
 end;
 
-function TColorSchemeLanguage.AhaToStoredName(aha: TAdditionalHilightAttribute): String;
-begin
-  Result := GetEnumName(TypeInfo(TAdditionalHilightAttribute), ord(aha));
-end;
-
 function TColorSchemeLanguage.GetStoredValuesForLanguage: TColorSchemeLanguage;
+var
+  cs: TColorScheme;
 begin
   Result := nil;
-  if (FOwner <> nil) and (FOwner.GetStoredValuesForScheme <> nil) then
-    Result := FOwner.GetStoredValuesForScheme.ColorScheme[FLanguage];
+  if FOwner <> nil then begin
+    cs := FOwner.GetStoredValuesForScheme;
+    if cs <> nil then
+      Result := cs.ColorScheme[FLanguage];
+  end;
 end;
 
-constructor TColorSchemeLanguage.Create(const AGroup: TColorScheme;
-  const ALang: TLazSyntaxHighlighter; IsSchemeDefault: Boolean = False);
+constructor TColorSchemeLanguage.Create(AGroup: TColorScheme;
+  ALang: TLazSyntaxHighlighter; IsSchemeDefault: Boolean);
 begin
   inherited Create;
   FIsSchemeDefault := IsSchemeDefault;
@@ -6497,52 +6368,51 @@ begin
     FHighlighter := LazSyntaxHighlighterClasses[ALang].Create(nil);
     FLanguageName := FHighlighter.LanguageName;
   end;
+end;
+
+constructor TColorSchemeLanguage.CreateWithDefColor(AGroup: TColorScheme;
+  ALang: TLazSyntaxHighlighter; IsSchemeDefault: Boolean);
+begin
+  Create(AGroup, ALang, IsSchemeDefault);
   FDefaultAttribute := TColorSchemeAttribute.Create(Self, @dlgAddHiAttrDefault, 'ahaDefault');
   FDefaultAttribute.Features := [hafBackColor, hafForeColor];
   FDefaultAttribute.Group := agnDefault;
-  FAttributes.AddObject(UpperCase(FDefaultAttribute.StoredName), FDefaultAttribute);
-  FAttributes.Sorted := true;
+  FAttributes.AddObject(FDefaultAttribute.StoredName, FDefaultAttribute);
 end;
 
-constructor TColorSchemeLanguage.CreateFromXml(const AGroup: TColorScheme;
-  const ALang: TLazSyntaxHighlighter; aXMLConfig: TRttiXMLConfig; aPath: String;
-  IsSchemeDefault: Boolean);
+constructor TColorSchemeLanguage.CreateFromXml(AGroup: TColorScheme;
+  ALang: TLazSyntaxHighlighter; aXMLConfig: TRttiXMLConfig;
+  const aPath: String; IsSchemeDefault: Boolean);
 var
+  hla: TSynHighlighterAttributes;
   csa: TColorSchemeAttribute;
-  i: Integer;
   aha: TAdditionalHilightAttribute;
-  FormatVersion: longint;
+  FormatVersion, i: Integer;
 begin
-  Create(AGroup, ALang, IsSchemeDefault);   // don't call inherited Create
+  CreateWithDefColor(AGroup, ALang, IsSchemeDefault); // don't call inherited Create
 
   FAttributes.Sorted := False;
   if FHighlighter <> nil then begin
     for i := 0 to FHighlighter.AttrCount - 1 do begin
-      csa := TColorSchemeAttribute.Create(Self,
-                                   FHighlighter.Attribute[i].Caption,
-                                   FHighlighter.Attribute[i].StoredName
-                                   );
-      csa.Assign(FHighlighter.Attribute[i]);
+      hla := FHighlighter.Attribute[i];
+      csa := TColorSchemeAttribute.Create(Self, hla.Caption, hla.StoredName);
+      csa.Assign(hla);
       csa.Group := agnLanguage;
-      FAttributes.AddObject(UpperCase(csa.StoredName), csa);
+      FAttributes.AddObject(csa.StoredName, csa);
     end;
   end;
 
   for aha := Low(TAdditionalHilightAttribute) to High(TAdditionalHilightAttribute) do begin
     if aha = ahaNone then continue;
     csa := TColorSchemeAttribute.Create(Self, @AdditionalHighlightAttributes[aha],
-                                        AhaToStoredName(aha)
-                                       );
+                                        GetAddiHilightAttrName(aha) );
     csa.Features := ahaSupportedFeatures[aha];
     csa.Group    := ahaGroupMap[aha];
-    FAttributes.AddObject(UpperCase(csa.StoredName), csa);
+    FAttributes.AddObject(csa.StoredName, csa);
   end;
-
   FAttributes.Sorted := true;
   FormatVersion := aXMLConfig.GetValue(aPath + 'Version', 0);
   LoadFromXml(aXMLConfig, aPath, nil, FormatVersion);
-
-
 end;
 
 destructor TColorSchemeLanguage.Destroy;
@@ -6565,49 +6435,38 @@ end;
 
 procedure TColorSchemeLanguage.Assign(Src: TColorSchemeLanguage);
 var
-  i, j: Integer;
-  Attr: TColorSchemeAttribute;
-  NewList: TQuickStringlist;
+  i: Integer;
+  Attr, SrcAttr: TColorSchemeAttribute;
 begin
-  // Do not clear old list => external references to Attributes may exist
+  Clear;
+  FAttributes.Sorted := false;
   FLanguage := Src.FLanguage;
-  FLanguageName := src.FLanguageName;
-  //FDefaultAttribute.Assign(Src.FDefaultAttribute);
+  FLanguageName := Src.FLanguageName;
   FDefaultAttribute := nil;
-  NewList := TQuickStringlist.Create;
   for i := 0 to Src.AttributeCount - 1 do begin
-    j := FAttributes.IndexOf(UpperCase(Src.AttributeAtPos[i].StoredName));
-    if j >= 0 then begin
-      Attr := TColorSchemeAttribute(FAttributes.Objects[j]);
-      FAttributes.Delete(j);
-    end
-    else
-      Attr := TColorSchemeAttribute.Create(Self,
-                                       Src.AttributeAtPos[i].Caption,
-                                       Src.AttributeAtPos[i].StoredName);
-    Attr.Assign(Src.AttributeAtPos[i]);
-    NewList.AddObject(UpperCase(Attr.StoredName), Attr);
-    if Src.AttributeAtPos[i] = Src.DefaultAttribute then
+    SrcAttr := Src.AttributeAtPos[i];
+    Attr := TColorSchemeAttribute.Create(Self, SrcAttr.Caption, SrcAttr.StoredName);
+    Attr.Assign(SrcAttr);
+    FAttributes.AddObject(Attr.StoredName, Attr);
+    if SrcAttr = Src.DefaultAttribute then
       FDefaultAttribute := Attr;
   end;
-  Clear;
-  FreeAndNil(FAttributes);
-  FAttributes := NewList;
   FAttributes.Sorted := true;
 end;
 
 function TColorSchemeLanguage.Equals(Other: TColorSchemeLanguage): Boolean;
 var
   i: Integer;
+  csa, othercsa: TColorSchemeAttribute;
 begin
   Result := //FDefaultAttribute.Equals(Other.FDefaultAttribute) and
             (FLanguage = Other.FLanguage) and
             (FAttributes.Count = Other.FAttributes.Count);
   i := FAttributes.Count - 1;
   while Result and (i >= 0) do begin
-    Result := Result and
-              (Other.Attribute[AttributeAtPos[i].StoredName] <> nil) and
-              AttributeAtPos[i].Equals(Other.Attribute[AttributeAtPos[i].StoredName]);
+    csa := AttributeAtPos[i];
+    othercsa := Other.Attribute[csa.StoredName];
+    Result := Result and (othercsa <> nil) and csa.Equals(othercsa);
     dec(i);
   end;
 end;
@@ -6617,17 +6476,16 @@ begin
   Result := FAttributes.IndexOfObject(AnAttr);
 end;
 
-procedure TColorSchemeLanguage.LoadFromXml(aXMLConfig: TRttiXMLConfig; aPath: String;
-  Defaults: TColorSchemeLanguage; ColorVersion: Integer; aOldPath: String);
+procedure TColorSchemeLanguage.LoadFromXml(aXMLConfig: TRttiXMLConfig;
+  const aPath: String; Defaults: TColorSchemeLanguage; ColorVersion: Integer;
+  const aOldPath: String);
 var
-  Def: TColorSchemeAttribute;
+  Def, EmptyDef, CurAttr: TColorSchemeAttribute;
   FormatVersion: longint;
   TmpPath: String;
   i: Integer;
-  EmptyDef: TColorSchemeAttribute;
 begin
 //  Path := 'EditorOptions/Color/'
-
   if not FIsSchemeDefault then
     TmpPath := aPath + 'Lang' + StrToValidXMLName(FLanguageName) + '/'
   else
@@ -6662,63 +6520,55 @@ begin
   //   Attribute has SchemeDefault => Save diff to SchemeDefault
   //     SchemeDefault_Attri.UseSchemeGlobals must be TRUE => so it serves as default
   //   Attribute hasn't SchemeDefault => Save diff to empty
-  if (Defaults = nil) then
+  if Defaults = nil then
     // default all colors = clNone
     EmptyDef := TColorSchemeAttribute.Create(Self, nil, '')
   else
     EmptyDef := nil;
 
   for i := 0 to AttributeCount - 1 do begin
+    CurAttr := AttributeAtPos[i];
     if Defaults <> nil then
-      Def := Defaults.Attribute[AttributeAtPos[i].StoredName]
+      Def := Defaults.Attribute[CurAttr.StoredName]
     else begin
-      if AttributeAtPos[i].GetSchemeGlobal <> nil then
-        Def := AttributeAtPos[i].GetSchemeGlobal
-      else
+      Def := CurAttr.GetSchemeGlobal;
+      if Def = nil then
         Def := EmptyDef;
     end;
-
-    //if ColorVersion < 2 then begin
-    if FormatVersion < 2 then begin
-      //if aXMLConfig.HasChildPaths(aPath) or (Defaults <> nil) or (Def <> EmptyDef) then
-        AttributeAtPos[i].LoadFromXmlV1(aXMLConfig, aPath, Def)
-    end else begin
-      //if aXMLConfig.HasPath(TmpPath, False) or (Defaults <> nil) or (Def <> EmptyDef) then
-        AttributeAtPos[i].LoadFromXml(aXMLConfig, TmpPath, Def, FormatVersion);
-    end;
-
-    if (ColorVersion < 9) and (AttributeAtPos[i].StoredName = AhaToStoredName(ahaMouseLink)) then begin
+    CurAttr.LoadFromXml(aXMLConfig, TmpPath, Def, FormatVersion);
+    if (ColorVersion < 9)
+    and (CurAttr.StoredName = GetAddiHilightAttrName(ahaMouseLink)) then
+    begin
       // upgrade ahaMouseLink
-      AttributeAtPos[i].FrameColor := AttributeAtPos[i].Foreground;
-      AttributeAtPos[i].Background := clNone;
-      AttributeAtPos[i].Style := [];
-      AttributeAtPos[i].StyleMask := [];
-      AttributeAtPos[i].FrameStyle := slsSolid;
-      AttributeAtPos[i].FrameEdges := sfeBottom;
+      CurAttr.FrameColor := CurAttr.Foreground;
+      CurAttr.Background := clNone;
+      CurAttr.Style := [];
+      CurAttr.StyleMask := [];
+      CurAttr.FrameStyle := slsSolid;
+      CurAttr.FrameEdges := sfeBottom;
     end;
 
-    if (ColorVersion < 12) and (AttributeAtPos[i].Group = agnOutlineColors) then begin
-      AttributeAtPos[i].MarkupFoldLineColor := AttributeAtPos[i].Foreground;
-    end
+    if (ColorVersion < 12) and (CurAttr.Group = agnOutlineColors) then
+      CurAttr.MarkupFoldLineColor := CurAttr.Foreground;
   end;
   FreeAndNil(EmptyDef);
 
   // Version 5 and before stored the global background on the Whitespace attribute.
   // If a whitespace Attribute was loaded (UseSchemeGlobals=false) then copy it
-  if (FormatVersion <= 5) and (DefaultAttribute <> nil) and
-      (FHighlighter <> nil) and (FHighlighter.WhitespaceAttribute <> nil) and
-      (Attribute[Highlighter.WhitespaceAttribute.StoredName] <> nil) and
-      (not Attribute[Highlighter.WhitespaceAttribute.StoredName].UseSchemeGlobals)
-  then
-    DefaultAttribute.Background := Attribute[Highlighter.WhitespaceAttribute.StoredName].Background;
+  if (FormatVersion <= 5) and (DefaultAttribute <> nil)
+  and (FHighlighter <> nil) and (FHighlighter.WhitespaceAttribute <> nil) then
+  begin
+    CurAttr := Attribute[Highlighter.WhitespaceAttribute.StoredName];
+    if (CurAttr <> nil) and not CurAttr.UseSchemeGlobals then
+      DefaultAttribute.Background := CurAttr.Background;
+  end;
 end;
 
 procedure TColorSchemeLanguage.SaveToXml(aXMLConfig: TRttiXMLConfig; aPath: String;
   Defaults: TColorSchemeLanguage);
 var
-  Def: TColorSchemeAttribute;
+  Def, EmptyDef, CurAttr: TColorSchemeAttribute;
   i: Integer;
-  EmptyDef: TColorSchemeAttribute;
 begin
   if (FLanguageName = '') and (not FIsSchemeDefault) then
     exit;
@@ -6726,10 +6576,8 @@ begin
     aPath := aPath + 'Lang' + StrToValidXMLName(FLanguageName) + '/';
   if (Defaults <> nil) and Self.Equals(Defaults) then begin
     aXMLConfig.DeletePath(aPath + 'Scheme' + StrToValidXMLName(Name));
-    if not FIsSchemeDefault then begin
-      if not aXMLConfig.HasChildPaths(aPath) then
-        aXMLConfig.DeletePath(aPath);
-    end;
+    if not (FIsSchemeDefault or aXMLConfig.HasChildPaths(aPath)) then
+      aXMLConfig.DeletePath(aPath);
     exit;
   end;
   aXMLConfig.SetValue(aPath + 'Version', EditorOptsFormatVersion);
@@ -6742,15 +6590,15 @@ begin
     EmptyDef := nil;
 
   for i := 0 to AttributeCount - 1 do begin
+    CurAttr := AttributeAtPos[i];
     if Defaults <> nil then
-      Def := Defaults.Attribute[AttributeAtPos[i].StoredName]
+      Def := Defaults.Attribute[CurAttr.StoredName]
     else begin
-      if AttributeAtPos[i].GetSchemeGlobal <> nil then
-        Def := AttributeAtPos[i].GetSchemeGlobal
-      else
+      Def := CurAttr.GetSchemeGlobal;
+      if Def = nil then
         Def := EmptyDef;
     end;
-    AttributeAtPos[i].SaveToXml(aXMLConfig, aPath, Def);
+    CurAttr.SaveToXml(aXMLConfig, aPath, Def);
   end;
   FreeAndNil(EmptyDef);
 end;
@@ -6842,23 +6690,29 @@ begin
     SetMarkupColorByClass(ahaSpecialVisibleChars, TSynEditMarkupSpecialChar);
     if ASynEdit is TIDESynEditor then begin
       with TIDESynEditor(ASynEdit) do begin
-        if AttributeByEnum[ahaIfDefBlockInactive] <> nil
-          then AttributeByEnum[ahaIfDefBlockInactive].ApplyTo(MarkupIfDef.MarkupInfoDisabled )
+        Attri := AttributeByEnum[ahaIfDefBlockInactive];
+        if Attri <> nil
+          then Attri.ApplyTo(MarkupIfDef.MarkupInfoDisabled )
           else MarkupIfDef.MarkupInfoDisabled.Clear;
-        if AttributeByEnum[ahaIfDefBlockActive] <> nil
-          then AttributeByEnum[ahaIfDefBlockActive].ApplyTo(MarkupIfDef.MarkupInfoEnabled )
+        Attri := AttributeByEnum[ahaIfDefBlockActive];
+        if Attri <> nil
+          then Attri.ApplyTo(MarkupIfDef.MarkupInfoEnabled )
           else MarkupIfDef.MarkupInfoEnabled.Clear;
-        if AttributeByEnum[ahaIfDefBlockTmpActive] <> nil
-          then AttributeByEnum[ahaIfDefBlockTmpActive].ApplyTo(MarkupIfDef.MarkupInfoTempEnabled )
+        Attri := AttributeByEnum[ahaIfDefBlockTmpActive];
+        if Attri <> nil
+          then Attri.ApplyTo(MarkupIfDef.MarkupInfoTempEnabled )
           else MarkupIfDef.MarkupInfoTempEnabled.Clear;
-        if AttributeByEnum[ahaIfDefNodeInactive] <> nil
-          then AttributeByEnum[ahaIfDefNodeInactive].ApplyTo(MarkupIfDef.MarkupInfoNodeDisabled )
+        Attri := AttributeByEnum[ahaIfDefNodeInactive];
+        if Attri <> nil
+          then Attri.ApplyTo(MarkupIfDef.MarkupInfoNodeDisabled )
           else MarkupIfDef.MarkupInfoNodeDisabled.Clear;
-        if AttributeByEnum[ahaIfDefNodeActive] <> nil
-          then AttributeByEnum[ahaIfDefNodeActive].ApplyTo(MarkupIfDef.MarkupInfoNodeEnabled )
+        Attri := AttributeByEnum[ahaIfDefNodeActive];
+        if Attri <> nil
+          then Attri.ApplyTo(MarkupIfDef.MarkupInfoNodeEnabled )
           else MarkupIfDef.MarkupInfoNodeEnabled.Clear;
-        if AttributeByEnum[ahaIfDefNodeTmpActive] <> nil
-          then AttributeByEnum[ahaIfDefNodeTmpActive].ApplyTo(MarkupIfDef.MarkupInfoTempNodeEnabled )
+        Attri := AttributeByEnum[ahaIfDefNodeTmpActive];
+        if Attri <> nil
+          then Attri.ApplyTo(MarkupIfDef.MarkupInfoTempNodeEnabled )
           else MarkupIfDef.MarkupInfoTempNodeEnabled.Clear;
       end;
     end;
@@ -6987,13 +6841,15 @@ procedure TColorSchemeLanguage.ApplyTo(AHLighter: TSynCustomHighlighter);
 var
   i: Integer;
   Attr: TColorSchemeAttribute;
+  hlattrs: TSynHighlighterAttributes;
 begin
   AHLighter.BeginUpdate;
   try
     for i := 0 to AHLighter.AttrCount - 1 do begin
-      Attr := Attribute[AHLighter.Attribute[i].StoredName];
+      hlattrs := AHLighter.Attribute[i];
+      Attr := Attribute[hlattrs.StoredName];
       if Attr <> nil then
-        Attr.ApplyTo(AHLighter.Attribute[i], DefaultAttribute);
+        Attr.ApplyTo(hlattrs, DefaultAttribute);
     end;
   finally
     AHLighter.EndUpdate;
@@ -7027,7 +6883,7 @@ begin
   Result:=ColorSchemeFactory.ColorSchemeGroup[Name];
 end;
 
-constructor TColorScheme.Create(AName: String);
+constructor TColorScheme.Create(const AName: String);
 begin
   inherited Create;
   FName := AName;
@@ -7039,12 +6895,12 @@ var
 begin
   Create(AName);
   FDefaultColors := TColorSchemeLanguage.CreateFromXml(Self, lshNone, aXMLConfig,
-    aPath  + 'Globals/', True);
+                                                       aPath + 'Globals/', True);
   for i := low(TLazSyntaxHighlighter) to high(TLazSyntaxHighlighter) do
     // do not create duplicates
     if CompatibleLazSyntaxHilighter[i] = i then
       FColorSchemes[i] := TColorSchemeLanguage.CreateFromXml(Self, i, aXMLConfig,
-        aPath)
+                                                             aPath, False)
     else
       FColorSchemes[i] := nil;
 end;
@@ -7065,8 +6921,7 @@ var
 begin
   if Src.FDefaultColors = nil then
     FreeAndNil(FDefaultColors)
-  else
-  if (FDefaultColors = nil) then
+  else if FDefaultColors = nil then
     FDefaultColors := TColorSchemeLanguage.Create(Self, lshNone, True);
   if FDefaultColors <> nil then
     FDefaultColors.Assign(Src.FDefaultColors);
@@ -7075,7 +6930,7 @@ begin
       FreeAndNil(FColorSchemes[i]);
     end else begin
       if FColorSchemes[i] = nil then
-        FColorSchemes[i] := TColorSchemeLanguage.Create(Self, i);
+        FColorSchemes[i] := TColorSchemeLanguage.Create(Self, i, False);
       FColorSchemes[i].Assign(Src.FColorSchemes[i]);
     end;
   end;
@@ -7134,7 +6989,7 @@ function TColorSchemeFactory.GetColorSchemeGroup(Index: String): TColorScheme;
 var
   Idx: integer;
 begin
-  Idx := FMappings.IndexOf(UpperCase(Index));
+  Idx := FMappings.IndexOf(Index);
   if Idx = -1 then
     Result := nil
   else
@@ -7182,13 +7037,13 @@ begin
   for i := 0 to Src.FMappings.Count - 1 do begin
     lMapping := TColorScheme.Create(Src.ColorSchemeGroupAtPos[i].Name);
     lMapping.Assign(Src.ColorSchemeGroupAtPos[i]);
-    FMappings.AddObject(UpperCase(lMapping.Name), lMapping);
+    FMappings.AddObject(lMapping.Name, lMapping);
   end;
   FMappings.Sorted := true;
 end;
 
-procedure TColorSchemeFactory.LoadFromXml(aXMLConfig: TRttiXMLConfig; aPath: String;
-  Defaults: TColorSchemeFactory; aOldPath: String);
+procedure TColorSchemeFactory.LoadFromXml(aXMLConfig: TRttiXMLConfig;
+  const aPath: String; Defaults: TColorSchemeFactory; const aOldPath: String);
 var
   i: Integer;
   Def: TColorScheme;
@@ -7198,8 +7053,7 @@ begin
       Def := Defaults.ColorSchemeGroupAtPos[i]
     else
       Def := nil;
-    ColorSchemeGroupAtPos[i].LoadFromXml(aXMLConfig, aPath,
-                                         Def, aOldPath);
+    ColorSchemeGroupAtPos[i].LoadFromXml(aXMLConfig, aPath, Def, aOldPath);
   end;
   // all Schemes have read (and relocated) the old values
   if aOldPath <> '' then begin
@@ -7208,8 +7062,8 @@ begin
   end;
 end;
 
-procedure TColorSchemeFactory.SaveToXml(aXMLConfig: TRttiXMLConfig; aPath: String;
-  Defaults: TColorSchemeFactory);
+procedure TColorSchemeFactory.SaveToXml(aXMLConfig: TRttiXMLConfig;
+  const aPath: String; Defaults: TColorSchemeFactory);
 var
   i: Integer;
   Def: TColorScheme;
@@ -7225,20 +7079,21 @@ end;
 
 procedure TColorSchemeFactory.RegisterScheme(aXMLConfig: TRttiXMLConfig; AName, aPath: String);
 var
-  i, j: integer;
   lMapping: TColorScheme;
+  i, j: integer;
 begin
-  i := FMappings.IndexOf(UpperCase(AName));
+  i := FMappings.IndexOf(AName);
   if i <> -1 then begin
     j := 0;
-    while i >= 0 do begin
+    repeat
       inc(j);
-      i := FMappings.IndexOf(UpperCase(AName+'_'+IntToStr(j)));
-    end;
+      i := FMappings.IndexOf(AName+'_'+IntToStr(j));
+    until i = -1;
     AName := AName+'_'+IntToStr(j);
+    DebugLn(['TColorSchemeFactory.RegisterScheme: Adjusting AName to ', AName]);
   end;
   lMapping := TColorScheme.CreateFromXml(aXMLConfig, AName, aPath);
-  FMappings.AddObject(UpperCase(AName), lMapping);
+  FMappings.AddObject(AName, lMapping);
 end;
 
 procedure TColorSchemeFactory.GetRegisteredSchemes(AList: TStrings);
@@ -7258,25 +7113,10 @@ end;
 { TQuickStringlist }
 
 function TQuickStringlist.DoCompareText(const s1, s2: string): PtrInt;
-var
-  i, l: Integer;
 begin
-  Result := length(s1) - length(s2);
-  if Result <> 0 then
-    exit;
-  i := 1;
-  if Result < 0 then
-    l := length(s1)
-  else
-    l := length(s2);
-  while i <= l do begin
-    Result := ord(s1[i]) - ord(s2[i]);
-    if Result <> 0 then
-      exit;
-    inc(i);
-  end;
-  Result := 0;
+  Result := CompareText(s1, s2);
 end;
+
 
 initialization
   RegisterIDEOptionsGroup(GroupEditor, TEditorOptions);

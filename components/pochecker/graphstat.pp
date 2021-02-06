@@ -53,8 +53,6 @@ type
     procedure RefreshCurrMenuItemClick(Sender: TObject);
   private
     { private declarations }
-    FPoFamilyList: TPoFamilyList;
-    FPoFamilyStats: TPoFamilyStats;
     FImgList: TImageList;
     FOldHintHidePause: Integer;
     FSettings: TPoCheckerSettings;
@@ -71,8 +69,6 @@ type
     procedure ConfigureContextPopUp(AdvancedMode: boolean);
   public
     { public declarations }
-    property PoFamilyList: TPoFamilyList read FPoFamilyList write FPoFamilyList;
-    property PoFamilyStats: TPoFamilyStats read FPoFamilyStats write FPoFamilyStats;
     property Settings: TPoCheckerSettings read FSettings write FSettings;
   end;
 
@@ -116,7 +112,7 @@ begin
   Application.HintHidePause := 5000;
   LoadConfig;
   WindowState := Settings.GraphFormWindowState;
-  Application.QueueAsyncCall(@DrawGraphs, FPoFamilyStats.Count);
+  Application.QueueAsyncCall(@DrawGraphs, PoFamilyList.PoFamilyStats.Count);
 end;
 
 procedure TGraphStatForm.IDEEditorMenuItemClick(Sender: TObject);
@@ -135,7 +131,7 @@ begin
   if Assigned(Item) then
   begin
     Index := Item.Index;
-    AStat := FPoFamilyStats.Items[Index];
+    AStat := PoFamilyList.PoFamilyStats.Items[Index];
     ListView.Hint := Format(sStatHint,[AStat.NrTranslated, AStat.PercTranslated,
                                        AStat.NrUnTranslated, AStat.PercUnTranslated,
                                        AStat.NrFuzzy, AStat.PercFuzzy, AStat.NrErrors]);
@@ -162,7 +158,7 @@ begin
     if Assigned(anItem) then
     begin
       anIndex := anItem.Index;
-      AStat := FPoFamilyStats.Items[anIndex];
+      AStat := PoFamilyList.PoFamilyStats.Items[anIndex];
       Fn := AStat.PoName;
       CurrentMasterPoFile := ExtractMasterNameFromChildName(AStat.PoName);
       ConfigureContextPopUp(ssShift in Shift);
@@ -407,11 +403,11 @@ begin
   Screen.BeginWaitCursor;
   try
     StatusLabel.Visible := True;
-    for Index := 0 to FPoFamilyStats.Count - 1 do
+    for Index := 0 to PoFamilyList.PoFamilyStats.Count - 1 do
     begin
       StatusLabel.Caption := Format(sCreatingIconXofY,[Index + 1, Cnt]);
       StatusLabel.Repaint;
-      AStat := FPoFamilyStats.Items[Index];
+      AStat := PoFamilyList.PoFamilyStats.Items[Index];
       Bmp := CreateBitmap(AStat);
       AddToListView(AStat, Bmp);
 

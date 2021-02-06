@@ -291,14 +291,40 @@ msgstr ""
 msgid "Set value"
 msgstr ""
 
-#: objinspstrconsts.lisunabletofindparserfortool
-#, object-pascal-format
-msgid "Unable to find parser for tool \"%s\""
+#: objinspstrconsts.lrsbufdsfilters
+msgid "XML data files|*.xml;Binary data files|*.dat"
 msgstr ""
 
-#: objinspstrconsts.lisunabletofindparserwithname
-#, object-pascal-format
-msgid "Unable to find parser with name \"%s\""
+#: objinspstrconsts.lrscopyfromdataset
+msgid "Copy data from other dataset"
+msgstr ""
+
+#: objinspstrconsts.lrscreatedataset
+msgid "Create dataset"
+msgstr ""
+
+#: objinspstrconsts.lrsdatasetactive
+msgid "Dataset is already active, close it first."
+msgstr ""
+
+#: objinspstrconsts.lrsloadfromfile
+msgid "Load data from file"
+msgstr ""
+
+#: objinspstrconsts.lrsnodatasetsavailableforcopy
+msgid "No dataset available to copy data from."
+msgstr ""
+
+#: objinspstrconsts.lrsprovidedatafilename
+msgid "Select a data file to save data to"
+msgstr ""
+
+#: objinspstrconsts.lrssavetofile
+msgid "Save data to file"
+msgstr ""
+
+#: objinspstrconsts.lrsselectdatafilename
+msgid "Select a file with data to load into dataset"
 msgstr ""
 
 #: objinspstrconsts.nbcesaddpage
@@ -474,10 +500,6 @@ msgstr ""
 #: objinspstrconsts.oiscopycomponents
 msgctxt "objinspstrconsts.oiscopycomponents"
 msgid "&Copy"
-msgstr ""
-
-#: objinspstrconsts.oiscreateanewpascalunit
-msgid "Create a new pascal unit."
 msgstr ""
 
 #: objinspstrconsts.oiscreatedefaultevent
@@ -858,10 +880,6 @@ msgstr ""
 
 #: objinspstrconsts.oissettodefaulthint
 msgid "Set property value to Default"
-msgstr ""
-
-#: objinspstrconsts.oisshowalloutputlines
-msgid "Show all output lines"
 msgstr ""
 
 #: objinspstrconsts.oisshowclasses
@@ -1271,10 +1289,6 @@ msgstr ""
 
 #: objinspstrconsts.pefiltername
 msgid "Filter name"
-msgstr ""
-
-#: objinspstrconsts.pirsunit
-msgid "Pascal unit"
 msgstr ""
 
 #: objinspstrconsts.rscdalignment

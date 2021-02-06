@@ -15,28 +15,38 @@ resourcestring
   MsgfpErrAnyError                        = '%1:s';
   MsgfpErrSymbolNotFound                  = 'Identifier not found: "%1:s"';
   MsgfpErrNoMemberWithName                = 'Member not found: %1:s';
-  MsgfpErrorNotAStructure                 = 'Cannot get member "%1:s" from none structure type: %2:s';
-  MsgfpErrorBadFloatSize                  = 'Unsupported float value: Unknown precission';
+  MsgfpErrorNotAStructure                 = 'Cannot get member "%1:s" from non-structured type: %2:s';
+  MsgfpErrorBadFloatSize                  = 'Unsupported float value: Unknown precision';
   MsgfpErrAddressIsNil                    = 'Cannot access data, Address is NIL';
 
   MsgfpErrPasParserInvalidExpression      = 'Invalid Expression';
   MsgfpErrPasParserUnexpectedToken        = 'Unexpected token ''%1:s'' at pos %2:d';
   MsgfpErrPasParserMissingExprAfterComma  = 'Expected Expression after Comma, but found closing bracket %1:s';
   MsgfpErrPasParserMissingIndexExpression = 'Expected Expression but found closing bracket: %1:s';
-  MsgfpErrInvalidNumber                   = 'Can''t parse number: %1:s';
-  MsgfpErrCannotDereferenceType           = 'Can not dereference Expression "%1:s"';
-  MsgfpErrTypeHasNoIndex                  = 'Not a type or Array. Cannot access indexed element on expression %1:s';
+  MsgfpErrInvalidNumber                   = 'Cannot parse number: %1:s';
+  MsgfpErrCannotDereferenceType           = 'Cannot dereference Expression "%1:s"';
+  MsgfpErrTypeHasNoIndex                  = 'Cannot access indexed element in expression %1:s';
+  MsgfpErrChangeVariableNotSupported      = 'Changing the value of this variable is not supported';
   // 100 memreader error
   MsgfpInternalErrfpErrFailedReadMem              = 'Internal error: Failed to read data from memory';
   MsgfpInternalErrCanNotReadInvalidMem            = 'Internal error: Missing data location';
+  MsgfpErrReadMemSizeLimit                        = 'Memory read size exceeds limit';
   MsgfpErrCanNotReadMemAtAddr             = 'Failed to read Mem at Address $%1:x';
   MsgfpErrFailedReadRegiseter             = 'Failed to read data from register';
+  MsgfpErrFailedWriteMem                  = 'Failed to write data';
+  MsgfpInternalErrCanNotWriteInvalidMem   = 'Internal error writing data: Missing data location';
+  MsgfpErrCanNotWriteMemAtAddr            = 'Failed to write Mem at Address $%1:x';
+
   // 200 LocationParser
-  MsgfpErrLocationParser                  = 'Internal Error: Can not calculate location.';
+  MsgfpErrLocationParser                  = 'Internal Error: Cannot calculate location.';
   MsgfpErrLocationParserMemRead           = '%1:s (while calculating location)';          // Pass on nested error
-  MsgfpErrLocationParserInit              = 'Internal Error: Can not calculate location. (Init)';
+  MsgfpErrLocationParserInit              = 'Internal Error: Cannot calculate location (Init).';
   MsgfpErrLocationParserMinStack          = 'Not enough elements on stack.';             // internally used
   MsgfpErrLocationParserNoAddressOnStack  = 'Not an address on stack';           // internally used
+
+  // 10000 Process/Control errors
+  MsgfpErrCreateProcess = 'Failed to start process "%1:s".%0:s Error message: %2:d "%3:s". %0:s%4:s';
+  MsgfpErrAttachProcess = 'Failed to attach to process "%1:s".%0:s Error message: %2:d "%3:s". %0:s%4:s';
 
 const
   fpErrNoError        = TFpErrorCode(0); // not an error
@@ -55,12 +65,17 @@ const
   fpErrInvalidNumber                   = TFpErrorCode(28);
   fpErrCannotDereferenceType           = TFpErrorCode(29);
   fpErrTypeHasNoIndex                  = TFpErrorCode(30);
+  fpErrChangeVariableNotSupported      = TFpErrorCode(31);
 
   // 100 memreader error
   fpInternalErrFailedReadMem        = TFpErrorCode(100);
   fpInternalErrCanNotReadInvalidMem = TFpErrorCode(101);
-  fpErrCanNotReadMemAtAddr          = TFpErrorCode(102);
-  fpErrFailedReadRegister           = TFpErrorCode(103);
+  fpErrReadMemSizeLimit             = TFpErrorCode(102);
+  fpErrCanNotReadMemAtAddr          = TFpErrorCode(103);
+  fpErrFailedReadRegister           = TFpErrorCode(104);
+  fpInternalErrCanNotWriteInvalidMem= TFpErrorCode(105);
+  fpErrFailedWriteMem               = TFpErrorCode(106);
+  fpErrCanNotWriteMemAtAddr         = TFpErrorCode(107);
 
   // 200 LocationParser
   fpErrLocationParser                 = TFpErrorCode(200);
@@ -68,6 +83,11 @@ const
   fpErrLocationParserInit             = TFpErrorCode(202);
   fpErrLocationParserMinStack         = TFpErrorCode(203);
   fpErrLocationParserNoAddressOnStack = TFpErrorCode(204);
+
+  // 10000 Process/Control errors
+  fpErrCreateProcess                  = TFpErrorCode(10000);
+  fpErrAttachProcess                  = TFpErrorCode(10001);
+
 type
 
   TFpError = array of record
@@ -192,17 +212,25 @@ begin
     fpErrInvalidNumber:                   Result := MsgfpErrInvalidNumber;
     fpErrCannotDereferenceType:           Result := MsgfpErrCannotDereferenceType;
     fpErrTypeHasNoIndex: Result := MsgfpErrTypeHasNoIndex;
+    fpErrChangeVariableNotSupported:      Result := MsgfpErrChangeVariableNotSupported;
 
     fpInternalErrCanNotReadInvalidMem: Result := MsgfpInternalErrCanNotReadInvalidMem;
+    fpErrReadMemSizeLimit:             Result := MsgfpErrReadMemSizeLimit;
     fpInternalErrFailedReadMem:        Result := MsgfpInternalErrfpErrFailedReadMem;
     fpErrCanNotReadMemAtAddr:          Result := MsgfpErrCanNotReadMemAtAddr;
     fpErrFailedReadRegister:           Result := MsgfpErrFailedReadRegiseter;
+    fpInternalErrCanNotWriteInvalidMem:Result := MsgfpInternalErrCanNotWriteInvalidMem;
+    fpErrFailedWriteMem:               Result := MsgfpErrFailedWriteMem;
+    fpErrCanNotWriteMemAtAddr:         Result := MsgfpErrCanNotWriteMemAtAddr;
 
     fpErrLocationParser:                 Result := MsgfpErrLocationParser;
     fpErrLocationParserMemRead:          Result := MsgfpErrLocationParserMemRead;
     fpErrLocationParserInit:             Result := MsgfpErrLocationParserInit;
     fpErrLocationParserMinStack:         Result := MsgfpErrLocationParserMinStack;
     fpErrLocationParserNoAddressOnStack: Result := MsgfpErrLocationParserNoAddressOnStack;
+
+    fpErrCreateProcess:                  Result := MsgfpErrCreateProcess;
+    fpErrAttachProcess:                  Result := MsgfpErrAttachProcess;
   end;
 end;
 

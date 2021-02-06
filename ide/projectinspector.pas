@@ -57,17 +57,20 @@ interface
 uses
   Classes, SysUtils,
   // LCL
-  LCLProc, LCLType, LCLIntf, Forms, Controls, Buttons, ComCtrls,
-  Menus, Dialogs, FileUtil, LazFileUtils, LazFileCache, ExtCtrls, Graphics,
+  LCLType, LCLIntf, Forms, Controls, Buttons, ComCtrls, Menus, Dialogs,
+  ExtCtrls, StdCtrls, Graphics,
   // LazControls
   TreeFilterEdit,
+  // LazUtils
+  FileUtil, LazFileUtils, LazUtilities, LazLoggerBase, LazTracer, LazFileCache,
+  // BuildIntf
+  ProjectIntf, PackageIntf, PackageLinkIntf, PackageDependencyIntf,
   // IDEIntf
-  IDEHelpIntf, IDECommands, IDEDialogs, IDEImagesIntf, LazIDEIntf, ProjectIntf,
-  PackageIntf, PackageLinkIntf, MainIntf,
+  IDEHelpIntf, IDECommands, IDEDialogs, IDEImagesIntf, LazIDEIntf, ToolBarIntf,
   // IDE
-  LazarusIDEStrConsts, IDEProcs, DialogProcs, IDEOptionDefs, EnvironmentOpts,
-  PackageDefs, Project, PackageEditor, AddToProjectDlg, AddPkgDependencyDlg,
-  InputHistory, MainBase, ProjPackChecks, PackageLinks, AddFPMakeDependencyDlg;
+  LazarusIDEStrConsts, MainBase, IDEProcs, DialogProcs, IDEOptionDefs, Project, InputHistory,
+  EnvironmentOpts, AddToProjectDlg, AddPkgDependencyDlg, AddFPMakeDependencyDlg,
+  ProjPackChecks, ProjPackEditing, ProjPackFilePropGui, PackageDefs, PackageSystem, BuildManager;
 
 type
   TOnAddUnitToProject =
@@ -79,21 +82,14 @@ type
   TAddProjInspDepEvent = function(Sender: TObject;
                            ADependency: TPkgDependency): TModalResult of object;
 
-  TProjectInspectorFlag = (
-    pifNeedUpdateFiles,
-    pifNeedUpdateDependencies,
-    pifNeedUpdateButtons,
-    pifNeedUpdateTitle
-    );
-  TProjectInspectorFlags = set of TProjectInspectorFlag;
-
   { TProjectInspectorForm }
 
   TProjectInspectorForm = class(TForm,IFilesEditorInterface)
     AddPopupMenu: TPopupMenu;
-    BtnPanel: TPanel;
+    FilterPanel: TPanel;
     DirectoryHierarchyButton: TSpeedButton;
     FilterEdit: TTreeFilterEdit;
+    PropsGroupBox: TGroupBox;
     MenuItem1: TMenuItem;
     MenuItem2: TMenuItem;
     mnuAddFPMakeReq: TMenuItem;
@@ -104,6 +100,7 @@ type
     ItemsTreeView: TTreeView;
     ItemsPopupMenu: TPopupMenu;
     SortAlphabeticallyButton: TSpeedButton;
+    Splitter1: TSplitter;
     // toolbar
     ToolBar: TToolBar;
     // toolbuttons
@@ -114,7 +111,10 @@ type
     procedure CopyMoveToDirMenuItemClick(Sender: TObject);
     procedure DirectoryHierarchyButtonClick(Sender: TObject);
     procedure FilterEditKeyDown(Sender: TObject; var Key: Word; {%H-}Shift: TShiftState);
+    procedure FormActivate(Sender: TObject);
     procedure FormCreate(Sender: TObject);
+    procedure FormDeactivate(Sender: TObject);
+    procedure FormDestroy(Sender: TObject);
     procedure FormDropFiles(Sender: TObject; const FileNames: array of String);
     procedure ItemsPopupMenuPopup(Sender: TObject);
     procedure ItemsTreeViewAdvancedCustomDrawItem(Sender: TCustomTreeView;
@@ -126,7 +126,7 @@ type
       State: TDragState; var Accept: Boolean);
     procedure ItemsTreeViewKeyDown(Sender: TObject; var Key: Word; {%H-}Shift: TShiftState);
     procedure ItemsTreeViewSelectionChanged(Sender: TObject);
-    procedure mnuAddBitBtnClick(Sender: TObject);
+    procedure mnuAddDiskFileClick(Sender: TObject);
     procedure mnuAddEditorFilesClick(Sender: TObject);
     procedure mnuAddFPMakeReqClick(Sender: TObject);
     procedure mnuAddReqClick(Sender: TObject);
@@ -165,37 +165,41 @@ type
     FDependenciesNode: TTreeNode;
     FRemovedDependenciesNode: TTreeNode;
     ImageIndexFiles: integer;
-    ImageIndexRequired: integer;
-    ImageIndexConflict: integer;
-    ImageIndexAvailableOnline: integer;
-    ImageIndexRemovedRequired: integer;
     ImageIndexProject: integer;
     ImageIndexUnit: integer;
     ImageIndexRegisterUnit: integer;
     ImageIndexText: integer;
     ImageIndexBinary: integer;
     ImageIndexDirectory: integer;
-    FFlags: TProjectInspectorFlags;
-    FProjectNodeDataList : array [TPENodeType] of TPENodeData;
+    FFlags: TPEFlags;
+    FPropGui: TProjPackFilePropGui;
     procedure AddMenuItemClick(Sender: TObject);
     function AddOneFile(aFilename: string): TModalResult;
     procedure DoAddMoreDialog;
     procedure DoAddDepDialog;
     procedure DoAddFPMakeDepDialog;
-    procedure FreeNodeData(Typ: TPENodeType);
-    function CreateNodeData(Typ: TPENodeType; aName: string; aRemoved: boolean): TPENodeData;
+    function CreateToolButton(AName, ACaption, AHint, AImageName: String;
+      AOnClick: TNotifyEvent): TToolButton;
+    function CreateDivider: TToolButton;
     procedure SetDependencyDefaultFilename(AsPreferred: boolean);
     procedure SetIdleConnected(AValue: boolean);
     procedure SetLazProject(const AValue: TProject);
     procedure SetShowDirectoryHierarchy(const AValue: boolean);
     procedure SetSortAlphabetically(const AValue: boolean);
     procedure SetupComponents;
-    function OnTreeViewGetImageIndex({%H-}Str: String; Data: TObject; var {%H-}AIsEnabled: Boolean): Integer;
-    procedure OnProjectBeginUpdate(Sender: TObject);
-    procedure OnProjectEndUpdate(Sender: TObject; ProjectChanged: boolean);
+    function GetDependencyToUpdate(Immediately: boolean): TPkgDependencyID;
+    function GetSingleSelectedDependency: TPkgDependency;
+    procedure ApplyDependencyButtonClick(Sender: TObject);
+    function TreeViewGetImageIndex({%H-}Str: String; Data: TObject; var {%H-}AIsEnabled: Boolean): Integer;
+    procedure ProjectBeginUpdate(Sender: TObject);
+    procedure ProjectEndUpdate(Sender: TObject; ProjectChanged: boolean);
     procedure EnableI18NForSelectedLFM(TheEnable: boolean);
-    procedure DoOnPackageListAvailable(Sender: TObject);
-    function FindOnlinePackageLink(const ADependency: TPkgDependency): TPackageLink;
+    procedure PackageListAvailable(Sender: TObject);
+    function CanUpdate(Flag: TPEFlag; Immediately: boolean): boolean;
+    procedure UpdateFiles(Immediately: boolean = false);
+    procedure UpdateProperties(Immediately: boolean = false);
+    procedure UpdateButtons(Immediately: boolean = false);
+    procedure UpdatePending;
   protected
     procedure KeyDown(var Key: Word; Shift: TShiftState); override;
     procedure IdleHandler(Sender: TObject; var {%H-}Done: Boolean);
@@ -203,20 +207,14 @@ type
     constructor Create(TheOwner: TComponent); override;
     destructor Destroy; override;
     function IsUpdateLocked: boolean; inline;
-    procedure UpdateTitle;
-    procedure UpdateProjectFiles;
-    procedure UpdateRequiredPackages;
-    procedure UpdateButtons;
-    procedure UpdatePending;
-    function CanUpdate(Flag: TProjectInspectorFlag): boolean;
-    function GetSingleSelectedDependency: TPkgDependency;
+    procedure UpdateTitle(Immediately: boolean = false);
+    procedure UpdateRequiredPackages(Immediately: boolean = false);
     function TreeViewToInspector(TV: TTreeView): TProjectInspectorForm;
   public
     // IFilesEditorInterface
     procedure BeginUpdate;
     procedure EndUpdate;
     procedure UpdateAll(Immediately: boolean = false);
-    function GetNodeData(TVNode: TTreeNode): TPENodeData;
     function GetNodeItem(NodeData: TPENodeData): TObject;
     function GetNodeDataItem(TVNode: TTreeNode; out NodeData: TPENodeData;
       out Item: TObject): boolean;
@@ -255,6 +253,24 @@ type
     property SortAlphabetically: boolean read FSortAlphabetically write SetSortAlphabetically;
     property ShowDirectoryHierarchy: boolean read FShowDirectoryHierarchy write SetShowDirectoryHierarchy;
     property IdleConnected: boolean read FIdleConnected write SetIdleConnected;
+  end;
+
+  { TSetBuildModeToolButton }
+
+  TSetBuildModeToolButton = class(TIDEToolButton)
+  public type
+    TBuildModeMenuItem = class(TMenuItem)
+    public
+      BuildModeIndex: Integer;
+      procedure Click; override;
+    end;
+
+    TBuildModeMenu = class(TPopupMenu)
+    protected
+      procedure DoPopup(Sender: TObject); override;
+    end;
+  public
+    procedure DoOnAdded; override;
   end;
 
 var
@@ -339,20 +355,22 @@ end;
 
 procedure TProjectInspectorForm.ItemsTreeViewSelectionChanged(Sender: TObject);
 begin
+  UpdateProperties;
   UpdateButtons;
 end;
 
-procedure TProjectInspectorForm.mnuAddBitBtnClick(Sender: TObject);
+procedure TProjectInspectorForm.mnuAddDiskFileClick(Sender: TObject);
 var
   OpenDialog: TOpenDialog;
+  ADirectory, NewFilename: String;
   i: Integer;
-  ADirectory: String;
 begin
   OpenDialog:=IDEOpenDialogClass.Create(nil);
   try
     InputHistories.ApplyFileDialogSettings(OpenDialog);
     ADirectory:=LazProject.Directory;
-    if not FilenameIsAbsolute(ADirectory) then ADirectory:='';
+    if not FilenameIsAbsolute(ADirectory) then
+      ADirectory:='';
     if ADirectory<>'' then
       OpenDialog.InitialDir:=ADirectory;
     OpenDialog.Title:=lisOpenFile;
@@ -362,11 +380,20 @@ begin
                  +'|'+dlgFilterLazarusUnit+' (*.pas;*.pp)|*.pas;*.pp'
                  +'|'+dlgFilterLazarusInclude+' (*.inc)|*.inc'
                  +'|'+dlgFilterLazarusForm+' (*.lfm;*.dfm)|*.lfm;*.dfm';
-    if OpenDialog.Execute then begin
+    if OpenDialog.Execute then
+    begin
+      InputHistories.StoreFileDialogSettings(OpenDialog);
       for i:=0 to OpenDialog.Files.Count-1 do
-        if not (AddOneFile(OpenDialog.Files[i]) in [mrOk, mrIgnore]) then break;
+      begin
+        NewFilename := OpenDialog.Files[i];
+        case TPrjFileCheck.AddingFile(LazProject, NewFilename) of
+          mrOk: if not (AddOneFile(NewFilename) in [mrOk, mrIgnore]) then
+                  break;
+          mrIgnore: continue;
+          mrCancel: exit;
+        end;
+      end;
     end;
-    InputHistories.StoreFileDialogSettings(OpenDialog);
   finally
     OpenDialog.Free;
   end;
@@ -451,9 +478,11 @@ end;
 function TProjectInspectorForm.AddOneFile(aFilename: string): TModalResult;
 var
   NewFile: TUnitInfo;
+  NewFN: String;
 begin
   Result := mrOK;
-  aFilename:=CleanAndExpandFilename(aFilename);
+  NewFN:=CleanAndExpandFilename(aFilename);
+  Assert(NewFN=aFilename, 'TProjectInspectorForm.AddOneFile: '+aFilename+' is not clean.');
   NewFile:=LazProject.UnitInfoWithFilename(aFilename);
   if NewFile<>nil then begin
     if NewFile.IsPartOfProject then Exit(mrIgnore);
@@ -471,22 +500,14 @@ begin
 end;
 
 procedure TProjectInspectorForm.AddMenuItemClick(Sender: TObject);
-
-  function _NodeTreeIsIn(xIterNode, xParentNode: TTreeNode): Boolean;
-  begin
-    Result := (xIterNode = xParentNode);
-    if not Result and Assigned(xIterNode) then
-      Result := _NodeTreeIsIn(xIterNode.Parent, xParentNode);
-  end;
-
 begin
   //check the selected item in ItemsTreeView
   // -> if it's "Required Packages", call "New Requirement" (mnuAddReqClick)
   // -> otherwise (selected = "Files") call "Add files from file system" (AddBitBtnClick)
-  if _NodeTreeIsIn(ItemsTreeView.Selected, FDependenciesNode) then
+  if NodeTreeIsIn(ItemsTreeView.Selected, FDependenciesNode) then
     mnuAddReqClick(Sender)
   else
-    mnuAddBitBtnClick(Sender);
+    mnuAddDiskFileClick(Sender);
 end;
 
 procedure TProjectInspectorForm.DoAddMoreDialog;
@@ -575,8 +596,31 @@ end;
 
 procedure TProjectInspectorForm.FormCreate(Sender: TObject);
 begin
+  if LazarusIDE.IDEStarted and (LazProject=nil) then
+  begin   // User opens this window for the very first time. Set active project.
+    LazProject := Project1;
+    UpdateAll;
+  end;
   if OPMInterface <> nil then
-    OPMInterface.OnPackageListAvailable := @DoOnPackageListAvailable;
+    OPMInterface.AddPackageListNotification(@PackageListAvailable);
+end;
+
+procedure TProjectInspectorForm.FormDestroy(Sender: TObject);
+begin
+  if OPMInterface <> nil then
+    OPMInterface.RemovePackageListNotification(@PackageListAvailable);
+end;
+
+procedure TProjectInspectorForm.FormActivate(Sender: TObject);
+begin
+  //DebugLn('* TProjectInspectorForm.FormActivate *');
+  ItemsTreeView.OnSelectionChanged := @ItemsTreeViewSelectionChanged;
+end;
+
+procedure TProjectInspectorForm.FormDeactivate(Sender: TObject);
+begin
+  // Prevent calling handler when the tree gets updated with a project.
+  ItemsTreeView.OnSelectionChanged := Nil;
 end;
 
 procedure TProjectInspectorForm.FormDropFiles(Sender: TObject;
@@ -638,6 +682,7 @@ var
   HasValidDep: Integer;
   CanClearDep: Integer;
   CanMoveFileCount: Integer;
+  OpenItemCapt: String;
 begin
   ItemCnt:=0;
 
@@ -692,7 +737,7 @@ begin
   begin
     // Only the Files node is selected.
     Assert(AddBitBtn.Enabled, 'AddBitBtn not Enabled');
-    AddPopupMenuItem(lisBtnDlgAdd, @mnuAddBitBtnClick);
+    AddPopupMenuItem(lisBtnDlgAdd, @mnuAddDiskFileClick);
     if not LazProject.IsVirtual then
       AddPopupMenuItem(lisRemoveNonExistingFiles,@RemoveNonExistingFilesMenuItemClick);
     AddPopupMenuItem(cLineCaption, Nil, False);                // Separator
@@ -705,8 +750,18 @@ begin
   end
   else begin
     // Files, dependencies or everything mixed is selected.
-    if CanOpenCount>0 then
-      AddPopupMenuItem(lisOpen, @OpenButtonClick);
+    if CanOpenCount>0 then begin
+      OpenItemCapt := lisOpen;
+      if Assigned(SingleSelectedDep) then
+        case SingleSelectedDep.LoadPackageResult of
+          lprAvailableOnline:
+            OpenItemCapt:=lisPckEditInstall;
+          lprNotFound:
+            if Assigned(OPMInterface) and not OPMInterface.IsPackageListLoaded then
+              OpenItemCapt:=lisPckEditCheckAvailabilityOnline;
+        end;
+      AddPopupMenuItem(OpenItemCapt, @OpenButtonClick);
+    end;
     if CanRemoveCount>0 then
       AddPopupMenuItem(lisRemove, @RemoveBitBtnClick);
     // files section
@@ -773,55 +828,25 @@ end;
 procedure TProjectInspectorForm.OpenButtonClick(Sender: TObject);
 var
   i: Integer;
-  TVNode: TTreeNode;
   NodeData: TPENodeData;
   Item: TObject;
-  CurFile: TUnitInfo;
-  CurDependency: TPkgDependency;
-  PackageLink: TPackageLink;
-  PkgLinks: TList;
-  NeedToRebuild: Boolean;
 begin
-  PkgLinks := TList.Create;
-  try
-    NeedToRebuild := False;
-    BeginUpdate;
-    try
-      for i:=0 to ItemsTreeView.SelectionCount-1 do begin
-        TVNode:=ItemsTreeView.Selections[i];
-        if not GetNodeDataItem(TVNode,NodeData,Item) then continue;
-        if Item is TUnitInfo then begin
-          CurFile:=TUnitInfo(Item);
-          if LazarusIDE.DoOpenEditorFile(CurFile.Filename,-1,-1,[ofAddToRecent])<>mrOk then begin
-             PkgLinks.Free;
-             Exit;
-          end;
-        end else if (Item is TPkgDependency) and (TPkgDependency(Item).DependencyType=pdtLazarus) then begin
-          CurDependency:=TPkgDependency(Item);
-          if CurDependency.LoadPackageResult = lprSuccess then begin
-            if PackageEditingInterface.DoOpenPackageWithName(CurDependency.PackageName,[],false)<>mrOk then begin
-              PkgLinks.Free;
-              Exit;
-            end;
-          end else begin
-            if OPMInterface<>nil then begin
-              PackageLink:=FindOnlinePackageLink(CurDependency);
-              if PackageLink<>nil then
-                PkgLinks.Add(PackageLink);
-            end;
-          end;
-        end;
-      end;
-    finally
-      EndUpdate;
+  for i:=0 to ItemsTreeView.SelectionCount-1 do
+  begin
+    if GetNodeDataItem(ItemsTreeView.Selections[i], NodeData, Item) then
+    begin
+      if Item is TUnitInfo then
+      begin
+        if LazarusIDE.DoOpenEditorFile(TUnitInfo(Item).Filename,
+                                       -1,-1,[ofAddToRecent]) <> mrOk then
+          Exit;
+      end
+      else if Item is TPkgDependency then
+        if not OpmAddOrOpenDependency(TPkgDependency(Item)) then
+          Exit;
     end;
-    if (OPMInterface<>nil) and (PkgLinks.Count>0) then
-      OPMInterface.InstallPackages(PkgLinks, NeedToRebuild);
-  finally
-    PkgLinks.Free;
   end;
-  if (OPMInterface<>nil) and (NeedToRebuild) then
-    MainIDEInterface.DoBuildLazarus([])
+  OpmInstallPendingDependencies;
 end;
 
 procedure TProjectInspectorForm.OptionsBitBtnClick(Sender: TObject);
@@ -850,7 +875,7 @@ begin
       if not NodeData.Removed then continue;
       if not (Item is TPkgDependency) then continue;
       Dependency:=TPkgDependency(Item);
-      if not CheckAddingProjectDependency(LazProject,Dependency) then exit;
+      if TPrjFileCheck.AddingDependency(LazProject,Dependency)<>mrOK then exit;
       if Assigned(OnReAddDependency) then
         OnReAddDependency(Self,Dependency);
     end;
@@ -947,7 +972,7 @@ begin
     end;
     if HasChanged then begin
       LazProject.Modified:=true;
-      UpdateProjectFiles;
+      UpdateFiles;
     end;
   finally
     EndUpdate;
@@ -972,18 +997,19 @@ end;
 procedure TProjectInspectorForm.SetLazProject(const AValue: TProject);
 begin
   if FLazProject=AValue then exit;
-  if FLazProject<>nil then begin
+  if FLazProject<>nil then begin       // Old Project
     dec(FUpdateLock,LazProject.UpdateLock);
     FLazProject.OnBeginUpdate:=nil;
     FLazProject.OnEndUpdate:=nil;
   end;
   FLazProject:=AValue;
-  if FLazProject<>nil then begin
+  if FLazProject<>nil then begin       // New Project
     inc(FUpdateLock,LazProject.UpdateLock);
-    FLazProject.OnBeginUpdate:=@OnProjectBeginUpdate;
-    FLazProject.OnEndUpdate:=@OnProjectEndUpdate;
-  end;
-  UpdateAll;
+    FLazProject.OnBeginUpdate:=@ProjectBeginUpdate;
+    FLazProject.OnEndUpdate:=@ProjectEndUpdate;
+  end
+  else // Only update when no project. ProjectEndUpdate will update a project.
+    UpdateAll;
 end;
 
 procedure TProjectInspectorForm.SetShowDirectoryHierarchy(const AValue: boolean);
@@ -1049,36 +1075,56 @@ begin
     Application.RemoveOnIdleHandler(@IdleHandler);
 end;
 
+function TProjectInspectorForm.GetDependencyToUpdate(Immediately: boolean): TPkgDependencyID;
+begin
+  if CanUpdate(pefNeedUpdateApplyDependencyButton,Immediately) then
+    Result:=GetSingleSelectedDependency
+  else
+    Result:=nil;
+end;
+
+procedure TProjectInspectorForm.ApplyDependencyButtonClick(Sender: TObject);
+var
+  CurDependency: TPkgDependency;
+begin
+  CurDependency:=GetSingleSelectedDependency;
+  if (LazProject=nil) or (CurDependency=nil)
+  or not FPropGui.CheckApplyDependency(CurDependency) then exit;
+  // Try to load the package again. Min/max version may have changed.
+  CurDependency.LoadPackageResult := lprUndefined;
+  // This calls UpdateRequiredPackages from PackageGraph.OnEndUpdate,
+  //  and also updates all package editors which is useless here.
+  PackageGraph.OpenDependency(CurDependency, False);
+  //fForcedFlags:=[pefNeedUpdateRequiredPkgs];
+  LazProject.Modified:=True;
+end;
+
+function TProjectInspectorForm.CreateToolButton(AName, ACaption, AHint, AImageName: String;
+  AOnClick: TNotifyEvent): TToolButton;
+begin
+  Result := TToolButton.Create(Self);
+  Result.Name := AName;
+  Result.Caption := ACaption;
+  Result.Hint := AHint;
+  if AImageName <> '' then
+    Result.ImageIndex := IDEImages.LoadImage(AImageName);
+  Result.ShowHint := True;
+  Result.OnClick := AOnClick;
+  Result.AutoSize := True;
+  Result.Parent := ToolBar;
+end;
+
+function TProjectInspectorForm.CreateDivider: TToolButton;
+begin
+  Result := TToolButton.Create(Self);
+  Result.Style := tbsDivider;
+  Result.AutoSize := True;
+  Result.Parent := ToolBar;
+end;
+
 procedure TProjectInspectorForm.SetupComponents;
-
-  function CreateToolButton(AName, ACaption, AHint, AImageName: String; AOnClick: TNotifyEvent): TToolButton;
-  begin
-    Result := TToolButton.Create(Self);
-    Result.Name := AName;
-    Result.Caption := ACaption;
-    Result.Hint := AHint;
-    if AImageName <> '' then
-      Result.ImageIndex := IDEImages.LoadImage(AImageName);
-    Result.ShowHint := True;
-    Result.OnClick := AOnClick;
-    Result.AutoSize := True;
-    Result.Parent := ToolBar;
-  end;
-
-  function CreateDivider: TToolButton;
-  begin
-    Result := TToolButton.Create(Self);
-    Result.Style := tbsDivider;
-    Result.AutoSize := True;
-    Result.Parent := ToolBar;
-  end;
-
 begin
   ImageIndexFiles           := IDEImages.LoadImage('pkg_files');
-  ImageIndexRequired        := IDEImages.LoadImage('pkg_required');
-  ImageIndexConflict        := IDEImages.LoadImage('pkg_conflict');
-  ImageIndexAvailableOnline := IDEImages.LoadImage('pkg_install');
-  ImageIndexRemovedRequired := IDEImages.LoadImage('pkg_removedrequired');
   ImageIndexProject         := IDEImages.LoadImage('item_project_source');
   ImageIndexUnit            := IDEImages.LoadImage('item_unit');
   ImageIndexRegisterUnit    := IDEImages.LoadImage('pkg_registerunit');
@@ -1088,7 +1134,7 @@ begin
 
   ItemsTreeView.Images      := IDEImages.Images_16;
   ToolBar.Images            := IDEImages.Images_16;
-  FilterEdit.OnGetImageIndex:=@OnTreeViewGetImageIndex;
+  FilterEdit.OnGetImageIndex:=@TreeViewGetImageIndex;
 
   AddBitBtn     := CreateToolButton('AddBitBtn', lisAdd, lisClickToSeeTheChoices, 'laz_add', nil);
   AddBitBtn.Style:=tbsButtonDrop;
@@ -1113,17 +1159,20 @@ begin
   DirectoryHierarchyButton.Hint:=lisPEShowDirectoryHierarchy;
   IDEImages.AssignImage(DirectoryHierarchyButton, 'pkg_hierarchical');
 
+  FPropGui.OnGetPkgDep := @GetDependencyToUpdate;
+  FPropGui.ApplyDependencyButton.OnClick := @ApplyDependencyButtonClick;
+
   with ItemsTreeView do begin
     FFilesNode:=Items.Add(nil, dlgEnvFiles);
     FFilesNode.ImageIndex:=ImageIndexFiles;
     FFilesNode.SelectedIndex:=FFilesNode.ImageIndex;
     FDependenciesNode:=Items.Add(nil, lisPckEditRequiredPackages);
-    FDependenciesNode.ImageIndex:=ImageIndexRequired;
+    FDependenciesNode.ImageIndex:=FPropGui.ImageIndexRequired;
     FDependenciesNode.SelectedIndex:=FDependenciesNode.ImageIndex;
   end;
 end;
 
-function TProjectInspectorForm.OnTreeViewGetImageIndex(Str: String; Data: TObject;
+function TProjectInspectorForm.TreeViewGetImageIndex(Str: String; Data: TObject;
                                                 var AIsEnabled: Boolean): Integer;
 var
   NodeData: TPENodeData;
@@ -1134,144 +1183,108 @@ begin
   NodeData:=TPENodeData(Data);
   Item:=GetNodeItem(NodeData);
   if Item=nil then exit;
-
   if Item is TUnitInfo then begin
-    if FilenameIsPascalUnit(TUnitInfo(Item).Filename) then
+    if FilenameHasPascalExt(TUnitInfo(Item).Filename) then
       Result:=ImageIndexUnit
     else if (LazProject<>nil) and (LazProject.MainUnitinfo=Item) then
       Result:=ImageIndexProject
     else
       Result:=ImageIndexText;
   end
-  else if Item is TPkgDependency then begin
-    if TPkgDependency(Item).Removed then
-      Result:=ImageIndexRemovedRequired
-    else if TPkgDependency(Item).LoadPackageResult=lprSuccess then
-      Result:=ImageIndexRequired
-    else begin
-      Result:=ImageIndexConflict;
-      if OPMInterface<>nil then
-        if FindOnlinePackageLink(TPkgDependency(Item))<>nil then
-          Result:=ImageIndexAvailableOnline;
-    end;
-  end;
+  else if Item is TPkgDependency then
+    Result:=FPropGui.GetDependencyImageIndex(TPkgDependency(Item));
 end;
 
-procedure TProjectInspectorForm.UpdateProjectFiles;
+procedure TProjectInspectorForm.UpdateFiles(Immediately: boolean);
 var
   CurFile: TUnitInfo;
   FilesBranch: TTreeFilterBranch;
   Filename: String;
   ANodeData : TPENodeData;
 begin
-  if not CanUpdate(pifNeedUpdateFiles) then exit;
-  ItemsTreeView.BeginUpdate;
-  try
-    FilesBranch:=FilterEdit.GetCleanBranch(FFilesNode);
-    FilesBranch.ClearNodeData;
-    FreeNodeData(penFile);
-    if LazProject<>nil then begin
-      FilterEdit.SelectedPart:=FNextSelectedPart;
-      FilterEdit.ShowDirHierarchy:=ShowDirectoryHierarchy;
-      FilterEdit.SortData:=SortAlphabetically;
-      FilterEdit.ImageIndexDirectory:=ImageIndexDirectory;
-      // collect and sort files
-      CurFile:=LazProject.FirstPartOfProject;
-      while CurFile<>nil do begin
-        Filename:=CurFile.GetShortFilename(true);
-        if Filename<>'' then Begin
-          ANodeData := CreateNodeData(penFile, CurFile.Filename, False);
-          FilesBranch.AddNodeData(Filename, ANodeData, CurFile.Filename);
-        end;
-        CurFile:=CurFile.NextPartOfProject;
+  if not CanUpdate(pefNeedUpdateFiles,Immediately) then exit;
+  FilesBranch:=FilterEdit.GetCleanBranch(FFilesNode);
+  FilesBranch.ClearNodeData;
+  FPropGui.FreeNodeData(penFile);
+  if LazProject<>nil then begin
+    FilterEdit.SelectedPart:=FNextSelectedPart;
+    FilterEdit.ShowDirHierarchy:=ShowDirectoryHierarchy;
+    FilterEdit.SortData:=SortAlphabetically;
+    FilterEdit.ImageIndexDirectory:=ImageIndexDirectory;
+    // collect and sort files
+    CurFile:=LazProject.FirstPartOfProject;
+    while CurFile<>nil do begin
+      Filename:=CurFile.GetShortFilename(true);
+      if Filename<>'' then Begin
+        ANodeData:=FPropGui.CreateNodeData(penFile, CurFile.Filename, False);
+        FilesBranch.AddNodeData(Filename, ANodeData, CurFile.Filename);
       end;
+      CurFile:=CurFile.NextPartOfProject;
     end;
-    FilterEdit.InvalidateFilter;            // Data is shown by FilterEdit.
-  finally
-    ItemsTreeView.EndUpdate;
   end;
+  FilterEdit.InvalidateFilter;            // Data is shown by FilterEdit.
+  UpdateProperties;
   UpdateButtons;
 end;
 
-procedure TProjectInspectorForm.UpdateRequiredPackages;
+procedure TProjectInspectorForm.UpdateRequiredPackages(Immediately: boolean);
 var
   Dependency: TPkgDependency;
   RequiredBranch, RemovedBranch: TTreeFilterBranch;
-  NodeText, AFilename: String;
   ANodeData : TPENodeData;
 begin
-  if not CanUpdate(pifNeedUpdateDependencies) then exit;
-  ItemsTreeView.BeginUpdate;
-  try
-    RequiredBranch:=FilterEdit.GetCleanBranch(FDependenciesNode);
-    RequiredBranch.ClearNodeData;
-    FreeNodeData(penDependency);
-    Dependency:=Nil;
-    if LazProject<>nil then begin
-      // required packages
-      Dependency:=LazProject.FirstRequiredDependency;
+  if not CanUpdate(pefNeedUpdateRequiredPkgs,Immediately) then exit;
+  RequiredBranch:=FilterEdit.GetCleanBranch(FDependenciesNode);
+  RequiredBranch.ClearNodeData;
+  FPropGui.FreeNodeData(penDependency);
+  Dependency:=Nil;
+  if LazProject<>nil then begin
+    // required packages
+    Dependency:=LazProject.FirstRequiredDependency;
+    while Dependency<>nil do begin
+      // Add the required package under the branch
+      ANodeData:=FPropGui.CreateNodeData(penDependency, Dependency.PackageName, False);
+      RequiredBranch.AddNodeData(Dependency.AsString(False,True)+OPNote(Dependency), ANodeData);
+      Dependency:=Dependency.NextRequiresDependency;
+    end;
+
+    // removed required packages
+    Dependency:=LazProject.FirstRemovedDependency;
+    if Dependency<>nil then begin
+      // Create root node for removed dependencies if not done yet.
+      if FRemovedDependenciesNode=nil then begin
+        FRemovedDependenciesNode:=ItemsTreeView.Items.Add(FDependenciesNode,
+                                                lisProjInspRemovedRequiredPackages);
+        FRemovedDependenciesNode.ImageIndex:=FPropGui.ImageIndexRemovedRequired;
+        FRemovedDependenciesNode.SelectedIndex:=FRemovedDependenciesNode.ImageIndex;
+      end;
+      RemovedBranch:=FilterEdit.GetCleanBranch(FRemovedDependenciesNode);
+      // Add all removed dependencies under the branch
       while Dependency<>nil do begin
-        // Figure out the item's caption
-        NodeText:=Dependency.AsString;
-        if Dependency.DefaultFilename<>'' then begin
-          AFilename:=Dependency.MakeFilenameRelativeToOwner(Dependency.DefaultFilename);
-          if Dependency.PreferDefaultFilename then
-            NodeText:=Format(lisCEIn, [NodeText,AFilename])  // like the 'in' keyword in the uses section
-          else
-            NodeText:=Format(lisPckEditDefault, [NodeText, AFilename]);
-        end;
-        if Dependency.LoadPackageResult<>lprSuccess then
-          if OPMInterface<>nil then
-            if FindOnlinePackageLink(Dependency)<>nil then
-              NodeText:=NodeText+' '+lisPckEditAvailableOnline;
-        if Dependency.DependencyType=pdtFPMake then
-          NodeText:=NodeText+' '+lisPckEditFPMakePackage;
-        // Add the required package under the branch
-        ANodeData := CreateNodeData(penDependency, Dependency.PackageName, False);
-        RequiredBranch.AddNodeData(NodeText, ANodeData);
+        ANodeData := FPropGui.CreateNodeData(penDependency, Dependency.PackageName, True);
+        RemovedBranch.AddNodeData(Dependency.AsString, ANodeData);
         Dependency:=Dependency.NextRequiresDependency;
       end;
-
-      // removed required packages
-      Dependency:=LazProject.FirstRemovedDependency;
-      if Dependency<>nil then begin
-        // Create root node for removed dependencies if not done yet.
-        if FRemovedDependenciesNode=nil then begin
-          FRemovedDependenciesNode:=ItemsTreeView.Items.Add(FDependenciesNode,
-                                                  lisProjInspRemovedRequiredPackages);
-          FRemovedDependenciesNode.ImageIndex:=ImageIndexRemovedRequired;
-          FRemovedDependenciesNode.SelectedIndex:=FRemovedDependenciesNode.ImageIndex;
-        end;
-        RemovedBranch:=FilterEdit.GetCleanBranch(FRemovedDependenciesNode);
-        // Add all removed dependencies under the branch
-        while Dependency<>nil do begin
-          ANodeData := CreateNodeData(penDependency, Dependency.PackageName, True);
-          RemovedBranch.AddNodeData(Dependency.AsString, ANodeData);
-          Dependency:=Dependency.NextRequiresDependency;
-        end;
-      end;
     end;
-
-    // Dependency is set to removed required packages if there is active project
-    if (Dependency=nil) and (FRemovedDependenciesNode<>nil) then begin
-      // No removed dependencies -> delete the root node
-      FilterEdit.DeleteBranch(FRemovedDependenciesNode);
-      FreeThenNil(FRemovedDependenciesNode);
-    end;
-    FilterEdit.InvalidateFilter;
-  finally
-    ItemsTreeView.EndUpdate;
   end;
+
+  // Dependency is set to removed required packages if there is active project
+  if (Dependency=nil) and (FRemovedDependenciesNode<>nil) then begin
+    // No removed dependencies -> delete the root node
+    FilterEdit.DeleteBranch(FRemovedDependenciesNode);
+    FreeThenNil(FRemovedDependenciesNode);
+  end;
+  FilterEdit.InvalidateFilter;
+  UpdateProperties;
   UpdateButtons;
 end;
 
-procedure TProjectInspectorForm.OnProjectBeginUpdate(Sender: TObject);
+procedure TProjectInspectorForm.ProjectBeginUpdate(Sender: TObject);
 begin
   BeginUpdate;
 end;
 
-procedure TProjectInspectorForm.OnProjectEndUpdate(Sender: TObject;
-  ProjectChanged: boolean);
+procedure TProjectInspectorForm.ProjectEndUpdate(Sender: TObject; ProjectChanged: boolean);
 begin
   if ProjectChanged then
     UpdateAll;
@@ -1296,53 +1309,10 @@ begin
   end;
 end;
 
-procedure TProjectInspectorForm.DoOnPackageListAvailable(Sender: TObject);
-var
-  CurDependency: TPkgDependency;
-  i: Integer;
-  TVNode: TTreeNode;
-  NodeData: TPENodeData;
-  Item: TObject;
-  NodeText: String;
-  ImageIndex: Integer;
+procedure TProjectInspectorForm.PackageListAvailable(Sender: TObject);
 begin
-  BeginUpdate;
-  try
-    for i:=0 to ItemsTreeView.Items.Count-1 do begin
-      TVNode:=ItemsTreeView.Items[i];
-      if not GetNodeDataItem(TVNode,NodeData,Item) then continue;
-      if not (Item is TPkgDependency) or (TPkgDependency(Item).DependencyType=pdtFPMake) then continue;
-      CurDependency:=TPkgDependency(Item);
-      NodeText:=CurDependency.AsString;
-      ImageIndex:=ImageIndexRequired;
-      if CurDependency.LoadPackageResult<>lprSuccess then begin
-        ImageIndex:=ImageIndexConflict;
-        if OPMInterface<>nil then begin
-          if FindOnlinePackageLink(CurDependency)<>nil then begin
-            NodeText:=NodeText+' '+lisPckEditAvailableOnline;
-            ImageIndex:=ImageIndexAvailableOnline;
-          end;
-        end;
-      end;
-      TVNode.Text:=NodeText;
-      TVNode.ImageIndex:=ImageIndex;
-      TVNode.SelectedIndex:=ImageIndex;
-    end;
-  finally
-    EndUpdate;
-  end;
-end;
-
-function TProjectInspectorForm.FindOnlinePackageLink(
-  const ADependency: TPkgDependency): TPackageLink;
-var
-  PackageLink: TPackageLink;
-begin
-  Result := nil;
-  PackageLink := LazPackageLinks.FindLinkWithPkgName(ADependency.AsString);
-  if (PackageLink <> nil) and (PackageLink.Origin = ploOnline) and
-      (ADependency.IsCompatible(PackageLink.Version)) then
-    Result := PackageLink;
+  DebugLn(['TProjectInspectorForm.PackageListAvailable: ', LazProject.Title]);
+  UpdateRequiredPackages;
 end;
 
 procedure TProjectInspectorForm.KeyDown(var Key: Word; Shift: TShiftState);
@@ -1353,10 +1323,8 @@ end;
 
 procedure TProjectInspectorForm.IdleHandler(Sender: TObject; var Done: Boolean);
 begin
-  if IsUpdateLocked then begin
-    IdleConnected:=false;
-    exit;
-  end;
+  if fUpdateLock>0 then exit;
+  IdleConnected:=false;
   UpdatePending;
 end;
 
@@ -1385,6 +1353,7 @@ begin
   Name:=NonModalIDEWindowNames[nmiwProjectInspector];
   Caption:=lisMenuProjectInspector;
   KeyPreview:=true;
+  FPropGui:=TProjPackFilePropGui.Create(PropsGroupBox, False);
   SetupComponents;
   KeyPreview:=true;
   SortAlphabetically := EnvironmentOptions.ProjInspSortAlphabetically;
@@ -1392,14 +1361,11 @@ begin
 end;
 
 destructor TProjectInspectorForm.Destroy;
-var
-  nt: TPENodeType;
 begin
   IdleConnected:=false;
   LazProject:=nil;
   inherited Destroy;
-  for nt:=Low(TPENodeType) to High(TPENodeType) do
-    FreeNodeData(nt);
+  FreeAndNil(FPropGui);
   if ProjInspector=Self then
     ProjInspector:=nil;
 end;
@@ -1495,32 +1461,35 @@ end;
 
 procedure TProjectInspectorForm.UpdateAll(Immediately: boolean);
 begin
-  ItemsTreeView.BeginUpdate;
-  try
-    UpdateTitle;
-    UpdateProjectFiles;
-    UpdateRequiredPackages;
-    UpdateButtons;
-    if Immediately then
-      UpdatePending;
-  finally
-    ItemsTreeView.EndUpdate;
-  end;
+  if csDestroying in ComponentState then exit;
+  fFlags:=fFlags+[
+    pefNeedUpdateTitle,
+    pefNeedUpdateFiles,
+    pefNeedUpdateRequiredPkgs,
+    pefNeedUpdateProperties,
+    pefNeedUpdateButtons,
+    pefNeedUpdateApplyDependencyButton,
+    pefNeedUpdateStatusBar];
+  //UpdateTitle;
+  //UpdateFiles;
+  //UpdateRequiredPackages;
+  //UpdateButtons;
+  if Immediately then
+    UpdatePending
+  else
+    IdleConnected:=true;
 end;
 
-procedure TProjectInspectorForm.UpdateTitle;
+procedure TProjectInspectorForm.UpdateTitle(Immediately: boolean);
 var
   NewCaption: String;
   IconStream: TStream;
 begin
-  if not CanUpdate(pifNeedUpdateTitle) then exit;
-
+  if not CanUpdate(pefNeedUpdateTitle,Immediately) then exit;
   Icon.Clear;
   if LazProject=nil then
-  begin
-    Caption:=lisMenuProjectInspector;
-  end else
-  begin
+    Caption:=lisMenuProjectInspector
+  else begin
     NewCaption:=LazProject.GetTitle;
     if NewCaption='' then
       NewCaption:=ExtractFilenameOnly(LazProject.ProjectInfoFile);
@@ -1542,7 +1511,86 @@ begin
   end;
 end;
 
-procedure TProjectInspectorForm.UpdateButtons;
+procedure TProjectInspectorForm.UpdateProperties(Immediately: boolean);
+var
+  CurDependency, SingleSelectedDep: TPkgDependency;
+  TVNode, SingleSelectedDirectory: TTreeNode;
+  NodeData: TPENodeData;
+  Item: TObject;
+  i, SelFileCount, SelDepCount, SelUnitCount, SelDirCount: Integer;
+  SingleSelectedRemoved: Boolean;
+begin
+  if not CanUpdate(pefNeedUpdateProperties,Immediately) then exit;
+  //GuiToFileOptions(False);
+
+  // check selection
+  SingleSelectedDep:=nil;
+  SingleSelectedDirectory:=nil;
+  SingleSelectedRemoved:=false;
+  SelFileCount:=0;
+  SelDepCount:=0;
+  SelUnitCount:=0;
+  SelDirCount:=0;
+  for i:=0 to ItemsTreeView.SelectionCount-1 do begin
+    TVNode:=ItemsTreeView.Selections[i];
+    if GetNodeDataItem(TVNode,NodeData,Item) then begin
+      if Item is TUnitInfo then begin
+        inc(SelFileCount);
+        SingleSelectedRemoved:=NodeData.Removed;
+        inc(SelUnitCount);
+      end
+      else if Item is TPkgDependency then begin
+        inc(SelDepCount);
+        CurDependency:=TPkgDependency(Item);
+        SingleSelectedDep:=CurDependency;
+        SingleSelectedRemoved:=NodeData.Removed;
+      end;
+    end else if IsDirectoryNode(TVNode) or (TVNode=FFilesNode) then begin
+      inc(SelDirCount);
+      SingleSelectedDirectory:=TVNode;
+    end //else if TVNode=FRequiredPackagesNode then
+      // DebugLn('UpdatePEProperties: Required packages selected');
+  end;
+
+  if (SelFileCount+SelDepCount+SelDirCount>1) then begin
+    // it is a multi selection
+    SingleSelectedDep:=nil;
+    SingleSelectedDirectory:=nil;
+  end;
+
+  //OnlyFilesWithUnitsSelected:=
+  //  (SelFileCount>0) and (SelDepCount=0) and (SelDirCount=0) and (SelUnitCount>0);
+  //FPropGui.ControlVisible := OnlyFilesWithUnitsSelected;
+  FPropGui.ControlEnabled := True; //not LazProject.ReadOnly;
+  DisableAlign;
+  try
+    // Min/Max version of dependency (only single selection)
+    FPropGui.ControlVisible := SingleSelectedDep<>nil;
+    FPropGui.SetMinMaxVisibility;
+    if SelFileCount>0 then begin
+      PropsGroupBox.Enabled:=true;
+      PropsGroupBox.Caption:=lisPckEditFileProperties;
+    end
+    else if SingleSelectedDep<>nil then begin
+      PropsGroupBox.Enabled:=not SingleSelectedRemoved;
+      PropsGroupBox.Caption:=lisPckEditDependencyProperties;
+      FPropGui.SetMinMaxValues(SingleSelectedDep);
+      FPropGui.UpdateApplyDependencyButton;
+    end
+    else if SingleSelectedDirectory<>nil then begin
+      //PropsGroupBox.Enabled:=true;
+      //PropsGroupBox.Caption:=lisPckEditFileProperties;
+    end
+    else begin
+      PropsGroupBox.Enabled:=false;
+      PropsGroupBox.Caption:=lisPckEditDependencyProperties;
+    end;
+  finally
+    EnableAlign;
+  end;
+end;
+
+procedure TProjectInspectorForm.UpdateButtons(Immediately: boolean);
 var
   i: Integer;
   TVNode: TTreeNode;
@@ -1552,13 +1600,11 @@ var
   CurUnitInfo: TUnitInfo;
   CanOpenCount: Integer;
 begin
-  if not CanUpdate(pifNeedUpdateButtons) then exit;
-
-  if LazProject<>nil then begin
-    AddBitBtn.Enabled:=true;
-
-    CanRemoveCount:=0;
-    CanOpenCount:=0;
+  if not CanUpdate(pefNeedUpdateButtons,Immediately) then exit;
+  CanRemoveCount:=0;
+  CanOpenCount:=0;
+  if Assigned(LazProject) then
+  begin
     for i:=0 to ItemsTreeView.SelectionCount-1 do begin
       TVNode:=ItemsTreeView.Selections[i];
       if not GetNodeDataItem(TVNode,NodeData,Item) then continue;
@@ -1574,84 +1620,46 @@ begin
         end;
       end;
     end;
-
-    RemoveBitBtn.Enabled:=(CanRemoveCount>0);
-    OpenButton.Enabled:=(CanOpenCount>0);
-    OptionsBitBtn.Enabled:=true;
-  end else begin
-    AddBitBtn.Enabled:=false;
-    RemoveBitBtn.Enabled:=false;
-    OpenButton.Enabled:=false;
-    OptionsBitBtn.Enabled:=false;
   end;
+  AddBitBtn.Enabled:=Assigned(LazProject);
+  RemoveBitBtn.Enabled:=(CanRemoveCount>0);
+  OpenButton.Enabled:=(CanOpenCount>0);
+  OptionsBitBtn.Enabled:=Assigned(LazProject);
 end;
 
 procedure TProjectInspectorForm.UpdatePending;
 begin
   ItemsTreeView.BeginUpdate;
   try
-    if pifNeedUpdateFiles in FFlags then
-      UpdateProjectFiles;
-    if pifNeedUpdateDependencies in FFlags then
-      UpdateRequiredPackages;
-    if pifNeedUpdateTitle in FFlags then
-      UpdateTitle;
-    if pifNeedUpdateButtons in FFlags then
-      UpdateButtons;
+    if pefNeedUpdateTitle in FFlags then
+      UpdateTitle(True);
+    if pefNeedUpdateFiles in FFlags then
+      UpdateFiles(True);
+    if pefNeedUpdateRequiredPkgs in FFlags then
+      UpdateRequiredPackages(True);
+    if pefNeedUpdateProperties in FFlags then
+      UpdateProperties(True);
+    if pefNeedUpdateButtons in FFlags then
+      UpdateButtons(True);
+    //if pefNeedUpdateApplyDependencyButton in fFlags then
+    //  FPropGui.UpdateApplyDependencyButton(true);
     IdleConnected:=false;
   finally
     ItemsTreeView.EndUpdate;
   end;
 end;
 
-function TProjectInspectorForm.CanUpdate(Flag: TProjectInspectorFlag): boolean;
+function TProjectInspectorForm.CanUpdate(Flag: TPEFlag; Immediately: boolean): boolean;
 begin
   Result:=false;
   if csDestroying in ComponentState then exit;
-  if LazProject=nil then exit;
-  if IsUpdateLocked then begin
+  if (FUpdateLock>0) and not Immediately then begin
     Include(fFlags,Flag);
     IdleConnected:=true;
-    Result:=false;
   end else begin
     Exclude(fFlags,Flag);
     Result:=true;
   end;
-end;
-
-procedure TProjectInspectorForm.FreeNodeData(Typ: TPENodeType);
-var
-  NodeData,
-  n: TPENodeData;
-begin
-  NodeData:=FProjectNodeDataList[Typ];
-  while NodeData<>nil do begin
-    n:=NodeData;
-    NodeData:=NodeData.Next;
-    n.Free;
-  end;
-  FProjectNodeDataList[Typ]:=nil;
-End;
-
-function TProjectInspectorForm.CreateNodeData(Typ: TPENodeType;
-  aName: string; aRemoved: boolean): TPENodeData;
-Begin
-  Result := TPENodeData.Create(Typ,aName,aRemoved);
-  Result.Next := FProjectNodeDataList[Typ];
-  FProjectNodeDataList[Typ] := Result;
-end;
-
-function TProjectInspectorForm.GetNodeData(TVNode: TTreeNode): TPENodeData;
-var
-  o: TObject;
-begin
-  Result:=nil;
-  if (TVNode=nil) then exit;
-  o:=TObject(TVNode.Data);
-  if o is TFileNameItem then
-    o:=TObject(TFileNameItem(o).Data);
-  if o is TPENodeData then
-    Result:=TPENodeData(o);
 end;
 
 function TProjectInspectorForm.GetNodeItem(NodeData: TPENodeData): TObject;
@@ -1680,6 +1688,79 @@ begin
   NodeData:=GetNodeData(TVNode);
   Item:=GetNodeItem(NodeData);
   Result:=Item<>nil;
+end;
+
+{ TSetBuildModeToolButton.TBuildModeMenu }
+
+procedure TSetBuildModeToolButton.TBuildModeMenu.DoPopup(Sender: TObject);
+var
+  CurIndex: Integer;
+  i: Integer;
+
+  procedure AddMode(BuildModeIndex: Integer; CurMode: TProjectBuildMode);
+  var
+    AMenuItem: TBuildModeMenuItem;
+  begin
+    if Items.Count > CurIndex then
+      AMenuItem := Items[CurIndex] as TBuildModeMenuItem
+    else
+    begin
+      AMenuItem := TBuildModeMenuItem.Create(Self);
+      AMenuItem.Name := Name + 'Mode' + IntToStr(CurIndex);
+      Items.Add(AMenuItem);
+    end;
+    AMenuItem.BuildModeIndex := BuildModeIndex;
+    AMenuItem.Caption := CurMode.GetCaption;
+    AMenuItem.Checked := (Project1<>nil) and (Project1.ActiveBuildMode=CurMode);
+    AMenuItem.ShowAlwaysCheckable:=true;
+    inc(CurIndex);
+  end;
+
+begin
+  // fill the PopupMenu
+  CurIndex := 0;
+  if Project1<>nil then
+    for i:=0 to Project1.BuildModes.Count-1 do
+      AddMode(i, Project1.BuildModes[i]);
+  // remove unused menuitems
+  while Items.Count > CurIndex do
+    Items[Items.Count - 1].Free;
+
+  inherited DoPopup(Sender);
+end;
+
+{ TSetBuildModeToolButton.TBuildModeMenuItem }
+
+procedure TSetBuildModeToolButton.TBuildModeMenuItem.Click;
+var
+  NewMode: TProjectBuildMode;
+begin
+  inherited Click;
+
+  NewMode := Project1.BuildModes[BuildModeIndex];
+  if NewMode = Project1.ActiveBuildMode then exit;
+  if not (MainIDE.ToolStatus in [itNone,itDebugger]) then begin
+    IDEMessageDialog(dlgMsgWinColorUrgentError,
+      lisYouCanNotChangeTheBuildModeWhileCompiling,
+      mtError,[mbOk]);
+    exit;
+  end;
+
+  Project1.ActiveBuildMode := NewMode;
+  MainBuildBoss.SetBuildTargetProject1(false);
+  MainIDE.UpdateCaption;
+  if Assigned(ProjInspector) then
+    ProjInspector.UpdateTitle;
+end;
+
+{ TSetBuildModeToolButton }
+
+procedure TSetBuildModeToolButton.DoOnAdded;
+begin
+  inherited DoOnAdded;
+
+  DropdownMenu := TBuildModeMenu.Create(Self);
+  Style := tbsDropDown;
 end;
 
 end.

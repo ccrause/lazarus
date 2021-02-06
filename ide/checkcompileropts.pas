@@ -205,11 +205,12 @@ begin
   FOptions:=AValue;
 end;
 
-procedure TCheckCompilerOptsDlg.SetMsgDirectory(Index: integer;
-  const CurDir: string);
+procedure TCheckCompilerOptsDlg.SetMsgDirectory(Index: integer; const CurDir: string);
 begin
-  if FDirectories=nil then FDirectories:=TStringList.Create;
-  while FDirectories.Count<=Index do FDirectories.Add('');
+  if FDirectories=nil then
+    FDirectories:=TStringList.Create;
+  while FDirectories.Count<=Index do
+    FDirectories.Add('');
   FDirectories[Index]:=CurDir;
 end;
 
@@ -456,8 +457,7 @@ begin
   Result:=mrOk;
 end;
 
-function TCheckCompilerOptsDlg.FindAllPPUFiles(const AnUnitPath: string
-  ): TStrings;
+function TCheckCompilerOptsDlg.FindAllPPUFiles(const AnUnitPath: string): TStrings;
 var
   Directory: String;
   p: Integer;
@@ -476,8 +476,7 @@ begin
           if (FileInfo.Name='.') or (FileInfo.Name='..') or (FileInfo.Name='') then
             continue;
           // check extension
-          if CompareFileExt(FileInfo.Name,'.ppu',
-            {$IFDEF MSWINDOWS}false{$ELSE}true{$ENDIF})=0 then
+          if CompareFileExt(FileInfo.Name,'ppu',true)=0 then
             Result.Add(Directory+FileInfo.Name);
         until FindNextUTF8(FileInfo)<>0;
       end;
@@ -626,7 +625,7 @@ begin
     Node:=CfgCache.Units.Tree.FindLowest;
     while Node<>nil do begin
       Item:=PStringToStringItem(Node.Data);
-      if (Item^.Value<>'') and (CompareFileExt(Item^.Value,'.ppu',false)=0) then
+      if (Item^.Value<>'') and (CompareFileExt(Item^.Value,'ppu',true)=0) then
         CheckFileAge(Item^.Value);
       Node:=CfgCache.Units.Tree.FindSuccessor(Node);
     end;
@@ -696,13 +695,13 @@ var
   p: Integer;
   Directory: String;
   FileInfo: TSearchRec;
-  WarnedDirectories: TStringList;
+  WarnedDirectories: TStringListUTF8Fast;
 begin
   FTest:=cotCheckFPCUnitPathsContainSources;
   LabelTest.Caption:=dlgCCOTestSrcInPPUPaths;
 
   Result:=mrCancel;
-  WarnedDirectories:=TStringList.Create;
+  WarnedDirectories:=TStringListUTF8Fast.Create;
   p:=1;
   while p<=length(FPCCfgUnitPath) do begin
     Directory:=TrimFilename(GetNextDirectoryInSearchPath(FPCCfgUnitPath,p));
@@ -718,7 +717,7 @@ begin
             if (FileInfo.Name='.') or (FileInfo.Name='..') or (FileInfo.Name='') then
               continue;
             // check extension
-            if FilenameIsPascalUnit(FileInfo.Name) then begin
+            if FilenameHasPascalExt(FileInfo.Name) then begin
               AddWarning(lisCCOFPCUnitPathHasSource+Directory+FileInfo.Name);
               WarnedDirectories.Add(Directory);
               break;
@@ -805,10 +804,8 @@ begin
         if (FileInfo.Name='.') or (FileInfo.Name='..') or (FileInfo.Name='') then
           continue;
         // check extension
-        if (CompareFileExt(FileInfo.Name,'.ppu',
-          {$IFDEF MSWINDOWS}false{$ELSE}true{$ENDIF})<>0)
-        and (CompareFileExt(FileInfo.Name,'.o',
-          {$IFDEF MSWINDOWS}false{$ELSE}true{$ENDIF})<>0)
+        if (CompareFileExt(FileInfo.Name,'ppu',true)<>0)
+        and (CompareFileExt(FileInfo.Name,'o',true)<>0)
         then
           continue;
         PPUFiles.Add(Directory+FileInfo.Name);

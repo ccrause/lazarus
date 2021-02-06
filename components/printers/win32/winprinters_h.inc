@@ -46,7 +46,7 @@ Type
     procedure DoNewPage; override;
     procedure DoBeginPage; override;
     procedure DoEndPage; override;
-    procedure DoEndDoc(aAborded : Boolean); override;
+    procedure DoEndDoc(aAborted : Boolean); override;
     procedure DoAbort; override;
 
     procedure DoEnumPrinters(Lst : TStrings); override;
@@ -57,6 +57,7 @@ Type
     function DoGetDefaultPaperName: string; override;
     procedure DoSetPaperName(aName : string); override;
     function DoGetPaperRect(aName : string; Var aPaperRc : TPaperRect) : Integer; override;
+    function DoSetPaperRect(aPaperRc: TPaperRect):boolean; override;
 
     procedure DoEnumBins(Lst : TStrings); override;
     function DoGetDefaultBinName: string; override;

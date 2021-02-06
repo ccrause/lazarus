@@ -56,6 +56,12 @@ type
 // Msg handlers
 ////////////////////////////////////////////////////////////////////////////////
 
+var
+  ListViewWindProcInfo: record
+    ActiveListView: TCustomListView;
+    NoMouseUp: Boolean;
+  end;
+
 function ListViewParentMsgHandler(const AWinControl: TWinControl; Window: HWnd;
       Msg: UInt; WParam: Windows.WParam; LParam: Windows.LParam;
       var MsgResult: Windows.LResult; var WinProcess: Boolean): Boolean;
@@ -194,7 +200,6 @@ var
     end;
 
     OldDC := ALV.Canvas.Handle;
-    ALV.Canvas.Handle := DrawInfo^.nmcd.hdc;
     ALV.Canvas.Font.Assign(ALV.Font);
     ALV.Canvas.Brush.Assign(ALV.Brush);
 
@@ -221,6 +226,7 @@ var
     begin
       DrawInfo^.clrText := ColorToRGB(ALV.Canvas.Font.Color);
       DrawInfo^.clrTextBk := ColorToRGB(ALV.Canvas.Brush.Color);
+      SelectObject(DrawInfo^.nmcd.hdc, ALV.Canvas.Font.Handle); //jp
     end;
     ALV.Canvas.Handle := OldDC;
 
@@ -241,6 +247,10 @@ begin
           HandleListViewOwnerData(TCustomListViewAccess(AWinControl));
         NM_CUSTOMDRAW:
           HandleListViewCustomDraw(TCustomListViewAccess(AWinControl));
+        LVN_BEGINDRAG, LVN_BEGINRDRAG: begin
+            if ListViewWindProcInfo.ActiveListView = AWinControl then
+              ListViewWindProcInfo.NoMouseUp := True;
+          end;
       end;
     end;
   end;
@@ -750,7 +760,7 @@ procedure ListViewDrawItem(const AWinControl: TWinControl; Window: HWnd;
   Msg: UInt; WParam: Windows.WParam; const DrawIS: TDrawItemStruct;
   var ItemMsg: Integer; var DrawListItem: Boolean);
 begin
-  DrawListItem := (AWinControl <> nil) and (AWinControl is TListView) and
+  DrawListItem := (AWinControl is TListView) and
       (TListView(AWinControl).ViewStyle = vsReport) and
       (DrawIS.ctlType = ODT_LISTVIEW) and
       (TListView(AWinControl).OwnerDraw);
@@ -759,41 +769,70 @@ end;
 
 function ListViewProc(Window: HWnd; Msg: UInt; WParam: Windows.WParam;
     LParam: Windows.LParam): LResult; stdcall;
+
+  function GetClientCursorPos(ClientWindow: HWND) : TPoint;
+  begin
+    Windows.GetCursorPos(Result);
+      Windows.ScreenToClient(ClientWindow, Result);
+  end;
+
 var
   WindowInfo: PWin32WindowInfo;
   ListItem: TListItem;
   ListView: TCustomListView;
   AMsg: UINT;
+  MPos: TPoint;
 begin
   case Msg of
+    WM_CONTEXTMENU:
+      begin
+        if ListViewWindProcInfo.ActiveListView <> nil then begin
+          Result := 1;
+          exit;
+        end;
+      end;
     WM_LBUTTONDOWN, WM_RBUTTONDOWN:
       begin
-        // A ListView doesn't get a WM_LBUTTONUP, WM_RBUTTONUP message,
-        // because it keeps the message in its own event loop,
-        // see msdn article about "Default List-View Message Processing"
-        // therefore we take this notification and create a
-        // LM_LBUTTONUP, LM_RBUTTONUP message out of it
+      (*
+         A ListView doesn't get a WM_LBUTTONUP, WM_RBUTTONUP message,
+         because it keeps the message in its own event loop,
+         see msdn article about "Default List-View Message Processing"
+         therefore we take this notification and create a
+         LM_LBUTTONUP, LM_RBUTTONUP message out of it.
+
+         - When the ListView starts dragging (LVN_BEGIN(R)DRAG), it will get the
+           mouse up
+         - The WindProg for the WM_LBUTTONUP, WM_RBUTTONUP does not always
+           return immediately (multi select). It will return on either mouse up
+           or BeginDrag.
+           The LCL mouse down event is executed with the same delay.
+         - Also see issue #33330
+      *)
 
         WindowInfo := GetWin32WindowInfo(Window);
         ListView := TListView(WindowInfo^.WinControl);
-        ListItem := ListView.GetItemAt(WindowInfo^.MouseX, WindowInfo^.MouseY);
+        ListItem := ListView.GetItemAt(GET_X_LPARAM(LParam), GET_Y_LPARAM(LParam));
 
         if Msg = WM_LBUTTONDOWN
         then AMsg := LM_LBUTTONUP
         else AMsg := LM_RBUTTONUP;
 
-        // for multiselected listbox the message has to be send after current
-        // message or the list item selecting does not work, also see issue #33330
-        if not Assigned(ListItem) and ListView.MultiSelect then
-        begin
+        ListViewWindProcInfo.ActiveListView := ListView;
+        ListViewWindProcInfo.NoMouseUp := False;
+        try
           Result := WindowProc(Window, Msg, WParam, LParam);
-          if not (Msg = WM_LBUTTONDBLCLK) and ((Msg = WM_LBUTTONDOWN) or not Assigned(ListView.PopupMenu)) then
-            PostMessage(Window, AMsg, 0, MakeLParam(WindowInfo^.MouseX, WindowInfo^.MouseY));
-          Exit;
+        finally
+          ListViewWindProcInfo.ActiveListView:= nil;
         end;
 
-        if Assigned(ListItem) then
-          PostMessage(Window, AMsg, 0, MakeLParam(WindowInfo^.MouseX, WindowInfo^.MouseY));
+        if (not ListViewWindProcInfo.NoMouseUp) and
+           (Assigned(ListItem) or ListView.MultiSelect)
+        then
+        begin
+          MPos := GetClientCursorPos(Window);
+          PostMessage(Window, AMsg, 0, Windows.MakeLParam(MPos.X, MPos.Y));
+        end;
+        exit;
       end;
   end;
   Result := WindowProc(Window, Msg, WParam, LParam);

@@ -26,10 +26,9 @@ interface
 
 uses
   {$IFDEF Darwin}MacOSAll, {$ENDIF}
-  Classes, SysUtils, Math, TypInfo, Types, Laz_AVL_Tree,
+  Classes, SysUtils, Math, Types, Laz_AVL_Tree,
   // LazUtils
-  FPCAdds, LazFileUtils, LazUtilities, LazMethodList, LazUTF8, LazUTF8Classes,
-  LazLoggerBase, LazTracer,
+  LazFileUtils, LazUtilities, LazMethodList, LazUTF8, LazLoggerBase, LazTracer,
   // LCL
   LCLStrConsts, LCLType;
 
@@ -85,9 +84,6 @@ procedure MergeSort(List: TFPList; const OnCompare: TListSortCompare); overload;
 procedure MergeSort(List: TFPList; StartIndex, EndIndex: integer; const OnCompare: TListSortCompare); overload;
 procedure MergeSort(List: TStrings; const OnCompare: TStringsSortCompare); overload;
 
-function GetEnumValueDef(TypeInfo: PTypeInfo; const Name: string;
-                         const DefaultValue: Integer): Integer;
-
 function KeyAndShiftStateToKeyString(Key: word; ShiftState: TShiftState): String;
 function KeyStringIsIrregular(const s: string): boolean;
 function ShortCutToText(ShortCut: TShortCut): string; inline;    // localized output
@@ -135,18 +131,19 @@ function DeleteAmpersands(var Str : String) : Integer;
 function RemoveAmpersands(const ASource: String): String;
 function RemoveAmpersands(Src: PChar; var LineLength: Longint): PChar;
 
-function ComparePointers(p1, p2: Pointer): integer; inline;
 function CompareHandles(h1, h2: THandle): integer;
 function CompareRect(R1, R2: PRect): Boolean;
 function ComparePoints(const p1, p2: TPoint): integer;
 function CompareCaret(const FirstCaret, SecondCaret: TPoint): integer;
-function CompareMethods(const m1, m2: TMethod): boolean; inline;
 
-function RoundToInt(const e: Extended): integer; inline;
-function RoundToCardinal(const e: Extended): cardinal; inline;
-function TruncToInt(const e: Extended): integer; inline;
-function TruncToCardinal(const e: Extended): cardinal; inline;
-function StrToDouble(const s: string): double; inline;
+// Deprecated in 2.1 / 12.12.2020 / Remove in 2.3
+function CompareMethods(m1, m2: TMethod): boolean; deprecated 'Use LazMethodList.CompareMethods';
+function ComparePointers(p1, p2: Pointer): integer; deprecated 'Use LazUtilities.ComparePointers';
+function RoundToInt(e: Extended): integer; deprecated 'Use LazUtilities.RoundToInt';
+function RoundToCardinal(e: Extended): cardinal; deprecated 'Use LazUtilities.RoundToCardinal';
+function TruncToInt(e: Extended): integer; deprecated 'Use LazUtilities.TruncToInt';
+function TruncToCardinal(e: Extended): cardinal; deprecated 'Use LazUtilities.TruncToCardinal';
+function StrToDouble(const s: string): double; deprecated 'Use LazUtilities.StrToDouble';
 
 // Call debugging procedure in LazLoggerBase.
 procedure RaiseGDBException(const Msg: string); inline;
@@ -327,8 +324,6 @@ var
 {$ENDIF}
 
 implementation
-
-uses gettext;
 
 const
   {$IFDEF WithOldDebugln}
@@ -643,7 +638,7 @@ const
     'OEM_8', // 0xdf - VK_OEM_8
     '', // 0xe0
     'OEM_0xE1', // 0xe1
-    '\', // 0xe2 - VK_OEM_102 - Either the angle bracket key or the backslash key on the RT 102-key keyboard
+    'OEM_Backslash', // 0xe2 - VK_OEM_102 - Either the angle bracket key or the backslash key on the RT 102-key keyboard
     'OEM_0xE3', // 0xe3
     'OEM_0xE4', // 0xe4
     'IME_process', // 0xe5 - VK_PROCESSKEY
@@ -685,14 +680,6 @@ end;
 function CompareItemWithDebugLCLItemInfo(Item, DebugItemInfo: Pointer): integer;
 begin
   Result:=ComparePointers(Item,TDebugLCLItemInfo(DebugItemInfo).Item);
-end;
-
-function GetEnumValueDef(TypeInfo: PTypeInfo; const Name: string;
-  const DefaultValue: Integer): Integer;
-begin
-  Result:=GetEnumValue(TypeInfo,Name);
-  if Result<0 then
-    Result:=DefaultValue;
 end;
 
 function KeyCodeToKeyString(Key: TShortCut; Localized: boolean): string;
@@ -910,11 +897,13 @@ end;
 
 function IsEditableTextKey(Key: Word): Boolean;
 begin
- Result := (((Key >= VK_A) and (Key <= VK_Z)) or
-            ((Key >= VK_NUMPAD0) and (Key <= VK_DIVIDE)) or
-            ((Key >= VK_0) and (Key <= VK_9)) or
-            ((Key >= 186) and (Key <= 192)) or
-            ((Key >= 219) and (Key <= 222)));
+  Result := Key in [
+      VK_A..VK_Z,
+      VK_0..VK_9,
+      VK_NUMPAD0..VK_DIVIDE,
+      VK_OEM_1..VK_OEM_3,
+      VK_OEM_4..VK_OEM_7
+  ];
 end;
 
 function SendApplicationMessage(Msg: Cardinal; WParam: WParam; LParam: LParam
@@ -928,8 +917,7 @@ end;
 
 procedure OwnerFormDesignerModified(AComponent: TComponent);
 begin
-  if ([csDesigning,csLoading,csDestroying]*AComponent.ComponentState
-    =[csDesigning])
+  if ([csDesigning,csLoading,csDestroying]*AComponent.ComponentState=[csDesigning])
   then begin
     if OwnerFormDesignerModifiedProc<>nil then
       OwnerFormDesignerModifiedProc(AComponent);
@@ -1049,11 +1037,6 @@ begin
   end;
 end;
 
-function ComparePointers(p1, p2: Pointer): integer;
-begin
-  Result:=LazUtilities.ComparePointers(p1, p2);
-end;
-
 function CompareHandles(h1, h2: THandle): integer;
 begin
   if h1>h2 then
@@ -1102,49 +1085,39 @@ begin
     Result:=0;
 end;
 
-function CompareMethods(const m1, m2: TMethod): boolean;
+function CompareMethods(m1, m2: TMethod): boolean;
 begin
   Result:=LazMethodList.CompareMethods(m1, m2);
 end;
 
-function RoundToInt(const e: Extended): integer;
+function ComparePointers(p1, p2: Pointer): integer;
 begin
-  Result:=integer(Round(e));
-  {$IFDEF VerboseRound}
-  DebugLn('RoundToInt ',e,' ',Result);
-  {$ENDIF}
+  Result:=LazUtilities.ComparePointers(p1, p2);
 end;
 
-function RoundToCardinal(const e: Extended): cardinal;
+function RoundToInt(e: Extended): integer;
 begin
-  Result:=cardinal(Round(e));
-  {$IFDEF VerboseRound}
-  DebugLn('RoundToCardinal ',e,' ',Result);
-  {$ENDIF}
+  Result:=LazUtilities.RoundToInt(e);
 end;
 
-function TruncToInt(const e: Extended): integer;
+function RoundToCardinal(e: Extended): cardinal;
 begin
-  Result:=integer(Trunc(e));
-  {$IFDEF VerboseRound}
-  DebugLn('TruncToInt ',e,' ',Result);
-  {$ENDIF}
+  Result:=LazUtilities.RoundToCardinal(e);
 end;
 
-function TruncToCardinal(const e: Extended): cardinal;
+function TruncToInt(e: Extended): integer;
 begin
-  Result:=cardinal(Trunc(e));
-  {$IFDEF VerboseRound}
-  DebugLn('TruncToCardinal ',e,' ',Result);
-  {$ENDIF}
+  Result:=LazUtilities.TruncToInt(e);
+end;
+
+function TruncToCardinal(e: Extended): cardinal;
+begin
+  Result:=LazUtilities.TruncToCardinal(e);
 end;
 
 function StrToDouble(const s: string): double;
 begin
-  {$IFDEF VerboseRound}
-  DebugLn('StrToDouble "',s,'"');
-  {$ENDIF}
-  Result:=Double(StrToFloat(s));
+  Result:=LazUtilities.StrToDouble(s);
 end;
 
 procedure MergeSort(List: TFPList; const OnCompare: TListSortCompare);
@@ -2241,15 +2214,15 @@ end;
 procedure DbgOutThreadLog(const Msg: string);
 var
   PID: PtrInt;
-  fs: TFileStreamUTF8;
+  fs: TFileStream;
   Filename: string;
 begin
   PID:=PtrInt(GetThreadID);
   Filename:='Log'+IntToStr(PID);
   if FileExistsUTF8(Filename) then
-    fs:=TFileStreamUTF8.Create(Filename,fmOpenWrite or fmShareDenyNone)
+    fs:=TFileStream.Create(Filename,fmOpenWrite or fmShareDenyNone)
   else
-    fs:=TFileStreamUTF8.Create(Filename,fmCreate);
+    fs:=TFileStream.Create(Filename,fmCreate);
   fs.Position:=fs.Size;
   fs.Write(Msg[1], length(Msg));
   fs.Free;
@@ -2313,7 +2286,7 @@ procedure DbgSaveData(FileName: String; AData: PChar; ADataSize: PtrUInt);
 var
   S: TStream;
 begin
-  S := TFileStreamUTF8.Create(FileName, fmCreate);
+  S := TFileStream.Create(FileName, fmCreate);
   S.Write(AData^, ADataSize);
   S.Free;
 end;

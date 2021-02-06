@@ -20,6 +20,11 @@ msgstr "Hibakereső"
 msgid "The debugger encountered an error when trying to run/step the application:%0:s%0:s%1:s%0:s%0:sPress \"Ok\" to remove the breakpoints and continue debugging (paused), and correct the problem, or choose an alternative run command.%0:sPress \"Stop\" to end the debug session."
 msgstr "A hibakereső hibát észlelt amikor megpróbálta futtatni/léptetni az alkalmazást:%0:s%0:s%1:s%0:s%0:sAz \"Ok\"-ra nyomva eltávolítja a töréspontot és folytatja a hibakeresés (szünetel) valamint javíthatja a hibát vagy válasszon másik futtatóparancsot.%0:sA \"Stop\"-ra nyomva befejeződik a hibakeresés."
 
+#: gdbmistringconstants.gdbmicommandstartapplicationerror
+#, object-pascal-format
+msgid "The application could not be started:%0:s%1s"
+msgstr ""
+
 #: gdbmistringconstants.gdbmicommandstartmainbreakerror
 #, object-pascal-format
 msgid "The debugger could not set a breakpoint on the application's entry point.%0:sThis may be caused by missing debug info."
@@ -144,16 +149,16 @@ msgstr "A \"Kihagyás\"-ra nyomva folytatható a hibakeresés, Ez NEM biztonság
 
 #: gdbmistringconstants.gdbmisfailedinitproc
 msgid "Failed to execute the initialization process"
-msgstr ""
+msgstr "Az előkészítési folyamat végrehajtása nem sikerült"
 
 #: gdbmistringconstants.gdbmisfailedinitprocwaitonexit
 #, object-pascal-format
 msgid "Failed on wait on exit. Status: %d Code: %d"
-msgstr ""
+msgstr "Nem sikerült megvárni a folyamat végét. Állapot: %d  Kód: %d"
 
 #: gdbmistringconstants.gdbmisnoasyncmode
 msgid "GDB does not support async mode"
-msgstr ""
+msgstr "A GDB nem támogatja az aszinkron módot"
 
 #: gdbmistringconstants.gdbmithedebuggerexperiencedanunknowncondition
 msgid "The debugger experienced an unknown condition"

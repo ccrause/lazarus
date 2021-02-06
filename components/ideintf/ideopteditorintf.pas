@@ -27,9 +27,11 @@ interface
 uses
   Classes, SysUtils,
   // LCL
-  LCLProc, Controls, Buttons, Forms, StdCtrls, Graphics, ComCtrls, Grids,
+  Controls, Buttons, Forms, StdCtrls, Graphics, ComCtrls, Grids,
+  // BuildIntf
+  IDEOptionsIntf,
   // IdeIntf
-  IDEOptionsIntf, EditorSyntaxHighlighterDef;
+  EditorSyntaxHighlighterDef;
 
 type
   // forward
@@ -49,6 +51,7 @@ type
   public
     // read-only access to options needed by external packages.
     // feel free to extend when needed
+    function CreateSynHighlighter(LazSynHilighter: TLazSyntaxHighlighter): TObject; virtual; abstract; // returns sub-class of TSynCustomHighlighter
     function ExtensionToLazSyntaxHighlighter(Ext: String): TLazSyntaxHighlighter; virtual; abstract;
     property TabPosition: TTabPosition read GetTabPosition;
   end;

@@ -147,7 +147,7 @@ type
     procedure SetUseStdOut(AValue: Boolean);
   protected
     procedure DoInit; override;
-    procedure DoFinsh; override;
+    procedure DoFinish; override;
 
     procedure IncreaseIndent; overload; override;
     procedure DecreaseIndent; overload; override;
@@ -619,9 +619,9 @@ begin
   FileHandle.OpenFile;
 end;
 
-procedure TLazLoggerFile.DoFinsh;
+procedure TLazLoggerFile.DoFinish;
 begin
-  inherited DoFinsh;
+  inherited DoFinish;
 
   FileHandle.CloseFile;
 end;
@@ -817,7 +817,7 @@ end;
 procedure TLazLoggerFile.Assign(Src: TLazLogger);
 begin
   inherited Assign(Src);
-  if (Src <> nil) and (Src is TLazLoggerFile) then begin
+  if Src is TLazLoggerFile then begin
     FOnDbgOut  := TLazLoggerFile(Src).FOnDbgOut;
     FOnDebugLn := TLazLoggerFile(Src).FOnDebugLn;;
 

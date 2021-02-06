@@ -325,9 +325,9 @@ constructor TIpHtmlPropB.Create(AOwner: TIpHtmlPropsBList);
 begin
   inherited Create;
   FOwner := AOwner;
-  FPropRec.BgColor := -1;
-  FPropRec.HoverColor := -1;
-  FPropRec.HoverBgColor := -1;
+  FPropRec.BgColor := clNone;
+  FPropRec.HoverColor := clNone;
+  FPropRec.HoverBgColor := clNone;
 end;
 
 destructor TIpHtmlPropB.Destroy;
@@ -361,13 +361,14 @@ end;
 
 constructor TIpHtmlProps.Create(APropsAList: TIpHtmlPropsAList; APropsBList: TIpHtmlPropsBList);
 begin
+  inherited Create;
   FPropsACache := APropsAList;
   FPropsBCache := APropsBList;
   FPropA := FPropsACache.FDummyA;
   FPropA.IncUse;
   FPropB := FPropsBCache.FDummyB;
   FPropB.IncUse;
-  //BgColor := -1;
+  //BgColor := clNone;
 end;
 
 destructor TIpHtmlProps.Destroy;

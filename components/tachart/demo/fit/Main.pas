@@ -24,8 +24,10 @@ type
     cbShowErrorbars: TCheckBox;
     cbShowConfidenceIntervals: TCheckBox;
     cbShowPredictionIntervals: TCheckBox;
-    CbHTML: TCheckBox;
-    CbCombinedExtent: TCheckBox;
+    cbHTML: TCheckBox;
+    cbCombinedExtent: TCheckBox;
+    edConfLevel: TFloatSpinEdit;
+    lblConfLevel: TLabel;
     UpperConfIntervalSeries: TFuncSeries;
     LowerConfIntervalSeries: TFuncSeries;
     UpperPredIntervalSeries: TFuncSeries;
@@ -39,7 +41,7 @@ type
     ChartAxisTransformations: TChartAxisTransformations;
     edFitParam0: TFloatSpinEdit;
     edFitParam1: TFloatSpinEdit;
-    GroupBox1: TGroupBox;
+    gbFixedParams: TGroupBox;
     Label1: TLabel;
     lblNoiseY1: TLabel;
     LogarithmAxisTransform: TLogarithmAxisTransform;
@@ -64,23 +66,23 @@ type
     pnlChart: TPanel;
     SaveDialog: TSaveDialog;
     btnSave: TSpeedButton;
-    EdPointsCount: TSpinEdit;
+    edPointsCount: TSpinEdit;
     Splitter1: TSplitter;
     TabSheet1: TTabSheet;
     TabSheet2: TTabSheet;
     procedure BtnLoadClick(Sender: TObject);
     procedure btnSaveClick(Sender: TObject);
-    procedure CbCombinedExtentChange(Sender: TObject);
+    procedure cbCombinedExtentChange(Sender: TObject);
     procedure cbDrawFitRangeOnlyClick(Sender: TObject);
     procedure cbFitEquationSelect(Sender: TObject);
-    procedure CbHTMLChange(Sender: TObject);
+    procedure cbFitParam0FixedChange(Sender: TObject);
+    procedure cbFitParam1FixedChange(Sender: TObject);
+    procedure cbHTMLChange(Sender: TObject);
     procedure cbShowConfidenceIntervalsChange(Sender: TObject);
     procedure cbShowErrorbarsChange(Sender: TObject);
     procedure cbShowPredictionIntervalsChange(Sender: TObject);
-    procedure EdPointsCountChange(Sender: TObject);
-    procedure FitSeriesFitEquationText(ASeries: TFitSeries;
-      AEquationText: IFitEquationText);
-    procedure FixedParamsChanged(Sender: TObject);
+    procedure edConfLevelChange(Sender: TObject);
+    procedure edPointsCountChange(Sender: TObject);
     procedure cbFitRangeUseMaxClick(Sender:TObject);
     procedure cbFitRangeUseMinClick(Sender:TObject);
     procedure cbLogClick(Sender: TObject);
@@ -89,8 +91,11 @@ type
     procedure edFitRangeMaxChange(Sender:TObject);
     procedure edFitRangeMinChange(Sender:TObject);
     procedure edNoiseYChange(Sender: TObject);
-    procedure FormCreate(Sender: TObject);
     procedure FitCompleteHandler(Sender:TObject);
+    procedure FitSeriesFitEquationText(ASeries: TFitSeries;
+      AEquationText: IFitEquationText);
+    procedure FixedParamsChanged(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
     procedure lbResultsDrawItem(Control: TWinControl; Index: Integer;
       ARect: TRect; State: TOwnerDrawState);
   private
@@ -99,6 +104,7 @@ type
     procedure CreateData;
     procedure OpenFile(const AFileName: string);
     function PrepareFixedParams: String;
+    procedure ShowIntervalSeries(AEnable: Boolean);
   end;
 
 var
@@ -109,7 +115,7 @@ implementation
 {$R *.lfm}
 
 uses
-  Math, typ, spe, StrUtils,
+  Math, typ, spe,
   TAChartAxis, TATypes, TAChartUtils, TACustomSource, TAFitLib;
 
 const
@@ -180,9 +186,9 @@ begin
   end;
 end;
 
-procedure TfrmMain.CbCombinedExtentChange(Sender: TObject);
+procedure TfrmMain.cbCombinedExtentChange(Sender: TObject);
 begin
-  FitSeries.UseCombinedExtentY := CbCombinedExtent.Checked;
+  FitSeries.UseCombinedExtentY := cbCombinedExtent.Checked;
 end;
 
 procedure TfrmMain.BtnLoadClick(Sender: TObject);
@@ -205,8 +211,15 @@ procedure TfrmMain.cbFitEquationSelect(Sender: TObject);
 var
   eq: TFitEquation;
 begin
+  // Prevent drawing of interval series while fit result is not yet valid
+  // They will be re-activated in FitSeries.OnFitComplete
+  ShowIntervalSeries(false);
+
+  // Set new kind of fit equation
   eq := TFitEquation(cbFitEquation.ItemIndex);
   FitSeries.FitEquation := eq;
+
+  // Adapt GUI according to new fit equation.
   edFitOrder.Enabled := (eq = fePolynomial);
   lblFitOrder.Enabled := edFitOrder.Enabled;
 
@@ -215,6 +228,7 @@ begin
   case eq of
     fePolynomial:
       begin
+        FitSeries.ParamCount := edFitOrder.Value + 1;
         cbFitParam0Fixed.Caption := 'b0 = ';
         cbFitParam1Fixed.Caption := 'b1 = ';
         edFitParam0.Value := POLY_PARAMS[0];
@@ -250,9 +264,23 @@ begin
   end;
 end;
 
-procedure TfrmMain.CbHTMLChange(Sender: TObject);
+procedure TfrmMain.cbFitParam0FixedChange(Sender: TObject);
 begin
-  if CbHtml.Checked then Chart.Legend.TextFormat := tfHTML else Chart.Legend.TextFormat := tfNormal;
+  edFitParam0.Enabled := cbFitParam0Fixed.Checked;
+  ShowIntervalSeries(false);
+  FixedParamsChanged(Sender);
+end;
+
+procedure TfrmMain.cbFitParam1FixedChange(Sender: TObject);
+begin
+  edFitParam1.Enabled := cbFitParam1Fixed.Checked;
+  ShowIntervalSeries(false);
+  FixedParamsChanged(Sender);
+end;
+
+procedure TfrmMain.cbHTMLChange(Sender: TObject);
+begin
+  if cbHTML.Checked then Chart.Legend.TextFormat := tfHTML else Chart.Legend.TextFormat := tfNormal;
   FitSeries.Title := 'fitted data';
     // the fit equation is appended automatically due to FitSeries.Legend.Format
 end;
@@ -288,7 +316,13 @@ begin
   LowerPredIntervalSeries.Active := cbShowPredictionIntervals.Checked;
 end;
 
-procedure TfrmMain.EdPointsCountChange(Sender: TObject);
+procedure TfrmMain.edConfLevelChange(Sender: TObject);
+begin
+  ShowIntervalSeries(false);
+  FitSeries.ConfidenceLevel := edConfLevel.Value;
+end;
+
+procedure TfrmMain.edPointsCountChange(Sender: TObject);
 begin
   CreateData;
 end;
@@ -296,15 +330,19 @@ end;
 procedure TfrmMain.FitSeriesFitEquationText(ASeries: TFitSeries;
   AEquationText: IFitEquationText);
 begin
-  AEquationText.NumFormat('%.5f');
-  if CbHTML.Checked then
-    AEquationText.TextFormat(tfHtml)
-  else
-    AEquationText.TextFormat(tfNormal);
+  if ASeries.ErrCode = fitOK then
+  begin
+    AEquationText.NumFormat('%.5f');
+    if cbHTML.Checked then
+      AEquationText.TextFormat(tfHtml)
+    else
+      AEquationText.TextFormat(tfNormal);
+  end;
 end;
 
 procedure TfrmMain.FixedParamsChanged(Sender: TObject);
 begin
+  ShowIntervalSeries(false);
   FitSeries.FixedParams := PrepareFixedParams;
 end;
 
@@ -351,15 +389,19 @@ end;
 procedure TfrmMain.CreateData;
 var
   i, n: Integer;
-  x, y, xmin, xmax, ymin, ymax: Double;
-  xarr, yarr: array of Double;
+  x, y, xmin, xmax: Double;
+  xarr: array of Double = nil;
+  yarr: array of Double = nil;
 begin
   RandSeed := 875876;   // Reproducible noise for testing.
-  n := EdPointsCount.Value;
+  n := edPointsCount.Value;
   if n = 0 then begin
     MessageDlg('No data', mtError, [mbOK], 0);
     exit;
   end;
+
+  // Hide the confidence/prediction intervals series to prevent crashes due to out-dated fit results
+  ShowIntervalSeries(false);
 
   // Calculate test data and store in temporary arrays.
   // This is because noise is relative to the data range in this example.
@@ -387,8 +429,6 @@ begin
   end;
 
   // Add noise to the y values, and add data to line series.
-  ymin := MinValue(yarr);
-  ymax := MaxValue(yarr);
   FitSeries.BeginUpdate;
   try
     FitSeries.Clear;
@@ -417,6 +457,7 @@ end;
 
 procedure TfrmMain.edFitOrderChange(Sender:TObject);
 begin
+  ShowIntervalSeries(false);
   // Needs one parameter more than degree of fit polynomial.
   FitSeries.ParamCount := edFitOrder.Value + 1;
 end;
@@ -436,14 +477,6 @@ begin
   CreateData;
 end;
 
-function MyFormatFloat(x: Double; StdFormat, ExpFormat: String): String;
-begin
-  if (abs(x) <= 1E-6) or (abs(x) >= 1E6) then
-    Result := Format(ExpFormat, [x])
-  else
-    Result := Format(StdFormat, [x]);
-end;
-
 procedure TfrmMain.FitCompleteHandler(Sender:TObject);
 const
   {$IF FPC_FullVersion >= 30004}
@@ -453,14 +486,15 @@ const
   MASK = '%-4s %10s %10s %10s';
   {$IFEND}
   EXP_FMT = '%.3e';
-  STD_FMT = '%.5f';
+  STD_FMT = '%.3f';
   PARAM_NAME: array[0..1] of String = ('a', 'b');
+  PRECISION = 3;
 var
   i: Integer;
-  L: Integer;
   decsep: Char;
   paramName: String;
   confL, confH: Double;
+  predL, predH: Double;
 begin
   decsep := DefaultFormatSettings.DecimalSeparator;
   with lbResults.Items do begin
@@ -486,11 +520,11 @@ begin
               end;
               Add(Format(MASK, [
                 paramName,
-                MyFormatFloat(FitSeries.Param[i], STD_FMT, EXP_FMT),
-                MyFormatFloat(FitSeries.ParamError[i], STD_FMT, EXP_FMT),
-                MyFormatFloat(FitSeries.Param_tValue[i], STD_FMT, EXP_FMT)
+                FloatToStrEx(FitSeries.Param[i], PRECISION, STD_FMT, EXP_FMT),
+                FloatToStrEx(FitSeries.ParamError[i], PRECISION, STD_FMT, EXP_FMT),
+                FloatToStrEx(FitSeries.Param_tValue[i], PRECISION, STD_FMT, EXP_FMT)
                 {$IF FPC_FullVersion >= 30004},
-                MyFormatFloat(FitSeries.Param_pValue[i], STD_FMT, EXP_FMT)
+                FloatToStrEx(FitSeries.Param_pValue[i], PRECISION, STD_FMT, EXP_FMT)
                 {$IFEND}
               ]));
             end;
@@ -508,9 +542,9 @@ begin
               FitSeries.GetConfidenceLimits(i, confL, confH);
               Add(Format(CONF_MASK, [
                 paramName,
-                MyFormatFloat(FitSeries.Param[i], STD_FMT, EXP_FMT),
-                MyFormatFloat(confL, STD_FMT, EXP_FMT),
-                MyFormatFloat(confH, STD_FMT, EXP_FMT)
+                FloatToStrEx(FitSeries.Param[i], PRECISION, STD_FMT, EXP_FMT),
+                FloatToStrEx(confL, PRECISION, STD_FMT, EXP_FMT),
+                FloatToStrEx(confH, PRECISION, STD_FMT, EXP_FMT)
               ]));
             end;
             Add('');
@@ -529,6 +563,32 @@ begin
             UpperPredIntervalSeries.OnCalculate := @FitSeries.GetUpperPredictionInterval;
             LowerPredIntervalSeries.OnCalculate := @FitSeries.GetLowerPredictionInterval;
             {$IFEND}
+
+            Add('');
+            Add('VALUES');
+            {$IF FPC_FullVersion >= 30004}
+            Add(Format('%8s %8s %8s %8s %8s %8s %8s', ['x', 'y', 'y hat', 'confL', 'confH', 'predL', 'predH']));
+            for i := 0 to FitSeries.Count-1 do
+            begin
+              FitSeries.GetLowerConfidenceInterval(FitSeries.XValue[i], confL);
+              FitSeries.GetUpperConfidenceInterval(FitSeries.XValue[i], confH);
+              FitSeries.GetLowerPredictionInterval(FitSeries.XValue[i], predL);
+              FitSeries.GetUpperPredictionInterval(FitSeries.XValue[i], predH);
+              Add(Format('%8.2f %8.2f %8.2f %8.2f %8.2f %8.2f %8.2f', [
+                FitSeries.XValue[i], FitSeries.YValue[i], FitSeries.Calculate(FitSeries.XValue[i]),
+                confL, confH, predL, predH]));
+            end;
+            {$ELSE}
+            Add(Format('%8s %8s %8s', ['x', 'y', 'y hat']));
+            for i := 0 to FitSeries.Count-1 do
+            begin
+              Add(Format('%8.2f %8.2f %8.2f', [
+                FitSeries.XValue[i], FitSeries.YValue[i], FitSeries.Calculate(FitSeries.XValue[i])
+              ]));
+            end;
+            {$IFEND}
+
+            ShowIntervalSeries(true);
           end;
         else
           Add(FitSeries.ErrorMsg);
@@ -538,6 +598,10 @@ begin
       DefaultFormatSettings.DecimalSeparator := decsep;
     end;
   end;
+
+  if FitSeries.ErrCode <> fitOK then
+    Chart.Title.Text.Text := FitSeries.ErrorMsg;
+  Chart.Title.Visible := FitSeries.ErrCode <> fitOK;
 end;
 
 procedure TfrmMain.lbResultsDrawItem(Control: TWinControl; Index: Integer;
@@ -549,6 +613,7 @@ var
   w: Integer;
   lb: TListBox;
 begin
+  Unused(State);
   lb := Control as TListbox;
   lb.Canvas.FillRect(ARect);
   s := lb.Items[Index];
@@ -599,10 +664,7 @@ var
   L, LC: TStrings;
   x, y, dy: Double;
   i: Integer;
-  p: Integer;
   res: Integer;
-  s: String;
-  delim: Char;
 begin
   if not FileExists(AFileName) then begin
     ShowMessage('File not found.');
@@ -619,6 +681,9 @@ begin
     else
     if pos(#9, L[0]) > 0 then
       LC.Delimiter := #9
+    else
+    if pos(',', L[0]) > 0 then
+      LC.Delimiter := ','
     else begin
       ShowMessage('Unknown or no delimiter.');
       exit;
@@ -634,6 +699,7 @@ begin
       FitSeries.ListSource.YCount := 1;
       FitSeries.ListSource.YErrorBarData.Kind := ebkNone;
     end;
+    FitSeries.BeginUpdate;
 
     for i:=0 to L.Count-1 do begin
       LC.DelimitedText := L[i];
@@ -650,6 +716,8 @@ begin
         FitSeries.AddXY(x, y);
     end;
     FDemoData := false;
+    FitSeries.EndUpdate;
+    FitSeries.ExecFit;
   finally
     L.Free;
   end;
@@ -667,6 +735,16 @@ begin
     Result := FloatToStr(edFitParam0.Value, fs);
   if cbFitParam1Fixed.Checked then
     Result := Result + ';' + FloatToStr(edFitParam1.Value, fs);
+end;
+
+procedure TfrmMain.ShowIntervalSeries(AEnable: Boolean);
+begin
+  {$IF FPC_FullVersion > 30004}
+  UpperConfIntervalSeries.Active := AEnable and cbShowConfidenceIntervals.Checked;
+  LowerConfIntervalSeries.Active := AEnable and cbShowConfidenceIntervals.Checked;
+  UpperPredIntervalSeries.Active := AEnable and cbShowPredictionIntervals.Checked;
+  LowerPredIntervalSeries.Active := AEnable and cbShowPredictionIntervals.Checked;
+  {$IFEND}
 end;
 
 end.

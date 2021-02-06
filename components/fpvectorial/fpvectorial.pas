@@ -33,13 +33,13 @@ interface
 uses
   Classes, SysUtils, Math, TypInfo, contnrs, types,
   // FCL-Image
-  fpcanvas, fpimage, fpwritebmp,
+  FPCanvas, FPImage, FPWriteBMP,
   // lazutils
-  laz2_dom,
+  GraphType, Laz2_DOM,
   // LCL
-  lazutf8, lazregions
+  LazUTF8, LazRegions
   {$ifdef USE_LCL_CANVAS}
-  , Graphics, LCLIntf, LCLType, intfgraphics, graphtype, interfacebase
+  , Graphics, LCLIntf, LCLType, IntfGraphics, InterfaceBase
   {$endif}
   ;
 
@@ -8301,7 +8301,7 @@ function TvInsert.GenerateDebugTree(ADestRoutine: TvDebugAddItemProc;
   APageItem: Pointer): Pointer;
 begin
   FExtraDebugStr := Format(' RotationAngle(degrees)=%f', [RotationAngle * 180 / Pi]);
-  if (InsertEntity <> nil) and (InsertEntity is TvNamedEntity) then
+  if InsertEntity is TvNamedEntity then
     FExtraDebugStr := FExtraDebugStr + Format(' InsertEntity="%s"', [TvNamedEntity(InsertEntity).Name]);
   Result:=inherited GenerateDebugTree(ADestRoutine, APageItem);
 end;
@@ -10392,7 +10392,7 @@ var
   lCurPage: TvPage;
 begin
   lCurPage := GetCurrentPage();
-  if (lCurPage <> nil) and (lCurPage is TvVectorialPage) then
+  if lCurPage is TvVectorialPage then
     Result := TvVectorialPage(lCurPage)
   else
     Result := nil

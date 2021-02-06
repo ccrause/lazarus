@@ -44,10 +44,8 @@ uses
   FileProcs,
   // LazUtils
   LazFileUtils, LazUTF8, Laz2_XMLCfg,
-  // IdeIntf
-  ProjectIntf,
-  // IDE
-  PublishModule;
+  // BuildIntf
+  ProjectIntf, PublishModuleIntf;
 
 type
   TOnLoadSaveFilename = procedure(var Filename:string; Load:boolean) of object;
@@ -953,7 +951,7 @@ end;
 function TLazProjectFileDescriptors.IndexOf(const Name: string): integer;
 begin
   Result:=Count-1;
-  while (Result>=0) and (UTF8CompareText(Name,Items[Result].Name)<>0) do
+  while (Result>=0) and (UTF8CompareLatinTextFast(Name,Items[Result].Name)<>0) do
     dec(Result);
 end;
 
@@ -1077,7 +1075,7 @@ end;
 function TLazProjectDescriptors.IndexOf(const Name: string): integer;
 begin
   Result:=Count-1;
-  while (Result>=0) and (UTF8CompareText(Name,Items[Result].Name)<>0) do
+  while (Result>=0) and (UTF8CompareLatinTextFast(Name,Items[Result].Name)<>0) do
     dec(Result);
 end;
 

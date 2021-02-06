@@ -32,7 +32,7 @@ uses
   StdCtrls, Controls, Graphics, Forms, Themes,
 ////////////////////////////////////////////////////
   WSControls, WSStdCtrls, WSLCLClasses, WSProc, Windows, LCLIntf, LCLType,
-  LazUTF8, LazUtf8Classes, InterfaceBase, LMessages, LCLMessageGlue, TextStrings,
+  LazUTF8, InterfaceBase, LMessages, LCLMessageGlue, TextStrings,
   Win32Int, Win32Proc, Win32WSControls, Win32Extra, Win32Themes;
 
 type
@@ -99,6 +99,8 @@ type
     class procedure SetItemIndex(const ACustomComboBox: TCustomComboBox; NewIndex: integer); override;
     class procedure SetMaxLength(const ACustomComboBox: TCustomComboBox; NewLength: integer); override;
     class procedure SetStyle(const ACustomComboBox: TCustomComboBox; NewStyle: TComboBoxStyle); override;
+    class procedure SetReadOnly(const ACustomComboBox: TCustomComboBox; NewReadOnly: boolean); override;
+    class procedure SetTextHint(const ACustomComboBox: TCustomComboBox; const ATextHint: string); override;
 
     class function  GetItems(const ACustomComboBox: TCustomComboBox): TStrings; override;
     class procedure Sort(const ACustomComboBox: TCustomComboBox; AList: TStrings; IsSorted: boolean); override;
@@ -132,7 +134,11 @@ type
     class function GetStrings(const ACustomListBox: TCustomListBox): TStrings; override;
     class function GetTopIndex(const ACustomListBox: TCustomListBox): integer; override;
 
-    class procedure SelectItem(const ACustomListBox: TCustomListBox; AIndex: integer; ASelected: boolean); override;
+    class procedure SelectItem(const ACustomListBox: TCustomListBox;
+      AIndex: integer; ASelected: boolean); override;
+    class procedure SelectRange(const ACustomListBox: TCustomListBox;
+      ALow, AHigh: integer; ASelected: boolean); override;
+
     class procedure SetBorder(const ACustomListBox: TCustomListBox); override;
     class procedure SetColumnCount(const ACustomListBox: TCustomListBox; ACount: Integer); override;
     class procedure SetItemIndex(const ACustomListBox: TCustomListBox; const AIndex: integer); override;
@@ -426,6 +432,31 @@ begin
         LMessage.Result := 0;
         Exit(DeliverMessage(WindowInfo^.WinControl, LMessage));
       end;
+
+    // WM_SETFONT and WM_SIZE were added due to csSimple issue #37129
+    WM_SETFONT:
+      begin
+        Result := WindowProc(Window, Msg, WParam, LParam);
+        WindowInfo := GetWin32WIndowInfo(Window);
+        if TCustomComBoBox(WindowInfo^.WinControl).Style = csSimple then
+          with WindowInfo^.WinControl do
+          begin {LCL is blocking the size change so we trick it}
+            SendMessage(Window,CB_SETDROPPEDWIDTH, WIdth, 0);
+            MoveWindow(Handle, left, Top, Width, Height-1, False); {Trick the No size lock}
+            MoveWindow(Handle, Left, Top, Width, Height+1, False);{ Won't change otherwise}
+          end;
+        Exit;
+      end;
+    WM_SIZE: { Added for csSimple border painting with the list in view}
+       begin
+         Result := WindowProc(Window, Msg, WParam, LParam); //call original firt;
+         WindowInfo := GetWin32WindowInfo(Window);
+         if TCustomcombobox(WindowInfo^.WinControl).Style = csSimple then
+         begin
+           InvalidateRect(WindowInfo^.WinControl.Handle, nil, true); {border does not paint properly otherwise}
+         end;
+         Exit;
+       end;
   end;
   // normal processing
   Result := WindowProc(Window, Msg, WParam, LParam);
@@ -503,7 +534,14 @@ begin
     { ~bk 2019.12.11
        https://docs.microsoft.com/en-us/windows/win32/controls/sbm-setscrollinfo
        says that "they should use the SetScrollInfo function".}
-    SetScrollInfo(Handle, SB_CTL, ScrollInfo, IsEnabled);
+    { However, this is sent while processing an incoming notification on user
+      action. SetScrollInfo acts immediately, and misplaces the scrollbar.
+      If it is not enabled this can not happen. And using SetScrollInfo we can
+      avoid enabling it by accident. }
+    if IsEnabled then
+      SendMessage(Handle, SBM_SETSCROLLINFO, WParam(True), LParam(@ScrollInfo))
+    else
+      SetScrollInfo(Handle, SB_CTL, ScrollInfo, IsEnabled);;
     case Kind of
       sbHorizontal:
         SetWindowLong(Handle, GWL_STYLE, GetWindowLong(Handle, GWL_STYLE) or SBS_HORZ);
@@ -876,6 +914,24 @@ begin
     SetItemIndex(ACustomListBox, -1);
 end;
 
+class procedure TWin32WSCustomListBox.SelectRange(const ACustomListBox: TCustomListBox;
+  ALow, AHigh: integer; ASelected: boolean);
+var
+  AHandle: HWND;
+  ARange: LONG;
+begin
+  //https://docs.microsoft.com/en-us/windows/win32/controls/lb-selitemrange
+  if (AHigh > $FFFF) then
+    inherited SelectRange(ACustomListBox, ALow, AHigh, ASelected)
+  else
+  begin
+    AHandle := ACustomListBox.Handle;
+    ARange := Windows.MakeLong(ALow, AHigh);
+    Windows.SendMessage(AHandle, LB_SELITEMRANGE, Windows.WParam(ASelected), Windows.LParam(ARange));
+  end;
+
+end;
+
 class procedure TWin32WSCustomListBox.SetBorder(const ACustomListBox: TCustomListBox);
 var
   Handle: HWND;
@@ -968,6 +1024,14 @@ begin
     pSubClassName := LCLComboboxClsName;
     SubClassWndProc := @ComboBoxWindowProc;
   end;
+
+  // issue #37129: Fix static listbox of style csSimple when height is changed (like in Delphi)
+  if TCustomComBoBox(AWInControl).Style = csSimple then
+  begin
+    Params.Flags := Params.Flags or CBS_NOINTEGRALHEIGHT;
+    Include(TWinControlAccess(AWinControl).FWinControlFlags, wcfEraseBackground);
+  end;
+
   // create window
   FinishCreateWindow(AWinControl, Params, False, True);
 
@@ -1049,6 +1113,42 @@ end;
 class procedure TWin32WSCustomComboBox.SetStyle(const ACustomComboBox: TCustomComboBox; NewStyle: TComboBoxStyle);
 begin
   RecreateWnd(ACustomComboBox);
+  if (NewStyle = csSimple) and (csDesigning in ACustomComboBox.ComponentState) then
+    ACustomComboBox.Constraints.SetInterfaceConstraints(0,0,0,0);
+end;
+
+class procedure TWin32WSCustomComboBox.SetReadOnly(const ACustomComboBox: TCustomComboBox;
+  NewReadOnly: boolean);
+var
+  Info: TComboboxInfo;
+begin
+  if not ACustomComboBox.HandleAllocated then
+    Exit;
+
+  Info.cbSize := SizeOf(Info);
+  Win32Extra.GetComboBoxInfo(ACustomComboBox.Handle, @Info);
+  if (info.hwndItem<>0) and (info.hwndItem<>INVALID_HANDLE_VALUE) then
+    SendMessage(info.hwndItem, EM_SETREADONLY, WParam(NewReadOnly), 0);
+end;
+
+class procedure TWin32WSCustomComboBox.SetTextHint(
+  const ACustomComboBox: TCustomComboBox; const ATextHint: string);
+const
+  CB_SETCUEBANNER = (CBM_FIRST + 3); // Same as EM_SETCUEBANNER for TEdit
+var
+  Msg: UINT = CB_SETCUEBANNER;
+  Wnd: HWND;
+  Info: TComboboxInfo;
+begin
+  if not WSCheckHandleAllocated(ACustomComboBox, 'SetTextHint') then Exit;
+  Info.cbSize := SizeOf(Info);
+  Wnd := ACustomComboBox.Handle;
+  if Win32Extra.GetComboBoxInfo(Wnd, @Info) and (Info.hwndItem <> 0) then
+  begin
+    Wnd := Info.hwndItem;
+    Msg := EM_SETCUEBANNER;
+  end;
+  SendMessage(Wnd, Msg, 1, {%H-}LParam(PWideChar(UTF8ToUTF16(ATextHint))));
 end;
 
 class function TWin32WSCustomComboBox.GetItemIndex(const ACustomComboBox: TCustomComboBox): integer;
@@ -1080,30 +1180,22 @@ class procedure TWin32WSCustomComboBox.SetDropDownCount(
 var
   StringList: TWin32ComboBoxStringList;
 begin
-  if (WindowsVersion >= wvVista) and ThemeServices.ThemesEnabled then
-  begin
-    //Use CB_SETMINVISIBLE in vista or above
-    SendMessage(ACustomComboBox.Handle, CB_SETMINVISIBLE, NewCount, 0);
-  end
-  else
-  begin
-    StringList := GetStringList(ACustomComboBox);
-    if StringList <> nil then
-      StringList.DropDownCount := NewCount;
-  end;
+  StringList := GetStringList(ACustomComboBox);
+  if StringList <> nil then
+    StringList.DropDownCount := NewCount;
 end;
 
 class procedure TWin32WSCustomComboBox.SetDroppedDown(
   const ACustomComboBox: TCustomComboBox; ADroppedDown: Boolean);
 var
   aSelStart, aSelLength: Integer;
-  aText: string;
+  aText: string = '';
   Editable: Boolean;
   OldItemIndex: Integer;
 begin
   if WSCheckHandleAllocated(ACustomComboBox, 'TWin32WSCustomComboBox.SetDroppedDown') then
   begin
-    Editable := (ACustomComboBox.Style in [csDropDown, csOwnerDrawEditableFixed, csOwnerDrawEditableVariable]);
+    Editable := (ACustomComboBox.Style.HasEditBox);
     if Editable then
     begin
       if not GetText(ACustomComboBox, aText) then
@@ -1114,7 +1206,8 @@ begin
 
     OldItemIndex := GetItemIndex(ACustomComboBox);
     SendMessage(ACustomComboBox.Handle, CB_SHOWDROPDOWN, WPARAM(ADroppedDown), 0);
-    SetItemIndex(ACustomComboBox, OldItemIndex);
+    if GetKeyState(VK_RETURN) < 0 then
+      SetItemIndex(ACustomComboBox, OldItemIndex);
 
     if Editable then
     begin
@@ -1134,6 +1227,8 @@ end;
 
 class procedure TWin32WSCustomComboBox.SetSelStart(const ACustomComboBox: TCustomComboBox; NewStart: integer);
 begin
+  if not ACustomComboBox.Style.HasEditBox then
+    Exit;
   SendMessage(ACustomComboBox.Handle, CB_SETEDITSEL, 0, MakeLParam(NewStart, NewStart));
 end;
 
@@ -1142,6 +1237,8 @@ var
   startpos, endpos: integer;
   winhandle: HWND;
 begin
+  if not ACustomComboBox.Style.HasEditBox then
+    Exit;
   winhandle := ACustomComboBox.Handle;
   SendMessage(winhandle, CB_GETEDITSEL, Windows.WParam(@startpos), Windows.LParam(@endpos));
   endpos := startpos + NewLength;
@@ -1599,13 +1696,18 @@ begin
     WM_PAINT:
       begin
         WindowInfo := GetWin32WindowInfo(Window);
-        if ThemeServices.ThemesEnabled and Assigned(WindowInfo) and (WindowInfo^.WinControl is TCustomStaticText)
-        and not TCustomStaticText(WindowInfo^.WinControl).Enabled then
+        // Workaround for disabled StaticText not being grayed at designtime
+        if ThemeServices.ThemesEnabled and Assigned(WindowInfo) and
+           (WindowInfo^.WinControl is TCustomStaticText)
+           and not TCustomStaticText(WindowInfo^.WinControl).Enabled then
         begin
           Result := WindowProc(Window, Msg, WParam, LParam);
           StaticText := TCustomStaticText(WindowInfo^.WinControl);
+          if not (csDesigning in StaticText.ComponentState) then
+            exit;
+
           DC := GetDC(Window);
-          SetBkColor(DC, GetSysColor(COLOR_BTNFACE));
+          SetBkMode(DC, TRANSPARENT);
           SetTextColor(DC, GetSysColor(COLOR_GRAYTEXT));
           SelectObject(DC, StaticText.Font.Reference.Handle);
           Flags := 0;

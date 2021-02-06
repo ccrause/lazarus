@@ -26,7 +26,7 @@ interface
 uses
   Classes, SysUtils, FileUtil, LazFileUtils, Forms, Controls, Graphics, Dialogs,
   StdCtrls, CheckLst, Buttons, ExtCtrls, ComCtrls, Types,
-  LCLType, LazUTF8, LCLTranslator,
+  LCLType, LazUTF8,
   {$IFnDEF POCHECKERSTANDALONE}
   MenuIntf,
   {$ENDIF}
@@ -62,8 +62,6 @@ type
     procedure SelectAllMasterFilesBtnClick(Sender: TObject);
     procedure UnselectAllMasterFilesBtnClick(Sender: TObject);
   private
-    //PoFamily: TPoFamily;
-    PoFamilyList: TPoFamilyList;
     FPoCheckerSettings: TPoCheckerSettings;
     procedure OnTestStart(const ATestName, APoFileName: string);
     procedure OnTestEnd(const {%H-}ATestName: string; const {%H-}ErrorCount: integer);
@@ -399,8 +397,6 @@ end;
 procedure TPoCheckerForm.RunSelectedTests;
 var
   TestTypes: TPoTestTypes;
-  TotalTranslatedCount, TotalUntranslatedCount, TotalFuzzyCount: Integer;
-  TotalPercTranslated: Double;
   ResultDlg: TResultDlgForm;
   mr: TModalResult;
 begin
@@ -415,7 +411,7 @@ begin
   try
     PoFamilyList.TestTypes := TestTypes;
 
-    PoFamilyList.RunTests(TotalTranslatedCount, TotalUntranslatedCount, TotalFuzzyCount, TotalPercTranslated);
+    PoFamilyList.RunTests;
 
     PoFamilyList.InfoLog.Insert(0, sLastSearchPath);
     PoFamilyList.InfoLog.Insert(1, SelectDirectoryDialog.FileName);
@@ -426,17 +422,6 @@ begin
 
     ResultDlg := TResultDlgForm.Create(nil);
     try
-      ResultDlg.FTotalTranslated := TotalTranslatedCount;
-      ResultDlg.FTotalUntranslated := TotalUntranslatedCount;
-      ResultDlg.FTotalFuzzy := TotalFuzzyCount;
-      ResultDlg.FTotalPercTranslated := TotalPercTranslated;
-      ResultDlg.Log.Assign(PoFamilyList.InfoLog);
-      ResultDlg.StatLog.Assign(PoFamilyList.StatLog);
-
-      ResultDlg.DupLog.Assign(PoFamilyList.DupLog);
-
-      ResultDlg.PoFamilyList := PoFamilyList;
-      ResultDlg.PoFamilyStats := PoFamilyList.PoFamilyStats;
       ResultDlg.Settings := FPoCheckerSettings;
       mr := ResultDlg.ShowModal;
     finally
@@ -572,7 +557,7 @@ end;
 
 function ListSortFunc(List: TStringList; Index1, Index2: Integer): Integer;
 begin
-  Result := Utf8CompareText(List.Strings[Index1], List.Strings[Index2]);
+  Result := UTF8CompareLatinTextFast(List.Strings[Index1], List.Strings[Index2]);
 end;
 
 function TPoCheckerForm.LangFilterIndexToLangID(Index: Integer): TLangID;

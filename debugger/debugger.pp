@@ -39,11 +39,9 @@ interface
 
 uses
   TypInfo, Classes, SysUtils, math,
-  // LCL
-  LCLProc,
   // LazUtils
-  Laz2_XMLCfg, LazFileUtils, LazStringUtils, LazLoggerBase, LazConfigStorage,
-  LazClasses, Maps,
+  Laz2_XMLCfg, LazFileUtils, LazStringUtils, LazUtilities, LazLoggerBase,
+  LazConfigStorage, LazClasses, Maps,
   // DebuggerIntf
   DbgIntfBaseTypes, DbgIntfMiscClasses, DbgIntfDebuggerBase;
 
@@ -1352,7 +1350,6 @@ type
     function GetUnitInfoProvider: TDebuggerUnitInfoProvider; override;
   public
     function CreateCopy: TCallStackEntry; override;
-    procedure Assign(AnOther: TCallStackEntry); override;
   end;
 
   { TThreadEntry }
@@ -1734,6 +1731,7 @@ const
     'StepOver',
     'StepInto',
     'StepOut',
+    'StepTo',
     'RunTo',
     'Jumpto',
     'Attach',
@@ -1856,14 +1854,6 @@ function TIdeThreadFrameEntry.CreateCopy: TCallStackEntry;
 begin
   Result := TIdeThreadFrameEntry.Create;
   Result.Assign(Self);
-end;
-
-procedure TIdeThreadFrameEntry.Assign(AnOther: TCallStackEntry);
-begin
-  inherited Assign(AnOther);
-  if AnOther is TIdeThreadFrameEntry then begin
-    FThread := TIdeThreadFrameEntry(AnOther).FThread;
-  end;
 end;
 
 { TIDEBreakPointGroupList }
@@ -5357,7 +5347,7 @@ begin
   while i >= 0 do
   begin
     Result := Items[i];
-    if (AnsiCompareText(Result.Name, GroupName) = 0) and (Ignore <> Result) then
+    if (Ignore <> Result) and (AnsiCompareText(Result.Name, GroupName) = 0) then
       Exit;
     Dec(i);
   end;
@@ -5896,7 +5886,7 @@ end;
 
 procedure TIDERegisterValue.DoDataValidityChanged(AnOldValidity: TDebuggerDataState);
 begin
-  if (Owner <> nil) and (Owner is TCurrentIDERegisters) then
+  if Owner is TCurrentIDERegisters then
     TCurrentIDERegisters(Owner).DoDataValidityChanged(AnOldValidity);
 end;
 
@@ -5904,11 +5894,11 @@ procedure TIDERegisterValue.DoDisplayFormatChanged(AnOldFormat: TRegisterDisplay
 begin
   if not HasValueFormat[DisplayFormat] then begin
     DataValidity := ddsRequested;
-    if (Owner <> nil) and (Owner is TCurrentIDERegisters) then
+    if Owner is TCurrentIDERegisters then
       TCurrentIDERegisters(Owner).FMonitor.RequestData(TCurrentIDERegisters(Owner));
   end
   else
-  if (Owner <> nil) and (Owner is TCurrentIDERegisters) then
+  if Owner is TCurrentIDERegisters then
     TCurrentIDERegisters(Owner).FMonitor.NotifyChange(TCurrentIDERegisters(Owner));
 end;
 

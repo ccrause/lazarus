@@ -36,7 +36,7 @@ uses
   Classes, SysUtils, contnrs,
   LCLProc, Forms, Controls, Grids, LResources, Dialogs, Buttons, StdCtrls, ExtCtrls,
   // LazUtils
-  LazFileUtils, LazUTF8Classes, LazUTF8, AvgLvlTree,
+  LazFileUtils, LazUTF8, AvgLvlTree,
   // components
   SynHighlighterLFM, SynEdit, SynEditMiscClasses,
   // codetools
@@ -88,7 +88,7 @@ type
     procedure FillReplaceGrids;
     function ShowConvertLFMWizard: TModalResult;
   protected
-    function FixMissingComponentClasses(aMissingTypes: TStringList): TModalResult; override;
+    function FixMissingComponentClasses(aMissingTypes: TClassList): TModalResult; override;
     procedure LoadLFM;
   public
     constructor Create(ACTLink: TCodeToolLink; ALFMBuffer: TCodeBuffer);
@@ -222,7 +222,7 @@ begin
   Result:=mrOk;
   OutS:='';
   aInStream.Position:=0;
-  SetLength(InS, aInStream.Size);
+  SetLength(InS{%H-}, aInStream.Size);
   aInStream.Read(InS[1],length(InS));
   i := 1;
   while i <= Length(InS) do begin
@@ -279,12 +279,12 @@ end;
 
 function TDFMConverter.ConvertDfmToLfm(const aFilename: string): TModalResult;
 var
-  DFMStream, LFMStream, Utf8LFMStream: TMemoryStreamUTF8;
+  DFMStream, LFMStream, Utf8LFMStream: TMemoryStream;
 begin
   Result:=mrOk;
-  DFMStream:=TMemoryStreamUTF8.Create;
-  LFMStream:=TMemoryStreamUTF8.Create;
-  Utf8LFMStream:=TMemoryStreamUTF8.Create;
+  DFMStream:=TMemoryStream.Create;
+  LFMStream:=TMemoryStream.Create;
+  Utf8LFMStream:=TMemoryStream.Create;
   try
     // Note: The file is copied from DFM file earlier. Load it.
     try
@@ -585,12 +585,12 @@ begin
   end;
 end;
 
-function TLFMFixer.FixMissingComponentClasses(aMissingTypes: TStringList): TModalResult;
+function TLFMFixer.FixMissingComponentClasses(aMissingTypes: TClassList): TModalResult;
 // This is called from TLFMChecker.FindAndFixMissingComponentClasses.
 // Add needed units to uses section using methods already defined in fUsedUnitsTool.
 var
   RegComp: TRegisteredComponent;
-  ClassUnitInfo: TUnitInfo;
+  //ClassUnitInfo: TUnitInfo;
   i: Integer;
   NeededUnitName: String;
 begin
@@ -598,19 +598,22 @@ begin
   if not Assigned(fUsedUnitsTool) then Exit;
   for i := 0 to aMissingTypes.Count-1 do
   begin
-    RegComp:=IDEComponentPalette.FindComponent(aMissingTypes[i]);
+    RegComp:=IDEComponentPalette.FindRegComponent(aMissingTypes[i]);
     NeededUnitName:='';
-    if (RegComp<>nil) then begin
-      if RegComp.ComponentClass<>nil then begin
+    if Assigned(RegComp) then
+    begin
+      if RegComp.ComponentClass<>nil then
+      begin
         NeededUnitName:=RegComp.ComponentClass.UnitName;
         if NeededUnitName='' then
           NeededUnitName:=RegComp.GetUnitName;
       end;
     end
     else begin
-      ClassUnitInfo:=Project1.UnitWithComponentClassName(aMissingTypes[i]);
+      Assert(False, 'TLFMFixer.FixMissingComponentClasses: RegComp=Nil');
+{      ClassUnitInfo:=Project1.UnitWithComponentClass(aMissingTypes[i] as TComponentClass);
       if ClassUnitInfo<>nil then
-        NeededUnitName:=ClassUnitInfo.GetUsesUnitName;
+        NeededUnitName:=ClassUnitInfo.GetUsesUnitName;  }
     end;
     if (NeededUnitName<>'')
     and fUsedUnitsTool.AddUnitImmediately(NeededUnitName) then

@@ -19,8 +19,8 @@ type
       Expected: array of string);
   published
     procedure TestIntfProcUpdateArgName;
-    procedure TestIntfCompleteMethodBody_ResultGenericObjFPC; // todo
-    procedure TestIntfCompleteMethodBody_ResultGenericDelphi; // todo
+    procedure TestIntfCompleteMethodBody_ResultGenericObjFPC;
+    procedure TestIntfCompleteMethodBody_ResultGenericDelphi;
     procedure TestMethodUpdateArgName_GenericObjFPC;
     procedure TestMethodUpdateArgName_GenericDelphi;
     procedure TestCompleteMethodSignature_Def_GenericObjFPC;
@@ -30,6 +30,8 @@ type
     procedure TestCompleteMethodBody_GenericObjFPC;
     procedure TestCompleteMethodBody_GenericDelphi;
     procedure TestCompleteMethodBody_GenericMethod;
+    procedure TestCompleteMethodBody_GenericFunctionResultObjFPC;
+    procedure TestCompleteMethodBody_GenericFunctionResultDelphi;
     procedure TestCompleteMethodBody_ParamGenericObjFPC;
     procedure TestCompleteMethodBody_ParamGenericDelphi;
     procedure TestCompleteProperty_TypeWithUnitname;
@@ -171,7 +173,6 @@ end;
 
 procedure TTestCodeCompletion.TestIntfCompleteMethodBody_ResultGenericObjFPC;
 begin
-  exit;
   Test('TestIntfCompleteMethodBody_ResultGenericObjFPC',
     ['unit test1;'
     ,'{$mode objfpc}{$H+}'
@@ -199,7 +200,6 @@ end;
 
 procedure TTestCodeCompletion.TestIntfCompleteMethodBody_ResultGenericDelphi;
 begin
-  exit;
   Test('TestIntfCompleteMethodBody_ResultGenericDelphi',
     ['unit test1;'
     ,'{$mode delphi}{$H+}'
@@ -423,7 +423,7 @@ begin
     '{$mode delphi}',
     'interface',
     'type',
-    '  TBird<T: class> = class',
+    '  TBird<T: class;U> = class',
     '    procedure DoIt;',
     '  end;',
     'implementation',
@@ -436,12 +436,12 @@ begin
     '',
     '  { TBird }',
     '',
-    '  TBird<T: class> = class',
+    '  TBird<T: class;U> = class',
     '    procedure DoIt;',
     '  end;',
     'implementation',
     '',
-    'procedure TBird<T>.DoIt;',
+    'procedure TBird<T, U>.DoIt;',
     'begin',
     '',
     'end;',
@@ -482,6 +482,70 @@ begin
     'end.']);
 end;
 
+procedure TTestCodeCompletion.TestCompleteMethodBody_GenericFunctionResultObjFPC;
+begin
+  Test('TestCompleteMethodBody_GenericFunctionResultObjFPC',
+    ['unit test1;',
+    '{$mode objfpc}{$H+}',
+    'interface',
+    'type',
+    '  generic TBird<T: class> = class',
+    '    function DoIt: specialize TBird<T>;',
+    '  end;',
+    'implementation',
+    'end.'],
+    6,1,
+    ['unit test1;',
+    '{$mode objfpc}{$H+}',
+    'interface',
+    'type',
+    '',
+    '  { TBird }',
+    '',
+    '  generic TBird<T: class> = class',
+    '    function DoIt: specialize TBird<T>;',
+    '  end;',
+    'implementation',
+    '',
+    'function TBird.DoIt: specialize TBird<T>;',
+    'begin',
+    'end;',
+    '',
+    'end.']);
+end;
+
+procedure TTestCodeCompletion.TestCompleteMethodBody_GenericFunctionResultDelphi;
+begin
+  Test('TestCompleteMethodBody_GenericFunctionResultDelphi',
+    ['unit test1;',
+    '{$mode delphi}{$H+}',
+    'interface',
+    'type',
+    '  TBird<T: class> = class',
+    '    function DoIt: TBird<T>;',
+    '  end;',
+    'implementation',
+    'end.'],
+    6,1,
+    ['unit test1;',
+    '{$mode delphi}{$H+}',
+    'interface',
+    'type',
+    '',
+    '  { TBird }',
+    '',
+    '  TBird<T: class> = class',
+    '    function DoIt: TBird<T>;',
+    '  end;',
+    'implementation',
+    '',
+    'function TBird<T>.DoIt: TBird<T>;',
+    'begin',
+    'end;',
+    '',
+    'end.']);
+end;
+
 procedure TTestCodeCompletion.TestCompleteMethodBody_ParamGenericObjFPC;
 begin
   Test('TestCompleteMethodBody_ParamGenericObjFPC',
@@ -491,6 +555,7 @@ begin
     'type',
     '  TBird = class',
     '    procedure DoIt(i: specialize TGenList<longint>);',
+    '    procedure DoIt2(i: specialize TGenList<specialize TGenObject<integer>>);',
     '  end;',
     'implementation',
     'end.'],
@@ -504,10 +569,15 @@ begin
     '',
     '  TBird = class',
     '    procedure DoIt(i: specialize TGenList<longint>);',
+    '    procedure DoIt2(i: specialize TGenList<specialize TGenObject<integer>>);',
     '  end;',
     'implementation',
     '',
     'procedure TBird.DoIt(i: specialize TGenList<longint>);',
+    'begin',
+    'end;',
+    '',
+    'procedure TBird.DoIt2(i: specialize TGenList<specialize TGenObject<integer>>);',
     'begin',
     'end;',
     '',
@@ -523,6 +593,7 @@ begin
     'type',
     '  TBird = class',
     '    procedure DoIt(i: TGenList<longint>);',
+    '    procedure DoIt2(i: TGenList<TGenObject<longint>>);',
     '  end;',
     'implementation',
     'end.'],
@@ -536,10 +607,15 @@ begin
     '',
     '  TBird = class',
     '    procedure DoIt(i: TGenList<longint>);',
+    '    procedure DoIt2(i: TGenList<TGenObject<longint>>);',
     '  end;',
     'implementation',
     '',
     'procedure TBird.DoIt(i: TGenList<longint>);',
+    'begin',
+    'end;',
+    '',
+    'procedure TBird.DoIt2(i: TGenList<TGenObject<longint>>);',
     'begin',
     'end;',
     '',

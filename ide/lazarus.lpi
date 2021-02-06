@@ -37,29 +37,32 @@
     <RunParams>
       <FormatVersion Value="2"/>
     </RunParams>
-    <RequiredPackages Count="7">
+    <RequiredPackages Count="8">
       <Item1>
-        <PackageName Value="LazDebuggerGdbmi"/>
+        <PackageName Value="SynEditDsgn"/>
       </Item1>
       <Item2>
-        <PackageName Value="LCLBase"/>
-        <MinVersion Major="1" Release="1" Valid="True"/>
+        <PackageName Value="LazDebuggerGdbmi"/>
       </Item2>
       <Item3>
-        <PackageName Value="LazControls"/>
+        <PackageName Value="LCLBase"/>
+        <MinVersion Major="1" Release="1" Valid="True"/>
       </Item3>
       <Item4>
-        <PackageName Value="CodeTools"/>
+        <PackageName Value="LazControls"/>
       </Item4>
       <Item5>
-        <PackageName Value="IDEIntf"/>
+        <PackageName Value="CodeTools"/>
       </Item5>
       <Item6>
-        <PackageName Value="LCL"/>
+        <PackageName Value="IDEIntf"/>
       </Item6>
       <Item7>
-        <PackageName Value="SynEdit"/>
+        <PackageName Value="LCL"/>
       </Item7>
+      <Item8>
+        <PackageName Value="SynEdit"/>
+      </Item8>
     </RequiredPackages>
     <Units Count="242">
       <Unit0>
@@ -319,6 +322,7 @@
       <Unit40>
         <Filename Value="../designer/designerprocs.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="DesignerProcs"/>
       </Unit40>
       <Unit41>
         <Filename Value="codebrowser.pas"/>
@@ -918,6 +922,7 @@
         <Filename Value="searchfrm.pas"/>
         <IsPartOfProject Value="True"/>
         <HasResources Value="True"/>
+        <UnitName Value="SearchFrm"/>
       </Unit143>
       <Unit144>
         <Filename Value="codemacroselect.pas"/>
@@ -1036,6 +1041,7 @@
         <Filename Value="fpdoceditwindow.pas"/>
         <IsPartOfProject Value="True"/>
         <HasResources Value="True"/>
+        <UnitName Value="FPDocEditWindow"/>
       </Unit167>
       <Unit168>
         <Filename Value="unitinfodlg.pp"/>
@@ -1049,6 +1055,7 @@
       <Unit170>
         <Filename Value="lazarusmanager.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="LazarusManager"/>
       </Unit170>
       <Unit171>
         <Filename Value="macropromptdlg.pas"/>
@@ -1191,6 +1198,7 @@
       <Unit197>
         <Filename Value="codehelp.pas"/>
         <IsPartOfProject Value="True"/>
+        <UnitName Value="CodeHelp"/>
       </Unit197>
       <Unit198>
         <Filename Value="diffdialog.pas"/>
@@ -1234,6 +1242,7 @@
         <ComponentName Value="IDEOptionsDialog"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
+        <UnitName Value="IDEOptionsDlg"/>
       </Unit205>
       <Unit206>
         <Filename Value="findunitdlg.pas"/>
@@ -1257,7 +1266,9 @@
       <Unit210>
         <Filename Value="searchresultview.pp"/>
         <IsPartOfProject Value="True"/>
+        <ComponentName Value="SearchResultsView"/>
         <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
         <UnitName Value="SearchResultView"/>
       </Unit210>
       <Unit211>
@@ -1333,6 +1344,7 @@
         <Filename Value="charactermapdlg.pas"/>
         <IsPartOfProject Value="True"/>
         <HasResources Value="True"/>
+        <UnitName Value="CharacterMapDlg"/>
       </Unit225>
       <Unit226>
         <Filename Value="idedefs.pas"/>

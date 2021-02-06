@@ -1,4 +1,4 @@
-//Converted by Nyitrai Péter
+﻿//Converted by Nyitrai Péter
 {-------------------------------------------------------------------------------
 The contents of this file are subject to the Mozilla Public License
 Version 1.1 (the "License"); you may not use this file except in compliance
@@ -12,7 +12,7 @@ the specific language governing rights and limitations under the License.
 The Original Code is: SynHighlighterVB.pas, released 2000-04-20.
 The Original Code is based on the wbADSP21xxSyn.pas file from the
 mwEdit component suite by Martin Waldenburg and other developers, the Initial
-Author of this file is Max Horvßth.
+Author of this file is Max Horváth.
 All Rights Reserved.
 
 Contributors to the SynEdit and mwEdit projects are listed in the
@@ -37,7 +37,7 @@ Known Issues:
 -------------------------------------------------------------------------------}
 {
 @abstract(Provides a Visual Basic highlighter for SynEdit)
-@author(Max Horvßth <TheProfessor@gmx.de>, converted to SynEdit by David Muir <david@loanhead45.freeserve.co.uk>)
+@author(Max Horváth <TheProfessor@gmx.de>, converted to SynEdit by David Muir <david@loanhead45.freeserve.co.uk>)
 @created(5 December 1999, converted to SynEdit April 21, 2000)
 @lastmod(2000-06-23)
 The SynHighlighterVB unit provides SynEdit with a Visual Basic (.bas) highlighter.
@@ -52,7 +52,7 @@ uses
   SysUtils, Classes,
   LCLIntf, LCLType,
   Controls, Graphics,
-  SynEditTypes, SynEditHighlighter;
+  SynEditTypes, SynEditHighlighter, SynEditStrConst;
 
 type
   TtkTokenKind = (tkComment, tkIdentifier, tkKey, tkNull, tkNumber, tkSpace,
@@ -225,9 +225,6 @@ type
   end;
 
 implementation
-
-uses
-  SynEditStrConst;
 
 var
   Identifiers: array[#0..#255] of ByteBool;
@@ -488,7 +485,6 @@ begin
   if KeyComp('name') then Result := tkKey else
     if KeyComp('lof') then Result := tkKey else
       if KeyComp('or') then Result := tkKey else
-        if KeyComp('cdate') then Result := tkKey else
           if KeyComp('cdate') then Result := tkKey else Result := tkIdentifier;
 end;
 
@@ -616,7 +612,6 @@ begin
   if KeyComp('ucase') then Result := tkKey else
     if KeyComp('redim') then Result := tkKey else
       if KeyComp('pmt') then Result := tkKey else
-        if KeyComp('not') then Result := tkKey else
           if KeyComp('not') then Result := tkKey else Result := tkIdentifier;
 end;
 
@@ -727,9 +722,10 @@ end;
 
 function TSynVBSyn.Func66: TtkTokenKind;
 begin
-  if KeyComp('freefile') then Result := tkKey else
-    if KeyComp('single') then Result := tkKey else
-      if KeyComp('cverr') then Result := tkKey else Result := tkIdentifier;
+  if KeyComp('andalso') then Result := tkKey else
+    if KeyComp('freefile') then Result := tkKey else
+      if KeyComp('single') then Result := tkKey else
+        if KeyComp('cverr') then Result := tkKey else Result := tkIdentifier;
 end;
 
 function TSynVBSyn.Func67: TtkTokenKind;
@@ -774,8 +770,9 @@ end;
 
 function TSynVBSyn.Func74: TtkTokenKind;
 begin
-  if KeyComp('weekday') then Result := tkKey else
-    if KeyComp('error') then Result := tkKey else Result := tkIdentifier;
+  if KeyComp('orelse') then Result := tkKey else
+    if KeyComp('weekday') then Result := tkKey else
+      if KeyComp('error') then Result := tkKey else Result := tkIdentifier;
 end;
 
 function TSynVBSyn.Func75: TtkTokenKind;
@@ -847,9 +844,7 @@ end;
 
 function TSynVBSyn.Func89: TtkTokenKind;
 begin
-  if KeyComp('option') then Result := tkKey else
-    if KeyComp('option') then Result := tkKey else
-      if KeyComp('option') then Result := tkKey else Result := tkIdentifier;
+  if KeyComp('option') then Result := tkKey else Result := tkIdentifier;
 end;
 
 function TSynVBSyn.Func91: TtkTokenKind;
@@ -858,9 +853,8 @@ begin
     if KeyComp('datevalue') then Result := tkKey else
       if KeyComp('fileattr') then Result := tkKey else
         if KeyComp('isarray') then Result := tkKey else
-          if KeyComp('fileattr') then Result := tkKey else
-            if KeyComp('filecopy') then Result := tkKey else
-              if KeyComp('getattr') then Result := tkKey else Result := tkIdentifier;
+          if KeyComp('filecopy') then Result := tkKey else
+            if KeyComp('getattr') then Result := tkKey else Result := tkIdentifier;
 end;
 
 function TSynVBSyn.Func94: TtkTokenKind;
@@ -880,8 +874,7 @@ end;
 
 function TSynVBSyn.Func98: TtkTokenKind;
 begin
-  if KeyComp('explicit') then Result := tkKey else
-    if KeyComp('explicit') then Result := tkKey else Result := tkIdentifier;
+  if KeyComp('explicit') then Result := tkKey else Result := tkIdentifier;
 end;
 
 function TSynVBSyn.Func99: TtkTokenKind;

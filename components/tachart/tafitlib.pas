@@ -35,7 +35,8 @@ type
     fitMoreParamsThanValues,   // There are more fitting parameters than data values
     fitNoFitParams,            // No fit parameters specified
     fitSingular,               // Matrix is (nearly) singular
-    fitNoBaseFunctions         // No user-provided base functions
+    fitNoBaseFunctions,        // No user-provided base functions
+    fitOverflow                // Numerical overflow
   );
 
   TFitResults = record
@@ -131,7 +132,7 @@ function CalcBestFitValues(const x, y: TArbFloatArray; n, m: Integer;
 var
   i, j: Integer;
 begin
-  SetLength(Result, Length(y));
+  SetLength(Result{%H-}, Length(y));
   for i := 0 to n - 1 do begin
     Result[i] := 0.0;
     for j := 0 to m - 1 do
@@ -202,11 +203,11 @@ end;
 function LinearFit(const x, y, dy: TArbFloatArray;
   FitParams: TFitParamArray): TFitResults;
 var
-  alpha: TArbFloatArray;
-  beta: TArbFloatArray;
-  xx: TArbFloatArray;
-  funcs: TArbFloatArray;
-  list: Array of Integer;
+  alpha: TArbFloatArray = nil;
+  beta: TArbFloatArray = nil;
+  xx: TArbFloatArray = nil;
+  funcs: TArbFloatArray = nil;
+  list: Array of Integer = nil;
   ycalc: TArbFloatArray;
   fp: TFitParam;
   n, m, mfit: Integer;
@@ -216,7 +217,7 @@ var
   ca: ArbFloat = 0.0;
   term: ArbInt = 0;
 begin
-  SetLength(Result.ParamValues, 0);
+  SetLength(Result{%H-}.ParamValues, 0);
   SetLength(Result.CovarianceMatrix, 0);
 
   // Check parameters

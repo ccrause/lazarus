@@ -63,11 +63,14 @@ type
   private
     appleMenu: TCocoaMenuItem;
     attachedAppleMenu: Boolean;
+    isKeyEq: Boolean;
   public
     procedure lclItemSelected(sender: id); message 'lclItemSelected:';
     procedure createAppleMenu(); message 'createAppleMenu';
     procedure overrideAppleMenu(AItem: TCocoaMenuItem); message 'overrideAppleMenu:';
     procedure attachAppleMenu(); message 'attachAppleMenu';
+    function performKeyEquivalent(theEvent: NSEvent): LCLObjCBoolean; override;
+    function lclIsKeyEquivalent: LCLObjCBoolean; message 'lclIsKeyEquivalent';
   end;
 
   { TCocoaMenuItem }
@@ -161,7 +164,8 @@ procedure NSMenuItemSetBitmap(mn: NSMenuItem; bmp: TBitmap);
 // the returned "Key" should not be released, as it's not memory owned
 procedure ShortcutToKeyEquivalent(const AShortCut: TShortcut; out Key: NSString; out shiftKeyMask: NSUInteger);
 
-procedure ToggleAppMenu(ALogicalEnabled: Boolean);
+// returns the last state the menu was at
+function ToggleAppMenu(ALogicalEnabled: Boolean): Boolean;
 
 function AllocCocoaMenu(const atitle: string = ''): TCocoaMenu;
 function LCLMenuItemInit(item: NSMenuItem; const atitle: string; ashortCut: TShortCut): id;
@@ -279,6 +283,18 @@ begin
   insertItem_atIndex(appleMenu, 0);
 end;
 
+function TCocoaMenu.performKeyEquivalent(theEvent: NSEvent): LCLObjCBoolean;
+begin
+  isKeyEq := true;
+  inherited performKeyEquivalent(theEvent);
+  isKeyEq := false;
+end;
+
+function TCocoaMenu.lclIsKeyEquivalent: LCLObjCBoolean;
+begin
+  Result := isKeyEq;
+end;
+
 { TCocoaMenuITem }
 
 procedure TCocoaMenuItem.UncheckSiblings(AIsChangingToChecked: LCLObjCBoolean);
@@ -384,6 +400,15 @@ end;
 procedure TCocoaMenuItem.menuNeedsUpdate(AMenu: NSMenu);
 begin
   if not Assigned(menuItemCallback) then Exit;
+  if (menu.isKindOfClass(TCocoaMenu)) then
+  begin
+    // Issue #37789
+    // Cocoa tries to find, if there's a menu with the key event
+    // so item is not actually selected yet. Thus should not send ItemSelected
+    if TCocoaMenu(menu).lclIsKeyEquivalent then
+      Exit;
+  end;
+
   //todo: call "measureItem"
   menuItemCallback.ItemSelected;
 end;
@@ -831,6 +856,7 @@ var
   view : NSView;
   w : NSWindow;
   px, py: Integer;
+  wi: NSUInteger;
 begin
   if Assigned(APopupMenu) and (APopupMenu.Handle<>0) then
   begin
@@ -847,6 +873,31 @@ begin
     py := y;
     view := nil;
     w :=NSApp.keyWindow;
+    if not Assigned(w) and (NSApp.windows.count>0) then
+    begin
+      // in macOS it's possible to "rightclick" without focusing a window
+      // so let's try to find the window
+      for wi := 0 to NSApp.windows.count-1 do
+      begin
+        w := NSWindow(NSApp.windows.objectAtIndex(wi));
+        if not w.isVisible then Continue;
+        view := w.contentView;
+        view.lclScreenToLocal(px, py);
+        if (px >= 0) and (py >= 0)
+          and (px<=Round(view.frame.size.width))
+          and (py<=Round(view.frame.size.height))
+        then
+        begin
+          px := X;
+          py := Y;
+          Break;
+        end;
+        w := nil;
+        px := X;
+        py := Y;
+      end;
+    end;
+
     if Assigned(w) then
     begin
       view := w.contentView;
@@ -911,9 +962,14 @@ begin
   end;
 end;
 
-procedure ToggleAppMenu(ALogicalEnabled: Boolean);
+var
+  isMenuEnabled : Boolean = true;
+
+function ToggleAppMenu(ALogicalEnabled: Boolean): Boolean;
 begin
+  Result := isMenuEnabled;
   ToggleAppNSMenu( NSApplication(NSApp).mainMenu, ALogicalEnabled );
+  isMenuEnabled := ALogicalEnabled;
 end;
 
 end.

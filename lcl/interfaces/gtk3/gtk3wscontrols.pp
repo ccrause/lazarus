@@ -42,7 +42,7 @@ uses
   Controls, Graphics, LCLType, Types, LCLProc,
 ////////////////////////////////////////////////////
   WSLCLClasses, WSControls, WSProc, LazGtk3, LazGdk3, LazGlib2, LazGObject2,
-  gtk3widgets, LazPango1,
+  gtk3widgets, LazPango1, LazCairo1, LazGdkPixbuf2,
   { TODO: remove when CreateHandle/Component code moved }
   InterfaceBase;
 
@@ -321,12 +321,18 @@ end;
 
 class procedure TGtk3WSWinControl.PaintTo(const AWinControl: TWinControl; ADC: HDC;
   X, Y: Integer);
+var
+  AWidget: TGtk3Widget;
+  cr: Pcairo_t;
 begin
   if not WSCheckHandleAllocated(AWincontrol, 'PaintTo') or (ADC = 0) then
     Exit;
-  {.$IFDEF GTK3DEBUGCORE}
-  DebugLn('WARNING: TGtk3WSWinControl.PaintTo not implemented');
-  {.$ENDIF}
+  AWidget := TGtk3Widget(AWinControl.Handle);
+  cr := TGtk3DeviceContext(ADC).pcr;
+  cairo_save(cr);
+  cairo_translate(cr, X, Y);
+  gtk_widget_draw(AWidget.Widget, cr);
+  cairo_restore(cr);
 end;
 
 class procedure TGtk3WSWinControl.SetBounds(const AWinControl: TWinControl; const ALeft, ATop, AWidth, AHeight: Integer);
@@ -531,20 +537,25 @@ begin
 end;
 
 class procedure TGtk3WSWinControl.ShowHide(const AWinControl: TWinControl);
+var
+  wgt:TGtk3Widget;
 begin
   if not WSCheckHandleAllocated(AWinControl, 'ShowHide') then
     Exit;
   {$IFDEF GTK3DEBUGCORE}
   DebugLn('TGtk3WSWinControl.ShowHide ',dbgsName(AWinControl));
   {$ENDIF}
-  TGtk3Widget(AWinControl.Handle).Visible := AWinControl.HandleObjectShouldBeVisible;
-  if TGtk3Widget(AWinControl.Handle).Visible then
+  wgt:=TGtk3Widget(AWinControl.Handle);
+  wgt.Visible := AWinControl.HandleObjectShouldBeVisible;
+  if wgt.Visible then
   begin
-    TGtk3Widget(AWinControl.Handle).ShowAll;
+    wgt.ShowAll;
     // imediatelly realize (create widget handles), so we'll get updated bounds
     // and everything just on time.
-    if not (wtScrollingWin in TGtk3Widget(AWinControl.Handle).WidgetType) then
-      PGtkWidget(TGtk3Widget(AWinControl.Handle).GetContainerWidget)^.realize;
+    if not (wtScrollingWin in wgt.WidgetType) then
+    begin
+      wgt.GetContainerWidget^.realize;
+    end;
   end;
 end;
 

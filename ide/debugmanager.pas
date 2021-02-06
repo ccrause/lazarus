@@ -223,6 +223,7 @@ type
     function DoStepIntoInstrProject: TModalResult; override;
     function DoStepOverInstrProject: TModalResult; override;
     function DoStepOutProject: TModalResult; override;
+    function DoStepToCursor: TModalResult; override;
     function DoRunToCursor: TModalResult; override;
     function DoStopProject: TModalResult; override;
     procedure DoToggleCallStack; override;
@@ -566,7 +567,7 @@ end;
 procedure TManagedBreakPoints.Update(Item: TCollectionItem);
 begin
   inherited Update(Item);
-  if (Project1 <> nil) and (Item <> nil) and (Item is TIDEBreakPoint) and (TIDEBreakPoint(Item).UserModified)
+  if (Project1 <> nil) and (Item is TIDEBreakPoint) and (TIDEBreakPoint(Item).UserModified)
   then begin
     Project1.Modified := True;
     TIDEBreakPoint(Item).UserModified := False;
@@ -1134,16 +1135,21 @@ begin
       WatchVar := SE.Selection
     else
       WatchVar := SE.GetOperandAtCurrentCaret;
-    if (WatchVar <> '') and SE.EditorComponent.Focused then
+    if (WatchVar <> '') and (SE.SourceNotebook.Active or SE.EditorComponent.Focused) then
     begin
-      w := Watches.CurrentWatches.Find(WatchVar);
-      if w = nil
-      then w := Watches.CurrentWatches.Add(WatchVar);
-      if (w <> nil)
-      then begin
-        w.Enabled := True;
-        ViewDebugDialog(ddtWatches, False);
-        Exit;
+      Watches.CurrentWatches.BeginUpdate;
+      try
+        w := Watches.CurrentWatches.Find(WatchVar);
+        if w = nil
+        then w := Watches.CurrentWatches.Add(WatchVar);
+        if (w <> nil)
+        then begin
+          w.Enabled := True;
+          ViewDebugDialog(ddtWatches, False);
+          Exit;
+        end;
+      finally
+        Watches.CurrentWatches.EndUpdate;
       end;
     end;
   end;
@@ -1349,7 +1355,7 @@ begin
   // All conmmands
   // -------------------
   // dcRun, dcPause, dcStop, dcStepOver, dcStepInto,  dcStepOverInstrcution, dcStepIntoInstrcution,
-  // dcRunTo, dcJumpto, dcBreak, dcWatch
+  // dcStepTo, dcJumpto, dcBreak, dcWatch
   // -------------------
 
   UpdateButtonsAndMenuItems;
@@ -1438,13 +1444,29 @@ begin
       if (OldState<>dsIdle)
       then begin
         MainIDE.DoCallRunFinishedHandler;
-        if EnvironmentOptions.DebuggerShowStopMessage
-        then begin
-          MsgResult:=IDEQuestionDialog(lisExecutionStopped, lisExecutionStopped,
-              mtInformation, [mrOK, lisMenuOk,
-                              mrYesToAll, lisDoNotShowThisMessageAgain], '');
-          if MsgResult=mrYesToAll then
-            EnvironmentOptions.DebuggerShowStopMessage:=false;
+        if not FDebugger.SkipStopMessage then begin
+          if (FDebugger.ExitCode <> 0) and EnvironmentOptions.DebuggerShowExitCodeMessage then begin
+            i := 4;
+            if FDebugger.ExitCode > 65535 then
+            i := 8;
+            {$PUSH}{$R-}
+            MsgResult:=IDEQuestionDialog(lisExecutionStopped,
+                Format(lisExecutionStoppedExitCode, [LineEnding+'', FDebugger.ExitCode, IntToHex(FDebugger.ExitCode, i)]),
+                mtInformation, [mrOK, lisMenuOk,
+                                mrYesToAll, lisDoNotShowThisMessageAgain], '');
+            {$POP}
+            if MsgResult=mrYesToAll then
+              EnvironmentOptions.DebuggerShowExitCodeMessage:=false;
+          end
+          else
+          if EnvironmentOptions.DebuggerShowStopMessage
+          then begin
+            MsgResult:=IDEQuestionDialog(lisExecutionStopped, lisExecutionStopped,
+                mtInformation, [mrOK, lisMenuOk,
+                                mrYesToAll, lisDoNotShowThisMessageAgain], '');
+            if MsgResult=mrYesToAll then
+              EnvironmentOptions.DebuggerShowStopMessage:=false;
+          end;
         end;
 
         if EnvironmentOptions.DebuggerResetAfterRun or FDebugger.NeedReset then
@@ -2056,6 +2078,7 @@ end;
 procedure TDebugManager.SetupSourceMenuShortCuts;
 begin
   SrcEditMenuToggleBreakpoint.Command:=GetCommand(ecToggleBreakPoint);
+  SrcEditMenuStepToCursor.Command:=GetCommand(ecStepToCursor);
   SrcEditMenuRunToCursor.Command:=GetCommand(ecRunToCursor);
   SrcEditMenuEvaluateModify.Command:=GetCommand(ecEvaluate);
   SrcEditMenuAddWatchAtCursor.Command:=GetCommand(ecAddWatch);
@@ -2070,61 +2093,68 @@ var
   CanRun: Boolean;
   SrcEdit: TSourceEditorInterface;
   AnUnitInfo: TUnitInfo;
+  AvailCommands: TDBGCommands;
+  CurState: TDBGState;
 begin
   if (MainIDE=nil) or (MainIDE.ToolStatus = itExiting) then exit;
 
-  DebuggerIsValid:=(FDebugger<>nil) and (MainIDE.ToolStatus=itDebugger);
+  if FDebugger <> nil then begin
+    AvailCommands := FDebugger.Commands;
+    CurState := FDebugger.State;
+    if CurState = dsError then begin
+      CurState := dsStop;
+      AvailCommands := GetDebuggerClass.SupportedCommandsFor(dsStop);
+    end;
+  end
+  else begin
+    AvailCommands := GetDebuggerClass.SupportedCommandsFor(dsStop);
+    CurState := dsStop;
+  end;
+  DebuggerIsValid:=(MainIDE.ToolStatus in [itNone, itDebugger]);
   MainIDE.GetCurrentUnitInfo(SrcEdit,AnUnitInfo);
   with MainIDEBar do begin
     // For 'run' and 'step' bypass 'idle', so we can set the filename later
     CanRun:=false;
-    if Project1<>nil then
+    if (Project1<>nil) and DebuggerIsValid then
       CanRun:=( (AnUnitInfo<>nil) and (AnUnitInfo.RunFileIfActive) ) or
               ( ((Project1.CompilerOptions.ExecutableType=cetProgram) or
                  ((Project1.RunParameterOptions.GetActiveMode<>nil) and (Project1.RunParameterOptions.GetActiveMode.HostApplicationFilename<>'')))
                and (pfRunnable in Project1.Flags)
               );
     // Run
-    itmRunMenuRun.Enabled := CanRun and (not DebuggerIsValid
-            or (dcRun in FDebugger.Commands) or (FDebugger.State = dsIdle));
+    itmRunMenuRun.Enabled          := CanRun and (dcRun in AvailCommands);
     // Pause
-    itmRunMenuPause.Enabled := CanRun and DebuggerIsValid
-            and ((dcPause in FDebugger.Commands) or FAutoContinueTimer.Enabled);
+    itmRunMenuPause.Enabled        := CanRun and ((dcPause in AvailCommands) or FAutoContinueTimer.Enabled);
     // Show execution point
-    itmRunMenuShowExecutionPoint.Enabled := CanRun and DebuggerIsValid
-            and (FDebugger.State = dsPause);
+    itmRunMenuShowExecutionPoint.Enabled := CanRun and (CurState = dsPause);
     // Step into
-    itmRunMenuStepInto.Enabled := CanRun and (not DebuggerIsValid
-            or (dcStepInto in FDebugger.Commands) or (FDebugger.State = dsIdle));
+    itmRunMenuStepInto.Enabled     := CanRun and (dcStepInto in AvailCommands);
     // Step over
-    itmRunMenuStepOver.Enabled := CanRun and (not DebuggerIsValid
-            or (dcStepOver in FDebugger.Commands)  or (FDebugger.State = dsIdle));
+    itmRunMenuStepOver.Enabled     := CanRun and (dcStepOver in AvailCommands);
     // Step out
-    itmRunMenuStepOut.Enabled := CanRun and DebuggerIsValid
-            and (dcStepOut in FDebugger.Commands) and (FDebugger.State = dsPause);
+    itmRunMenuStepOut.Enabled      := CanRun and (dcStepOut in AvailCommands) and (CurState = dsPause);
+    // Step to cursor
+    itmRunMenuStepToCursor.Enabled := CanRun and (dcStepTo in AvailCommands);
     // Run to cursor
-    itmRunMenuRunToCursor.Enabled := CanRun and DebuggerIsValid
-            and (dcRunTo in FDebugger.Commands);
+    itmRunMenuRunToCursor.Enabled  := CanRun and (dcRunTo in AvailCommands);
     // Stop
-    itmRunMenuStop.Enabled := CanRun and DebuggerIsValid;
+    itmRunMenuStop.Enabled         := (CanRun and (MainIDE.ToolStatus = itDebugger) and
+      (CurState in [dsPause, dsInternalPause, dsInit, dsRun, dsError])) or
+      (MainIDE.ToolStatus = itBuilder);
 
     //Attach / Detach
-    itmRunMenuAttach.Enabled := (not DebuggerIsValid) or (dcAttach in FDebugger.Commands);
-    itmRunMenuDetach.Enabled := (DebuggerIsValid)    and (dcDetach in FDebugger.Commands);
+    itmRunMenuAttach.Enabled          := DebuggerIsValid and (dcAttach in AvailCommands);
+    itmRunMenuDetach.Enabled          := DebuggerIsValid and (dcDetach in AvailCommands);
 
     // Evaluate
-    itmRunMenuEvaluate.Enabled := CanRun and DebuggerIsValid
-            and (dcEvaluate in FDebugger.Commands);
+    itmRunMenuEvaluate.Enabled        := CanRun and (dcEvaluate in AvailCommands);
     // Evaluate / modify
-    SrcEditMenuEvaluateModify.Enabled := CanRun and DebuggerIsValid
-            and (dcEvaluate in FDebugger.Commands);
+    SrcEditMenuEvaluateModify.Enabled := CanRun and (dcEvaluate in AvailCommands);
     // Inspect
-    SrcEditMenuInspect.Enabled := CanRun and DebuggerIsValid
-            and (dcEvaluate in FDebugger.Commands);
-    itmRunMenuInspect.Enabled := CanRun and DebuggerIsValid
-            and (dcEvaluate in FDebugger.Commands);
+    SrcEditMenuInspect.Enabled        := CanRun and (dcEvaluate in AvailCommands);
+    itmRunMenuInspect.Enabled         := CanRun and (dcEvaluate in AvailCommands);
     // Add watch
-    itmRunMenuAddWatch.Enabled := True; // always allow to add a watch
+    itmRunMenuAddWatch.Enabled        := True; // always allow to add a watch
 
     // Add Breakpoint
     itmRunMenuAddBpSource.Enabled := True;
@@ -2142,7 +2172,7 @@ procedure TDebugManager.UpdateToolStatus;
 const
   TOOLSTATEMAP: array[TDBGState] of TIDEToolStatus = (
   //dsNone, dsIdle, dsStop,     dsPause,    dsInternalPause, dsInit,     dsRun,      dsError,    dsDestroying
-    itNone, itNone, itDebugger, itDebugger, itDebugger,      itDebugger, itDebugger, itNone, itNone
+    itNone, itNone, itNone, itDebugger, itDebugger,      itDebugger, itDebugger, itNone, itNone
   );
 begin
   // Next may call ResetDebugger, then FDebugger is gone
@@ -2356,7 +2386,8 @@ begin
       begin
         if not PromptOnError then
           ClearPathAndExe
-        else
+        else begin
+          BuildBoss.WriteDebug_RunCommandLine;
           if IDEMessageDialog(lisLaunchingApplicationInvalid,
             Format(lisTheLaunchingApplicationBundleDoesNotExists,
               [LaunchingApplication, LineEnding, LineEnding, LineEnding+LineEnding]),
@@ -2366,6 +2397,7 @@ begin
           end
           else
             Exit;
+        end;
       end;
 
       if (NewDebuggerClass = TProcessDebugger) and (LaunchingApplication <> '') then
@@ -2377,6 +2409,7 @@ begin
     else
       if not FileIsExecutable(LaunchingApplication)
       then begin
+        BuildBoss.WriteDebug_RunCommandLine;
         if not PromptOnError then
           ClearPathAndExe
         else begin
@@ -2395,6 +2428,7 @@ begin
       if not PromptOnError then
         ClearPathAndExe
       else begin
+        debugln(['Info: (lazarus) [TDebugManager.GetLaunchPathAndExe] EnvironmentOptions.DebuggerFilename="',EnvironmentOptions.DebuggerFilename,'"']);
         IDEMessageDialog(lisDebuggerInvalid,
           Format(lisTheDebuggerDoesNotExistsOrIsNotExecutableSeeEnviro,
             [EnvironmentOptions.DebuggerFilename(Project1), LineEnding, LineEnding+LineEnding]),
@@ -2423,7 +2457,7 @@ begin
     exit;
   end;
 
-  if Destroying then Exit;
+  if Destroying or (Project1 = nil) then Exit;
   if not(difInitForAttach in AFlags) then begin
     if (Project1.MainUnitID < 0) then Exit;
     if not GetLaunchPathAndExe(LaunchingCmdLine, LaunchingApplication, LaunchingParams) then
@@ -2758,6 +2792,7 @@ begin
                            else DoStepOverProject;
                          end;
     ecStepOut:           DoStepOutProject;
+    ecStepToCursor:      DoStepToCursor;
     ecRunToCursor:       DoRunToCursor;
     ecStopProgram:       DoStopProject;
     ecResetDebugger:     ResetDebugger;
@@ -3025,16 +3060,16 @@ begin
   end;
 end;
 
-function TDebugManager.DoRunToCursor: TModalResult;
+function TDebugManager.DoStepToCursor: TModalResult;
 var
   ActiveSrcEdit: TSourceEditorInterface;
   ActiveUnitInfo: TUnitInfo;
   UnitFilename: string;
 begin
 {$ifdef VerboseDebugger}
-  DebugLn('TDebugManager.DoRunToCursor A');
+  DebugLn('TDebugManager.DoStepToCursor A');
 {$endif}
-  if (FDebugger = nil) or not(dcRunTo in FDebugger.Commands)
+  if (FDebugger = nil) or not(dcStepTo in FDebugger.Commands)
   then begin
     Result := mrAbort;
     Exit;
@@ -3048,7 +3083,7 @@ begin
     Exit;
   end;
 {$ifdef VerboseDebugger}
-  DebugLn('TDebugManager.DoRunToCursor B');
+  DebugLn('TDebugManager.DoStepToCursor B');
 {$endif}
 
   Result := mrCancel;
@@ -3067,14 +3102,48 @@ begin
   else UnitFilename:=BuildBoss.GetTestUnitFilename(ActiveUnitInfo);
 
 {$ifdef VerboseDebugger}
-  DebugLn('TDebugManager.DoRunToCursor C');
+  DebugLn('TDebugManager.DoStepToCursor C');
 {$endif}
-  FDebugger.RunTo(ExtractFilename(UnitFilename),
+  FDebugger.StepTo(ExtractFilename(UnitFilename),
                   TSourceEditor(ActiveSrcEdit).EditorComponent.CaretY);
 
 {$ifdef VerboseDebugger}
-  DebugLn('TDebugManager.DoRunToCursor D');
+  DebugLn('TDebugManager.DoStepToCursor D');
 {$endif}
+  Result := mrOK;
+end;
+
+function TDebugManager.DoRunToCursor: TModalResult;
+var
+  ActiveSrcEdit: TSourceEditorInterface;
+  ActiveUnitInfo: TUnitInfo;
+  UnitFilename: string;
+begin
+  if (MainIDE.DoInitProjectRun <> mrOK)
+  or (MainIDE.ToolStatus <> itDebugger)
+  or (FDebugger = nil) or Destroying
+  then begin
+    Result := mrAbort;
+    Exit;
+  end;
+
+  MainIDE.GetCurrentUnitInfo(ActiveSrcEdit,ActiveUnitInfo);
+  if (ActiveSrcEdit=nil) or (ActiveUnitInfo=nil)
+  then begin
+    IDEMessageDialog(lisRunToFailed, lisPleaseOpenAUnitBeforeRun, mtError,
+      [mbCancel]);
+    Result := mrCancel;
+    Exit;
+  end;
+
+  if not ActiveUnitInfo.Source.IsVirtual
+  then UnitFilename:=ActiveUnitInfo.Filename
+  else UnitFilename:=BuildBoss.GetTestUnitFilename(ActiveUnitInfo);
+
+  FStepping:=True;
+  FDebugger.RunTo(ExtractFilename(UnitFilename),
+                  TSourceEditor(ActiveSrcEdit).EditorComponent.CaretY);
+
   Result := mrOK;
 end;
 

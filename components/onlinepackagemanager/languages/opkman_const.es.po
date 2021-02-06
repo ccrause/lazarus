@@ -1103,6 +1103,16 @@ msgctxt "opkman_const.rsmainfrm_vsttext_downloadurl"
 msgid "External link (JSON)"
 msgstr "Actualizar enlace (JSON)"
 
+#: opkman_const.rsmainfrm_vsttext_externaldeps
+msgctxt "opkman_const.rsmainfrm_vsttext_externaldeps"
+msgid "External dependencies"
+msgstr ""
+
+#: opkman_const.rsmainfrm_vsttext_externalmetapackagedeps
+msgctxt "opkman_const.rsmainfrm_vsttext_externalmetapackagedeps"
+msgid "External dependencies for metapackage"
+msgstr ""
+
 #: opkman_const.rsmainfrm_vsttext_fpccompatibility
 msgctxt "opkman_const.rsmainfrm_vsttext_fpccompatibility"
 msgid "FPC compatibility"
@@ -1142,6 +1152,30 @@ msgstr "Información de licencia para el paquete"
 msgctxt "opkman_const.rsmainfrm_vsttext_license"
 msgid "License"
 msgstr "Licencia"
+
+#: opkman_const.rsmainfrm_vsttext_open
+#, fuzzy
+msgctxt "opkman_const.rsmainfrm_vsttext_open"
+msgid "Open"
+msgstr "Abrir"
+
+#: opkman_const.rsmainfrm_vsttext_open_error
+#, fuzzy
+msgctxt "opkman_const.rsmainfrm_vsttext_open_error"
+msgid "Cannot open package file."
+msgstr "No se puede abrir el archivo del paquete."
+
+#: opkman_const.rsmainfrm_vsttext_open_notfound
+msgid "Package file not found."
+msgstr ""
+
+#: opkman_const.rsmainfrm_vsttext_orphanedpackage1
+msgid "Orphaned package"
+msgstr ""
+
+#: opkman_const.rsmainfrm_vsttext_orphanedpackage2
+msgid "currently has no active maintainer"
+msgstr ""
 
 #: opkman_const.rsmainfrm_vsttext_packagecategory
 msgid "Package category"
@@ -1361,6 +1395,10 @@ msgstr "SVN"
 msgctxt "opkman_const.rsmainfrm_vsttext_version"
 msgid "Version"
 msgstr "Versión"
+
+#: opkman_const.rsmenulazaruspackagemanager
+msgid "Online Package Manager ..."
+msgstr ""
 
 #: opkman_const.rsopensslfrm_bp_cancelbutton_caption
 #, fuzzy
@@ -1859,6 +1897,7 @@ msgid "No valid download link found."
 msgstr "No se encontró un enlace de descarga válido."
 
 #: opkman_const.rsprogressfrm_error7
+msgctxt "opkman_const.rsprogressfrm_error7"
 msgid "Cannot open package file."
 msgstr "No se puede abrir el archivo del paquete."
 

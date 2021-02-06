@@ -4,14 +4,14 @@ msgid ""
 msgstr ""
 "Project-Id-Version: lazaruside\n"
 "POT-Creation-Date: \n"
-"PO-Revision-Date: 2020-02-18 22:32+0200\n"
-"Last-Translator: Olexandr Pylypchuk <lxlalexlxl@ukr.net>\n"
+"PO-Revision-Date: 2020-12-24 22:55+0200\n"
+"Last-Translator: lxlalexlxl <lxlalexlxl@ukr.net>\n"
 "Language-Team: Ukrainian <kde-i18n-doc@kde.org>\n"
 "Language: uk\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"X-Generator: Lokalize 19.04.3\n"
+"X-Generator: Lokalize 19.12.3\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
 #: lazarusidestrconsts.dbgbreakgroupdlgcaption
@@ -2109,7 +2109,7 @@ msgstr "З по&чатку"
 
 #: lazarusidestrconsts.dlgfromcursor
 msgid "&From cursor"
-msgstr "&Від курсору"
+msgstr "&Від курсора"
 
 #: lazarusidestrconsts.dlgglobal
 msgid "&Global"
@@ -3226,7 +3226,7 @@ msgstr "Розширені Параметри Ключових слів Паск
 
 #: lazarusidestrconsts.dlgpaskeywordsmarkup
 msgid "Markup (on caret)"
-msgstr "Підсвічувати (біля курсору)"
+msgstr "Підсвічувати (біля курсора)"
 
 #: lazarusidestrconsts.dlgpaskeywordsmatches
 msgid "Matching Keywords"
@@ -4564,8 +4564,8 @@ msgstr "Про проєкт Lazarus"
 
 #: lazarusidestrconsts.lisaboutlazarusmsg
 #, object-pascal-format
-msgid "License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.%sLazarus is an IDE to create graphical and console applications with Free Pascal. Free Pascal is Pascal and Object Pascal compiler that runs on Windows, Linux, Mac OS X, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing we need more developers."
-msgstr "Ліцензія: GPL/LGPL. Див. сирцеві коди Lazarus та Free Pascal для деталей ліцензії.%sLazarus це ІСР для створення графічних та консольних застосунків, написаних на Free Pascal. Free Pascal це компілятор Pascal та Object Pascal, що працює на Windows, Linux, Mac OS X, FreeBSD та інших.%sLazarus є шматком пазлу, якого бракувало, щоб розробляти програми для всіх перелічених платформ у Delphi-подібному оточенні. ІСР - це RAD-інструмент що включає в себе дизайнер форм.%sОскільки Lazarus росте, нам потрібно більше розробників."
+msgid "License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.%sLazarus is an IDE to create graphical and console applications with Free Pascal. Free Pascal is a Pascal and Object Pascal compiler that runs on Windows, Linux, macOS, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi-like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing, we need more developers."
+msgstr "Ліцензія: GPL/LGPL. Подробиціі ліцензії дивіться в сирцевих кодах Lazarus та Free Pascal.%sLazarus це ІСР для створення графічних та консольних застосунків, написаних на Free Pascal. Free Pascal це компілятор Pascal та Object Pascal, що працює на Windows, Linux, macOS, FreeBSD та інших.%sLazarus є шматком пазлу, якого бракувало, щоб розробляти програми для всіх перелічених платформ у Delphi-подібному оточенні. ІСР - це RAD-інструмент що включає в себе дизайнер форм.%sОскільки Lazarus росте, нам потрібно більше розробників."
 
 #: lazarusidestrconsts.lisaboutnocontributors
 msgid "Cannot find contributors list."
@@ -5019,10 +5019,6 @@ msgstr "Показати повну палітру компонентів"
 msgid "If component palette spans over more lines, show them all and not only one."
 msgstr "Якщо палітра компонентів ділиться на декілька рядків, показувати їх всі, а не лише один."
 
-#: lazarusidestrconsts.lisautocheckmodifiedfiles
-msgid "Automatically check (select) modified files"
-msgstr "Автоматично перевіряти (вибирати) змінені файли"
-
 #: lazarusidestrconsts.lisautocompletionoff
 msgid "Auto completion: off"
 msgstr "Автозавершення: вимкн."
@@ -5059,6 +5055,22 @@ msgstr "не завершувати вибір"
 #: lazarusidestrconsts.lisautomaticallyinvokeafterpoint
 msgid "Automatically invoke after point"
 msgstr "Автовиклик після крапки"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontype
+msgid "Automatically invoke on typing"
+msgstr "Автоматично викликати під час набору"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeminlength
+msgid "Only complete if word is longer or equal"
+msgstr "Завершувати, тільки якщо слово довше або таке саме"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeonlywordend
+msgid "Only complete when at end of word"
+msgstr "Завершувати, тільки в кінці слова"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeusetimer
+msgid "Use completion box delay"
+msgstr "Затримувати вікно завершення"
 
 #: lazarusidestrconsts.lisautomaticallyonlinebreak
 msgid "line break"
@@ -5361,7 +5373,7 @@ msgstr "Виклик %s для створення Makefile з %s не вдавс
 
 #: lazarusidestrconsts.liscallstacknotevaluated
 msgid "Stack not evaluated"
-msgstr "Стек не оцінений"
+msgstr "Стек не обчислений"
 
 #: lazarusidestrconsts.liscancel
 msgctxt "lazarusidestrconsts.liscancel"
@@ -8469,6 +8481,10 @@ msgstr "Відновити оброблені"
 msgid "Resume Unhandled"
 msgstr "Відновити необроблені"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmshowexitcodeonstop
+msgid "Show message on stop with Error (Exit-code <> 0)"
+msgstr "Показувати при зупинці повідомлення про помилку (Exit-code <> 0)"
+
 #: lazarusidestrconsts.lisdebugoptionsfrmshowmessageonstop
 msgid "Show message on stop"
 msgstr "Показувати повідомлення зверху"
@@ -8859,6 +8875,10 @@ msgstr "Перезавантажити змінені файли з диска"
 msgid "Some files have changed on disk:"
 msgstr "Деякі файли змінені на диску:"
 
+#: lazarusidestrconsts.lisdiskdiffsomefileshavelocalchanges
+msgid "Some files have local changes. Either local or external changes will be overwritten."
+msgstr "Деякі файли мають локальні зміни. Локальні або зовнішні зміни будуть перезаписані."
+
 #: lazarusidestrconsts.lisdistinguishbigandsmalllettersegaanda
 msgid "Distinguish big and small letters e.g. A and a"
 msgstr "Розрізняти регістр букв, наприклад, А і а"
@@ -9089,6 +9109,34 @@ msgstr "Повторний модуль"
 #, object-pascal-format
 msgid "Duplicate unit \"%s\" in \"%s\""
 msgstr "Повторний модуль \"%s\" у \"%s\""
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollin
+msgid "Amount to scroll in"
+msgstr "Відстань прокручування"
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollin2
+msgid "Amount to scroll in (%)"
+msgstr "Відстань прокручування (%)"
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollinmax
+msgid "Amount to scroll in (Max)"
+msgstr "Відстань прокручування (найбільша)"
+
+#: lazarusidestrconsts.lisdynpkgautoscrollondeletepa
+msgid "Auto Scroll on delete past left border"
+msgstr "Автопрокручування, якщо видалено після лівої межі "
+
+#: lazarusidestrconsts.lisdynpkgautoscrollontypepast
+msgid "Auto Scroll on type past right border"
+msgstr "Автопрокручування, якщо вводиться після правої межі "
+
+#: lazarusidestrconsts.lisdynpkgtriggeronmincharsofw
+msgid "Trigger on min chars (% of width)"
+msgstr "Мінімум символів для спрацювання (% ширини)"
+
+#: lazarusidestrconsts.lisdynpkgtriggeronmincharsvis
+msgid "Trigger on min chars visible"
+msgstr "Мінімум символів для спрацювання"
 
 #: lazarusidestrconsts.lisedit
 msgctxt "lazarusidestrconsts.lisedit"
@@ -9584,11 +9632,15 @@ msgstr "Оцінити вираз"
 
 #: lazarusidestrconsts.lisevaluate
 msgid "E&valuate"
-msgstr "О&цінити"
+msgstr "О&бчислити"
+
+#: lazarusidestrconsts.lisevaluateall
+msgid "Evaluate all"
+msgstr "Обчислити всі"
 
 #: lazarusidestrconsts.lisevaluatemodify
 msgid "&Evaluate/Modify"
-msgstr "&Оцінити/Змінити"
+msgstr "&Обчислити/Змінити"
 
 #: lazarusidestrconsts.liseventlogclear
 msgid "Clear Events"
@@ -9661,6 +9713,11 @@ msgstr "Виконати команду до"
 #: lazarusidestrconsts.lisexecutionstopped
 msgid "Execution stopped"
 msgstr "Виконання завершено"
+
+#: lazarusidestrconsts.lisexecutionstoppedexitcode
+#, object-pascal-format
+msgid "Execution stopped with exit-code %1:d ($%2:s)"
+msgstr "Виконання зупинено з кодом виходу %1:d ($%2:s)"
 
 #: lazarusidestrconsts.lisexit
 msgctxt "lazarusidestrconsts.lisexit"
@@ -10652,7 +10709,7 @@ msgstr "Виконати до повернення результату функ
 
 #: lazarusidestrconsts.lishintstepover
 msgid "Step Over"
-msgstr "На крок в обхід"
+msgstr "Переступити"
 
 #: lazarusidestrconsts.lishintthemakeresourcestringfunctionexpectsastringcon
 #, object-pascal-format
@@ -12397,7 +12454,7 @@ msgstr "Ко&піювати значення"
 
 #: lazarusidestrconsts.lislocalsnotevaluated
 msgid "Locals not evaluated"
-msgstr "Локальні не оцінені"
+msgstr "Локальні не обчислені"
 
 #: lazarusidestrconsts.lislogcallstack
 msgid "Log Call Stack"
@@ -13786,8 +13843,9 @@ msgid "Run &Parameters ..."
 msgstr "Пара&метри виконання ..."
 
 #: lazarusidestrconsts.lismenuruntocursor
-msgid "Step over to &Cursor"
-msgstr "Виконати до &курсору"
+msgctxt "lazarusidestrconsts.lismenuruntocursor"
+msgid "Run to Cursor"
+msgstr "Виконати до курсора"
 
 #: lazarusidestrconsts.lismenurunwithoutdebugging
 msgid "Run without Debugging"
@@ -13903,6 +13961,11 @@ msgstr "Переступити інструкцію"
 msgctxt "lazarusidestrconsts.lismenustepoverinstrhint"
 msgid "Step Over Instruction"
 msgstr "Переступити інструкцію"
+
+#: lazarusidestrconsts.lismenusteptocursor
+msgctxt "lazarusidestrconsts.lismenusteptocursor"
+msgid "Step over to &Cursor"
+msgstr "Переступити до &курсора"
 
 #: lazarusidestrconsts.lismenuswapcaseselection
 msgid "Swap Case in Selection"
@@ -15039,7 +15102,7 @@ msgstr "Відкрити файл"
 
 #: lazarusidestrconsts.lisopenfileatcursor
 msgid "Open file at cursor"
-msgstr "Відкрити файл біля курсору"
+msgstr "Відкрити файл біля курсора"
 
 #: lazarusidestrconsts.lisopeninfileman
 msgid "Open in file manager"
@@ -15430,6 +15493,10 @@ msgstr "(доступні онлайн)"
 #, object-pascal-format
 msgid "Call %sRegister%s procedure of selected unit"
 msgstr "Викликати процедуру %sRegister%s вибраного модуля"
+
+#: lazarusidestrconsts.lispckeditcheckavailabilityonline
+msgid "Check availability online"
+msgstr "Перевірити доступність онлайн"
 
 #: lazarusidestrconsts.lispckeditcleanupdependencies
 msgid "Clean up dependencies ..."
@@ -16846,10 +16913,6 @@ msgstr "Додати файли редактора"
 msgid "Invalid Min-Max version"
 msgstr "Неправильна версія (Min-Max)"
 
-#: lazarusidestrconsts.lisprojaddinvalidpascalunitname
-msgid "Invalid Pascal unit name"
-msgstr "Неправильна назва модуля Pascal"
-
 #: lazarusidestrconsts.lisprojaddinvalidversion
 msgid "Invalid version"
 msgstr "Неправильна версія"
@@ -16928,11 +16991,6 @@ msgstr "Назва модуля \"%s\" вже існує у проєкті%sу �
 #, object-pascal-format
 msgid "The unit name \"%s\" already exists in the selection%swith file: \"%s\"."
 msgstr "Назва модуля \"%s\" вже є у вибраному%sу файлі: \"%s\"."
-
-#: lazarusidestrconsts.lisprojaddtheunitnameisnotavalidpascalidentifier
-#, object-pascal-format
-msgid "The unit name \"%s\" is not a valid Pascal identifier."
-msgstr "Назва модуля \"%s\" не є правильним ідентифікатором Pascal. "
 
 #: lazarusidestrconsts.lisprojaddunitnamealreadyexists
 msgid "Unit name already exists"
@@ -20084,6 +20142,11 @@ msgstr "Ідентифікатор модуля існує"
 msgid "%s unit %s in package %s"
 msgstr "%s модуль %s у пакунку %s"
 
+#: lazarusidestrconsts.lisunitmustsavebeforeinherit
+#, object-pascal-format
+msgid "Unit \"%s\" must be saved before it can be inherited from. Save now?"
+msgstr "Модуль \"%s\" слід зберегти, щоб від нього можна було успадковувати. Зберегти?"
+
 #: lazarusidestrconsts.lisunitnamealreadyexistscap
 msgid "Unitname already in project"
 msgstr "Модуль з такою назвою вже є в проєкті"
@@ -20157,15 +20220,15 @@ msgstr "Вверх"
 
 #: lazarusidestrconsts.lisupdateapplicationcreateform
 msgid "Update Application.CreateForm statements in main unit"
-msgstr ""
+msgstr "Оновлювати вирази Application.CreateForm у головному модулі"
 
 #: lazarusidestrconsts.lisupdateapplicationscaledstatement
 msgid "Update Application.Scaled statement in main unit"
-msgstr ""
+msgstr "Оновлювати вирази Application.Scaled у головному модулі"
 
 #: lazarusidestrconsts.lisupdateapplicationtitlestatement
 msgid "Update Application.Title statement in main unit"
-msgstr ""
+msgstr "Оновлювати вирази Application.Title у головному модулі"
 
 #: lazarusidestrconsts.lisupdateinfo
 msgid "Update info"
@@ -21034,6 +21097,10 @@ msgstr "&Основна версія:"
 msgid "Mi&nor version:"
 msgstr "&Другорядна версія:"
 
+#: lazarusidestrconsts.rsnewsearchwithsamecriteria
+msgid "New search with same criteria"
+msgstr "Новий пошук з тими самими критеріями"
+
 #: lazarusidestrconsts.rsotherinfo
 msgid "Other info"
 msgstr "Інша інформація"
@@ -21041,6 +21108,10 @@ msgstr "Інша інформація"
 #: lazarusidestrconsts.rspooutputdirectory
 msgid "PO Output Directory:"
 msgstr "Результуюча тека PO:"
+
+#: lazarusidestrconsts.rsrefreshthesearch
+msgid "Refresh the search"
+msgstr "Оновити пошук"
 
 #: lazarusidestrconsts.rsresource
 msgid "Resource"
@@ -21066,10 +21137,6 @@ msgstr "&Ревізія:"
 #: lazarusidestrconsts.rsselectaninheritedentry
 msgid "Select an inherited entry"
 msgstr "Виберіть успадкований елемент"
-
-#: lazarusidestrconsts.rsstartanewsearch
-msgid "Start a new search"
-msgstr "Почати новий пошук"
 
 #: lazarusidestrconsts.rsversionnumbering
 msgid "Version numbering"
@@ -21097,7 +21164,7 @@ msgstr "Команди вибирання стовпців тексту"
 
 #: lazarusidestrconsts.srkmcatcursormoving
 msgid "Cursor moving commands"
-msgstr "Команди переміщення курсору"
+msgstr "Команди переміщення курсора"
 
 #: lazarusidestrconsts.srkmcatediting
 msgid "Text editing commands"
@@ -21429,7 +21496,7 @@ msgstr "Видалити до початку рядка"
 
 #: lazarusidestrconsts.srkmecdeletechar
 msgid "Delete char at cursor"
-msgstr "Видалити символ біля курсору"
+msgstr "Видалити символ біля курсора"
 
 #: lazarusidestrconsts.srkmecdeleteeol
 msgid "Delete to end of line"
@@ -21879,6 +21946,10 @@ msgctxt "lazarusidestrconsts.srkmecpaste"
 msgid "Paste"
 msgstr "Вставити"
 
+#: lazarusidestrconsts.srkmecpasteascolumns
+msgid "Paste (as Columns)"
+msgstr "Вставити (як стовпці)"
+
 #: lazarusidestrconsts.srkmecpause
 msgid "pause program"
 msgstr "призупинити програму"
@@ -21889,11 +21960,11 @@ msgstr "Очистити всі додаткові курсори"
 
 #: lazarusidestrconsts.srkmecpluginmulticaretmodecancelonmove
 msgid "Cursor keys clear all extra carets"
-msgstr "Клавіші курсору вилучають всі додаткові курсори"
+msgstr "Клавіші курсора вилучають всі додаткові курсори"
 
 #: lazarusidestrconsts.srkmecpluginmulticaretmodemoveall
 msgid "Cursor keys move all extra carets"
-msgstr "Клавіші курсору керують всіма додатковими курсорами"
+msgstr "Клавіші курсора керують всіма додатковими курсорами"
 
 #: lazarusidestrconsts.srkmecpluginmulticaretsetcaret
 msgid "Add extra caret"
@@ -22632,11 +22703,11 @@ msgstr "Зап-пауза"
 
 #: lazarusidestrconsts.uemaddwatchatcursor
 msgid "Add &Watch At Cursor"
-msgstr "Додати спостереження біля курсору"
+msgstr "Додати спостереження біля курсора"
 
 #: lazarusidestrconsts.uemaddwatchpointatcursor
 msgid "Add Watch&Point At Cursor"
-msgstr "Додати точку&огляду біля курсору"
+msgstr "Додати точку&огляду біля курсора"
 
 #: lazarusidestrconsts.uembookmarknset
 #, object-pascal-format
@@ -22701,7 +22772,7 @@ msgstr "Кодування"
 
 #: lazarusidestrconsts.uemevaluatemodify
 msgid "&Evaluate/Modify ..."
-msgstr "&Оцінити/Змінити ..."
+msgstr "&Обчислити/Змінити ..."
 
 #: lazarusidestrconsts.uemfinddeclaration
 msgid "&Find Declaration"
@@ -22780,7 +22851,7 @@ msgstr "Змінено"
 
 #: lazarusidestrconsts.uemopenfileatcursor
 msgid "&Open File at Cursor"
-msgstr "&Відкрити файл біля курсору"
+msgstr "&Відкрити файл біля курсора"
 
 #: lazarusidestrconsts.uemprevbookmark
 msgid "Goto Previous Bookmark"

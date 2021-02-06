@@ -417,6 +417,12 @@ begin
     P := gtk_hbox_new(false, 0);
   end;
 
+{$IFDEF HASX}
+  if (AWinControl = Application.MainForm) and
+    not Application.HasOption('disableaccurateframe') then
+      Gtk2WidgetSet.CreateDummyWidgetFrame(-1, -1, -1, -1);
+{$ENDIF}
+
   WidgetInfo := CreateWidgetInfo(P, AWinControl, AParams);
   WidgetInfo^.FormBorderStyle := Ord(ABorderStyle);
 
@@ -735,6 +741,7 @@ begin
   end;
 
   GtkWindow := {%H-}PGtkWindow(AForm.Handle);
+
   if (fsModal in AForm.FormState) and AForm.HandleObjectShouldBeVisible then
   begin
     gtk_window_set_default_size(GtkWindow, Max(1,AForm.Width), Max(1,AForm.Height));
@@ -851,8 +858,27 @@ begin
 end;
 
 class procedure TGtk2WSCustomForm.SetColor(const AWinControl: TWinControl);
+var
+  AScrolled: PGtkWidget;
+  AColor: TColor;
 begin
   TGtk2WSWinControl.SetColor(AWinControl);
+
+  // Forms: GtkWindow->GtkVBox->gtkScrolledWindow->GtkLayout
+  // we need to set the color of the GtkLayout so that the whole viewport
+  // will be filled (issue #16183)
+  AScrolled := g_object_get_data({%H-}PGObject(AWinControl.Handle), odnScrollArea);
+  if GTK_IS_SCROLLED_WINDOW(AScrolled) and
+    GTK_IS_LAYOUT({%H-}PGtkBin(AScrolled)^.child) then
+  begin
+    AColor := AWinControl.Color;
+    if AColor = clDefault then
+      AColor := GetDefaultColor(AWinControl, dctBrush);
+    Gtk2WidgetSet.SetWidgetColor({%H-}PGtkBin(AScrolled)^.child,
+                                 clNone, AColor,
+                                 [GTK_STATE_NORMAL, GTK_STATE_ACTIVE,
+                                  GTK_STATE_PRELIGHT, GTK_STATE_SELECTED]);
+  end;
 end;
 
 class procedure TGtk2WSCustomForm.SetRealPopupParent(
@@ -958,12 +984,20 @@ begin
 end;
 
 class procedure TGtk2WSScrollingWinControl.SetColor(const AWinControl: TWinControl);
+var
+  AColor: TColor;
 begin
   if not WSCheckHandleAllocated(AWinControl, 'SetColor')
   then Exit;
 
+  // ScrollingWinControl: GtkScrolledWindow->GtkLayout
+  // we need to set the color of the GtkLayout so that the whole viewport
+  // will be filled (issue #16183)
+  AColor := AWinControl.Color;
+  if AColor = clDefault then
+    AColor := GetDefaultColor(AWinControl, dctBrush);
   Gtk2WidgetSet.SetWidgetColor({%H-}PGtkBin(AWinControl.Handle)^.child,
-                               clNone, AWinControl.Color,
+                               clNone, AColor,
                                [GTK_STATE_NORMAL, GTK_STATE_ACTIVE,
                                 GTK_STATE_PRELIGHT, GTK_STATE_SELECTED]);
 end;

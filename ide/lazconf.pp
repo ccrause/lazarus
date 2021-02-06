@@ -48,7 +48,7 @@ interface
 uses
   SysUtils, Classes,
   // LazUtils
-  FileUtil, LazFileUtils, LazUTF8, LazUTF8Classes, LazLoggerBase,
+  FileUtil, LazFileUtils, LazUTF8, LazLoggerBase,
   // Codetools
   DefineTemplates;
 
@@ -153,12 +153,12 @@ function CreateCompilerTestPascalFilename: string;
 
   function CreateFile(const Filename: string): boolean;
   var
-    fs: TFileStreamUTF8;
+    fs: TFileStream;
   begin
     if FileExistsUTF8(Filename) then exit(true);
     Result:=false;
     try
-      fs:=TFileStreamUTF8.Create(Filename,fmCreate);
+      fs:=TFileStream.Create(Filename,fmCreate);
       fs.Free;
       Result:=true;
     except
@@ -274,9 +274,13 @@ end;
   SetPrimaryConfigPath procedure
  ---------------------------------------------------------------------------}
 procedure SetPrimaryConfigPath(const NewValue: String);
+var
+  NewExpValue: String;
 begin
-  debugln('SetPrimaryConfigPath NewValue="',UTF8ToConsole(NewValue),'" -> "',UTF8ToConsole(ExpandFileNameUTF8(NewValue)),'"');
-  PrimaryConfigPath := ChompPathDelim(ExpandFileNameUTF8(NewValue));
+  NewExpValue:=ChompPathDelim(ExpandFileNameUTF8(NewValue));
+  if NewExpValue=PrimaryConfigPath then exit;
+  debugln('SetPrimaryConfigPath NewValue="',UTF8ToConsole(NewValue),'" -> "',UTF8ToConsole(NewExpValue),'"');
+  PrimaryConfigPath := NewExpValue;
 end;
 
 {---------------------------------------------------------------------------
@@ -352,6 +356,8 @@ begin
   if CompareText(copy(TargetOS,1,3), 'win') = 0 then
     Result:='.dll'
   else if CompareText(TargetOS, 'darwin') = 0 then
+    Result:='.dylib'
+  else if CompareText(TargetOS, 'ios') = 0 then
     Result:='.dylib'
   else if (CompareText(TargetOS, 'linux') = 0)
   or (CompareText(TargetOS, 'android') = 0)

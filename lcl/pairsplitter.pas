@@ -42,7 +42,6 @@ type
   
   TPairSplitterSide = class(TWinControl)
   private
-    fCreatedBySplitter: boolean;
     function GetSplitter: TCustomPairSplitter;
   protected
     class procedure WSRegisterClass; override;
@@ -170,7 +169,7 @@ end;
 
 function TPairSplitterSide.GetSplitter: TCustomPairSplitter;
 begin
-  if (Parent<>nil) and (Parent is TCustomPairSplitter) then
+  if Parent is TCustomPairSplitter then
     Result:=TCustomPairSplitter(Parent)
   else
     Result:=nil;
@@ -192,7 +191,8 @@ begin
   ASplitter := Splitter;
   if ASplitter <> nil then begin
     ASplitter.RemoveSide(Self);
-    DeletingSplitter := (csDestroying in ASplitter.ComponentState) or DesignerDeleting;
+    DeletingSplitter := (csDestroying in ASplitter.ComponentState)
+                     or (wcfDesignerDeleting in FWinControlFlags);
   end
   else
     DeletingSplitter := False;
@@ -239,6 +239,8 @@ begin
   inherited Create(TheOwner);
   FCompStyle := csPairSplitterSide;
   ControlStyle := ControlStyle + [csAcceptsControls];
+  // A flag custom made for TPairSplitterSide.
+  Include(FWinControlFlags, wcfSpecialSubControl);
 end;
 
 destructor TPairSplitterSide.Destroy;
@@ -335,7 +337,7 @@ begin
     end;
   // if the user deletes a side at designtime, autocreate a new one
   if (ComponentState * [csDesigning,csDestroying] = [csDesigning])
-  and not DesignerDeleting then
+  and not (wcfDesignerDeleting in FWinControlFlags) then
     CreateSides;
 end;
 
@@ -388,14 +390,8 @@ begin
 end;
 
 destructor TCustomPairSplitter.Destroy;
-var
-  i: Integer;
 begin
-  // destroy the sides
   fDoNotCreateSides:=true;
-  for i:=Low(FSides) to High(FSides) do
-    if (FSides[i]<>nil) and (FSides[i].fCreatedBySplitter) then
-      FSides[i].Free;
   inherited Destroy;
 end;
 
@@ -433,8 +429,7 @@ var
   ASide: TPairSplitterSide;
   i: Integer;
 begin
-  if fDoNotCreateSides or (csDestroying in ComponentState)
-  or (csLoading in ComponentState)
+  if fDoNotCreateSides or (ComponentState * [csLoading,csDestroying] <> [])
   or ((Owner<>nil) and (csLoading in Owner.ComponentState)) then exit;
   // create the missing side controls
   for i := Low(FSides) to High(FSides) do
@@ -443,7 +438,6 @@ begin
       // For streaming it is important that the side controls are owned by
       // the owner of the splitter
       ASide:=TPairSplitterSide.Create(Owner);
-      ASide.fCreatedBySplitter:=true;
       ASide.Parent:=Self;
     end;
 end;

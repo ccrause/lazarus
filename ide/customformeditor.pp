@@ -45,6 +45,7 @@ uses
   Forms, Menus, Dialogs,
   // LazUtils
   FileUtil, LazFileUtils, LazFileCache, CompWriterPas, LazLoggerBase, LazTracer,
+  LazUTF8,
   // Codetools
   CodeCache, CodeTree, CodeToolManager, FindDeclarationTool,
   // IDEIntf
@@ -291,6 +292,7 @@ type
     procedure DefineBinaryProperty(const Name: string;
       {%H-}ReadData, {%H-}WriteData: TStreamProc;
       {%H-}HasData: Boolean); override;
+    procedure FlushBuffer;  {$IF FPC_FULLVERSION >= 30200}override;{$ENDIF}
     property DefinePropertyNames: TStrings read FDefinePropertyNames;
   end;
   
@@ -360,7 +362,7 @@ var
   LFMCode: TCodeBuffer;
 begin
   Result:=pfcbcNone;
-  if not FilenameIsPascalUnit(aFilename) then exit;
+  if not FilenameHasPascalExt(aFilename) then exit;
   if not FilenameIsAbsolute(aFilename) then exit;
   LFMFilename:=ChangeFileExt(aFilename,'.lfm');
   if not FileExistsCached(LFMFilename) then exit;
@@ -538,7 +540,7 @@ procedure TCustomFormEditor.RegisterFrame;
 var
   FrameComp: TRegisteredComponent;
 begin
-  FrameComp:=IDEComponentPalette.FindComponent('TFrame');
+  FrameComp:=IDEComponentPalette.FindRegComponent('TFrame');
   if FrameComp <> nil then
     FrameComp.OnGetCreationClass:=@FrameCompGetCreationClass;
 end;
@@ -619,6 +621,8 @@ Begin
 
       if (AForm <> nil) then
       begin
+        AForm.ControlStyle:=AForm.ControlStyle+[csNoDesignVisible];
+        LCLIntf.ShowWindow(AForm.Handle,SW_HIDE);
         FNonFormForms.Remove(AForm);
         (AForm as INonFormDesigner).LookupRoot := nil;
         Application.ReleaseComponent(AForm);
@@ -642,7 +646,7 @@ Begin
       DebugLn(['TCustomFormEditor.DeleteComponent Hiding: ',dbgsName(AWinControl)]);
     end;
   end;
-  PropertyEditorHook.PersistentDeleted;
+  //PropertyEditorHook.PersistentDeleted(AComponent); Not needed?
 end;
 
 function TCustomFormEditor.FindComponentByName(const Name: ShortString): TComponent;
@@ -1363,7 +1367,7 @@ begin
           AParent:=AParent.Parent;
         end;
       end;
-      DebugLn('Parent is '''+dbgsName(AParent)+'''');
+      //DebugLn('TCustomFormEditor.CreateComponent: Parent is '''+dbgsName(AParent)+'''');
     end else begin
       // create a toplevel component
       // -> a form or a datamodule or a custom component
@@ -1836,8 +1840,7 @@ var
   OldClassName: String;
   DefinePropertiesPersistent: TDefinePropertiesPersistent;
 
-  function CreateTempPersistent(
-    const APersistentClass: TPersistentClass): boolean;
+  function CreateTempPersistent(APersistentClass: TPersistentClass): boolean;
   begin
     Result:=false;
     if APersistent<>nil then
@@ -1865,35 +1868,38 @@ var
     AncestorClass: TComponentClass;
   begin
     Result:=false;
-    
+    Assert(APersistent=nil, 'GetDefinePersistent: APersistent is assigned.');
+
     // try to find the AClassName in the registered components
-    if APersistent=nil then begin
-      CacheItem.RegisteredComponent:=IDEComponentPalette.FindComponent(AClassname);
+    //if APersistent=nil then begin
+      CacheItem.RegisteredComponent:=IDEComponentPalette.FindRegComponent(AClassName);
       if (CacheItem.RegisteredComponent<>nil)
       and (CacheItem.RegisteredComponent.ComponentClass<>nil) then begin
         //debugln('TCustomFormEditor.FindDefineProperty ComponentClass ',AClassName,' is registered');
         if not CreateTempPersistent(CacheItem.RegisteredComponent.ComponentClass)
         then exit;
       end;
-    end;
+    //end;
     
     // try to find the AClassName in the registered TPersistent classes
-    if APersistent=nil then begin
+    //if APersistent=nil then begin
       APersistentClass:=Classes.GetClass(AClassName);
       if APersistentClass<>nil then begin
         //debugln('TCustomFormEditor.FindDefineProperty PersistentClass ',AClassName,' is registered');
+        Assert(APersistent=nil, 'GetDefinePersistent: APersistent is assigned.');
         if not CreateTempPersistent(APersistentClass) then exit;
       end;
-    end;
+    //end;
 
-    if APersistent=nil then begin
+    //if APersistent=nil then begin
       // try to find the AClassName in the open forms/datamodules
+      Assert(APersistent=nil, 'GetDefinePersistent: APersistent is assigned.');
       APersistent:=FindJITComponentByClassName(AClassName);
       if APersistent<>nil then
         debugln('TCustomFormEditor.FindDefineProperty ComponentClass ',
           AClassName,' is a resource,'
           +' but inheriting design properties is not yet implemented');
-    end;
+    //end;
 
     // try default classes
     if (APersistent=nil) then begin
@@ -1925,9 +1931,8 @@ begin
     AutoFreePersistent:=false;
 
     if not GetDefinePersistent(APersistentClassName) then exit;
-    if (APersistent=nil) then begin
+    if APersistent=nil then
       if not GetDefinePersistent(AncestorClassName) then exit;
-    end;
 
     if APersistent<>nil then begin
       //debugln('TCustomFormEditor.FindDefineProperty Getting define properties for ',APersistent.ClassName);
@@ -1965,7 +1970,7 @@ begin
         // cache defined properties
         if (DefinePropertiesReader<>nil)
         and (DefinePropertiesReader.DefinePropertyNames<>nil) then begin
-          CacheItem.DefineProperties:=TStringList.Create;
+          CacheItem.DefineProperties:=TStringListUTF8Fast.Create;
           CacheItem.DefineProperties.Assign(DefinePropertiesReader.DefinePropertyNames);
           debugln('TCustomFormEditor.FindDefineProperty Class=',APersistentClassName,
             ' DefineProps="',CacheItem.DefineProperties.Text,'"');
@@ -2000,7 +2005,7 @@ begin
     CacheItem:=TDefinePropertiesCacheItem(ANode.Data);
   end;
   if (CacheItem.DefineProperties=nil) then
-    CacheItem.DefineProperties:=TStringList.Create;
+    CacheItem.DefineProperties:=TStringListUTF8Fast.Create;
   if (CacheItem.DefineProperties.IndexOf(Identifier)<0) then
     CacheItem.DefineProperties.Add(Identifier);
 end;
@@ -2247,7 +2252,7 @@ var
   i: Integer;
 begin
   //DebugLn(['TCustomFormEditor.JITListFindClass ',ComponentClassName]);
-  RegComp:=IDEComponentPalette.FindComponent(ComponentClassName);
+  RegComp:=IDEComponentPalette.FindRegComponent(ComponentClassName);
   if RegComp<>nil then begin
     //DebugLn(['TCustomFormEditor.JITListFindClass ',ComponentClassName,' is registered as ',DbgSName(RegComp.ComponentClass)]);
     ComponentClass:=RegComp.ComponentClass;
@@ -2614,7 +2619,8 @@ end;
 procedure TDefinePropertiesReader.AddPropertyName(const Name: string);
 begin
   debugln('TDefinePropertiesReader.AddPropertyName Name="',Name,'"');
-  if FDefinePropertyNames=nil then FDefinePropertyNames:=TStringList.Create;
+  if FDefinePropertyNames=nil then
+    FDefinePropertyNames:=TStringListUTF8Fast.Create;
   if FDefinePropertyNames.IndexOf(Name)<=0 then
     FDefinePropertyNames.Add(Name);
 end;
@@ -2635,6 +2641,11 @@ procedure TDefinePropertiesReader.DefineBinaryProperty(const Name: string;
   ReadData, WriteData: TStreamProc; HasData: Boolean);
 begin
   AddPropertyName(Name);
+end;
+
+procedure TDefinePropertiesReader.FlushBuffer;
+begin
+
 end;
 
 { TDefinePropertiesPersistent }

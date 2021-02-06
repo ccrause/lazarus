@@ -1016,6 +1016,16 @@ msgctxt "opkman_const.rsmainfrm_vsttext_downloadurl"
 msgid "External link (JSON)"
 msgstr "Внешняя ссылка (JSON)"
 
+#: opkman_const.rsmainfrm_vsttext_externaldeps
+msgctxt "opkman_const.rsmainfrm_vsttext_externaldeps"
+msgid "External dependencies"
+msgstr "Внешние зависимости"
+
+#: opkman_const.rsmainfrm_vsttext_externalmetapackagedeps
+msgctxt "opkman_const.rsmainfrm_vsttext_externalmetapackagedeps"
+msgid "External dependencies for metapackage"
+msgstr "Внешние зависимости метапакета"
+
 #: opkman_const.rsmainfrm_vsttext_fpccompatibility
 msgctxt "opkman_const.rsmainfrm_vsttext_fpccompatibility"
 msgid "FPC compatibility"
@@ -1053,6 +1063,28 @@ msgstr "Сведения о лицензии пакета"
 msgctxt "opkman_const.rsmainfrm_vsttext_license"
 msgid "License"
 msgstr "Лицензия"
+
+#: opkman_const.rsmainfrm_vsttext_open
+msgctxt "opkman_const.rsmainfrm_vsttext_open"
+msgid "Open"
+msgstr "Открыть"
+
+#: opkman_const.rsmainfrm_vsttext_open_error
+msgctxt "opkman_const.rsmainfrm_vsttext_open_error"
+msgid "Cannot open package file."
+msgstr "Невозможно открыть файл пакета."
+
+#: opkman_const.rsmainfrm_vsttext_open_notfound
+msgid "Package file not found."
+msgstr "Файл пакета не найден."
+
+#: opkman_const.rsmainfrm_vsttext_orphanedpackage1
+msgid "Orphaned package"
+msgstr "Пакет бесхозен"
+
+#: opkman_const.rsmainfrm_vsttext_orphanedpackage2
+msgid "currently has no active maintainer"
+msgstr "в настоящий момент не имеет активного сопровождающего"
 
 #: opkman_const.rsmainfrm_vsttext_packagecategory
 msgid "Package category"
@@ -1268,6 +1300,10 @@ msgstr "SVN"
 msgctxt "opkman_const.rsmainfrm_vsttext_version"
 msgid "Version"
 msgstr "Версия"
+
+#: opkman_const.rsmenulazaruspackagemanager
+msgid "Online Package Manager ..."
+msgstr "Сетевой диспетчер пакетов ..."
 
 #: opkman_const.rsopensslfrm_bp_cancelbutton_caption
 msgctxt "opkman_const.rsopensslfrm_bp_cancelbutton_caption"
@@ -1761,6 +1797,7 @@ msgid "No valid download link found."
 msgstr "Не найдено корректной ссылки для загрузки."
 
 #: opkman_const.rsprogressfrm_error7
+msgctxt "opkman_const.rsprogressfrm_error7"
 msgid "Cannot open package file."
 msgstr "Невозможно открыть файл пакета."
 

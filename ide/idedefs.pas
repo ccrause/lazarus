@@ -52,8 +52,7 @@ type
   TIDEFileStateFlags = set of TIDEFileStateFlag;
   
   TGetIDEFileStateEvent = procedure(Sender: TObject; const Filename: string;
-    NeededFlags: TIDEFileStateFlags; out ResultFlags: TIDEFileStateFlags)
-    of object;
+    NeededFlags: TIDEFileStateFlags; out ResultFlags: TIDEFileStateFlags) of object;
 
 implementation
 

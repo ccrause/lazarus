@@ -370,6 +370,7 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+    procedure SetFontToStr(dst: NSMutableAttributedString);
     procedure SetText(UTF8Text: PChar; ByteSize: Integer);
     function GetSize: TSize;
     function GetGlyphs: TGlyphArray;
@@ -403,6 +404,7 @@ type
     // Also, because of bug 28015 FClipped cannot use ctx.Restore(Save)GraphicsState;
     // it will use CGContextRestore(Save)GState(CGContext()); to save/restore DC instead
     FClipped: Boolean;
+    FFlipped: Boolean;
     FClipRegion: TCocoaRegion;
     FSavedDCList: TFPObjectList;
     FPenPos: TPoint;
@@ -485,6 +487,7 @@ type
     function CopyClipRegion(ADstRegion: TCocoaRegion): TCocoaRegionType;
 
     property Clipped: Boolean read FClipped;
+    property Flipped: Boolean read FFlipped;
     property PenPos: TPoint read FPenPos write FPenPos;
     property ROP2: Integer read FROP2 write SetROP2;
     property Size: TSize read FSize;
@@ -1280,6 +1283,11 @@ end;
 { TCocoaTextLayout }
 
 procedure TCocoaTextLayout.UpdateFont;
+begin
+  SetFontToStr(FTextStorage);
+end;
+
+procedure TCocoaTextLayout.SetFontToStr(dst: NSMutableAttributedString);
 const
   UnderlineStyle = NSUnderlineStyleSingle or NSUnderlinePatternSolid;
 var
@@ -1287,26 +1295,32 @@ var
 begin
   if Assigned(FFont) then
   begin
-    Range := GetTextRange;
+    Range.location := 0;
+    Range.length := dst.string_.length;
     if (Range.length <= 0) or (FFont.Font = nil) then Exit;
     // apply font itself
-    FTextStorage.addAttribute_value_range(NSFontAttributeName, FFont.Font, Range);
+    dst.addAttribute_value_range(NSFontAttributeName, FFont.Font, Range);
     // aply font attributes which are not in NSFont
     if cfs_Underline in FFont.Style then
-      FTextStorage.addAttribute_value_range(NSUnderlineStyleAttributeName, NSNumber.numberWithInteger(UnderlineStyle), Range)
-     else
-     FTextStorage.removeAttribute_range(NSUnderlineStyleAttributeName, Range);
+      dst.addAttribute_value_range(NSUnderlineStyleAttributeName, NSNumber.numberWithInteger(UnderlineStyle), Range)
+    else
+      dst.removeAttribute_range(NSUnderlineStyleAttributeName, Range);
 
     if cfs_Strikeout in FFont.Style then
-      FTextStorage.addAttribute_value_range(NSStrikethroughStyleAttributeName, NSNumber.numberWithInteger(UnderlineStyle), Range)
+      dst.addAttribute_value_range(NSStrikethroughStyleAttributeName, NSNumber.numberWithInteger(UnderlineStyle), Range)
     else
-      FTextStorage.removeAttribute_range(NSStrikethroughStyleAttributeName, Range);
+      dst.removeAttribute_range(NSStrikethroughStyleAttributeName, Range);
   end;
 end;
 
 procedure TCocoaTextLayout.UpdateColor;
+var
+  lForegroundColor: NSColor;
 begin
-  FTextStorage.addAttribute_value_range(NSForegroundColorAttributeName, ColorToNSColor(ForegroundColor), GetTextRange);
+  lForegroundColor := SysColorToNSColor(SysColorToSysColorIndex(ForegroundColor));
+  if lForegroundColor = nil then
+    lForegroundColor := ColorToNSColor(ColorToRGB(ForegroundColor));
+  FTextStorage.addAttribute_value_range(NSForegroundColorAttributeName, lForegroundColor, GetTextRange);
   FTextStorage.addAttribute_value_range(NSBackgroundColorAttributeName, ColorToNSColor(BackgroundColor), GetTextRange);
 end;
 
@@ -1679,7 +1693,7 @@ end;
 
 procedure TCocoaContext.SetTextColor(AValue: TColor);
 begin
-  FText.ForegroundColor := TColor(ColorToRGB(AValue));
+  FText.ForegroundColor := AValue;
 end;
 
 procedure TCocoaContext.UpdateContextOfs(const AWindowOfs, AViewOfs: TPoint);
@@ -1790,6 +1804,7 @@ begin
   FSavedDCList := nil;
   FText := TCocoaTextLayout.Create;
   FClipped := False;
+  FFlipped := False;
 end;
 
 destructor TCocoaContext.Destroy;
@@ -1808,8 +1823,11 @@ begin
 
   FBkBrush.Free;
 
-  if Assigned(ctx) then
+  if Assigned(ctx) then begin
+    if Assigned(CGContext()) and Flipped then
+      CGContextRestoreGState(CGContext());
     ctx.release;
+    end;
   if Assigned(boxview) then boxview.release;
   inherited Destroy;
 end;
@@ -1871,6 +1889,9 @@ begin
   cg := CGContext;
   Result := Assigned(cg);
   if not Result then Exit;
+
+  CGContextSaveGState(cg);
+  FFlipped := True;
 
   FSize.cx := width;
   FSize.cy := height;
@@ -2298,6 +2319,8 @@ begin
     Trans := CGContextGetCTM(cgc);
     CGContextRestoreGState(cgc);
     ApplyTransform(Trans);
+    if Assigned(FPen) then FPen.Apply(Self);
+    if Assigned(FBrush) then FBrush.Apply(Self);
   end;
 end;
 
@@ -2386,10 +2409,32 @@ end;
   Computes the width and height of the specified string of text
  ------------------------------------------------------------------------------}
 function TCocoaContext.GetTextExtentPoint(AStr: PChar; ACount: Integer; var Size: TSize): Boolean;
+var
+  s : NSString;
+  M : NSMutableAttributedString;
+  r : NSRect;
 begin
-  FText.SetText(AStr, ACount);
+  {FText.SetText(AStr, ACount);
   Size := FText.GetSize;
-  Result := True;
+  Result := True;}
+  S := NSString( CFStringCreateWithBytesNoCopy(nil, AStr, ACount, kCFStringEncodingUTF8,
+    false,
+    kCFAllocatorNull));
+  Result := Assigned(S);
+  if not Result then Exit;
+
+  M := NSMutableAttributedString.alloc.initWithString(S);
+  Result := Assigned(M);
+  if Result then
+  begin
+    FText.SetFontToStr(M);
+    r := M.boundingRectWithSize_options(NSMakeSize(MaxInt, MaxInt), 0);
+
+    Size.cx := Round(r.size.width);
+    Size.cy := Round(r.Size.height);
+    M.release;
+  end;
+  CFRelease(S);
 end;
 
 {------------------------------------------------------------------------------

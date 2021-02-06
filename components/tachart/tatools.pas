@@ -759,6 +759,7 @@ begin
   i := FChart.ActiveToolIndex;
   if (i <> Index) and InRange(i, 0, Toolset.Tools.Count) then
     Toolset[i].Deactivate;
+  FCurrentDrawer := nil;
   inherited;
   SetCursor;
 end;
@@ -1063,7 +1064,7 @@ function TChartToolset.Dispatch(
   AChart: TChart; AEventId: TChartToolEventId;
   AShift: TShiftState; APoint: TPoint): Boolean;
 var
-  candidates: array of TChartTool;
+  candidates: array of TChartTool = nil;
   candidateCount: Integer;
 
   procedure AddCandidate(AIndex: Integer);
@@ -1874,7 +1875,7 @@ begin
   best.FDist := MaxInt;
   for s in CustomSeries(FChart, FAffectedSeries.AsBooleans(FChart.SeriesCount)) do
     if
-      InBoundaryBox(s) and s.GetNearestPoint(p, cur) and
+      InBoundaryBox(s) and s.Active and s.GetNearestPoint(p, cur) and
       PtInRect(FChart.ClipRect, cur.FImg) and (cur.FDist < best.FDist)
     then begin
       bestS := s;
@@ -2225,6 +2226,7 @@ end;
 
 procedure TDataPointCrosshairTool.MouseDown(APoint: TPoint);
 begin
+  FCurrentDrawer := nil;
   MouseMove(APoint);
 end;
 

@@ -299,14 +299,40 @@ msgstr "IfNDef"
 msgid "Set value"
 msgstr "Keisti vertę"
 
-#: objinspstrconsts.lisunabletofindparserfortool
-#, object-pascal-format
-msgid "Unable to find parser for tool \"%s\""
-msgstr "Įrankiui „%s“ neina rasti nalizatoriaus"
+#: objinspstrconsts.lrsbufdsfilters
+msgid "XML data files|*.xml;Binary data files|*.dat"
+msgstr ""
 
-#: objinspstrconsts.lisunabletofindparserwithname
-#, object-pascal-format
-msgid "Unable to find parser with name \"%s\""
+#: objinspstrconsts.lrscopyfromdataset
+msgid "Copy data from other dataset"
+msgstr ""
+
+#: objinspstrconsts.lrscreatedataset
+msgid "Create dataset"
+msgstr ""
+
+#: objinspstrconsts.lrsdatasetactive
+msgid "Dataset is already active, close it first."
+msgstr ""
+
+#: objinspstrconsts.lrsloadfromfile
+msgid "Load data from file"
+msgstr ""
+
+#: objinspstrconsts.lrsnodatasetsavailableforcopy
+msgid "No dataset available to copy data from."
+msgstr ""
+
+#: objinspstrconsts.lrsprovidedatafilename
+msgid "Select a data file to save data to"
+msgstr ""
+
+#: objinspstrconsts.lrssavetofile
+msgid "Save data to file"
+msgstr ""
+
+#: objinspstrconsts.lrsselectdatafilename
+msgid "Select a file with data to load into dataset"
 msgstr ""
 
 #: objinspstrconsts.nbcesaddpage
@@ -483,10 +509,6 @@ msgstr "Patvirtinimas šalinant"
 msgctxt "objinspstrconsts.oiscopycomponents"
 msgid "&Copy"
 msgstr "&Kopijuoti"
-
-#: objinspstrconsts.oiscreateanewpascalunit
-msgid "Create a new pascal unit."
-msgstr "Kurti naują Paskalio modulį."
 
 #: objinspstrconsts.oiscreatedefaultevent
 msgid "Create default event"
@@ -867,10 +889,6 @@ msgstr "Keisti į numatytą: %s"
 #: objinspstrconsts.oissettodefaulthint
 msgid "Set property value to Default"
 msgstr "Savybės vertę atstatyti į numatytą"
-
-#: objinspstrconsts.oisshowalloutputlines
-msgid "Show all output lines"
-msgstr ""
 
 #: objinspstrconsts.oisshowclasses
 msgid "Show classes"
@@ -1280,10 +1298,6 @@ msgstr "Failo rengyklė"
 #: objinspstrconsts.pefiltername
 msgid "Filter name"
 msgstr "Filtro pavadinimas"
-
-#: objinspstrconsts.pirsunit
-msgid "Pascal unit"
-msgstr "Paskalio modulis"
 
 #: objinspstrconsts.rscdalignment
 msgid "Alignment"

@@ -33,7 +33,7 @@ unit SetClarify;
 interface
 
 uses
-  Classes,
+  Classes, SysUtils,
   JcfSetBase, SettingsStream;
 
 type
@@ -71,8 +71,6 @@ type
 implementation
 
 uses
-  { Delphi }
-  SysUtils,
   { local }
   JcfStringUtils;
 
@@ -90,10 +88,12 @@ begin
   inherited;
   SetSection('Clarify');
 
-  fcIgnoreUnusedParams := TStringList.Create;
+  fcIgnoreUnusedParams := TStringList.Create;  // Will compare with CompareText.
+  {$IF FPC_FULLVERSION>=30200}fcIgnoreUnusedParams.UseLocale := False;{$ENDIF}
   fcIgnoreUnusedParams.Duplicates := dupIgnore;
 
   fcFileExtensions := TStringList.Create;
+  {$IF FPC_FULLVERSION>=30200}fcFileExtensions.UseLocale := False;{$ENDIF}
   fcFileExtensions.Duplicates := dupIgnore;
 
 end;

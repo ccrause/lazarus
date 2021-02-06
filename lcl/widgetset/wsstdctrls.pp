@@ -86,6 +86,8 @@ type
     class procedure SetItemIndex(const ACustomComboBox: TCustomComboBox; NewIndex: integer); virtual;
     class procedure SetMaxLength(const ACustomComboBox: TCustomComboBox; NewLength: integer); virtual;
     class procedure SetStyle(const ACustomComboBox: TCustomComboBox; NewStyle: TComboBoxStyle); virtual;
+    class procedure SetReadOnly(const ACustomComboBox: TCustomComboBox; NewReadOnly: boolean); virtual;
+    class procedure SetTextHint(const ACustomComboBox: TCustomComboBox; const ATextHint: string); virtual;
 
     class function  GetItems(const ACustomComboBox: TCustomComboBox): TStrings; virtual;
     class procedure FreeItems(var AItems: TStrings); virtual;
@@ -118,7 +120,10 @@ type
     class procedure FreeStrings(var AStrings: TStrings); virtual;
     class function GetTopIndex(const ACustomListBox: TCustomListBox): integer; virtual;
 
-    class procedure SelectItem(const ACustomListBox: TCustomListBox; AIndex: integer; ASelected: boolean); virtual;
+    class procedure SelectItem(const ACustomListBox: TCustomListBox;
+      AIndex: integer; ASelected: boolean); virtual;
+    class procedure SelectRange(const ACustomListBox: TCustomListBox;
+      ALow, AHigh: integer; ASelected: boolean); virtual;
 
     class procedure SetBorder(const ACustomListBox: TCustomListBox); virtual;
     class procedure SetColumnCount(const ACustomListBox: TCustomListBox; ACount: Integer); virtual;
@@ -160,7 +165,6 @@ type
     class procedure SetSelLength(const ACustomEdit: TCustomEdit; NewLength: integer); virtual;
     class procedure SetSelText(const ACustomEdit: TCustomEdit; const NewSelText: string); virtual;
     class procedure SetTextHint(const ACustomEdit: TCustomEdit; const ATextHint: string); virtual;
-    class function CreateEmulatedTextHintFont(const ACustomEdit: TCustomEdit): TFont; virtual;
 
     class procedure Cut(const ACustomEdit: TCustomEdit); virtual;
     class procedure Copy(const ACustomEdit: TCustomEdit); virtual;
@@ -356,8 +360,25 @@ begin
   Result := 0;
 end;
 
-class procedure TWSCustomListBox.SelectItem(const ACustomListBox: TCustomListBox; AIndex: integer; ASelected: boolean);
+class procedure TWSCustomListBox.SelectItem(const ACustomListBox: TCustomListBox;
+  AIndex: integer; ASelected: boolean);
 begin
+end;
+
+class procedure TWSCustomListBox.SelectRange(const ACustomListBox: TCustomListBox;
+  ALow, AHigh: integer; ASelected: boolean);
+var
+  OldTopIndex, i: Integer;
+begin  // A default implementation. A widgetset can override it with a better one.
+  OldTopIndex := ACustomListBox.TopIndex; //prevent scrolling to last Item selected on Windows, Issue #0036929
+  ACustomListBox.Items.BeginUpdate; //prevent visual update when selecting large ranges on Windows, Issue #0036929
+  try
+    for i := ALow to AHigh do
+      SelectItem(ACustomListBox, i, ASelected);
+    ACustomListBox.TopIndex := OldTopIndex;
+  finally
+    ACustomListBox.Items.EndUpdate;
+  end;
 end;
 
 class procedure TWSCustomListBox.SetBorder(const ACustomListBox: TCustomListBox);
@@ -467,6 +488,16 @@ end;
 
 class procedure TWSCustomComboBox.SetStyle(const ACustomComboBox: TCustomComboBox;
   NewStyle: TComboBoxStyle);
+begin
+end;
+
+class procedure TWSCustomComboBox.SetReadOnly(const ACustomComboBox: TCustomComboBox;
+  NewReadOnly: boolean);
+begin
+end;
+
+class procedure TWSCustomComboBox.SetTextHint(
+  const ACustomComboBox: TCustomComboBox; const ATextHint: string);
 begin
 end;
 
@@ -596,20 +627,6 @@ class procedure TWSCustomEdit.Copy(const ACustomEdit: TCustomEdit);
 begin
   if (ACustomEdit.EchoMode = emNormal) and (ACustomEdit.SelLength > 0) then
     Clipboard.AsText := ACustomEdit.SelText;
-end;
-
-class function TWSCustomEdit.CreateEmulatedTextHintFont(
-  const ACustomEdit: TCustomEdit): TFont;
-begin
-  Result := TFont.Create;
-  try
-    Result.Assign(ACustomEdit.Font);
-    Result.Color := clGrayText;
-  except
-    Result.Free;
-    Result := nil;
-    raise;
-  end;
 end;
 
 class procedure TWSCustomEdit.Paste(const ACustomEdit: TCustomEdit);

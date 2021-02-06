@@ -4561,8 +4561,8 @@ msgstr "Sobre o Lazarus"
 
 #: lazarusidestrconsts.lisaboutlazarusmsg
 #, object-pascal-format
-msgid "License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.%sLazarus is an IDE to create graphical and console applications with Free Pascal. Free Pascal is Pascal and Object Pascal compiler that runs on Windows, Linux, Mac OS X, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing we need more developers."
-msgstr "Licença: GPL/LGPL. Veja os fontes Lazarus e Free Pascal para detalhes da licença.%sLazarus é uma IDE para criar aplicações gráficas e console com o Free Pascal. Free Pascal é um compilador Pascal e Object Pascal que roda em Windows, Linux, Mac OS X, FreeBSD e mais.%sLazarus é a peça que falta do quebra-cabeças que irá permitir a você desenvolver programas para todas as plataformas citadas em um ambiente semelhante ao Delphi. A IDE é uma ferramenta RAD que inclui um editor de formulários.%sNa medida que o Lazarus evolui nós precisamos de mais desenvolvedores."
+msgid "License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.%sLazarus is an IDE to create graphical and console applications with Free Pascal. Free Pascal is a Pascal and Object Pascal compiler that runs on Windows, Linux, macOS, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi-like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing, we need more developers."
+msgstr "Licença: GPL/LGPL. Veja os fontes Lazarus e Free Pascal para detalhes da licença.%sLazarus é uma IDE para criar aplicações gráficas e console com o Free Pascal. Free Pascal é um compilador Pascal e Object Pascal que roda em Windows, Linux, macOS, FreeBSD e mais.%sLazarus é a peça que falta do quebra-cabeças que irá permitir a você desenvolver programas para todas as plataformas citadas em um ambiente semelhante ao Delphi. A IDE é uma ferramenta RAD que inclui um editor de formulários.%sNa medida que o Lazarus evolui nós precisamos de mais desenvolvedores."
 
 #: lazarusidestrconsts.lisaboutnocontributors
 msgid "Cannot find contributors list."
@@ -5038,10 +5038,6 @@ msgstr "Exibir paleta de componentes completa"
 msgid "If component palette spans over more lines, show them all and not only one."
 msgstr "Se a paleta de componentes abranger mais linhas, mostre todas e não apenas uma."
 
-#: lazarusidestrconsts.lisautocheckmodifiedfiles
-msgid "Automatically check (select) modified files"
-msgstr "Verificar (selecionar) automaticamente arquivos modificados"
-
 #: lazarusidestrconsts.lisautocompletionoff
 msgid "Auto completion: off"
 msgstr "Auto complementação: desligado"
@@ -5077,7 +5073,23 @@ msgstr "não completar a seleção"
 
 #: lazarusidestrconsts.lisautomaticallyinvokeafterpoint
 msgid "Automatically invoke after point"
-msgstr "Auto invocar após ponto"
+msgstr "Invocar automaticamente após ponto"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontype
+msgid "Automatically invoke on typing"
+msgstr "Invocar automaticamente ao digitar"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeminlength
+msgid "Only complete if word is longer or equal"
+msgstr "Apenas completar se a palavra for mais longa ou igual"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeonlywordend
+msgid "Only complete when at end of word"
+msgstr "Apenas completar quando estiver no final da palavra"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeusetimer
+msgid "Use completion box delay"
+msgstr "Usar atraso na caixa de complementação"
 
 #: lazarusidestrconsts.lisautomaticallyonlinebreak
 msgid "line break"
@@ -8496,6 +8508,10 @@ msgstr "Retomar Manipulados"
 msgid "Resume Unhandled"
 msgstr "Retomar não Manipulados"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmshowexitcodeonstop
+msgid "Show message on stop with Error (Exit-code <> 0)"
+msgstr "Exibir mensagem na parada com erro (Exit-code <> 0)"
+
 #: lazarusidestrconsts.lisdebugoptionsfrmshowmessageonstop
 msgid "Show message on stop"
 msgstr "Exibir mensagem na parada"
@@ -8886,6 +8902,10 @@ msgstr "Recarregar arquivos marcados do disco"
 msgid "Some files have changed on disk:"
 msgstr "Alguns arquivos foram alterados no disco:"
 
+#: lazarusidestrconsts.lisdiskdiffsomefileshavelocalchanges
+msgid "Some files have local changes. Either local or external changes will be overwritten."
+msgstr "Alguns arquivos têm alterações locais. Ambas as alterações locais ou externas serão sobrescritas."
+
 #: lazarusidestrconsts.lisdistinguishbigandsmalllettersegaanda
 msgid "Distinguish big and small letters e.g. A and a"
 msgstr "Distinguir letras grandes e pequenas, ex: A e a"
@@ -9116,6 +9136,34 @@ msgstr "Unidade duplicada"
 #, object-pascal-format
 msgid "Duplicate unit \"%s\" in \"%s\""
 msgstr "Unidade duplicada \"%s\" em \"%s\""
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollin
+msgid "Amount to scroll in"
+msgstr "Quantidade para rolagem"
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollin2
+msgid "Amount to scroll in (%)"
+msgstr "Quantidade para rolagem (%)"
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollinmax
+msgid "Amount to scroll in (Max)"
+msgstr "Quantidade para rolagem (Max)"
+
+#: lazarusidestrconsts.lisdynpkgautoscrollondeletepa
+msgid "Auto Scroll on delete past left border"
+msgstr "Auto rolagem ao excluir além da borda esquerda"
+
+#: lazarusidestrconsts.lisdynpkgautoscrollontypepast
+msgid "Auto Scroll on type past right border"
+msgstr "Auto rolagem ao digitar além da borda direita"
+
+#: lazarusidestrconsts.lisdynpkgtriggeronmincharsofw
+msgid "Trigger on min chars (% of width)"
+msgstr "Gatilho mínimo em caracteres (% largura)"
+
+#: lazarusidestrconsts.lisdynpkgtriggeronmincharsvis
+msgid "Trigger on min chars visible"
+msgstr "Gatilho mínimo em caracteres visíveis"
 
 #: lazarusidestrconsts.lisedit
 msgctxt "lazarusidestrconsts.lisedit"
@@ -9615,6 +9663,10 @@ msgstr "Avaliar expressão"
 msgid "E&valuate"
 msgstr "A&valiar"
 
+#: lazarusidestrconsts.lisevaluateall
+msgid "Evaluate all"
+msgstr "Avaliar tudo"
+
 #: lazarusidestrconsts.lisevaluatemodify
 msgid "&Evaluate/Modify"
 msgstr "&Avaliar/Modificar"
@@ -9690,6 +9742,11 @@ msgstr "Executando comando anterior"
 #: lazarusidestrconsts.lisexecutionstopped
 msgid "Execution stopped"
 msgstr "Execução parada"
+
+#: lazarusidestrconsts.lisexecutionstoppedexitcode
+#, object-pascal-format
+msgid "Execution stopped with exit-code %1:d ($%2:s)"
+msgstr "Execução parada com \"exit-code\" %1:d ($%2:s)"
 
 #: lazarusidestrconsts.lisexit
 msgctxt "lazarusidestrconsts.lisexit"
@@ -13819,8 +13876,9 @@ msgid "Run &Parameters ..."
 msgstr "&Parâmetros de execução ..."
 
 #: lazarusidestrconsts.lismenuruntocursor
-msgid "Step over to &Cursor"
-msgstr "Executar até o &cursor"
+msgctxt "lazarusidestrconsts.lismenuruntocursor"
+msgid "Run to Cursor"
+msgstr "Executar até o cursor"
 
 #: lazarusidestrconsts.lismenurunwithoutdebugging
 msgid "Run without Debugging"
@@ -13936,6 +13994,11 @@ msgstr "Passar sobre instrução"
 msgctxt "lazarusidestrconsts.lismenustepoverinstrhint"
 msgid "Step Over Instruction"
 msgstr "Passar sobre instrução"
+
+#: lazarusidestrconsts.lismenusteptocursor
+msgctxt "lazarusidestrconsts.lismenusteptocursor"
+msgid "Step over to &Cursor"
+msgstr "Passar sobre até o &cursor"
 
 #: lazarusidestrconsts.lismenuswapcaseselection
 msgid "Swap Case in Selection"
@@ -15464,6 +15527,10 @@ msgstr "(disponível online)"
 msgid "Call %sRegister%s procedure of selected unit"
 msgstr "Chamar procedimento de %sRegistro%s da unidade selecionada"
 
+#: lazarusidestrconsts.lispckeditcheckavailabilityonline
+msgid "Check availability online"
+msgstr "Verificar disponibilidade online"
+
 #: lazarusidestrconsts.lispckeditcleanupdependencies
 msgid "Clean up dependencies ..."
 msgstr "Limpar dependências ..."
@@ -16879,10 +16946,6 @@ msgstr "Adicionar arquivos do editor"
 msgid "Invalid Min-Max version"
 msgstr "Versão Min-Max inválida"
 
-#: lazarusidestrconsts.lisprojaddinvalidpascalunitname
-msgid "Invalid Pascal unit name"
-msgstr "Nome de unidade Pascal inválido"
-
 #: lazarusidestrconsts.lisprojaddinvalidversion
 msgid "Invalid version"
 msgstr "Versão Inválida"
@@ -16961,11 +17024,6 @@ msgstr "O nome de unidade \"%s\" já existe no projeto%scom arquivo: \"%s\"."
 #, object-pascal-format
 msgid "The unit name \"%s\" already exists in the selection%swith file: \"%s\"."
 msgstr "O nome de unidade \"%s\" já existe na seleção%scom arquivo: \"%s\"."
-
-#: lazarusidestrconsts.lisprojaddtheunitnameisnotavalidpascalidentifier
-#, object-pascal-format
-msgid "The unit name \"%s\" is not a valid Pascal identifier."
-msgstr "O nome de unidade  \"%s\" não é um identificador Pascal válido."
 
 #: lazarusidestrconsts.lisprojaddunitnamealreadyexists
 msgid "Unit name already exists"
@@ -20131,6 +20189,11 @@ msgstr "Identificador de unidade existe"
 msgid "%s unit %s in package %s"
 msgstr "%s unidade %s no pacote %s"
 
+#: lazarusidestrconsts.lisunitmustsavebeforeinherit
+#, object-pascal-format
+msgid "Unit \"%s\" must be saved before it can be inherited from. Save now?"
+msgstr "Unidade \"%s\" deve ser salva antes que possa ser herdada. Salvar agora?"
+
 #: lazarusidestrconsts.lisunitnamealreadyexistscap
 msgid "Unitname already in project"
 msgstr "Nome de unidade já existe no projeto"
@@ -21081,6 +21144,10 @@ msgstr "Versão &Maior:"
 msgid "Mi&nor version:"
 msgstr "Versão Me&nor:"
 
+#: lazarusidestrconsts.rsnewsearchwithsamecriteria
+msgid "New search with same criteria"
+msgstr "Nova busca com o mesmo critério"
+
 #: lazarusidestrconsts.rsotherinfo
 msgid "Other info"
 msgstr "Outras informações"
@@ -21088,6 +21155,10 @@ msgstr "Outras informações"
 #: lazarusidestrconsts.rspooutputdirectory
 msgid "PO Output Directory:"
 msgstr "Diretório de saída PO"
+
+#: lazarusidestrconsts.rsrefreshthesearch
+msgid "Refresh the search"
+msgstr "Atualizar a busca"
 
 #: lazarusidestrconsts.rsresource
 msgid "Resource"
@@ -21113,10 +21184,6 @@ msgstr "&Revisão:"
 #: lazarusidestrconsts.rsselectaninheritedentry
 msgid "Select an inherited entry"
 msgstr "Selecionar uma entrada herdada"
-
-#: lazarusidestrconsts.rsstartanewsearch
-msgid "Start a new search"
-msgstr "Iniciar nova busca"
 
 #: lazarusidestrconsts.rsversionnumbering
 msgid "Version numbering"
@@ -21925,6 +21992,10 @@ msgstr "Mover o cursor uma página acima"
 msgctxt "lazarusidestrconsts.srkmecpaste"
 msgid "Paste"
 msgstr "Colar"
+
+#: lazarusidestrconsts.srkmecpasteascolumns
+msgid "Paste (as Columns)"
+msgstr "Colar (como colunas)"
 
 #: lazarusidestrconsts.srkmecpause
 msgid "pause program"

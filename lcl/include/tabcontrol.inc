@@ -198,6 +198,14 @@ begin
     TTabControl(Parent).OnMouseLeave(Parent);
 end;
 
+function TNoteBookStringsTabControl.GetPopupMenu: TPopupMenu;
+begin
+  if (Parent is TTabControl) and (nboHidePageListPopup in Self.Options) then
+    Result:=TTabControl(Parent).PopupMenu
+  else
+    Result:=inherited GetPopupMenu;
+end;
+
 class procedure TNoteBookStringsTabControl.WSRegisterClass;
 begin
   inherited WSRegisterClass;
@@ -781,13 +789,17 @@ begin
 end;
 
 function TTabControl.IndexOfTabAt(X, Y: Integer): Integer;
+var
+  Offs: TPoint;
 begin
-  Result:=TTabControlStrings(FTabs).IndexOfTabAt(X,Y);
+  Offs := TTabControlNoteBookStrings(FTabs).FNoteBook.ClientOrigin;
+  Offs := Offs.Subtract(ClientOrigin);
+  Result:=TTabControlStrings(FTabs).IndexOfTabAt(X-Offs.X, Y-Offs.Y);
 end;
 
 function TTabControl.IndexOfTabAt(P: TPoint): Integer;
 begin
-  Result:=TTabControlStrings(FTabs).IndexOfTabAt(P.x, P.y);
+  Result:=IndexOfTabAt(P.x, P.y);
 end;
 
 function TTabControl.GetHitTestInfoAt(X, Y: Integer): THitTests;

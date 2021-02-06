@@ -2625,53 +2625,53 @@ const
   GDK_GRAB_FROZEN: TGdkGrabStatus = 4;
 
 type
-  TGdkEventType = Integer;
-const
+  TGdkEventType = (
   { GdkEventType }
-  GDK_NOTHING: TGdkEventType = -1;
-  GDK_DELETE: TGdkEventType = 0;
-  GDK_DESTROY: TGdkEventType = 1;
-  GDK_EXPOSE: TGdkEventType = 2;
-  GDK_MOTION_NOTIFY: TGdkEventType = 3;
-  GDK_BUTTON_PRESS: TGdkEventType = 4;
-  GDK_2BUTTON_PRESS: TGdkEventType = 5;
-  GDK_DOUBLE_BUTTON_PRESS: TGdkEventType = 5;
-  GDK_3BUTTON_PRESS: TGdkEventType = 6;
-  GDK_TRIPLE_BUTTON_PRESS: TGdkEventType = 6;
-  GDK_BUTTON_RELEASE: TGdkEventType = 7;
-  GDK_KEY_PRESS: TGdkEventType = 8;
-  GDK_KEY_RELEASE: TGdkEventType = 9;
-  GDK_ENTER_NOTIFY: TGdkEventType = 10;
-  GDK_LEAVE_NOTIFY: TGdkEventType = 11;
-  GDK_FOCUS_CHANGE: TGdkEventType = 12;
-  GDK_CONFIGURE: TGdkEventType = 13;
-  GDK_MAP: TGdkEventType = 14;
-  GDK_UNMAP: TGdkEventType = 15;
-  GDK_PROPERTY_NOTIFY: TGdkEventType = 16;
-  GDK_SELECTION_CLEAR: TGdkEventType = 17;
-  GDK_SELECTION_REQUEST: TGdkEventType = 18;
-  GDK_SELECTION_NOTIFY: TGdkEventType = 19;
-  GDK_PROXIMITY_IN: TGdkEventType = 20;
-  GDK_PROXIMITY_OUT: TGdkEventType = 21;
-  GDK_DRAG_ENTER: TGdkEventType = 22;
-  GDK_DRAG_LEAVE: TGdkEventType = 23;
-  GDK_DRAG_MOTION_: TGdkEventType = 24;
-  GDK_DRAG_STATUS_: TGdkEventType = 25;
-  GDK_DROP_START: TGdkEventType = 26;
-  GDK_DROP_FINISHED: TGdkEventType = 27;
-  GDK_CLIENT_EVENT: TGdkEventType = 28;
-  GDK_VISIBILITY_NOTIFY: TGdkEventType = 29;
-  GDK_SCROLL: TGdkEventType = 31;
-  GDK_WINDOW_STATE: TGdkEventType = 32;
-  GDK_SETTING: TGdkEventType = 33;
-  GDK_OWNER_CHANGE: TGdkEventType = 34;
-  GDK_GRAB_BROKEN: TGdkEventType = 35;
-  GDK_DAMAGE: TGdkEventType = 36;
-  GDK_TOUCH_BEGIN: TGdkEventType = 37;
-  GDK_TOUCH_UPDATE: TGdkEventType = 38;
-  GDK_TOUCH_END: TGdkEventType = 39;
-  GDK_TOUCH_CANCEL: TGdkEventType = 40;
-  GDK_EVENT_LAST: TGdkEventType = 41;
+  GDK_NOTHING = -1,
+  GDK_DELETE = 0,
+  GDK_DESTROY = 1,
+  GDK_EXPOSE = 2,
+  GDK_MOTION_NOTIFY = 3,
+  GDK_BUTTON_PRESS = 4,
+  GDK_2BUTTON_PRESS = 5,
+  GDK_DOUBLE_BUTTON_PRESS = 5,
+  GDK_3BUTTON_PRESS = 6,
+  GDK_TRIPLE_BUTTON_PRESS = 6,
+  GDK_BUTTON_RELEASE = 7,
+  GDK_KEY_PRESS = 8,
+  GDK_KEY_RELEASE = 9,
+  GDK_ENTER_NOTIFY = 10,
+  GDK_LEAVE_NOTIFY = 11,
+  GDK_FOCUS_CHANGE = 12,
+  GDK_CONFIGURE = 13,
+  GDK_MAP = 14,
+  GDK_UNMAP = 15,
+  GDK_PROPERTY_NOTIFY = 16,
+  GDK_SELECTION_CLEAR = 17,
+  GDK_SELECTION_REQUEST = 18,
+  GDK_SELECTION_NOTIFY = 19,
+  GDK_PROXIMITY_IN = 20,
+  GDK_PROXIMITY_OUT = 21,
+  GDK_DRAG_ENTER = 22,
+  GDK_DRAG_LEAVE = 23,
+  GDK_DRAG_MOTION_ = 24,
+  GDK_DRAG_STATUS_ = 25,
+  GDK_DROP_START = 26,
+  GDK_DROP_FINISHED = 27,
+  GDK_CLIENT_EVENT = 28,
+  GDK_VISIBILITY_NOTIFY = 29,
+  GDK_SCROLL = 31,
+  GDK_WINDOW_STATE = 32,
+  GDK_SETTING = 33,
+  GDK_OWNER_CHANGE = 34,
+  GDK_GRAB_BROKEN = 35,
+  GDK_DAMAGE = 36,
+  GDK_TOUCH_BEGIN = 37,
+  GDK_TOUCH_UPDATE = 38,
+  GDK_TOUCH_END = 39,
+  GDK_TOUCH_CANCEL = 40,
+  GDK_EVENT_LAST = 41
+  );
 
 type
   TGdkVisibilityState = Integer;
@@ -2880,14 +2880,21 @@ type
   PPGdkEvent = ^PGdkEvent;
   PGdkEvent = ^TGdkEvent;
 
-  PPPGdkAtom = ^PPGdkAtom;
-  PPGdkAtom = ^PGdkAtom;
+  //typedef struct _GdkAtom *GdkAtom;
+  {PPPGdkAtom = ^PPGdkAtom;}
+  PPGdkAtom = ^GdkAtom;
   PGdkAtom = ^TGdkAtom;
+  GdkAtom = PGdkAtom; // pointer alias
   TGdkAtom = object
     function name: Pgchar; cdecl; inline;
     function intern(atom_name: Pgchar; only_if_exists: gboolean): PGdkAtom; cdecl; inline; static;
     function intern_static_string(atom_name: Pgchar): PGdkAtom; cdecl; inline; static;
   end;
+
+  { TGdkDisplay }
+
+  PGdkMonitor = ^TGdkMonitor;
+
   TGdkDisplay = object(TGObject)
     function get_default: PGdkDisplay; cdecl; inline; static;
     function open(display_name: Pgchar): PGdkDisplay; cdecl; inline; static;
@@ -2902,6 +2909,7 @@ type
     function get_default_screen: PGdkScreen; cdecl; inline;
     function get_device_manager: PGdkDeviceManager; cdecl; inline;
     function get_event: PGdkEvent; cdecl; inline;
+    function get_primary_monitor: PGdkMonitor; cdecl;inline;
     procedure get_maximal_cursor_size(width: Pguint; height: Pguint); cdecl; inline;
     function get_n_screens: gint; cdecl; inline;
     function get_name: Pgchar; cdecl; inline;
@@ -3888,7 +3896,30 @@ type
   TGdkWindowRedirect = record
   end;
 
+  TGdkSubpixelLayout = (
+    GDK_SUBPIXEL_LAYOUT_UNKNOWN, // The layout is not known
+    GDK_SUBPIXEL_LAYOUT_NONE, // Not organized in this way
+    GDK_SUBPIXEL_LAYOUT_HORIZONTAL_RGB, // The layout is horizontal, the order is RGB
+    GDK_SUBPIXEL_LAYOUT_HORIZONTAL_BGR, // The layout is horizontal, the order is BGR
+    GDK_SUBPIXEL_LAYOUT_VERTICAL_RGB, // The layout is vertical, the order is RGB
+    GDK_SUBPIXEL_LAYOUT_VERTICAL_BGR // The layout is vertical, the order is BGR
+  );
 
+  { TGdkMonitor available since 3.22 }
+  TGdkMonitor = object(TGObject)
+  public
+    function get_display ():PGdkDisplay;cdecl;inline;
+    procedure	geometry (geometry:PGdkRectangle);cdecl;inline;
+    procedure get_workarea (workarea:PGdkRectangle);cdecl;inline;
+    function get_width_mm():integer;cdecl;inline;
+    function get_height_mm():integer;cdecl;inline;
+    function get_manufacturer ():PChar;cdecl;inline;
+    function get_model ():PChar;cdecl;inline;
+    function get_scale_factor ():integer;cdecl;inline;
+    function get_refresh_rate ():integer;cdecl;inline;
+    function get_subpixel_layout ():TGdkSubpixelLayout;cdecl;inline;
+    function is_primary ():gboolean;cdecl;inline;
+  end;
 
 function gdk_app_launch_context_get_type: TGType; cdecl; external;
 function gdk_atom_intern(atom_name: Pgchar; only_if_exists: gboolean): PGdkAtom; cdecl; external;
@@ -3947,6 +3978,7 @@ function gdk_display_get_event(display: PGdkDisplay): PGdkEvent; cdecl; external
 function gdk_display_get_n_screens(display: PGdkDisplay): gint; cdecl; external;
 function gdk_display_get_name(display: PGdkDisplay): Pgchar; cdecl; external;
 function gdk_display_get_screen(display: PGdkDisplay; screen_num: gint): PGdkScreen; cdecl; external;
+function gdk_display_get_primary_monitor(display: PGdkDisplay): PGdkMonitor; cdecl; external;
 function gdk_display_get_type: TGType; cdecl; external;
 function gdk_display_has_pending(display: PGdkDisplay): gboolean; cdecl; external;
 function gdk_display_is_closed(display: PGdkDisplay): gboolean; cdecl; external;
@@ -4361,7 +4393,80 @@ procedure gdk_window_unfullscreen(window: PGdkWindow); cdecl; external;
 procedure gdk_window_unmaximize(window: PGdkWindow); cdecl; external;
 procedure gdk_window_unstick(window: PGdkWindow); cdecl; external;
 procedure gdk_window_withdraw(window: PGdkWindow); cdecl; external;
+
+{ GDK monitor available since 3.22 }
+function gdk_monitor_get_display (monitor:PGdkMonitor):PGdkDisplay;cdecl;external;
+procedure gdk_monitor_get_geometry (monitor: PGdkMonitor; geometry:PGdkRectangle);cdecl;external;
+procedure gdk_monitor_get_workarea (monitor: PGdkMonitor; workarea:PGdkRectangle);cdecl;external;
+function gdk_monitor_get_width_mm(monitor:PGdkMonitor):integer;cdecl;external;
+function gdk_monitor_get_height_mm (monitor:PGdkMonitor):integer;cdecl;external;
+function gdk_monitor_get_manufacturer (monitor:PGdkMonitor):PChar;cdecl;external;
+function gdk_monitor_get_model (monitor:PGdkMonitor):PChar;cdecl;external;
+function gdk_monitor_get_scale_factor (monitor:PGdkMonitor):integer;cdecl;external;
+function gdk_monitor_get_refresh_rate (monitor:PGdkMonitor):integer;cdecl;external;
+function gdk_monitor_get_subpixel_layout (monitor:PGdkMonitor):TGdkSubpixelLayout;cdecl;external;
+function gdk_monitor_is_primary (monitor:PGdkMonitor):gboolean;cdecl;external;
+
+
 implementation
+
+{ TGdkMonitor }
+
+function TGdkMonitor.get_display(): PGdkDisplay; cdecl;
+begin
+  Result:=LazGdk3.gdk_monitor_get_display (@Self);
+end;
+
+procedure TGdkMonitor.geometry(geometry: PGdkRectangle); cdecl;
+begin
+  LazGdk3.gdk_monitor_get_geometry (@Self, geometry);
+end;
+
+procedure TGdkMonitor.get_workarea(workarea: PGdkRectangle); cdecl;
+begin
+  LazGdk3.gdk_monitor_get_workarea (@Self, workarea);
+end;
+
+function TGdkMonitor.get_width_mm(): integer; cdecl;
+begin
+  Result:=LazGdk3.gdk_monitor_get_width_mm(@Self);
+end;
+
+function TGdkMonitor.get_height_mm(): integer; cdecl;
+begin
+  Result:=LazGdk3.gdk_monitor_get_height_mm (@Self);
+end;
+
+function TGdkMonitor.get_manufacturer(): PChar; cdecl;
+begin
+  Result:=LazGdk3.gdk_monitor_get_manufacturer(@Self);
+end;
+
+function TGdkMonitor.get_model(): PChar; cdecl;
+begin
+  Result:=LazGdk3.gdk_monitor_get_model(@Self);
+end;
+
+function TGdkMonitor.get_scale_factor(): integer; cdecl;
+begin
+  Result:=LazGdk3.gdk_monitor_get_scale_factor(@Self);
+end;
+
+function TGdkMonitor.get_refresh_rate(): integer; cdecl;
+begin
+  Result:=LazGdk3.gdk_monitor_get_refresh_rate(@Self);
+end;
+
+function TGdkMonitor.get_subpixel_layout(): TGdkSubpixelLayout; cdecl;
+begin
+  Result:=LazGdk3.gdk_monitor_get_subpixel_layout(@Self);
+end;
+
+function TGdkMonitor.is_primary(): gboolean; cdecl;
+begin
+  Result:=LazGdk3.gdk_monitor_is_primary(@Self);
+end;
+
 procedure TGdkAppLaunchContext.set_desktop(desktop: gint); cdecl;
 begin
   LazGdk3.gdk_app_launch_context_set_desktop(@self, desktop);
@@ -4450,6 +4555,11 @@ end;
 function TGdkDisplay.get_event: PGdkEvent; cdecl;
 begin
   Result := LazGdk3.gdk_display_get_event(@self);
+end;
+
+function TGdkDisplay.get_primary_monitor: PGdkMonitor; cdecl;
+begin
+  Result:=LazGdk3.gdk_display_get_primary_monitor(@Self);
 end;
 
 procedure TGdkDisplay.get_maximal_cursor_size(width: Pguint; height: Pguint); cdecl;

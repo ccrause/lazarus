@@ -9,14 +9,14 @@
  Modified Date: 20.10.2010
  By: Marcelo Borges de Paula
 }
-unit fieldseditor;
+unit FieldsEditor;
 
 {$mode objfpc}{$H+}
 
 interface
 
 uses
-  Classes, SysUtils, types, db,
+  Classes, SysUtils, db,
   // LCL
   LCLType, Forms, Controls, Menus, Dialogs, ComCtrls, ActnList, StdCtrls,
   // IdeIntf
@@ -102,7 +102,7 @@ type
     property ComponentEditor: TFieldsComponentEditor write FComponentEditor;
   end;
 
-  { TActionListComponentEditor }
+  { TFieldsComponentEditor }
 
   TFieldsComponentEditor = class(TComponentEditor)
   public
@@ -439,7 +439,7 @@ begin
     if i >= 0 then
       FieldsListBox.Items[i] := Field.FieldName;
   end else
-  if (AComponent is TDataset) And (AComponent = LinkDataset) then
+  if AComponent = LinkDataset then
     Caption := fesFeTitle + ' - ' + LinkDataset.Name;
 end;
 

@@ -25,6 +25,7 @@
 unit registersqldb;
 
 {$mode objfpc}{$H+}
+{$modeswitch typehelpers}
 
 {$DEFINE HASIBCONNECTION}
 {$DEFINE HASMYSQL55CONNECTION}
@@ -63,7 +64,7 @@ unit registersqldb;
 interface
 
 uses
-  Classes, SysUtils, db, sqldb,
+  Classes, SysUtils, typinfo, db, sqldb, sqldbstrconst,
   {$IFDEF HASIBCONNECTION}
     ibconnection,
   {$ENDIF}
@@ -119,6 +120,9 @@ uses
   ProjectIntf,
   IDEMsgIntf,
   IDEExternToolIntf,
+  ComponentEditors,
+  fieldseditor,
+  bufdatasetdsgn,
   CodeCache,
   CodeToolManager;
 
@@ -201,13 +205,30 @@ Type
     Property SourceFileName : String Read FSFN;
  end;
 
+ { TSQLQueryEditor }
+
+ TSQLQueryEditor = class(TBufDatasetDesignEditor)
+ Private
+   FVOffset : Integer;
+ Protected
+   procedure DesignUpdateSQL(aQuery: TSQLQuery); virtual;
+   procedure GenerateUpdateSQL(aQuery: TSQLQuery); virtual;
+   procedure EditSQL(aQuery: TSQLQuery); virtual;
+   procedure DoEditSQL(aQuery: TSQLQuery); virtual;
+ public
+   constructor Create(AComponent: TComponent;   ADesigner: TComponentEditorDesigner); override;
+   procedure ExecuteVerb(Index: integer); override;
+   function GetVerb(Index: integer): string; override;
+   function GetVerbCount: integer; override;
+ end;
+
 procedure Register;
 
 implementation
 
 {$R registersqldb.res}
 
-uses dynlibs;
+uses dialogs, generatesqldlg, dynlibs;
 
 procedure RegisterUnitSQLdb;
 begin
@@ -265,18 +286,153 @@ begin
     ]);
 end;
 
+Type
 
-Resourcestring
-  SSQLScript     = 'SQL Script file';
-  SSQLScriptDesc = 'Create a new SQL Script file';
-  SSQLSource = 'Insert your SQL statements here';
+   { TConnectionHelper }
 
-  SFireBirdDatabases = 'Firebird databases';
-  SSQLite3Databases = 'SQLite3 databases';
-  SInterbaseDatabases = 'Interbase databases';
-  SSQLStringsPropertyEditorDlgTitle = 'Editing %s';
+   TConnectionHelper = Class(TSQLConnection)
+   Public
+     Function GenerateStatement(Q : TCustomSQLQuery; aKind : TUpdateKind; Out WithReturning : Boolean) : String;
+   end;
 
-  sLibraries = 'Shared libraries';
+{ TConnectionHelper }
+
+function TConnectionHelper.GenerateStatement(Q : TCustomSQLQuery; aKind: TUpdateKind; Out WithReturning : Boolean): String;
+begin
+  WithReturning:=False;
+  Case aKind of
+    ukModify : Result:=Self.ConstructUpdateSQL(Q,WithReturning);
+    ukDelete : Result:=Self.ConstructDeleteSQL(Q);
+    ukInsert  : Result:=Self.ConstructInsertSQL(Q,WithReturning);
+  end;
+end;
+
+
+{ TSQLQueryEditor }
+
+procedure TSQLQueryEditor.DesignUpdateSQL(aQuery: TSQLQuery);
+
+begin
+  if GenerateSQL(aQuery) then
+    Modified;
+end;
+
+procedure TSQLQueryEditor.GenerateUpdateSQL(aQuery: TSQLQuery);
+
+Var
+  TH : TConnectionHelper;
+  R : Boolean;
+
+begin
+  if not Assigned(aQuery.SQLConnection) then
+    ShowMessage(SErrConnectionNotAssigned)
+  else
+    begin
+    TH:=TConnectionHelper(Aquery.SQLConnection);
+    R:=False;
+    aQuery.UpdateSQL.Text:=TH.GenerateStatement(aQuery,ukModify,R);
+    aQuery.DeleteSQL.Text:=TH.GenerateStatement(aQuery,ukDelete,R);
+    aQuery.InsertSQL.Text:=TH.GenerateStatement(aQuery,ukInsert,R);
+    Modified;
+    end;
+end;
+
+procedure TSQLQueryEditor.EditSQL(aQuery : TSQLQuery);
+
+var
+  TheDialog:TSQLStringsPropertyEditorDlg;
+  Strings  :TStrings;
+
+begin
+  Strings := aQuery.SQL;
+  TheDialog := TSQLStringsPropertyEditorDlg.Create(Application);
+  try
+    TheDialog.SQLEditor.Text := Strings.Text;
+    TheDialog.Caption := Format(SSQLStringsPropertyEditorDlgTitle, ['SQL']);
+    TheDialog.Connection  := (aQuery.DataBase as TSQLConnection);
+    TheDialog.Transaction := (aQuery.Transaction as TSQLTransaction);
+    if (TheDialog.ShowModal = mrOK)then
+      begin
+      Strings.Text := TheDialog.SQLEditor.Text;
+      Modified;
+      end;
+  finally
+    FreeAndNil(TheDialog);
+  end;
+end;
+
+
+constructor TSQLQueryEditor.Create(AComponent: TComponent; ADesigner: TComponentEditorDesigner);
+begin
+  inherited Create(AComponent, ADesigner);
+  FVOffset:=Inherited GetVerbCount;
+end;
+
+procedure TSQLQueryEditor.DoEditSQL(aQuery: TSQLQuery);
+
+var
+  AHook: TPropertyEditorHook;
+  PEC: TPropertyEditorClass;
+  PE: TPropertyEditor;
+  SQLPropInfo : PPropInfo;
+
+begin
+  PEC:=Nil;
+  SQLPropInfo:=GetPropInfo(aQuery,'SQL');
+  if Assigned(SQLPropInfo) then
+    PEC:=GetEditorClass(SQLPropInfo,aQuery);
+  if (PEC=Nil) or not GetHook(AHook) then
+    EditSQL(aQuery)
+  else
+    begin
+    PE:=PEC.Create(AHook,1);
+    try
+      PE.SetPropEntry(0,aQuery,SQLPropInfo);
+      PE.Edit;
+    finally
+      PE.Free;
+    end;
+    end;
+end;
+
+
+
+procedure TSQLQueryEditor.ExecuteVerb(Index: integer);
+var
+  Q : TSQLQuery;
+
+begin
+  if Index < FVOffset then
+    inherited
+  else
+    begin
+    Q:=Component as TSQLQuery;
+    case Index - FVOffset of
+      0 : DoEditSQL(Q);
+      1 : GenerateUpdateSQL(Q);
+      2 : DesignUpdateSQL(Q);
+    else
+      // Do nothing
+    end;
+    end;
+end;
+
+function TSQLQueryEditor.GetVerb(Index: integer): string;
+begin
+  if Index < FVOffset then
+    Result := inherited
+  else
+    case Index - FVOffset of
+      0 : Result := SEditSQL;
+      1 : Result := SGenerateUpdateSQL;
+      2 : Result := SEditUpdateSQL;
+    end;
+end;
+
+function TSQLQueryEditor.GetVerbCount: integer;
+begin
+  Result := FVOffset + 3;
+end;
 
 { TSQLDBLibraryLoaderConnectionTypePropertyEditor }
 
@@ -567,6 +723,7 @@ begin
   RegisterPropertyEditor(TStrings.ClassInfo, TSQLQuery,  'RefreshSQL',TSQLStringsPropertyEditor);
   RegisterPropertyEditor(TStrings.ClassInfo, TSQLScript, 'Script'   , TSQLStringsPropertyEditor);
   RegisterProjectFileDescriptor(TSQLFileDescriptor.Create);
+  RegisterComponentEditor(TSQLQuery, TSQLQueryEditor);
 
   RegisterUnit('sqldb',@RegisterUnitSQLdb);
   AChecker:=TSQLSyntaxChecker.Create(Nil);

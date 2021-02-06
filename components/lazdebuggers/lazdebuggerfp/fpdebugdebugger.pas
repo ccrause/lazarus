@@ -2,52 +2,320 @@ unit FpDebugDebugger;
 
 {$mode objfpc}{$H+}
 {$TYPEDADDRESS on}
+{$ModeSwitch advancedrecords}
 
 interface
 
 uses
-  Classes,
-  SysUtils, fgl, math,
-  Forms,
-  Maps,
-  process,
-  LazLogger,
-  Dialogs,
-  FpDbgClasses,
-  FpDbgInfo,
-  contnrs,
-  FpErrorMessages,
-  FpPascalBuilder,
-  DbgIntfBaseTypes,
-  DbgIntfDebuggerBase,
-  FpdMemoryTools,
-  FpPascalParser,
-  FPDbgController, FpDbgDwarfDataClasses, FpDbgDwarfFreePascal, FpDbgDwarf;
+  Classes, SysUtils, fgl, math, contnrs, process,
+  Forms, Dialogs,
+  Maps, LazLogger, LazUTF8,
+  DbgIntfBaseTypes, DbgIntfDebuggerBase,
+  FpDebugDebuggerUtils,
+  // FpDebug
+  FpDbgClasses, FpDbgInfo, FpErrorMessages, FpPascalBuilder, FpdMemoryTools,
+  FpPascalParser, FPDbgController, FpDbgDwarfDataClasses, FpDbgDwarfFreePascal,
+  FpDbgDwarf, FpDbgUtil;
 
 type
 
-  { TFpDebugThread }
   TFpDebugDebugger = class;
   TFpDbgAsyncMethod = procedure() of object;
 
-  TFpDebugThread = class(TThread)
-  private
-    FAsyncMethod: TFpDbgAsyncMethod;
-    FDebugLoopStoppedEvent: PRTLEvent;
-    FFpDebugDebugger: TFpDebugDebugger;
-    FStartDebugLoopEvent: PRTLEvent;
-    FStartSuccessfull: boolean;
-    FQueuedFinish: boolean;  // true = DoDebugLoopFinishedASync queud in main thread
-    procedure DoDebugLoopFinishedASync({%H-}Data: PtrInt);
+  { TFpDbgDebggerThreadWorkerItem }
+
+  TFpDbgDebggerThreadWorkerItem = class(TFpThreadPriorityWorkerItem)
+  protected type
+    THasQueued = (hqNotQueued, hqQueued, hqBlocked);
+  protected
+    FDebugger: TFpDebugDebugger;
+    FHasQueued: THasQueued;
   public
-    constructor Create(AFpDebugDebugger: TFpDebugDebugger);
-    destructor Destroy; override;
-    procedure Execute; override;
-    property StartSuccesfull: boolean read FStartSuccessfull;
-    property StartDebugLoopEvent: PRTLEvent read FStartDebugLoopEvent;
-    property DebugLoopStoppedEvent: PRTLEvent read FDebugLoopStoppedEvent;
-    property AsyncMethod: TFpDbgAsyncMethod read FAsyncMethod write FAsyncMethod;
+    constructor Create(ADebugger: TFpDebugDebugger; APriority: TFpThreadWorkerPriority);
+
+    procedure Queue(aMethod: TDataEvent; Data: PtrInt = 0);
+    (* Unqueue_DecRef also prevents new queuing
+       Unqueue_DecRef allows for destruction (no more access to object)
+       => therefor UnQueue_DecRef and ALL/most methods executing  unqueue_DecRef are named *_DecRef
+    *)
+    procedure UnQueue_DecRef(ABlockQueuing: Boolean = True);
   end;
+
+  { TFpDbgDebggerThreadWorkerLinkedItem }
+
+  TFpDbgDebggerThreadWorkerLinkedItem = class(TFpDbgDebggerThreadWorkerItem)
+  protected
+    FNextWorker: TFpDbgDebggerThreadWorkerLinkedItem; // linked list for use by TFPCallStackSupplier
+    procedure DoRemovedFromLinkedList; virtual;
+  end;
+
+  { TFpDbgDebggerThreadWorkerLinkedList }
+
+  TFpDbgDebggerThreadWorkerLinkedList = object
+  private
+    FNextWorker: TFpDbgDebggerThreadWorkerLinkedItem;
+  public
+    procedure Add(AWorkItem: TFpDbgDebggerThreadWorkerLinkedItem); // Does not add ref / uses existing ref
+    procedure ClearFinishedWorkers;
+    procedure RequestStopForWorkers;
+    procedure WaitForWorkers(AStop: Boolean); // Only call in IDE thread (main thread)
+  end;
+
+  { TFpThreadWorkerControllerRun }
+
+  TFpThreadWorkerControllerRun = class(TFpDbgDebggerThreadWorkerItem)
+  private
+    FWorkerThreadId: TThreadID;
+  protected
+    FStartSuccessfull: boolean;
+    procedure DoExecute; override;
+  public
+    constructor Create(ADebugger: TFpDebugDebugger);
+    property StartSuccesfull: boolean read FStartSuccessfull;
+    property WorkerThreadId: TThreadID read FWorkerThreadId;
+  end;
+
+  { TFpThreadWorkerRunLoop }
+
+  TFpThreadWorkerRunLoop = class(TFpDbgDebggerThreadWorkerItem)
+  protected
+    procedure DoExecute; override;
+  public
+    constructor Create(ADebugger: TFpDebugDebugger);
+  end;
+
+  { TFpThreadWorkerRunLoopAfterIdle }
+
+  TFpThreadWorkerRunLoopAfterIdle = class(TFpDbgDebggerThreadWorkerItem)
+  protected
+    procedure CheckIdleOrRun(Data: PtrInt = 0);
+    procedure DoExecute; override;
+  public
+    constructor Create(ADebugger: TFpDebugDebugger);
+  end;
+
+  { TFpThreadWorkerAsyncMeth }
+
+  TFpThreadWorkerAsyncMeth = class(TFpDbgDebggerThreadWorkerItem)
+  protected
+    FAsyncMethod: TFpDbgAsyncMethod;
+    procedure DoExecute; override;
+  public
+    constructor Create(ADebugger: TFpDebugDebugger; AnAsyncMethod: TFpDbgAsyncMethod);
+  end;
+
+  { TFpThreadWorkerPrepareCallStackEntryList }
+
+  TFpThreadWorkerPrepareCallStackEntryList = class(TFpDbgDebggerThreadWorkerLinkedItem)
+  (* Do not accesss   CallStackEntryList.Items[]   while this is running *)
+  protected
+    FRequiredMinCount: Integer;
+    FThread: TDbgThread;
+    procedure PrepareCallStackEntryList(AFrameRequired: Integer; AThread: TDbgThread);
+    procedure DoExecute; override;
+  public
+    constructor Create(ADebugger: TFpDebugDebugger; ARequiredMinCount: Integer; APriority: TFpThreadWorkerPriority = twpStack);
+    constructor Create(ADebugger: TFpDebugDebugger; ARequiredMinCount: Integer; AThread: TDbgThread);
+  end;
+
+  { TFpThreadWorkerCallStackCount }
+
+  TFpThreadWorkerCallStackCount = class(TFpThreadWorkerPrepareCallStackEntryList)
+  private
+    FCallstack: TCallStackBase;
+    procedure DoCallstackFreed_DecRef(Sender: TObject);
+  protected
+    procedure UpdateCallstack_DecRef(Data: PtrInt = 0);
+    procedure DoExecute; override;
+    procedure DoRemovedFromLinkedList; override; // _DecRef
+  public
+    constructor Create(ADebugger: TFpDebugDebugger; ACallstack: TCallStackBase; ARequiredMinCount: Integer);
+    procedure RemoveCallStack_DecRef;
+  end;
+
+  { TFpThreadWorkerCallEntry }
+
+  TFpThreadWorkerCallEntry = class(TFpThreadWorkerPrepareCallStackEntryList)
+  private
+    FCallstack: TCallStackBase;
+    FCallstackEntry: TCallStackEntry;
+    FCallstackIndex: Integer;
+    FDbgCallStack: TDbgCallstackEntry;
+    FParamAsString: String;
+    procedure DoCallstackFreed_DecRef(Sender: TObject);
+    procedure DoCallstackEntryFreed_DecRef(Sender: TObject);
+  protected
+    procedure UpdateCallstackEntry_DecRef(Data: PtrInt = 0);
+    procedure DoExecute; override;
+    procedure DoRemovedFromLinkedList; override; // _DecRef
+  public
+    constructor Create(ADebugger: TFpDebugDebugger; AThread: TDbgThread; ACallstackEntry: TCallStackEntry; ACallstack: TCallStackBase = nil);
+    procedure RemoveCallStackEntry_DecRef;
+  end;
+
+  { TFpThreadWorkerThreads }
+
+  TFpThreadWorkerThreads = class(TFpThreadWorkerPrepareCallStackEntryList)
+  protected
+    procedure UpdateThreads_DecRef(Data: PtrInt = 0);
+    procedure DoExecute; override;
+  public
+    constructor Create(ADebugger: TFpDebugDebugger);
+  end;
+
+  { TFpThreadWorkerLocals }
+
+  TFpThreadWorkerLocals = class(TFpDbgDebggerThreadWorkerLinkedItem)
+  private type
+
+    { TResultEntry }
+
+    TResultEntry = record
+      Name, Value: String;
+      class operator = (a, b: TResultEntry): Boolean;
+    end;
+    TResultList = specialize TFPGList<TResultEntry>;
+  private
+    FLocals: TLocals;
+    FThreadId, FStackFrame: Integer;
+    FResults: TResultList;
+    procedure DoLocalsFreed_DecRef(Sender: TObject);
+  protected
+    procedure UpdateLocals_DecRef(Data: PtrInt = 0);
+    procedure DoExecute; override;
+    procedure DoRemovedFromLinkedList; override; // _DecRef
+  public
+    constructor Create(ADebugger: TFpDebugDebugger; ALocals: TLocals);
+    destructor Destroy; override;
+  end;
+
+  { TFpThreadWorkerEvaluate }
+
+  TFpThreadWorkerEvaluate = class(TFpDbgDebggerThreadWorkerLinkedItem)
+  protected
+    function EvaluateExpression(const AnExpression: String;
+                                AStackFrame, AThreadId: Integer;
+                                ADispFormat: TWatchDisplayFormat;
+                                ARepeatCnt: Integer;
+                                AnEvalFlags: TDBGEvaluateFlags;
+                                out AResText: String;
+                                out ATypeInfo: TDBGType
+                               ): Boolean;
+  public
+  end;
+
+  { TFpThreadWorkerEvaluateExpr }
+
+  TFpThreadWorkerEvaluateExpr = class(TFpThreadWorkerEvaluate)
+  private
+    FExpression: String;
+    FStackFrame, FThreadId: Integer;
+    FDispFormat: TWatchDisplayFormat;
+    FRepeatCnt: Integer;
+    FEvalFlags: TDBGEvaluateFlags;
+  protected
+    FRes: Boolean;
+    FResText: String;
+    FResDbgType: TDBGType;
+    procedure DoExecute; override;
+  public
+    constructor Create(ADebugger: TFpDebugDebugger;
+                       APriority: TFpThreadWorkerPriority;
+                       const AnExpression: String;
+                       AStackFrame, AThreadId: Integer;
+                       ADispFormat: TWatchDisplayFormat;
+                       ARepeatCnt: Integer;
+                       AnEvalFlags: TDBGEvaluateFlags
+                      );
+    function DebugText: String; override;
+  end;
+
+  { TFpThreadWorkerCmdEval }
+
+  TFpThreadWorkerCmdEval = class(TFpThreadWorkerEvaluateExpr)
+  private
+    FCallback: TDBGEvaluateResultCallback;
+  protected
+    procedure DoCallback_DecRef(Data: PtrInt = 0);
+    procedure DoExecute; override;
+  public
+    constructor Create(ADebugger: TFpDebugDebugger;
+                       APriority: TFpThreadWorkerPriority;
+                       const AnExpression: String;
+                       AStackFrame, AThreadId: Integer;
+                       AnEvalFlags: TDBGEvaluateFlags;
+                       ACallback: TDBGEvaluateResultCallback
+                      );
+    procedure Abort;
+  end;
+
+  { TFpThreadWorkerWatchValueEval }
+
+  TFpThreadWorkerWatchValueEval = class(TFpThreadWorkerEvaluateExpr)
+  private
+    FWatchValue: TWatchValue;
+    procedure DoWatchFreed_DecRef(Sender: TObject);
+  protected
+    procedure UpdateWatch_DecRef(Data: PtrInt = 0);
+    procedure DoExecute; override;
+    procedure DoRemovedFromLinkedList; override; // _DecRef
+  public
+    constructor Create(ADebugger: TFpDebugDebugger; AWatchValue: TWatchValue);
+  end;
+
+  { TFpDebugDebuggerPropertiesMemLimits }
+
+  TFpDebugDebuggerPropertiesMemLimits = class(TPersistent)
+  private
+  const
+    DEF_MaxMemReadSize              = 512*1024*1024;
+    DEF_MaxStringLen                = 10000;
+    DEF_MaxArrayLen                 = 100*1024;
+    DEF_MaxNullStringSearchLen      = 10000;
+    DEF_MaxStackStringLen           = 512;
+    DEF_MaxStackArrayLen            = 64;
+    DEF_MaxStackNullStringSearchLen = 512;
+  private
+    FMaxArrayLen: QWord;
+    FMaxMemReadSize: QWord;
+    FMaxNullStringSearchLen: QWord;
+    FMaxStackArrayLen: QWord;
+    FMaxStackNullStringSearchLen: QWord;
+    FMaxStackStringLen: QWord;
+    FMaxStringLen: QWord;
+    function MaxArrayLenIsStored: Boolean;
+    function MaxMemReadSizeIsStored: Boolean;
+    function MaxNullStringSearchLenIsStored: Boolean;
+    function MaxStackArrayLenIsStored: Boolean;
+    function MaxStackNullStringSearchLenIsStored: Boolean;
+    function MaxStackStringLenIsStored: Boolean;
+    function MaxStringLenIsStored: Boolean;
+    procedure SetMaxArrayLen(AValue: QWord);
+    procedure SetMaxMemReadSize(AValue: QWord);
+    procedure SetMaxNullStringSearchLen(AValue: QWord);
+    procedure SetMaxStackArrayLen(AValue: QWord);
+    procedure SetMaxStackNullStringSearchLen(AValue: QWord);
+    procedure SetMaxStackStringLen(AValue: QWord);
+    procedure SetMaxStringLen(AValue: QWord);
+  public
+    constructor Create;
+    procedure Assign(Source: TPersistent); override;
+  published
+    property MaxMemReadSize: QWord read FMaxMemReadSize write SetMaxMemReadSize stored MaxMemReadSizeIsStored default DEF_MaxMemReadSize;
+
+    property MaxStringLen:           QWord read FMaxStringLen write SetMaxStringLen stored MaxStringLenIsStored default DEF_MaxStringLen;
+    property MaxArrayLen:            QWord read FMaxArrayLen write SetMaxArrayLen  stored MaxArrayLenIsStored default DEF_MaxArrayLen;
+    property MaxNullStringSearchLen: QWord read FMaxNullStringSearchLen write SetMaxNullStringSearchLen stored MaxNullStringSearchLenIsStored default DEF_MaxNullStringSearchLen;
+
+    property MaxStackStringLen:           QWord read FMaxStackStringLen write SetMaxStackStringLen stored MaxStackStringLenIsStored default DEF_MaxStackStringLen;
+    property MaxStackArrayLen:            QWord read FMaxStackArrayLen write SetMaxStackArrayLen stored MaxStackArrayLenIsStored default DEF_MaxStackArrayLen;
+    property MaxStackNullStringSearchLen: QWord read FMaxStackNullStringSearchLen write SetMaxStackNullStringSearchLen stored MaxStackNullStringSearchLenIsStored default DEF_MaxStackNullStringSearchLen;
+  end;
+
+  TFpInt3DebugBreakOption = (
+    dboIgnoreAll //, dboIgnoreDLL, dboIgnoreNtdllNoneDebug, dboIgnoreNtdllDebug
+  );
+  TFpInt3DebugBreakOptions = set of TFpInt3DebugBreakOption;
 
   { TFpDebugDebuggerProperties }
 
@@ -57,19 +325,26 @@ type
     {$ifdef windows}
     FForceNewConsole: boolean;
     {$endif windows}
+    FHandleDebugBreakInstruction: TFpInt3DebugBreakOptions;
+    FMemLimits: TFpDebugDebuggerPropertiesMemLimits;
     FNextOnlyStopOnStartLine: boolean;
+    procedure SetMemLimits(AValue: TFpDebugDebuggerPropertiesMemLimits);
   public
     constructor Create; override;
+    destructor Destroy; override;
     procedure Assign(Source: TPersistent); override;
     {$ifdef unix}
   published
     {$endif unix}
     property ConsoleTty: string read FConsoleTty write FConsoleTty;
   published
-    property NextOnlyStopOnStartLine: boolean read FNextOnlyStopOnStartLine write FNextOnlyStopOnStartLine;
+    property NextOnlyStopOnStartLine: boolean read FNextOnlyStopOnStartLine write FNextOnlyStopOnStartLine default False;
     {$ifdef windows}
-    property ForceNewConsole: boolean read FForceNewConsole write FForceNewConsole;
+    property ForceNewConsole: boolean read FForceNewConsole write FForceNewConsole default True;
     {$endif windows}
+
+    property MemLimits: TFpDebugDebuggerPropertiesMemLimits read FMemLimits write SetMemLimits;
+    property HandleDebugBreakInstruction: TFpInt3DebugBreakOptions read FHandleDebugBreakInstruction write FHandleDebugBreakInstruction default [dboIgnoreAll];
   end;
 
   { TDbgControllerStepOverOrFinallyCmd
@@ -102,6 +377,7 @@ type
   protected
     procedure DoResolveEvent(var AnEvent: TFPDEvent; AnEventThread: TDbgThread; out Finished: boolean); override;
     procedure InternalContinue(AProcess: TDbgProcess; AThread: TDbgThread); override;
+    procedure Init; override;
   public
     constructor Create(AController: TDbgController; AnAfterFinCallAddr: TDbgPtr); reintroduce;
   end;
@@ -118,7 +394,7 @@ type
   private
   type
     TBreakPointLoc = (
-      bplRaise, bplReRaise, // bplBreakError, bplRunError,
+      bplRaise, bplReRaise, bplBreakError, bplRunError,
       bplPopExcept, bplCatches,
       bplRtlUnwind, bplFpcSpecific,
       bplSehW64Finally, bplSehW64Except,
@@ -154,6 +430,9 @@ type
     function GetCurrentProcess: TDbgProcess; inline;
     function GetCurrentThread: TDbgThread; inline;
     function GetDbgController: TDbgController; inline;
+    function dbgs(st: TExceptStepState): string;
+    function dbgs(loc: TBreakPointLoc): string;
+    function dbgs(locs: TBreakPointLocs): string;
   protected
     property DbgController: TDbgController read GetDbgController;
     property CurrentProcess: TDbgProcess read GetCurrentProcess;
@@ -192,37 +471,49 @@ type
   TFpDebugDebugger = class(TDebuggerIntf)
   private
     FIsIdle: Boolean;
-    FWatchEvalList: TFPList; // Schedule
-    FWatchAsyncQueued: Boolean;
     FPrettyPrinter: TFpPascalPrettyPrinter;
+    FStartupCommand: TDBGCommand;
+    FStartuRunToFile: string;
+    FStartuRunToLine: LongInt;
     FDbgController: TDbgController;
-    FFpDebugThread: TFpDebugThread;
-    FQuickPause: boolean;
+    (* Each thread must only lock max one item at a time.
+       This ensures the locking will be dead-lock free.
+    *)
+    FLockList: TFpDbgLockList;
+    FWorkQueue: TFpThreadPriorityWorkerQueue;
+    FWorkThread: TThread; // for TThread.queue / 3.0.4 can only unqueue if there is a thread
+    FWorkerThreadId: TThreadID;
+    FEvalWorkItem: TFpThreadWorkerCmdEval;
+    FQuickPause, FPauseForEvent, FSendingEvents: boolean;
     FMemConverter: TFpDbgMemConvertorLittleEndian;
     FMemReader: TDbgMemReader;
     FMemManager: TFpDbgMemManager;
     FExceptionStepper: TFpDebugExceptionStepping;
     FConsoleOutputThread: TThread;
     // Helper vars to run in debug-thread
-    FCacheLine: cardinal;
+    FCacheLine, FCacheBytesRead: cardinal;
     FCacheFileName: string;
     FCacheLib: TDbgLibrary;
     FCacheBreakpoint: TFpDbgBreakpoint;
-    FCacheLocation: TDBGPtr;
+    FCacheLocation, FCacheLocation2: TDBGPtr;
     FCacheBoolean: boolean;
     FCachePointer: pointer;
     FCacheReadWrite: TDBGWatchPointKind;
     FCacheScope: TDBGWatchPointScope;
     FCacheThreadId, FCacheStackFrame: Integer;
-    FCacheContext: TFpDbgInfoContext;
+    FCacheContext: TFpDbgSymbolScope;
     //
     function GetClassInstanceName(AnAddr: TDBGPtr): string;
     function ReadAnsiString(AnAddr: TDbgPtr): string;
     procedure HandleSoftwareException(out AnExceptionLocation: TDBGLocationRec; var continue: boolean);
+    // HandleBreakError: Default handler for range-check etc
+    procedure HandleBreakError(var continue: boolean);
+    // HandleRunError: Software called RuntimeError
+    procedure HandleRunError(var continue: boolean);
     procedure FreeDebugThread;
-    procedure FDbgControllerHitBreakpointEvent(var continue: boolean; const Breakpoint: TFpDbgBreakpoint);
+    procedure FDbgControllerHitBreakpointEvent(var continue: boolean;
+      const Breakpoint: TFpDbgBreakpoint; AnEventType: TFPDEvent; AMoreHitEventsPending: Boolean);
     procedure EnterPause(ALocationAddr: TDBGLocationRec; AnInternalPause: Boolean = False);
-    procedure RunInternalPauseTasks;
     procedure FDbgControllerCreateProcessEvent(var {%H-}continue: boolean);
     procedure FDbgControllerProcessExitEvent(AExitCode: DWord);
     procedure FDbgControllerExceptionEvent(var continue: boolean; const ExceptionClass, ExceptionMessage: string);
@@ -230,18 +521,9 @@ type
     procedure FDbgControllerLibraryLoaded(var continue: boolean; ALib: TDbgLibrary);
     procedure FDbgControllerLibraryUnloaded(var continue: boolean; ALib: TDbgLibrary);
     function GetDebugInfo: TDbgInfo;
-    procedure DoWatchFreed(Sender: TObject);
-    procedure ProcessASyncWatches({%H-}Data: PtrInt);
-    procedure ClearWatchEvalList;
   protected
     procedure GetCurrentThreadAndStackFrame(out AThreadId, AStackFrame: Integer);
-    function GetContextForEvaluate(const ThreadId, StackFrame: Integer): TFpDbgInfoContext;
-    procedure ScheduleWatchValueEval(AWatchValue: TWatchValue);
-    function EvaluateExpression(AWatchValue: TWatchValue;
-                                AExpression: String;
-                                out AResText: String;
-                                out ATypeInfo: TDBGType;
-                                EvalFlags: TDBGEvaluateFlags = []): Boolean;
+    function GetContextForEvaluate(const ThreadId, StackFrame: Integer): TFpDbgSymbolScope;
 
     function CreateLineInfo: TDBGLineInfo; override;
     function CreateWatches: TWatchesSupplier; override;
@@ -259,31 +541,37 @@ type
     // On Linux, communication with the debuggee is only allowed from within
     // the thread that created the debuggee. So a method to execute functions
     // within the debug-thread is necessary.
-    procedure ExecuteInDebugThread(AMethod: TFpDbgAsyncMethod);
-    procedure StartDebugLoop;
-    procedure DebugLoopFinished;
+    function  ExecuteInDebugThread(AMethod: TFpDbgAsyncMethod): boolean;
+    procedure StartDebugLoop(AState: TDBGState = dsRun);
+    procedure DebugLoopFinished({%H-}Data: PtrInt);
+    (* Any item that requests a QuickPause must be called from RunQuickPauseTasks
+       A QuickPause may skip changing the debugger.State.
+    *)
     procedure QuickPause;
+    procedure RunQuickPauseTasks(AForce: Boolean = False);
     procedure DoRelease; override;
-    procedure DoOnIdle;
+    procedure CheckAndRunIdle;
+    procedure DoBeforeState(const OldState: TDBGState); override;
     procedure DoState(const OldState: TDBGState); override;
     function GetIsIdle: Boolean; override;
+    function GetCommands: TDBGCommands; override;
+
+    procedure LockCommandProcessing; override;
+    procedure UnLockCommandProcessing; override;
   protected
     // Helper vars to run in debug-thread
     FCallStackEntryListThread: TDbgThread;
     FCallStackEntryListFrameRequired: Integer;
-    FParamAsString: String;
-    FParamAsStringStackEntry: TDbgCallstackEntry;
-    FParamAsStringPrettyPrinter: TFpPascalPrettyPrinter;
-    FParamEnabled: Boolean;
     procedure DoAddBreakLine;
     procedure DoAddBreakFuncLib;
     procedure DoAddBreakLocation;
     procedure DoAddBWatch;
     procedure DoReadData;
+    procedure DoReadPartialData;
     procedure DoPrepareCallStackEntryList;
     procedure DoFreeBreakpoint;
     procedure DoFindContext;
-    procedure DoGetParamsAsString;
+    procedure DoSetStackFrameForBasePtr;
     //
     function AddBreak(const ALocation: TDbgPtr; AnEnabled: Boolean = True): TFpDbgBreakpoint; overload;
     function AddBreak(const AFileName: String; ALine: Cardinal; AnEnabled: Boolean = True): TFpDbgBreakpoint; overload;
@@ -292,29 +580,34 @@ type
                       AScope: TDBGWatchPointScope): TFpDbgBreakpoint;
     procedure FreeBreakpoint(const ABreakpoint: TFpDbgBreakpoint);
     function ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean; inline;
+    function ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData; out ABytesRead: Cardinal): Boolean; inline;
     function ReadAddress(const AAdress: TDbgPtr; out AData: TDBGPtr): Boolean;
     procedure PrepareCallStackEntryList(AFrameRequired: Integer = -1; AThread: TDbgThread = nil); inline;
-    function  FindContext(AThreadId, AStackFrame: Integer): TFpDbgInfoContext; inline;
-    function GetParamsAsString(AStackEntry: TDbgCallstackEntry; APrettyPrinter: TFpPascalPrettyPrinter): string; inline;
+    function SetStackFrameForBasePtr(ABasePtr: TDBGPtr; ASearchAssert: boolean = False;
+      CurAddr: TDBGPtr = 0): TDBGPtr;
+    function  FindSymbolScope(AThreadId, AStackFrame: Integer): TFpDbgSymbolScope; inline;
+    procedure StopAllWorkers;
+    function IsPausedAndValid: boolean; // ready for eval watches/stack....
 
     property DebugInfo: TDbgInfo read GetDebugInfo;
   public
     constructor Create(const AExternalDebugger: String); override;
     destructor Destroy; override;
-    function GetLocationRec(AnAddress: TDBGPtr=0): TDBGLocationRec;
+    function GetLocationRec(AnAddress: TDBGPtr=0; AnAddrOffset: Integer = 0): TDBGLocationRec;
     function GetLocation: TDBGLocationRec; override;
     class function Caption: String; override;
     class function NeedsExePath: boolean; override;
     class function RequiredCompilerOpts({%H-}ATargetCPU, {%H-}ATargetOS: String): TDebugCompilerRequirements; override;
     class function CreateProperties: TDebuggerProperties; override;
-    function  GetSupportedCommands: TDBGCommands; override;
+    class function  GetSupportedCommands: TDBGCommands; override;
+    class function SupportedCommandsFor(AState: TDBGState): TDBGCommands; override;
   end;
 
   { TFpLineInfo }
 
   TFpLineInfo = class(TDBGLineInfo) //class(TGDBMILineInfo)
   private
-    FRequestedSources: TStringList;
+    FRequestedSources: TStringListUTF8Fast;
   protected
     function  FpDebugger: TFpDebugDebugger;
     procedure DoStateChange(const {%H-}AOldState: TDBGState); override;
@@ -335,39 +628,26 @@ type
 
   TFPWatches = class(TWatchesSupplier)
   protected
+    FWatchEvalWorkers: TFpDbgDebggerThreadWorkerLinkedList;
     function  FpDebugger: TFpDebugDebugger;
-    //procedure DoStateChange(const AOldState: TDBGState); override;
+    procedure StopWorkes;
+    procedure DoStateLeavePause; override;
     procedure InternalRequestData(AWatchValue: TWatchValue); override;
   public
-  end;
-
-  { TCallstackAsyncRequest }
-
-  TCallstackAsyncRequest = class
-  private
-    FCallstack: TCallStackBase;
-    FRequiredMinCount: Integer;
-    FDebugger: TFpDebugDebugger;
-    FInDestroy: Boolean;
-    procedure FreeSelf;
-    procedure CallStackFreed(Sender: TObject);
-    procedure RequestAsync({%H-}Data: PtrInt);
-  public
-    constructor Create(ADebugger: TFpDebugDebugger; ACallstack: TCallStackBase;
-      ARequiredMinCount: Integer);
     destructor Destroy; override;
   end;
-
-  TCallstackAsyncRequestList = class(specialize TFPGObjectList<TCallstackAsyncRequest>);
 
   { TFPCallStackSupplier }
 
   TFPCallStackSupplier = class(TCallStackSupplier)
   private
     FPrettyPrinter: TFpPascalPrettyPrinter;
-    FReqList: TCallstackAsyncRequestList;
+    FInitialFrame: Integer;
+    FThreadForInitialFrame: Integer;
+    FCallStackWorkers: TFpDbgDebggerThreadWorkerLinkedList;
   protected
     function  FpDebugger: TFpDebugDebugger;
+    procedure StopWorkes;
     procedure DoStateLeavePause; override;
   public
     constructor Create(const ADebugger: TDebuggerIntf);
@@ -383,14 +663,14 @@ type
   { TFPLocals }
 
   TFPLocals = class(TLocalsSupplier)
-  private
-    FPrettyPrinter: TFpPascalPrettyPrinter;
   protected
+    FLocalWorkers: TFpDbgDebggerThreadWorkerLinkedList;
     function  FpDebugger: TFpDebugDebugger;
+    procedure StopWorkes;
+    procedure DoStateLeavePause; override;
   public
-    procedure RequestData(ALocals: TLocals); override;
-    constructor Create(const ADebugger: TDebuggerIntf);
     destructor Destroy; override;
+    procedure RequestData(ALocals: TLocals); override;
   end;
 
   { TFPRegisters }
@@ -404,8 +684,14 @@ type
 
   TFPThreads = class(TThreadsSupplier)
   protected
+    FThreadWorkers: TFpDbgDebggerThreadWorkerLinkedList;
     procedure DoStateEnterPause; override;
+    procedure DoStateChange(const AOldState: TDBGState); override;
+    procedure StopWorkes;
+    procedure DoStateLeavePause; override;
+    procedure RequestEntries;  // Only fill the list, no data for entries yet
   public
+    destructor Destroy; override;
     procedure RequestMasterData; override;
     procedure ChangeCurrentThread(ANewId: Integer); override;
   end;
@@ -454,12 +740,10 @@ procedure Register;
 implementation
 
 uses
-  FpDbgUtil,
-  FpDbgDisasX86,
-  FpDbgCommon;
+  FpDbgDisasX86;
 
 var
-  DBG_VERBOSE, DBG_BREAKPOINTS, FPDBG_COMMANDS: PLazLoggerLogGroup;
+  DBG_VERBOSE, DBG_WARNINGS, DBG_BREAKPOINTS, FPDBG_COMMANDS: PLazLoggerLogGroup;
 
 type
 
@@ -470,18 +754,20 @@ type
     FFpDebugDebugger: TFpDebugDebugger;
     FRegNum: Cardinal;
     FRegValue: TDbgPtr;
-    FRegContext: TFpDbgAddressContext;
+    FRegContext: TFpDbgLocationContext;
     FRegResult: Boolean;
     procedure DoReadRegister;
   protected
     function GetDbgProcess: TDbgProcess; override;
-    function GetDbgThread(AContext: TFpDbgAddressContext): TDbgThread; override;
+    function GetDbgThread(AContext: TFpDbgLocationContext): TDbgThread; override;
   public
     constructor create(AFpDebugDebuger: TFpDebugDebugger);
-    function ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean; override;
+    function ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean; override; overload;
+    function ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal; ADest: Pointer;
+      out ABytesRead: Cardinal): Boolean; override; overload;
     function ReadMemoryEx(AnAddress, AnAddressSpace: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean; override;
     function ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr;
-      AContext: TFpDbgAddressContext): Boolean; override;
+      AContext: TFpDbgLocationContext): Boolean; override;
   end;
 
   { TFpWaitForConsoleOutputThread }
@@ -501,6 +787,921 @@ type
 procedure Register;
 begin
   RegisterDebugger(TFpDebugDebugger);
+end;
+
+{ TFpDbgDebggerThreadWorkerLinkedList }
+
+procedure TFpDbgDebggerThreadWorkerLinkedList.Add(
+  AWorkItem: TFpDbgDebggerThreadWorkerLinkedItem);
+begin
+  AWorkItem.FNextWorker := FNextWorker;
+  FNextWorker := AWorkItem;
+end;
+
+procedure TFpDbgDebggerThreadWorkerLinkedList.ClearFinishedWorkers;
+var
+  WorkItem, w: TFpDbgDebggerThreadWorkerLinkedItem;
+begin
+  assert(system.ThreadID = classes.MainThreadID, 'TFpDbgDebggerThreadWorkerLinkedList.ClearFinishedCountWorkers: system.ThreadID = classes.MainThreadID');
+  WorkItem := FNextWorker;
+  while (WorkItem <> nil) and (WorkItem.RefCount = 1) do begin
+    w := WorkItem;
+    WorkItem := w.FNextWorker;
+    //w.DoRemovedFromLinkedList;
+    w.DecRef;
+  end;
+  FNextWorker := WorkItem;
+end;
+
+procedure TFpDbgDebggerThreadWorkerLinkedList.RequestStopForWorkers;
+var
+  WorkItem: TFpDbgDebggerThreadWorkerLinkedItem;
+begin
+  WorkItem := FNextWorker;
+  while (WorkItem <> nil) do begin
+    WorkItem.RequestStop;
+    WorkItem := WorkItem.FNextWorker;
+  end;
+end;
+
+procedure TFpDbgDebggerThreadWorkerLinkedList.WaitForWorkers(AStop: Boolean);
+var
+  WorkItem, w: TFpDbgDebggerThreadWorkerLinkedItem;
+begin
+  assert(system.ThreadID = classes.MainThreadID, 'TFpDbgDebggerThreadWorkerLinkedList.WaitForWorkers: system.ThreadID = classes.MainThreadID');
+  if AStop then
+    RequestStopForWorkers;
+
+  WorkItem := FNextWorker;
+  FNextWorker := nil;
+  while (WorkItem <> nil) do begin
+    w := WorkItem;
+    WorkItem := w.FNextWorker;
+    if w.IsCancelled then
+      w.FDebugger.FWorkQueue.RemoveItem(w)
+    else
+      w.FDebugger.FWorkQueue.WaitForItem(w);
+    w.DoRemovedFromLinkedList;
+    w.DecRef;
+  end;
+end;
+
+{ TFpDbgDebggerThreadWorkerItem }
+
+constructor TFpDbgDebggerThreadWorkerItem.Create(ADebugger: TFpDebugDebugger;
+  APriority: TFpThreadWorkerPriority);
+begin
+  inherited Create(APriority);
+  FDebugger := ADebugger;
+  AddRef;
+end;
+
+procedure TFpDbgDebggerThreadWorkerItem.Queue(aMethod: TDataEvent; Data: PtrInt
+  );
+begin
+  FDebugger.FLockList.Lock;
+  try
+    if (FHasQueued <> hqBlocked) then begin
+      assert(FHasQueued = hqNotQueued, 'TFpDbgDebggerThreadWorkerItem.Queue: FHasQueued = hqNotQueued');
+      FHasQueued := hqQueued;
+      AddRef;
+      Application.QueueAsyncCall(aMethod, 0);
+    end;
+  finally
+    FDebugger.FLockList.UnLock;
+  end;
+end;
+
+procedure TFpDbgDebggerThreadWorkerItem.UnQueue_DecRef(ABlockQueuing: Boolean);
+var
+  HasQ: THasQueued;
+begin
+  assert(system.ThreadID = classes.MainThreadID, 'TFpDbgDebggerThreadWorkerItem.UnQueue_DecRef: system.ThreadID = classes.MainThreadID');
+  FDebugger.FLockList.Lock;
+  HasQ := FHasQueued;
+  if ABlockQueuing then begin
+    FHasQueued := hqBlocked;
+    FDebugger.FLockList.UnLock; // unlock first.
+    Application.RemoveAsyncCalls(Self);
+  end
+  else begin
+    FHasQueued := hqNotQueued;
+    try
+      Application.RemoveAsyncCalls(Self);
+    finally
+      FDebugger.FLockList.UnLock;
+    end;
+  end;
+
+  if HasQ = hqQueued then
+    DecRef; // may call destroy
+end;
+
+{ TFpDbgDebggerThreadWorkerLinkedItem }
+
+procedure TFpDbgDebggerThreadWorkerLinkedItem.DoRemovedFromLinkedList;
+begin
+  //
+end;
+
+{ TFpThreadWorkerControllerRun }
+
+procedure TFpThreadWorkerControllerRun.DoExecute;
+begin
+  FStartSuccessfull := FDebugger.FDbgController.Run;
+  FWorkerThreadId := ThreadID;
+end;
+
+constructor TFpThreadWorkerControllerRun.Create(ADebugger: TFpDebugDebugger);
+begin
+  inherited Create(ADebugger, twpContinue);
+end;
+
+{ TFpThreadWorkerRunLoop }
+
+procedure TFpThreadWorkerRunLoop.DoExecute;
+begin
+  FDebugger.FDbgController.ProcessLoop;
+  Application.QueueAsyncCall(@FDebugger.DebugLoopFinished, 0);
+end;
+
+constructor TFpThreadWorkerRunLoop.Create(ADebugger: TFpDebugDebugger);
+begin
+  inherited Create(ADebugger, twpContinue);
+end;
+
+{ TFpThreadWorkerRunLoopAfterIdle }
+
+procedure TFpThreadWorkerRunLoopAfterIdle.CheckIdleOrRun(Data: PtrInt);
+var
+  WorkItem: TFpThreadWorkerRunLoopAfterIdle;
+  c: LongInt;
+begin
+  FDebugger.FWorkQueue.Lock;
+  FDebugger.CheckAndRunIdle;
+  c := FDebugger.FWorkQueue.Count;
+  FDebugger.FWorkQueue.Unlock;
+
+  if c = 0 then begin
+    FDebugger.StartDebugLoop;
+  end
+  else begin
+    WorkItem := TFpThreadWorkerRunLoopAfterIdle.Create(FDebugger);
+    FDebugger.FWorkQueue.PushItem(WorkItem);
+    WorkItem.DecRef;
+  end;
+  UnQueue_DecRef;
+end;
+
+procedure TFpThreadWorkerRunLoopAfterIdle.DoExecute;
+begin
+  Queue(@CheckIdleOrRun);
+end;
+
+constructor TFpThreadWorkerRunLoopAfterIdle.Create(ADebugger: TFpDebugDebugger);
+begin
+  inherited Create(ADebugger, twpContinue);
+end;
+
+{ TFpThreadWorkerAsyncMeth }
+
+procedure TFpThreadWorkerAsyncMeth.DoExecute;
+begin
+  FAsyncMethod();
+end;
+
+constructor TFpThreadWorkerAsyncMeth.Create(ADebugger: TFpDebugDebugger;
+  AnAsyncMethod: TFpDbgAsyncMethod);
+begin
+  inherited Create(ADebugger, twpUser);
+  FAsyncMethod := AnAsyncMethod;
+end;
+
+{ TFpThreadWorkerPrepareCallStackEntryList }
+
+procedure TFpThreadWorkerPrepareCallStackEntryList.PrepareCallStackEntryList(
+  AFrameRequired: Integer; AThread: TDbgThread);
+var
+  ThreadCallStack: TDbgCallstackEntryList;
+  CurCnt, ReqCnt: Integer;
+begin
+  ThreadCallStack := AThread.CallStackEntryList;
+
+  if ThreadCallStack = nil then begin
+    AThread.PrepareCallStackEntryList(-2); // Only create the list
+    ThreadCallStack := AThread.CallStackEntryList;
+    if ThreadCallStack = nil then
+      exit;
+  end;
+
+  FDebugger.FLockList.GetLockFor(ThreadCallStack);
+  try
+    CurCnt := ThreadCallStack.Count;
+    while (not StopRequested) and (FRequiredMinCount > CurCnt) and
+          (not ThreadCallStack.HasReadAllAvailableFrames)
+    do begin
+      ReqCnt := Min(CurCnt + 5, FRequiredMinCount);
+      AThread.PrepareCallStackEntryList(ReqCnt);
+      CurCnt := ThreadCallStack.Count;
+      if CurCnt < ReqCnt then
+        exit;
+    end;
+  finally
+    FDebugger.FLockList.FreeLockFor(ThreadCallStack);
+  end;
+end;
+
+procedure TFpThreadWorkerPrepareCallStackEntryList.DoExecute;
+var
+  AThread, t: TDbgThread;
+begin
+  if FRequiredMinCount < 0 then
+    exit;
+  if FThread = nil then begin
+    for t in FDebugger.FDbgController.CurrentProcess.ThreadMap do begin
+      PrepareCallStackEntryList(FRequiredMinCount, t);
+      if StopRequested then
+        break;
+    end;
+  end
+  else
+    PrepareCallStackEntryList(FRequiredMinCount, FThread);
+end;
+
+constructor TFpThreadWorkerPrepareCallStackEntryList.Create(
+  ADebugger: TFpDebugDebugger; ARequiredMinCount: Integer;
+  APriority: TFpThreadWorkerPriority);
+begin
+  inherited Create(ADebugger, APriority);
+  FRequiredMinCount := ARequiredMinCount;
+  FThread := nil;
+end;
+
+constructor TFpThreadWorkerPrepareCallStackEntryList.Create(
+  ADebugger: TFpDebugDebugger; ARequiredMinCount: Integer; AThread: TDbgThread);
+begin
+  Create(ADebugger, ARequiredMinCount);
+  FThread := AThread;
+end;
+
+{ TFpThreadWorkerCallStackCount }
+
+procedure TFpThreadWorkerCallStackCount.DoCallstackFreed_DecRef(Sender: TObject);
+begin
+  // Runs in IDE thread (because it is called by FCallstack)
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerCallStackCount.DoCallstackFreed_DecRef: system.ThreadID = classes.MainThreadID');
+  FCallstack := nil;
+  RequestStop;
+  UnQueue_DecRef;
+end;
+
+procedure TFpThreadWorkerCallStackCount.UpdateCallstack_DecRef(
+  Data: PtrInt);
+var
+  CList: TDbgCallstackEntryList;
+  dbg: TFpDebugDebugger;
+begin
+  // Runs in IDE thread (TThread.Queue)
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerCallStackCount.UpdateCallstack_DecRef: system.ThreadID = classes.MainThreadID');
+
+  if (FCallstack <> nil) then begin
+    FCallstack.RemoveFreeNotification(@DoCallstackFreed_DecRef);
+
+    if (FThread = nil) then
+      CList := nil
+    else
+      CList := FThread.CallStackEntryList;
+
+    if CList <> nil then begin
+      if CList.HasReadAllAvailableFrames then begin
+        FCallstack.Count := CList.Count;
+        FCallstack.SetCountValidity(ddsValid);
+      end
+      else begin
+        FCallstack.SetHasAtLeastCountInfo(ddsValid, CList.Count);
+      end;
+    end
+    else begin
+      FCallstack.SetCountValidity(ddsInvalid);
+      FCallstack.SetHasAtLeastCountInfo(ddsInvalid);
+    end;
+
+    // save whatever we have to history // limit to reduce time
+    if StopRequested and (CList <> nil) then
+      FCallstack.PrepareRange(0, Min(CList.Count, 10));
+
+    FCallstack := nil;
+  end;
+
+  dbg := FDebugger;
+  UnQueue_DecRef;
+  TFPCallStackSupplier(dbg.CallStack).FCallStackWorkers.ClearFinishedWorkers;
+end;
+
+procedure TFpThreadWorkerCallStackCount.DoExecute;
+begin
+  inherited DoExecute;
+  Queue(@UpdateCallstack_DecRef);
+end;
+
+procedure TFpThreadWorkerCallStackCount.DoRemovedFromLinkedList;
+begin
+  inherited DoRemovedFromLinkedList;
+  UpdateCallstack_DecRef;  // This trigger PrepareRange => but that still needs to be exec in thread? (or wait for lock)
+end;
+
+constructor TFpThreadWorkerCallStackCount.Create(
+  ADebugger: TFpDebugDebugger; ACallstack: TCallStackBase;
+  ARequiredMinCount: Integer);
+var
+  AThread: TDbgThread;
+begin
+  // Runs in IDE thread (TThread.Queue)
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerCallStackCount.Create: system.ThreadID = classes.MainThreadID');
+  FCallstack := ACallstack;
+  FCallstack.AddFreeNotification(@DoCallstackFreed_DecRef);
+  if not ADebugger.FDbgController.CurrentProcess.GetThread(FCallstack.ThreadId, AThread) then
+    ARequiredMinCount := -1;  // error
+  inherited Create(ADebugger, ARequiredMinCount, AThread);
+end;
+
+procedure TFpThreadWorkerCallStackCount.RemoveCallStack_DecRef;
+begin
+  // Runs in IDE thread (TThread.Queue)
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerCallStackCount.RemoveCallStack_DecRef: system.ThreadID = classes.MainThreadID');
+  RequestStop;
+  if (FCallstack <> nil) then begin
+    FCallstack.RemoveFreeNotification(@DoCallstackFreed_DecRef);
+    FCallstack := nil;
+  end;
+  UnQueue_DecRef;
+end;
+
+{ TFpThreadWorkerCallEntry }
+
+procedure TFpThreadWorkerCallEntry.DoCallstackFreed_DecRef(Sender: TObject);
+begin
+  // Runs in IDE thread (because it is called by FCallstack)
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerCallEntry.DoCallstackFreed_DecRef: system.ThreadID = classes.MainThreadID');
+  FCallstack := nil;
+  DoCallstackEntryFreed_DecRef(nil);
+end;
+
+procedure TFpThreadWorkerCallEntry.DoCallstackEntryFreed_DecRef(Sender: TObject
+  );
+begin
+  // Runs in IDE thread (because it is called by FCallstack)
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerCallEntry.DoCallstackEntryFreed_DecRef: system.ThreadID = classes.MainThreadID');
+  FCallstackEntry := nil;
+  RequestStop;
+  UnQueue_DecRef;
+end;
+
+procedure TFpThreadWorkerCallEntry.UpdateCallstackEntry_DecRef(Data: PtrInt);
+var
+  dbg: TFpDebugDebugger;
+  c: String;
+begin
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerCallEntry.UpdateCallstackEntry_DecRef: system.ThreadID = classes.MainThreadID');
+
+  if FCallstack <> nil then
+    FCallstack.RemoveFreeNotification(@DoCallstackFreed_DecRef);
+
+  if FCallstackEntry <> nil then begin
+    FCallstackEntry.RemoveFreeNotification(@DoCallstackEntryFreed_DecRef);
+
+    if FCallstackEntry.Validity = ddsRequested then begin
+      if FDbgCallStack = nil then
+        FCallstackEntry.Validity := ddsInvalid
+      else begin
+        c := FDbgCallStack.SrcClassName;
+        if c <> '' then
+          c := c + '.';
+        FCallstackEntry.Init(FDbgCallStack.AnAddress, nil,
+          c + FDbgCallStack.FunctionName + FParamAsString,
+          FDbgCallStack.SourceFile, '', FDbgCallStack.Line, ddsValid);
+      end;
+    end;
+
+    if FCallstack <> nil then
+      FCallstack.DoEntriesUpdated;
+  end;
+  FCallstack := nil;
+  FCallstackEntry := nil;
+
+  dbg := FDebugger;
+  UnQueue_DecRef;
+  TFPCallStackSupplier(dbg.CallStack).FCallStackWorkers.ClearFinishedWorkers;
+end;
+
+procedure TFpThreadWorkerCallEntry.DoExecute;
+var
+  PrettyPrinter: TFpPascalPrettyPrinter;
+  Prop: TFpDebugDebuggerProperties;
+begin
+  inherited DoExecute;
+
+  FDbgCallStack := FThread.CallStackEntryList[FCallstackIndex];
+  if (FDbgCallStack <> nil) and (not StopRequested) then begin
+    Prop := TFpDebugDebuggerProperties(FDebugger.GetProperties);
+    PrettyPrinter := TFpPascalPrettyPrinter.Create(DBGPTRSIZE[FDebugger.FDbgController.CurrentProcess.Mode]);
+    PrettyPrinter.MemManager := FDebugger.FMemManager;
+
+    FDebugger.FMemManager.MemLimits.MaxArrayLen            := Prop.MemLimits.MaxStackArrayLen;
+    FDebugger.FMemManager.MemLimits.MaxStringLen           := Prop.MemLimits.MaxStackStringLen;
+    FDebugger.FMemManager.MemLimits.MaxNullStringSearchLen := Prop.MemLimits.MaxStackNullStringSearchLen;
+
+    FParamAsString := FDbgCallStack.GetParamsAsString(PrettyPrinter);
+    PrettyPrinter.Free;
+
+    FDebugger.FMemManager.MemLimits.MaxArrayLen            := Prop.MemLimits.MaxArrayLen;
+    FDebugger.FMemManager.MemLimits.MaxStringLen           := Prop.MemLimits.MaxStringLen;
+    FDebugger.FMemManager.MemLimits.MaxNullStringSearchLen := Prop.MemLimits.MaxNullStringSearchLen;
+  end;
+
+  Queue(@UpdateCallstackEntry_DecRef);
+end;
+
+procedure TFpThreadWorkerCallEntry.DoRemovedFromLinkedList;
+begin
+  inherited DoRemovedFromLinkedList;
+  UpdateCallstackEntry_DecRef;
+end;
+
+constructor TFpThreadWorkerCallEntry.Create(ADebugger: TFpDebugDebugger;
+  AThread: TDbgThread; ACallstackEntry: TCallStackEntry;
+  ACallstack: TCallStackBase);
+begin
+  // Runs in IDE thread (TThread.Queue)
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerCallEntry.Create: system.ThreadID = classes.MainThreadID');
+  FCallstack := ACallstack;
+  if FCallstack <> nil then
+    FCallstack.AddFreeNotification(@DoCallstackFreed_DecRef);
+
+  FCallstackEntry := ACallstackEntry;
+  FCallstackEntry.AddFreeNotification(@DoCallstackEntryFreed_DecRef);
+  FCallstackIndex := FCallstackEntry.Index;
+
+  inherited Create(ADebugger, ACallstackEntry.Index+1, AThread);
+end;
+
+procedure TFpThreadWorkerCallEntry.RemoveCallStackEntry_DecRef;
+begin
+  // Runs in IDE thread (TThread.Queue)
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerCallEntry.RemoveCallStackEntry_DecRef: system.ThreadID = classes.MainThreadID');
+  RequestStop;
+  if FCallstack <> nil then begin
+    FCallstack.RemoveFreeNotification(@DoCallstackFreed_DecRef);
+    FCallstack := nil;
+  end;
+  if (FCallstackEntry <> nil) then begin
+    FCallstackEntry.RemoveFreeNotification(@DoCallstackEntryFreed_DecRef);
+    FCallstackEntry := nil;
+  end;
+  UnQueue_DecRef;
+end;
+
+{ TFpThreadWorkerThreads }
+
+procedure TFpThreadWorkerThreads.UpdateThreads_DecRef(Data: PtrInt);
+var
+  Threads: TThreadsSupplier;
+  ThreadArray: TFPDThreadArray;
+  i: Integer;
+  CallStack: TDbgCallstackEntryList;
+  t, n: TThreadEntry;
+  FpThr: TDbgThread;
+  c: TDbgCallstackEntry;
+  dbg: TFpDebugDebugger;
+begin
+  Threads := FDebugger.Threads;
+
+  if (Threads.CurrentThreads <> nil) then begin
+    ThreadArray := FDebugger.FDbgController.CurrentProcess.GetThreadArray;
+    for i := 0 to high(ThreadArray) do begin
+      FpThr := ThreadArray[i];
+      CallStack := FpThr.CallStackEntryList;
+      t := Threads.CurrentThreads.EntryById[FpThr.ID];
+      if Assigned(CallStack) and (CallStack.Count > 0) then begin
+        c := CallStack.Items[0];
+        if t = nil then begin
+          n := Threads.CurrentThreads.CreateEntry(c.AnAddress, nil, c.FunctionName, c.SourceFile, '', c.Line, FpThr.ID, 'Thread ' + IntToStr(FpThr.ID), 'paused');
+          Threads.CurrentThreads.Add(n);
+          n.Free;
+        end
+        else
+          t.Init(c.AnAddress, nil, c.FunctionName, c.SourceFile, '', c.Line, FpThr.ID, 'Thread ' + IntToStr(FpThr.ID), 'paused');
+      end
+      else begin
+        if t = nil then begin
+          n := Threads.CurrentThreads.CreateEntry(FpThr.GetInstructionPointerRegisterValue, nil, '', '', '', 0, FpThr.ID, 'Thread ' + IntToStr(FpThr.ID), 'paused');
+          Threads.CurrentThreads.Add(n);
+          n.Free;
+        end
+        else
+          t.Init(FpThr.GetInstructionPointerRegisterValue, nil, '', '', '', 0, FpThr.ID, 'Thread ' + IntToStr(FpThr.ID), 'paused');
+      end;
+    end;
+
+    Threads.CurrentThreads.SetValidity(ddsValid);
+  end;
+
+  dbg := FDebugger;
+  UnQueue_DecRef;
+  TFPThreads(dbg.Threads).FThreadWorkers.ClearFinishedWorkers;
+end;
+
+procedure TFpThreadWorkerThreads.DoExecute;
+begin
+  inherited DoExecute;
+  Queue(@UpdateThreads_DecRef);
+end;
+
+constructor TFpThreadWorkerThreads.Create(ADebugger: TFpDebugDebugger);
+begin
+  inherited Create(ADebugger, 1, twpThread);
+end;
+
+{ TFpThreadWorkerLocals.TResultEntry }
+
+class operator TFpThreadWorkerLocals.TResultEntry. = (a, b: TResultEntry
+  ): Boolean;
+begin
+  Result := False;
+  assert(False, 'TFpThreadWorkerLocals.TResultEntry.=: False');
+end;
+
+{ TFpThreadWorkerLocals }
+
+procedure TFpThreadWorkerLocals.DoLocalsFreed_DecRef(Sender: TObject);
+begin
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerLocals.DoLocalsFreed_DecRef: system.ThreadID = classes.MainThreadID');
+  FLocals := nil;
+  RequestStop;
+  UnQueue_DecRef;
+end;
+
+procedure TFpThreadWorkerLocals.UpdateLocals_DecRef(Data: PtrInt);
+var
+  i: Integer;
+  r: TResultEntry;
+  dbg: TFpDebugDebugger;
+begin
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerLocals.UpdateLocals_DecRef: system.ThreadID = classes.MainThreadID');
+
+  if FLocals <> nil then begin
+    FLocals.RemoveFreeNotification(@DoLocalsFreed_DecRef);
+    FLocals.Clear;
+    if FResults = nil then begin
+      FLocals.SetDataValidity(ddsInvalid);
+      FLocals := nil;
+      UnQueue_DecRef;
+      exit;
+    end;
+
+    for i := 0 to FResults.Count - 1 do begin
+      r := FResults[i];
+      FLocals.Add(r.Name, r.Value);
+    end;
+    FLocals.SetDataValidity(ddsValid);
+
+    FLocals := nil;
+  end;
+
+  dbg := FDebugger;
+  UnQueue_DecRef;
+  TFPLocals(dbg.Locals).FLocalWorkers.ClearFinishedWorkers;
+end;
+
+procedure TFpThreadWorkerLocals.DoExecute;
+var
+  LocalScope: TFpDbgSymbolScope;
+  ProcVal, m: TFpValue;
+  PrettyPrinter: TFpPascalPrettyPrinter;
+  i: Integer;
+  r: TResultEntry;
+begin
+  LocalScope := FDebugger.FDbgController.CurrentProcess.FindSymbolScope(FThreadId, FStackFrame);
+  if (LocalScope = nil) or (LocalScope.SymbolAtAddress = nil) then begin
+    LocalScope.ReleaseReference;
+    exit;
+  end;
+
+  ProcVal := LocalScope.ProcedureAtAddress;
+  if (ProcVal = nil) then begin
+    LocalScope.ReleaseReference;
+    exit;
+  end;
+
+  PrettyPrinter := TFpPascalPrettyPrinter.Create(LocalScope.SizeOfAddress);
+  PrettyPrinter.MemManager := LocalScope.MemManager;
+  PrettyPrinter.MemManager.DefaultContext := LocalScope.LocationContext;
+
+  FResults := TResultList.Create;
+  for i := 0 to ProcVal.MemberCount - 1 do begin
+    m := ProcVal.Member[i];
+    if m <> nil then begin
+      if m.DbgSymbol <> nil then
+        r.Name := m.DbgSymbol.Name
+      else
+        r.Name := '';
+      //if not StopRequested then // finish getting all names?
+      PrettyPrinter.PrintValue(r.Value, m);
+      m.ReleaseReference;
+      FResults.Add(r);
+    end;
+    if StopRequested then
+      Break;
+  end;
+  PrettyPrinter.Free;
+  ProcVal.ReleaseReference;
+  LocalScope.ReleaseReference;
+
+  Queue(@UpdateLocals_DecRef);
+end;
+
+procedure TFpThreadWorkerLocals.DoRemovedFromLinkedList;
+begin
+  inherited DoRemovedFromLinkedList;
+  if FLocals <> nil then begin
+    if FHasQueued = hqQueued then begin
+      UpdateLocals_DecRef;
+      exit;
+    end
+    else begin
+      FLocals.RemoveFreeNotification(@DoLocalsFreed_DecRef);
+      FLocals.SetDataValidity(ddsInvalid);
+    end;
+    FLocals := nil;
+  end;
+  UnQueue_DecRef;
+end;
+
+constructor TFpThreadWorkerLocals.Create(ADebugger: TFpDebugDebugger;
+  ALocals: TLocals);
+begin
+  // Runs in IDE thread (TThread.Queue)
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerLocals.Create: system.ThreadID = classes.MainThreadID');
+  FLocals := ALocals;
+  FLocals.AddFreeNotification(@DoLocalsFreed_DecRef);
+  FThreadId := ALocals.ThreadId;
+  FStackFrame := ALocals.StackFrame;
+  inherited Create(ADebugger, twpLocal);
+end;
+
+destructor TFpThreadWorkerLocals.Destroy;
+begin
+  FResults.Free;
+  inherited Destroy;
+end;
+
+{ TFpThreadWorkerEvaluate }
+
+function TFpThreadWorkerEvaluate.EvaluateExpression(const AnExpression: String;
+  AStackFrame, AThreadId: Integer; ADispFormat: TWatchDisplayFormat;
+  ARepeatCnt: Integer; AnEvalFlags: TDBGEvaluateFlags; out AResText: String;
+  out ATypeInfo: TDBGType): Boolean;
+var
+  WatchScope: TFpDbgSymbolScope;
+  APasExpr, PasExpr2: TFpPascalExpression;
+  PrettyPrinter: TFpPascalPrettyPrinter;
+  ResValue: TFpValue;
+  CastName, ResText2: String;
+begin
+  Result := False;
+  AResText := '';
+  ATypeInfo := nil;
+
+  WatchScope := FDebugger.FDbgController.CurrentProcess.FindSymbolScope(AThreadId, AStackFrame);
+  if WatchScope = nil then
+    exit;
+
+  WatchScope.MemManager.DefaultContext := WatchScope.LocationContext;
+
+  APasExpr := nil;
+  PrettyPrinter := nil;
+  try
+    APasExpr := TFpPascalExpression.Create(AnExpression, WatchScope);
+    APasExpr.ResultValue; // trigger full validation
+    if not APasExpr.Valid then begin
+      AResText := ErrorHandler.ErrorAsString(APasExpr.Error);
+      exit;
+    end;
+
+    ResValue := APasExpr.ResultValue;
+    if ResValue = nil then begin
+      AResText := 'Error';
+      exit;
+    end;
+
+    if StopRequested then
+      exit;
+    if (ResValue.Kind = skClass) and (ResValue.AsCardinal <> 0) and
+       (not IsError(ResValue.LastError)) and (defClassAutoCast in AnEvalFlags)
+    then begin
+      if ResValue.GetInstanceClassName(CastName) then begin
+        PasExpr2 := TFpPascalExpression.Create(CastName+'('+AnExpression+')', WatchScope);
+        PasExpr2.ResultValue;
+        if PasExpr2.Valid then begin
+          APasExpr.Free;
+          APasExpr := PasExpr2;
+          ResValue := APasExpr.ResultValue;
+        end
+        else
+          PasExpr2.Free;
+      end
+      else begin
+        ResValue.ResetError; // in case GetInstanceClassName did set an error
+        // TODO: indicate that typecasting to instance failed
+      end;
+    end;
+
+    if StopRequested then
+      exit;
+
+    PrettyPrinter := TFpPascalPrettyPrinter.Create(WatchScope.SizeOfAddress);
+    PrettyPrinter.MemManager := WatchScope.MemManager;
+
+    if defNoTypeInfo in AnEvalFlags then
+      Result := PrettyPrinter.PrintValue(AResText, ResValue, ADispFormat, ARepeatCnt)
+    else
+      Result := PrettyPrinter.PrintValue(AResText, ATypeInfo, ResValue, ADispFormat, ARepeatCnt);
+
+    // PCHAR/String
+    if Result and APasExpr.HasPCharIndexAccess and not IsError(ResValue.LastError) then begin
+    // TODO: Only dwarf 2
+      APasExpr.FixPCharIndexAccess := True;
+      APasExpr.ResetEvaluation;
+      ResValue := APasExpr.ResultValue;
+      if (ResValue=nil) or (not PrettyPrinter.PrintValue(ResText2, ResValue, ADispFormat, ARepeatCnt)) then
+        ResText2 := 'Failed';
+      AResText := 'PChar: '+AResText+ LineEnding + 'String: '+ResText2;
+    end;
+
+    if Result then
+      Result := not IsError(ResValue.LastError) // AResText should be set from Prettyprinter
+    else
+      AResText := 'Error';
+
+    if not Result then
+      FreeAndNil(ATypeInfo);
+  finally
+    PrettyPrinter.Free;
+    APasExpr.Free;
+    WatchScope.ReleaseReference;
+  end;
+end;
+
+{ TFpThreadWorkerEvaluateExpr }
+
+procedure TFpThreadWorkerEvaluateExpr.DoExecute;
+begin
+  FRes := EvaluateExpression(FExpression, FStackFrame, FThreadId,
+    FDispFormat, FRepeatCnt, FEvalFlags, FResText, FResDbgType);
+end;
+
+constructor TFpThreadWorkerEvaluateExpr.Create(ADebugger: TFpDebugDebugger;
+  APriority: TFpThreadWorkerPriority; const AnExpression: String; AStackFrame,
+  AThreadId: Integer; ADispFormat: TWatchDisplayFormat; ARepeatCnt: Integer;
+  AnEvalFlags: TDBGEvaluateFlags);
+begin
+  inherited Create(ADebugger, APriority);
+  FExpression := AnExpression;
+  FStackFrame := AStackFrame;
+  FThreadId := AThreadId;
+  FDispFormat := ADispFormat;
+  FRepeatCnt := ARepeatCnt;
+  FEvalFlags := AnEvalFlags;
+  FRes := False;
+end;
+
+function TFpThreadWorkerEvaluateExpr.DebugText: String;
+begin
+  Result := inherited DebugText;
+  if self = nil then exit;
+  Result := Format('%s Expr: "%s" T: %s S: %s', [Result, FExpression, dbgs(FThreadId), dbgs(FStackFrame)]);
+end;
+
+{ TFpThreadWorkerCmdEval }
+
+procedure TFpThreadWorkerCmdEval.DoCallback_DecRef(Data: PtrInt);
+var
+  CB: TDBGEvaluateResultCallback;
+begin
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerCmdEval.DoCallback_DecRef: system.ThreadID = classes.MainThreadID');
+  try
+    if FEvalFlags * [defNoTypeInfo, defSimpleTypeInfo, defFullTypeInfo] = [defNoTypeInfo] then
+      FreeAndNil(FResText);
+
+    if FCallback <> nil then begin
+      CB := FCallback;
+      FCallback := nil; // Ensure callback is never called a 2nd time (e.g. if Self.Abort is called, while in Callback)
+      CB(Self, FRes, FResText, FResDbgType);
+      // If Abort was called (during CB), then self is now invalid
+      // Abort would be called, if a new Evaluate Request is made. FEvalWorkItem<>nil
+    end;
+  except
+  end;
+
+  UnQueue_DecRef;
+end;
+
+procedure TFpThreadWorkerCmdEval.DoExecute;
+begin
+  inherited DoExecute;
+  Queue(@DoCallback_DecRef);
+end;
+
+constructor TFpThreadWorkerCmdEval.Create(ADebugger: TFpDebugDebugger;
+  APriority: TFpThreadWorkerPriority; const AnExpression: String; AStackFrame,
+  AThreadId: Integer; AnEvalFlags: TDBGEvaluateFlags;
+  ACallback: TDBGEvaluateResultCallback);
+begin
+  inherited Create(ADebugger, APriority, AnExpression, AStackFrame, AThreadId, wdfDefault, 0,
+    AnEvalFlags);
+  FCallback := ACallback;
+end;
+
+procedure TFpThreadWorkerCmdEval.Abort;
+begin
+  RequestStop;
+  FDebugger.FWorkQueue.RemoveItem(Self);
+  DoCallback_DecRef;
+end;
+
+{ TFpThreadWorkerWatchValueEval }
+
+procedure TFpThreadWorkerWatchValueEval.DoWatchFreed_DecRef(Sender: TObject);
+begin
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerWatchValueEval.DoWatchFreed_DecRef: system.ThreadID = classes.MainThreadID');
+  FWatchValue := nil;
+  RequestStop;
+  UnQueue_DecRef;
+end;
+
+procedure TFpThreadWorkerWatchValueEval.UpdateWatch_DecRef(Data: PtrInt);
+var
+  dbg: TFpDebugDebugger;
+begin
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerWatchValueEval.UpdateWatch_DecRef: system.ThreadID = classes.MainThreadID');
+
+  if FWatchValue <> nil then begin
+    FWatchValue.RemoveFreeNotification(@DoWatchFreed_DecRef);
+
+    FWatchValue.Value := FResText;
+    FWatchValue.TypeInfo := FResDbgType;
+    if not FRes then begin
+      if FResText = '' then
+        FWatchValue.Validity := ddsInvalid
+      else
+        FWatchValue.Validity := ddsError;
+    end
+    else begin
+      FWatchValue.Validity := ddsValid;
+    end;
+
+    FWatchValue := nil;
+  end;
+
+  dbg := FDebugger;
+  UnQueue_DecRef;
+  TFPWatches(dbg.Watches).FWatchEvalWorkers.ClearFinishedWorkers;
+end;
+
+procedure TFpThreadWorkerWatchValueEval.DoExecute;
+begin
+  inherited DoExecute;
+  Queue(@UpdateWatch_DecRef);
+end;
+
+procedure TFpThreadWorkerWatchValueEval.DoRemovedFromLinkedList;
+begin
+  inherited DoRemovedFromLinkedList;
+  if FWatchValue <> nil then begin
+    FWatchValue.RemoveFreeNotification(@DoWatchFreed_DecRef);
+    if FRes then begin
+      UpdateWatch_DecRef;
+    end
+    else begin
+      FWatchValue.Validity := ddsInvalid;
+      FWatchValue := nil;
+      UnQueue_DecRef;
+    end;
+  end
+  else begin
+    UnQueue_DecRef;
+    FWatchValue := nil;
+  end;
+end;
+
+constructor TFpThreadWorkerWatchValueEval.Create(ADebugger: TFpDebugDebugger;
+  AWatchValue: TWatchValue);
+begin
+  assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerWatchValueEval.Create: system.ThreadID = classes.MainThreadID');
+  FWatchValue := AWatchValue;
+  FWatchValue.AddFreeNotification(@DoWatchFreed_DecRef);
+  inherited Create(ADebugger, twpWatch, FWatchValue.Expression, FWatchValue.StackFrame, FWatchValue.ThreadId,
+    FWatchValue.DisplayFormat, FWatchValue.RepeatCount, FWatchValue.EvaluateFlags);
 end;
 
 { TDbgControllerStepOverFirstFinallyLineCmd }
@@ -613,6 +1814,12 @@ begin
   inherited InternalContinue(AProcess, AThread);
 end;
 
+procedure TDbgControllerStepThroughFpcSpecialHandler.Init;
+begin
+  InitStackFrameInfo;
+  inherited Init;
+end;
+
 constructor TDbgControllerStepThroughFpcSpecialHandler.Create(
   AController: TDbgController; AnAfterFinCallAddr: TDbgPtr);
 begin
@@ -636,70 +1843,77 @@ begin
   Changed;
 end;
 
-procedure TFPThreads.RequestMasterData;
+procedure TFPThreads.DoStateChange(const AOldState: TDBGState);
+begin
+  inherited DoStateChange(AOldState);
+  if (Debugger.State in [dsPause, dsInternalPause]) then // Make sure we have threads first // this can be removed, once threads are KEPT between pauses
+    RequestEntries;
+end;
+
+procedure TFPThreads.StopWorkes;
+begin
+  FThreadWorkers.RequestStopForWorkers;
+end;
+
+procedure TFPThreads.DoStateLeavePause;
+begin
+  inherited DoStateLeavePause;
+  FThreadWorkers.WaitForWorkers(True);
+end;
+
+procedure TFPThreads.RequestEntries;
 var
   ThreadArray: TFPDThreadArray;
-  ThreadEntry: TThreadEntry;
-  CallStack: TDbgCallstackEntryList;
   i: Integer;
-  FunctionName, SourceFile, State: String;
-  AnAddress: TDBGPtr;
-  Line: LongInt;
+  ThreadEntry: TThreadEntry;
 begin
   if Monitor = nil then exit;
   if CurrentThreads = nil then exit;
-
   if Debugger = nil then Exit;
+  if not TFpDebugDebugger(Debugger).IsPausedAndValid then exit;
 
   CurrentThreads.Clear;
 
-  if not (Debugger.State in [dsPause, dsInternalPause, dsRun]) then Exit;
-
   ThreadArray := TFpDebugDebugger(Debugger).FDbgController.CurrentProcess.GetThreadArray;
-  for i := 0 to high(ThreadArray) do
-    begin
-    TFpDebugDebugger(Debugger).PrepareCallStackEntryList(1, ThreadArray[i]);
-    CallStack := ThreadArray[i].CallStackEntryList;
-    if ThreadArray[i].ID = TFpDebugDebugger(Debugger).FDbgController.CurrentThread.ID then
-      State := 'stopped'
-    else
-      State := 'running';
-    if Assigned(CallStack) and (CallStack.Count > 0) then
-      begin
-      AnAddress := CallStack.Items[0].AnAddress;
-      FunctionName := CallStack.Items[0].FunctionName;
-      SourceFile := CallStack.Items[0].SourceFile;
-      Line := CallStack.Items[0].Line;
-      end
-    else
-      begin
-      AnAddress := 0;
-      FunctionName := '';
-      SourceFile := '';
-      Line := 0;
-      end;
-    ThreadEntry := CurrentThreads.CreateEntry(
-      AnAddress,
-      nil,
-      FunctionName,
-      SourceFile,
-      '',
-      Line,
-      ThreadArray[i].ID,
-      'Thread ' + IntToStr(ThreadArray[i].ID),
-      State);
+  for i := 0 to high(ThreadArray) do begin
+    // TODO: Maybe get the address. If FpDebug has already read the ThreadState.
+    ThreadEntry := CurrentThreads.CreateEntry(0, nil, '', '', '', 0, ThreadArray[i].ID, 'Thread ' + IntToStr(ThreadArray[i].ID), 'paused');
     try
       CurrentThreads.Add(ThreadEntry);
     finally
       ThreadEntry.Free;
     end;
-    end;
+  end;
 
   if TFpDebugDebugger(Debugger).FDbgController.CurrentThread = nil then
     CurrentThreads.CurrentThreadId := 0 // TODO: only until controller is guranteed to have a currentthread
   else
     CurrentThreads.CurrentThreadId := TFpDebugDebugger(Debugger).FDbgController.CurrentThread.ID;
-  CurrentThreads.SetValidity(ddsValid);
+  // Do NOT set validity // keep ddsUnknown;
+end;
+
+destructor TFPThreads.Destroy;
+begin
+  FThreadWorkers.WaitForWorkers(True);
+  inherited Destroy;
+end;
+
+procedure TFPThreads.RequestMasterData;
+var
+  WorkItem: TFpThreadWorkerThreads;
+begin
+  if Monitor = nil then exit;
+  if CurrentThreads = nil then exit;
+  if Debugger = nil then Exit;
+
+  if not (Debugger.State in [dsPause, dsInternalPause {, dsRun}]) then begin  // Make sure we have threads first // this can be removed, once threads are KEPT between pauses
+    CurrentThreads.Clear;
+    Exit;
+  end;
+
+  WorkItem := TFpThreadWorkerThreads.Create(TFpDebugDebugger(Debugger));
+  TFpDebugDebugger(Debugger).FWorkQueue.PushItem(WorkItem);
+  FThreadWorkers.Add(WorkItem);
 end;
 
 procedure TFPThreads.ChangeCurrentThread(ANewId: Integer);
@@ -707,20 +1921,166 @@ begin
   inherited ChangeCurrentThread(ANewId);
   if not(Debugger.State in [dsPause, dsInternalPause]) then exit;
 
-  {$IFDEF windows}
   TFpDebugDebugger(Debugger).FDbgController.CurrentThreadId := ANewId;
-  if CurrentThreads <> nil
-  then CurrentThreads.CurrentThreadId := ANewId;
+  if CurrentThreads <> nil then
+    CurrentThreads.CurrentThreadId := ANewId;
   Changed;
-  {$ENDIF}
+end;
+
+{ TFpDebugDebuggerPropertiesMemLimits }
+
+procedure TFpDebugDebuggerPropertiesMemLimits.SetMaxMemReadSize(AValue: QWord);
+begin
+  if (AValue <> 0) and (AValue < MINIMUM_MEMREAD_LIMIT) then
+    AValue := MINIMUM_MEMREAD_LIMIT;
+  if FMaxMemReadSize = AValue then Exit;
+  FMaxMemReadSize := AValue;
+
+  MaxStringLen                := MaxStringLen;
+  MaxNullStringSearchLen      := MaxNullStringSearchLen;
+  MaxArrayLen                 := MaxArrayLen;
+  MaxStackStringLen           := MaxStackStringLen;
+  MaxStackNullStringSearchLen := MaxStackNullStringSearchLen;
+  MaxStackArrayLen            := MaxStackArrayLen;
+end;
+
+procedure TFpDebugDebuggerPropertiesMemLimits.SetMaxArrayLen(AValue: QWord);
+begin
+  if (AValue > FMaxMemReadSize) then
+    AValue := FMaxMemReadSize;
+  if FMaxArrayLen = AValue then Exit;
+  FMaxArrayLen := AValue;
+end;
+
+function TFpDebugDebuggerPropertiesMemLimits.MaxArrayLenIsStored: Boolean;
+begin
+  Result := FMaxArrayLen <> DEF_MaxArrayLen;
+end;
+
+function TFpDebugDebuggerPropertiesMemLimits.MaxMemReadSizeIsStored: Boolean;
+begin
+  Result := FMaxMemReadSize <> DEF_MaxMemReadSize;
+end;
+
+function TFpDebugDebuggerPropertiesMemLimits.MaxNullStringSearchLenIsStored: Boolean;
+begin
+  Result := FMaxNullStringSearchLen <> DEF_MaxNullStringSearchLen;
+end;
+
+function TFpDebugDebuggerPropertiesMemLimits.MaxStackArrayLenIsStored: Boolean;
+begin
+  Result := FMaxStackArrayLen <> DEF_MaxStackArrayLen;
+end;
+
+function TFpDebugDebuggerPropertiesMemLimits.MaxStackNullStringSearchLenIsStored: Boolean;
+begin
+  Result := FMaxStackNullStringSearchLen <> DEF_MaxStackNullStringSearchLen;
+end;
+
+function TFpDebugDebuggerPropertiesMemLimits.MaxStackStringLenIsStored: Boolean;
+begin
+  Result := FMaxStackStringLen <> DEF_MaxStackStringLen;
+end;
+
+function TFpDebugDebuggerPropertiesMemLimits.MaxStringLenIsStored: Boolean;
+begin
+  Result := FMaxStringLen <> DEF_MaxStringLen;
+end;
+
+procedure TFpDebugDebuggerPropertiesMemLimits.SetMaxNullStringSearchLen(AValue: QWord);
+begin
+  if (AValue > FMaxStringLen) then
+    AValue := FMaxStringLen;
+  if (AValue > FMaxMemReadSize) then
+    AValue := FMaxMemReadSize;
+  if FMaxNullStringSearchLen = AValue then Exit;
+  FMaxNullStringSearchLen := AValue;
+end;
+
+procedure TFpDebugDebuggerPropertiesMemLimits.SetMaxStackArrayLen(AValue: QWord
+  );
+begin
+  if (AValue > FMaxMemReadSize) then
+    AValue := FMaxMemReadSize;
+  if FMaxStackArrayLen = AValue then Exit;
+  FMaxStackArrayLen := AValue;
+end;
+
+procedure TFpDebugDebuggerPropertiesMemLimits.SetMaxStackNullStringSearchLen(AValue: QWord);
+begin
+  if (AValue > FMaxStackStringLen) then
+    AValue := FMaxStackStringLen;
+  if (AValue > FMaxMemReadSize) then
+    AValue := FMaxMemReadSize;
+  if FMaxStackNullStringSearchLen = AValue then Exit;
+  FMaxStackNullStringSearchLen := AValue;
+end;
+
+procedure TFpDebugDebuggerPropertiesMemLimits.SetMaxStackStringLen(AValue: QWord);
+begin
+  if (AValue > FMaxMemReadSize) then
+    AValue := FMaxMemReadSize;
+  if FMaxStackStringLen = AValue then Exit;
+  FMaxStackStringLen := AValue;
+  MaxStackNullStringSearchLen      := MaxStackNullStringSearchLen;
+end;
+
+procedure TFpDebugDebuggerPropertiesMemLimits.SetMaxStringLen(AValue: QWord);
+begin
+  if (AValue > FMaxMemReadSize) then
+    AValue := FMaxMemReadSize;
+  if FMaxStringLen = AValue then Exit;
+  FMaxStringLen := AValue;
+  MaxNullStringSearchLen      := MaxNullStringSearchLen;
+end;
+
+constructor TFpDebugDebuggerPropertiesMemLimits.Create;
+begin
+  inherited Create;
+  FMaxMemReadSize             := DEF_MaxMemReadSize;
+  FMaxStringLen               := DEF_MaxStringLen;
+  FMaxArrayLen                := DEF_MaxArrayLen;
+  FMaxNullStringSearchLen     := DEF_MaxNullStringSearchLen ;
+  FMaxStackStringLen          := DEF_MaxStackStringLen;
+  FMaxStackArrayLen           := DEF_MaxStackArrayLen;
+  FMaxStackNullStringSearchLen:= DEF_MaxStackNullStringSearchLen;
+end;
+
+procedure TFpDebugDebuggerPropertiesMemLimits.Assign(Source: TPersistent);
+begin
+  if Source is TFpDebugDebuggerPropertiesMemLimits then begin
+    FMaxMemReadSize             := TFpDebugDebuggerPropertiesMemLimits(Source).FMaxMemReadSize;
+    FMaxStringLen               := TFpDebugDebuggerPropertiesMemLimits(Source).FMaxStringLen;
+    FMaxArrayLen                := TFpDebugDebuggerPropertiesMemLimits(Source).FMaxArrayLen;
+    FMaxNullStringSearchLen     := TFpDebugDebuggerPropertiesMemLimits(Source).FMaxNullStringSearchLen;
+    FMaxStackStringLen          := TFpDebugDebuggerPropertiesMemLimits(Source).FMaxStackStringLen;
+    FMaxStackArrayLen           := TFpDebugDebuggerPropertiesMemLimits(Source).FMaxStackArrayLen;
+    FMaxStackNullStringSearchLen:= TFpDebugDebuggerPropertiesMemLimits(Source).FMaxStackNullStringSearchLen;
+  end;
 end;
 
 { TFpDebugDebuggerProperties }
 
+procedure TFpDebugDebuggerProperties.SetMemLimits(AValue: TFpDebugDebuggerPropertiesMemLimits);
+begin
+  FMemLimits.Assign(AValue);
+end;
+
 constructor TFpDebugDebuggerProperties.Create;
 begin
   inherited Create;
-  FNextOnlyStopOnStartLine:=true;
+  FNextOnlyStopOnStartLine:=False;
+  {$ifdef windows}
+  FForceNewConsole            := True;
+  {$endif windows}
+  FMemLimits := TFpDebugDebuggerPropertiesMemLimits.Create;
+  FHandleDebugBreakInstruction := [dboIgnoreAll];
+end;
+
+destructor TFpDebugDebuggerProperties.Destroy;
+begin
+  inherited Destroy;
+  FMemLimits.Free;
 end;
 
 procedure TFpDebugDebuggerProperties.Assign(Source: TPersistent);
@@ -732,6 +2092,8 @@ begin
     {$ifdef windows}
     FForceNewConsole:=TFpDebugDebuggerProperties(Source).FForceNewConsole;
     {$endif windows}
+    FMemLimits.Assign(TFpDebugDebuggerProperties(Source).MemLimits);
+    FHandleDebugBreakInstruction:=TFpDebugDebuggerProperties(Source).FHandleDebugBreakInstruction;
   end;
 end;
 
@@ -789,7 +2151,7 @@ begin
   result := FFpDebugDebugger.FDbgController.CurrentProcess;
 end;
 
-function TFpDbgMemReader.GetDbgThread(AContext: TFpDbgAddressContext): TDbgThread;
+function TFpDbgMemReader.GetDbgThread(AContext: TFpDbgLocationContext): TDbgThread;
 var
   Process: TDbgProcess;
 begin
@@ -813,6 +2175,12 @@ begin
   result := FFpDebugDebugger.ReadData(AnAddress, ASize, ADest^);
 end;
 
+function TFpDbgMemReader.ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal;
+  ADest: Pointer; out ABytesRead: Cardinal): Boolean;
+begin
+  result := FFpDebugDebugger.ReadData(AnAddress, ASize, ADest^, ABytesRead);
+end;
+
 function TFpDbgMemReader.ReadMemoryEx(AnAddress, AnAddressSpace: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean;
 begin
   Assert(AnAddressSpace>0,'TFpDbgMemReader.ReadMemoryEx ignores AddressSpace');
@@ -820,117 +2188,19 @@ begin
 end;
 
 function TFpDbgMemReader.ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr;
-  AContext: TFpDbgAddressContext): Boolean;
+  AContext: TFpDbgLocationContext): Boolean;
 begin
   if FFpDebugDebugger.FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
   begin
     FRegNum := ARegNum;
     FRegContext := AContext;
+    FRegValue := 0; // TODO: error detection
     FFpDebugDebugger.ExecuteInDebugThread(@DoReadRegister);
     AValue := FRegValue;
     result := FRegResult;
   end
   else
     result := inherited ReadRegister(ARegNum, AValue, AContext);
-end;
-
-{ TCallstackAsyncRequest }
-
-procedure TCallstackAsyncRequest.RequestAsync(Data: PtrInt);
-var
-  AThread: TDbgThread;
-  CurCnt: LongInt;
-  ThreadCallStack: TDbgCallstackEntryList;
-  ReqCnt: Integer;
-begin
-
-  AThread := FDebugger.FDbgController.CurrentThread;
-  if (AThread = nil) then begin
-    FCallstack.SetCountValidity(ddsInvalid);
-    FCallstack.SetHasAtLeastCountInfo(ddsInvalid);
-    FRequiredMinCount := -1;
-    FreeSelf;
-    exit;
-  end;
-
-  ThreadCallStack := AThread.CallStackEntryList;
-  if ThreadCallStack <> nil then
-    CurCnt := ThreadCallStack.Count
-  else
-    CurCnt := 0;
-  if (FRequiredMinCount > CurCnt) then begin
-    ReqCnt := Min(CurCnt + 5, FRequiredMinCount);
-    FDebugger.PrepareCallStackEntryList(ReqCnt);
-
-    ThreadCallStack := AThread.CallStackEntryList;
-    if ThreadCallStack <> nil then begin
-      CurCnt := ThreadCallStack.Count;
-      if (CurCnt < FRequiredMinCount) and (CurCnt >= ReqCnt) then begin
-        Application.QueueAsyncCall(@RequestAsync, 0);
-        exit;
-      end;
-    end;
-  end;
-
-  if (CurCnt = 0) then begin
-    FCallstack.SetCountValidity(ddsInvalid);
-    FCallstack.SetHasAtLeastCountInfo(ddsInvalid);
-    FreeSelf;
-    exit;
-  end;
-
-  if (FRequiredMinCount < 0) or (CurCnt < FRequiredMinCount) then
-  begin
-    FCallstack.Count := CurCnt;
-    FCallstack.SetCountValidity(ddsValid);
-  end
-  else
-  begin
-    FCallstack.SetHasAtLeastCountInfo(ddsValid, CurCnt);
-  end;
-
-  // save whatever we have to history // limit to reduce time
-  if (FRequiredMinCount < 1) then
-    FCallstack.PrepareRange(0, Min(CurCnt, 10));
-
-  FRequiredMinCount := -1;
-  FreeSelf;
-end;
-
-procedure TCallstackAsyncRequest.FreeSelf;
-begin
-  if not FInDestroy then
-    TFPCallStackSupplier(FDebugger.CallStack).FReqList.Remove(Self); // calls  Destroy;
-end;
-
-procedure TCallstackAsyncRequest.CallStackFreed(Sender: TObject);
-begin
-  FCallstack := nil;
-  FRequiredMinCount := -1;
-  FreeSelf;
-end;
-
-constructor TCallstackAsyncRequest.Create(ADebugger: TFpDebugDebugger;
-  ACallstack: TCallStackBase; ARequiredMinCount: Integer);
-begin
-  FDebugger := ADebugger;
-  FCallstack := ACallstack;
-  FCallstack.AddFreeNotification(@CallStackFreed);
-  FRequiredMinCount := ARequiredMinCount;
-end;
-
-destructor TCallstackAsyncRequest.Destroy;
-begin
-  assert(not FInDestroy, 'TCallstackAsyncRequest.Destroy: not FInDestroy');
-  FInDestroy := True;
-  if FRequiredMinCount >= 0 then begin
-    FRequiredMinCount := -1;
-    RequestAsync(0);
-  end;
-  Application.RemoveAsyncCalls(Self);
-  if FCallstack <> nil then
-    FCallstack.RemoveFreeNotification(@CallStackFreed);
-  inherited Destroy;
 end;
 
 { TFPCallStackSupplier }
@@ -940,9 +2210,16 @@ begin
   Result := TFpDebugDebugger(Debugger);
 end;
 
+procedure TFPCallStackSupplier.StopWorkes;
+begin
+  FCallStackWorkers.RequestStopForWorkers;
+end;
+
 procedure TFPCallStackSupplier.DoStateLeavePause;
 begin
-  FReqList.Clear;
+  FCallStackWorkers.WaitForWorkers(True);
+  FInitialFrame := 0;
+  FThreadForInitialFrame := 0;
   if (TFpDebugDebugger(Debugger).FDbgController <> nil) and
      (TFpDebugDebugger(Debugger).FDbgController.CurrentProcess <> nil)
   then
@@ -952,14 +2229,13 @@ end;
 
 constructor TFPCallStackSupplier.Create(const ADebugger: TDebuggerIntf);
 begin
-  FReqList := TCallstackAsyncRequestList.Create;
   inherited Create(ADebugger);
   FPrettyPrinter := TFpPascalPrettyPrinter.Create(sizeof(pointer));
 end;
 
 destructor TFPCallStackSupplier.Destroy;
 begin
-  FReqList.Free;
+  FCallStackWorkers.WaitForWorkers(True);
   inherited Destroy;
   FPrettyPrinter.Free;
 end;
@@ -972,50 +2248,76 @@ end;
 procedure TFPCallStackSupplier.RequestAtLeastCount(ACallstack: TCallStackBase;
   ARequiredMinCount: Integer);
 var
-  r: TCallstackAsyncRequest;
+  WorkItem: TFpThreadWorkerCallStackCount;
 begin
-  if (Debugger = nil) or not(Debugger.State in [dsPause, dsInternalPause])
-  then begin
+  if not FpDebugger.IsPausedAndValid then begin
     ACallstack.SetCountValidity(ddsInvalid);
     exit;
   end;
-  r := TCallstackAsyncRequest.Create(FpDebugger, ACallstack, ARequiredMinCount);
-  FReqList.add(r);
-  r.RequestAsync(0);
+
+  WorkItem := TFpThreadWorkerCallStackCount.Create(FpDebugger, ACallstack, ARequiredMinCount);
+  FpDebugger.FWorkQueue.PushItem(WorkItem);
+  FCallStackWorkers.Add(WorkItem);
 end;
 
 procedure TFPCallStackSupplier.RequestEntries(ACallstack: TCallStackBase);
 var
   e: TCallStackEntry;
   It: TMapIterator;
-  ThreadCallStack: TDbgCallstackEntryList;
-  cs: TDbgCallstackEntry;
+  t: TDbgThread;
+  WorkItem: TFpThreadWorkerCallEntry;
+  i: Integer;
 begin
   It := TMapIterator.Create(ACallstack.RawEntries);
-  ThreadCallStack := FpDebugger.FDbgController.CurrentThread.CallStackEntryList;
-
   if not It.Locate(ACallstack.LowestUnknown )
   then if not It.EOM
   then It.Next;
 
+  if not FpDebugger.IsPausedAndValid then begin
+    while (not IT.EOM) and (TCallStackEntry(It.DataPtr^).Index <= ACallstack.HighestUnknown) do begin
+      TCallStackEntry(It.DataPtr^).Validity := ddsInvalid;
+      IT.Next;
+    end;
+    It.Free;
+    exit;
+  end;
+
+  if not FpDebugger.FDbgController.CurrentProcess.GetThread(ACallstack.ThreadId, t) then
+    t := nil;
+
+  i := 0;
   while (not IT.EOM) and (TCallStackEntry(It.DataPtr^).Index <= ACallstack.HighestUnknown)
   do begin
     e := TCallStackEntry(It.DataPtr^);
+    It.Next;
+    inc(i);
     if e.Validity = ddsRequested then
     begin
-      cs := ThreadCallStack[e.Index];
-      e.Init(cs.AnAddress, nil,
-        cs.FunctionName + FpDebugger.GetParamsAsString(cs, FPrettyPrinter),
-        cs.SourceFile, '', cs.Line, ddsValid);
+      if t = nil then
+        e.Validity := ddsInvalid
+      else
+      begin
+        if IT.EOM or ((i and 7) = 0) then
+          WorkItem := TFpThreadWorkerCallEntry.Create(FpDebugger, t, e, ACallstack)
+        else
+          WorkItem := TFpThreadWorkerCallEntry.Create(FpDebugger, t, e);
+        FpDebugger.FWorkQueue.PushItem(WorkItem);
+        FCallStackWorkers.Add(WorkItem);
+      end;
     end;
-    It.Next;
   end;
   It.Free;
 end;
 
 procedure TFPCallStackSupplier.RequestCurrent(ACallstack: TCallStackBase);
 begin
-  ACallstack.CurrentIndex := 0;
+  if (FThreadForInitialFrame <> 0) and (FThreadForInitialFrame = ACallstack.ThreadId) then begin
+    ACallstack.CurrentIndex := FInitialFrame;
+    FInitialFrame := 0;
+    FThreadForInitialFrame := 0;
+  end
+  else
+    ACallstack.CurrentIndex := 0;
   ACallstack.SetCurrentValidity(ddsValid);
 end;
 
@@ -1024,7 +2326,7 @@ var
   tid, idx: Integer;
   cs: TCallStackBase;
 begin
-  if (Debugger = nil) or not(Debugger.State = dsPause) then begin // dsInternalPause ?
+  if (Debugger = nil) or not(Debugger.State in [dsPause, dsInternalPause]) then begin
     exit;
   end;
 
@@ -1045,75 +2347,36 @@ begin
   Result := TFpDebugDebugger(Debugger);
 end;
 
-procedure TFPLocals.RequestData(ALocals: TLocals);
-var
-  AContext: TFpDbgInfoContext;
-  AController: TDbgController;
-  ProcVal: TFpValue;
-  i: Integer;
-  m: TFpValue;
-  n, v: String;
-  CurThreadId, CurStackFrame: Integer;
+procedure TFPLocals.StopWorkes;
 begin
-  AController := FpDebugger.FDbgController;
-  if (AController = nil) or (AController.CurrentProcess = nil) or
-     (AController.CurrentProcess.DbgInfo = nil)
-  then begin
-    ALocals.SetDataValidity(ddsInvalid);
-    exit;
-  end;
-
-  TFpDebugDebugger(Debugger).GetCurrentThreadAndStackFrame(CurThreadId, CurStackFrame);
-  AContext := FpDebugger.FindContext(CurThreadId, CurStackFrame);
-  if AContext = nil then begin
-    ALocals.SetDataValidity(ddsInvalid);
-    exit;
-  end;
-
-  if (AContext = nil) or (AContext.SymbolAtAddress = nil) then begin
-    ALocals.SetDataValidity(ddsInvalid);
-    AContext.ReleaseReference;
-    exit;
-  end;
-
-  ProcVal := AContext.ProcedureAtAddress;
-
-  if (ProcVal = nil) then begin
-    ALocals.SetDataValidity(ddsInvalid);
-    AContext.ReleaseReference;
-    exit;
-  end;
-  FPrettyPrinter.MemManager := AContext.MemManager;
-  FPrettyPrinter.AddressSize := AContext.SizeOfAddress;
-
-  ALocals.Clear;
-  for i := 0 to ProcVal.MemberCount - 1 do begin
-    m := ProcVal.Member[i];
-    if m <> nil then begin
-      if m.DbgSymbol <> nil then
-        n := m.DbgSymbol.Name
-      else
-        n := '';
-      FPrettyPrinter.PrintValue(v, m);
-      m.ReleaseReference;
-      ALocals.Add(n, v);
-    end;
-  end;
-  ALocals.SetDataValidity(ddsValid);
-  ProcVal.ReleaseReference;
-  AContext.ReleaseReference;
+  FLocalWorkers.RequestStopForWorkers;
 end;
 
-constructor TFPLocals.Create(const ADebugger: TDebuggerIntf);
+procedure TFPLocals.DoStateLeavePause;
 begin
-  inherited Create(ADebugger);
-  FPrettyPrinter := TFpPascalPrettyPrinter.Create(sizeof(pointer));
+  inherited DoStateLeavePause;
+  FLocalWorkers.WaitForWorkers(True);
 end;
 
 destructor TFPLocals.Destroy;
 begin
+  FLocalWorkers.WaitForWorkers(True);
   inherited Destroy;
-  FPrettyPrinter.Free;
+end;
+
+procedure TFPLocals.RequestData(ALocals: TLocals);
+var
+  AController: TDbgController;
+  WorkItem: TFpThreadWorkerLocals;
+begin
+  if not FpDebugger.IsPausedAndValid then begin
+    ALocals.SetDataValidity(ddsInvalid);
+    exit;
+  end;
+
+  WorkItem := TFpThreadWorkerLocals.Create(FpDebugger, ALocals);
+  FLocalWorkers.Add(WorkItem);
+  FpDebugger.FWorkQueue.PushItem(WorkItem);
 end;
 
 { TFPBreakpoints }
@@ -1124,7 +2387,9 @@ var
   i: Integer;
 begin
   inherited DoStateChange(AOldState);
-  if Debugger.State in [dsPause, dsInternalPause, dsStop] then
+  if (Debugger.State in [dsPause, dsInternalPause, dsStop]) or
+     (TFpDebugDebugger(Debugger).FSendingEvents and (Debugger.State in [dsRun, dsInit]))
+  then
   begin
     if FDelayedRemoveBreakpointList.Count>0 then begin
       debuglnEnter(DBG_BREAKPOINTS, ['TFPBreakpoints.DoStateChange  REMOVE DELAYED']);
@@ -1174,7 +2439,7 @@ end;
 procedure TFPBreakpoint.SetBreak;
 var
   CurThreadId, CurStackFrame: Integer;
-  CurContext: TFpDbgInfoContext;
+  CurContext: TFpDbgSymbolScope;
   WatchPasExpr: TFpPascalExpression;
   R: TFpValue;
   s: TFpDbgValueSize;
@@ -1225,11 +2490,13 @@ end;
 
 destructor TFPBreakpoint.Destroy;
 begin
-  if assigned(Debugger) and (Debugger.State = dsRun) and assigned(FInternalBreakpoint) then
+  if assigned(Debugger) and
+     ( (Debugger.State = dsRun) and (not TFpDebugDebugger(Debugger).FSendingEvents) ) and
+     assigned(FInternalBreakpoint) then
     begin
     TFPBreakpoints(Collection).AddBreakpointToDelayedRemoveList(FInternalBreakpoint);
     FInternalBreakpoint:=nil;
-    TFpDebugDebugger(Debugger).QuickPause;
+//    TFpDebugDebugger(Debugger).QuickPause;
     end
   else
     ResetBreak;
@@ -1238,7 +2505,9 @@ end;
 
 procedure TFPBreakpoint.DoStateChange(const AOldState: TDBGState);
 begin
-  if (Debugger.State in [dsPause, dsInternalPause]) then
+  if (Debugger.State in [dsPause, dsInternalPause]) or
+     (TFpDebugDebugger(Debugger).FSendingEvents and (Debugger.State in [dsRun, dsInit]))
+  then
     begin
     if Enabled and not FIsSet then
       begin
@@ -1267,7 +2536,7 @@ var
   ADebugger: TFpDebugDebugger;
 begin
   ADebugger := TFpDebugDebugger(Debugger);
-  if (ADebugger.State in [dsPause, dsInit]) then
+  if (ADebugger.State in [dsPause, dsInternalPause, dsInit]) or TFpDebugDebugger(Debugger).FSendingEvents then
     begin
     if Enabled and not FIsSet then
       FSetBreakFlag := True
@@ -1505,15 +2774,33 @@ var
   i: Integer;
   ARegisterValue: TRegisterValue;
   thr: TDbgThread;
+  frm: TDbgCallstackEntry;
 begin
-  if (Debugger = nil) or not(Debugger.State in [dsPause, dsInternalPause, dsStop]) then
+  if not TFpDebugDebugger(Debugger).IsPausedAndValid then begin
+    ARegisters.DataValidity:=ddsInvalid;
     exit;
+  end;
 
   if not TFpDebugDebugger(Debugger).FDbgController.MainProcess.GetThread(ARegisters.ThreadId, thr) then begin
     ARegisters.DataValidity:=ddsError;
     exit;
   end;
-  ARegisterList :=  thr.RegisterValueList;
+
+  ARegisterList := nil;
+  if ARegisters.StackFrame = 0 then begin
+    ARegisterList :=  thr.RegisterValueList;
+  end
+  else begin
+    frm := thr.CallStackEntryList[ARegisters.StackFrame];
+    if frm <> nil then
+      ARegisterList := frm.RegisterValueList;
+  end;
+
+  if ARegisterList = nil then begin
+    ARegisters.DataValidity:=ddsError;
+    exit;
+  end;
+
   for i := 0 to ARegisterList.Count-1 do
     begin
     ARegisterValue := ARegisters.EntriesByName[ARegisterList[i].Name];
@@ -1563,7 +2850,7 @@ end;
 
 constructor TFpLineInfo.Create(const ADebugger: TDebuggerIntf);
 begin
-  FRequestedSources := TStringList.Create;
+  FRequestedSources := TStringListUTF8Fast.Create;
   inherited Create(ADebugger);
 end;
 
@@ -1631,74 +2918,35 @@ begin
   Result := TFpDebugDebugger(Debugger);
 end;
 
+procedure TFPWatches.StopWorkes;
+begin
+  FWatchEvalWorkers.RequestStopForWorkers;
+end;
+
+procedure TFPWatches.DoStateLeavePause;
+begin
+  inherited DoStateLeavePause;
+  FWatchEvalWorkers.WaitForWorkers(True);
+end;
+
 procedure TFPWatches.InternalRequestData(AWatchValue: TWatchValue);
-//var
-//  AVal: string;
-//  AType: TDBGType;
+var
+  WorkItem: TFpThreadWorkerWatchValueEval;
 begin
-  FpDebugger.ScheduleWatchValueEval(AWatchValue);
-  //FpDebugger.EvaluateExpression(AWatchValue, AWatchValue.Expression, AVal, AType);
+  if not FpDebugger.IsPausedAndValid then begin
+    AWatchValue.Validity := ddsInvalid;
+    exit;
+  end;
+
+  WorkItem := TFpThreadWorkerWatchValueEval.Create(FpDebugger, AWatchValue);
+  FpDebugger.FWorkQueue.PushItem(WorkItem);
+  FWatchEvalWorkers.Add(WorkItem);
 end;
 
-{ TFpDebugThread }
-
-procedure TFpDebugThread.DoDebugLoopFinishedASync(Data: PtrInt);
+destructor TFPWatches.Destroy;
 begin
-  FQueuedFinish:=false;
-  FFpDebugDebugger.DebugLoopFinished;
-end;
-
-constructor TFpDebugThread.Create(AFpDebugDebugger: TFpDebugDebugger);
-begin
-  FDebugLoopStoppedEvent := RTLEventCreate;
-  FStartDebugLoopEvent := RTLEventCreate;
-  FFpDebugDebugger := AFpDebugDebugger;
-  inherited Create(false);
-end;
-
-destructor TFpDebugThread.Destroy;
-begin
-  if FQueuedFinish then
-    Application.RemoveAsyncCalls(Self);
-  RTLeventdestroy(FStartDebugLoopEvent);
-  RTLeventdestroy(FDebugLoopStoppedEvent);
+  FWatchEvalWorkers.WaitForWorkers(True);
   inherited Destroy;
-end;
-
-procedure TFpDebugThread.Execute;
-begin
-  if FFpDebugDebugger.FDbgController.Run then
-    FStartSuccessfull:=true;
-
-  RTLeventSetEvent(FDebugLoopStoppedEvent);
-
-  if FStartSuccessfull then
-    begin
-    repeat
-    RTLeventWaitFor(FStartDebugLoopEvent);
-    RTLeventResetEvent(FStartDebugLoopEvent);
-    if not terminated then
-      begin
-      if assigned(FAsyncMethod) then
-        begin
-        try
-          FAsyncMethod();
-        finally
-          RTLeventSetEvent(FDebugLoopStoppedEvent);
-        end;
-        end
-      else
-        begin
-        FFpDebugDebugger.FDbgController.ProcessLoop;
-        if not FQueuedFinish then
-          begin
-          FQueuedFinish:=true;
-          Application.QueueAsyncCall(@DoDebugLoopFinishedASync, 0);
-          end;
-        end;
-      end;
-    until Terminated;
-    end
 end;
 
 { TFpDebugExceptionStepping }
@@ -1706,6 +2954,24 @@ end;
 function TFpDebugExceptionStepping.GetDbgController: TDbgController;
 begin
   Result := FDebugger.FDbgController;
+end;
+
+function TFpDebugExceptionStepping.dbgs(st: TExceptStepState): string;
+begin
+  writestr(Result, st);
+end;
+
+function TFpDebugExceptionStepping.dbgs(loc: TBreakPointLoc): string;
+begin
+  writestr(Result, loc);
+end;
+
+function TFpDebugExceptionStepping.dbgs(locs: TBreakPointLocs): string;
+var
+  a: TBreakPointLoc;
+begin
+  Result := '';
+  for a in locs do Result := Result + dbgs(a) +',';
 end;
 
 function TFpDebugExceptionStepping.GetCurrentProcess: TDbgProcess;
@@ -1737,6 +3003,7 @@ var
   a: TBreakPointLoc;
 begin
   // Running in debug thread
+  //debugln(['EnableBreaksDirect ', dbgs(ALocs)]);
   for a in ALocs do
     if FBreakPoints[a] <> nil then begin
       if not(a in FBreakEnabled) then
@@ -1751,6 +3018,7 @@ var
   a: TBreakPointLoc;
 begin
   // Not in thread => only flag desired changes
+  //debugln(['DisableBreaks ', dbgs(ALocs)]);
   for a in ALocs do
     Exclude(FBreakNewEnabled, a);
 end;
@@ -1760,6 +3028,7 @@ var
   a: TBreakPointLoc;
 begin
   // Running in debug thread
+  //debugln(['DisableBreaksDirect ', dbgs(ALocs)]);
   for a in ALocs do
     if FBreakPoints[a] <> nil then begin
       if (a in FBreakEnabled) then
@@ -1831,8 +3100,8 @@ procedure TFpDebugExceptionStepping.DoProcessLoaded;
 begin
   debuglnEnter(DBG_BREAKPOINTS, ['>> TFpDebugDebugger.SetSoftwareExceptionBreakpoint FPC_RAISEEXCEPTION' ]);
   FBreakPoints[bplRaise]         := FDebugger.AddBreak('FPC_RAISEEXCEPTION');
-  //FBreakPoints[bplBreakError]    := FDebugger.AddBreak('FPC_BREAK_ERROR');
-  //FBreakPoints[bplRunError]      := FDebugger.AddBreak('FPC_RUNERROR');
+  FBreakPoints[bplBreakError]    := FDebugger.AddBreak('FPC_BREAK_ERROR');
+  FBreakPoints[bplRunError]      := FDebugger.AddBreak('FPC_RUNERROR');
   FBreakPoints[bplReRaise]       := FDebugger.AddBreak('FPC_RERAISE', nil,            False);
   FBreakPoints[bplPopExcept]     := FDebugger.AddBreak('FPC_POPADDRSTACK', nil,       False);
   FBreakPoints[bplCatches]       := FDebugger.AddBreak('FPC_CATCHES', nil,            False);
@@ -1872,13 +3141,14 @@ procedure TFpDebugExceptionStepping.ThreadProcessLoopCycle(
 
   function CheckCommandFinishesInFrame(AFrameAddr: TDBGPtr): Boolean;
   begin
-    Result := ACurCommand is TDbgControllerHiddenBreakStepBaseCmd;
+    Result := (ACurCommand is TDbgControllerHiddenBreakStepBaseCmd) and
+              (TDbgControllerHiddenBreakStepBaseCmd(CurrentCommand).StoredStackFrameInfo <> nil);
     if not Result then
       exit; // none stepping command, does not stop
     if ACurCommand is TDbgControllerStepOutCmd then
-      Result := TDbgControllerHiddenBreakStepBaseCmd(CurrentCommand).StoredStackFrame < AFrameAddr
+      Result := TDbgControllerHiddenBreakStepBaseCmd(CurrentCommand).StoredStackFrameInfo.StoredStackFrame < AFrameAddr
     else
-      Result := TDbgControllerHiddenBreakStepBaseCmd(CurrentCommand).StoredStackFrame <= AFrameAddr;
+      Result := TDbgControllerHiddenBreakStepBaseCmd(CurrentCommand).StoredStackFrameInfo.StoredStackFrame <= AFrameAddr;
   end;
 
   procedure CheckSteppedOutFromW64SehFinally;
@@ -1964,6 +3234,7 @@ begin
     if (CurrentCommand <> nil) and (CurrentCommand.Thread <> CurrentThread) then
       exit;
 
+    //DebugLn(['THreadProcLoop ', dbgs(FState), ' ', DbgSName(CurrentCommand)]);
     DisableBreaksDirect([bplPopExcept, bplCatches, bplFpcSpecific]); // FpcSpecific was not needed -> not SEH based code
     case FState of
       esIgnoredRaise: begin
@@ -2105,7 +3376,7 @@ begin
   end
   else
   // bplSehW64Except
-  if FBreakPoints[bplSehW64Except].HasLocation(PC) then begin // always assigned
+  if assigned(FBreakPoints[bplSehW64Except]) and FBreakPoints[bplSehW64Except].HasLocation(PC) then begin // always assigned
     debugln(FPDBG_COMMANDS, ['@ bplSehW64Except ', DbgSName(CurrentCommand)]);
     AFinishLoopAndSendEvents := False;
     FBreakPoints[bplSehW64Finally].RemoveAllAddresses;
@@ -2141,7 +3412,7 @@ begin
   end
   else
   // bplSehW64Finally
-  if FBreakPoints[bplSehW64Finally].HasLocation(PC) then begin // always assigned
+  if assigned(FBreakPoints[bplSehW64Finally]) and FBreakPoints[bplSehW64Finally].HasLocation(PC) then begin // always assigned
     debugln(FPDBG_COMMANDS, ['@ bplSehW64Finally ', DbgSName(CurrentCommand)]);
     AFinishLoopAndSendEvents := False;
     // TODO: esStepToFinally has "CurrentCommand = nil" and is Running, not stepping => thread not avail
@@ -2176,6 +3447,20 @@ begin
     DoExceptionRaised(&continue);
   end
   else
+  if BreakPoint = FBreakPoints[bplBreakError] then begin
+    debugln(FPDBG_COMMANDS, ['@ bplBreakError']);
+    FDebugger.HandleBreakError(&continue);
+    if not &continue then
+      FState := esNone;
+  end
+  else
+  if BreakPoint = FBreakPoints[bplRunError] then begin
+    debugln(FPDBG_COMMANDS, ['@ bplRunError']);
+    FDebugger.HandleRunError(&continue);
+    if not &continue then
+      FState := esNone;
+  end
+  else
     Result := False;
 end;
 
@@ -2191,14 +3476,14 @@ begin
     bplReRaise,
     bplRtlUnwind, bplStepOut]);
 
-  if ACommand in [dcStepInto, dcStepOver, dcStepOut, dcRunTo, dcStepOverInstr{, dcStepIntoInstr}] then
+  if ACommand in [dcStepInto, dcStepOver, dcStepOut, dcStepTo, dcRunTo, dcStepOverInstr{, dcStepIntoInstr}] then
     EnableBreaks([bplReRaise]);
   if ACommand in [dcStepOut] then
     EnableBreaks([bplFpcSpecific]);
 
   case st of
     esStoppedAtRaise: begin
-      if ACommand in [dcStepInto, dcStepOver, dcStepOut, dcRunTo] then begin
+      if ACommand in [dcStepInto, dcStepOver, dcStepOut, dcStepTo, dcRunTo] then begin
         FState := esStepToFinally;
         ACommand := dcRun;
         EnableBreaks([bplPopExcept, bplCatches, bplFpcSpecific]);
@@ -2226,12 +3511,13 @@ begin
 
   SetExitCode(Integer(AExitCode));
   {$PUSH}{$R-}
-  DoDbgEvent(ecProcess, etProcessExit, Format('Process exited with exit-code %d',[AExitCode]));
+  DoDbgEvent(ecProcess, etProcessExit, Format('Process exited with exit-code %u',[AExitCode]));
   {$POP}
   LockRelease;
   try
     SetState(dsStop);
     FExceptionStepper.DoDbgStopped;
+    StopAllWorkers;
     FreeDebugThread;
   finally
     UnlockRelease;
@@ -2254,147 +3540,6 @@ begin
   Result := nil;
   if (FDbgController <> nil) and (FDbgController.CurrentProcess<> nil) then
     Result := FDbgController.CurrentProcess.DbgInfo;
-end;
-
-procedure TFpDebugDebugger.ScheduleWatchValueEval(AWatchValue: TWatchValue);
-begin
-  AWatchValue.AddFreeNotification(@DoWatchFreed);
-  FWatchEvalList.Add(pointer(AWatchValue));
-  if not FWatchAsyncQueued then
-    begin
-    Application.QueueAsyncCall(@ProcessASyncWatches, 0);
-    FWatchAsyncQueued := True;
-    end;
-end;
-
-function TFpDebugDebugger.EvaluateExpression(AWatchValue: TWatchValue; AExpression: String;
-  out AResText: String; out ATypeInfo: TDBGType; EvalFlags: TDBGEvaluateFlags): Boolean;
-var
-  AContext: TFpDbgInfoContext;
-  APasExpr, PasExpr2: TFpPascalExpression;
-  DispFormat: TWatchDisplayFormat;
-  RepeatCnt: Integer;
-  Res: Boolean;
-  StackFrame, ThreadId: Integer;
-  ResValue: TFpValue;
-  CastName, ResText2: String;
-  ClassAddr, CNameAddr: TFpDbgMemLocation;
-  NameLen: QWord;
-begin
-  Result := False;
-  AResText := '';
-  ATypeInfo := nil;
-
-  if AWatchValue <> nil then begin
-    StackFrame := AWatchValue.StackFrame;
-    ThreadId := AWatchValue.ThreadId;
-    DispFormat := AWatchValue.DisplayFormat;
-    RepeatCnt := AWatchValue.RepeatCount;
-    EvalFlags := AWatchValue.EvaluateFlags;
-  end
-  else begin
-    GetCurrentThreadAndStackFrame(ThreadId, StackFrame);
-    DispFormat := wdfDefault;
-    RepeatCnt := -1;
-  end;
-
-  AContext := GetContextForEvaluate(ThreadId, StackFrame);
-
-  if AContext = nil then
-    begin
-    if AWatchValue <> nil then
-      AWatchValue.Validity := ddsInvalid;
-    exit;
-    end;
-
-  Result := True;
-  APasExpr := nil;
-  try
-    APasExpr := TFpPascalExpression.Create(AExpression, AContext);
-    APasExpr.ResultValue; // trigger full validation
-    if not APasExpr.Valid then
-      begin
-      AResText := ErrorHandler.ErrorAsString(APasExpr.Error);
-      if AWatchValue <> nil then
-        begin
-        AWatchValue.Value := AResText;
-        AWatchValue.Validity := ddsError;
-        end;
-      end
-    else
-      begin
-      FPrettyPrinter.AddressSize:=AContext.SizeOfAddress;
-      FPrettyPrinter.MemManager := AContext.MemManager;
-
-      ResValue := APasExpr.ResultValue;
-      if (ResValue.Kind = skClass) and (ResValue.AsCardinal <> 0) and (defClassAutoCast in EvalFlags)
-      then begin
-        CastName := '';
-        if FMemManager.ReadAddress(ResValue.DataAddress, SizeVal(AContext.SizeOfAddress), ClassAddr) then begin
-          {$PUSH}{$Q-}
-          ClassAddr.Address := ClassAddr.Address + TDBGPtr(3 * AContext.SizeOfAddress);
-          {$POP}
-          if FMemManager.ReadAddress(ClassAddr, SizeVal(AContext.SizeOfAddress), CNameAddr) then begin
-            if (FMemManager.ReadUnsignedInt(CNameAddr, SizeVal(1), NameLen)) then
-              if NameLen > 0 then begin
-                SetLength(CastName, NameLen);
-                CNameAddr.Address := CNameAddr.Address + 1;
-                FMemManager.ReadMemory(CNameAddr, SizeVal(NameLen), @CastName[1]);
-                PasExpr2 := TFpPascalExpression.Create(CastName+'('+AExpression+')', AContext);
-                PasExpr2.ResultValue;
-                if PasExpr2.Valid then begin
-                  APasExpr.Free;
-                  APasExpr := PasExpr2;
-                  ResValue := APasExpr.ResultValue;
-                end
-                else
-                  PasExpr2.Free;
-              end;
-          end;
-        end;
-      end;
-
-
-      if defNoTypeInfo in EvalFlags then
-        Res := FPrettyPrinter.PrintValue(AResText, ResValue, DispFormat, RepeatCnt)
-      else
-        Res := FPrettyPrinter.PrintValue(AResText, ATypeInfo, ResValue, DispFormat, RepeatCnt);
-
-      // PCHAR/String
-      if APasExpr.HasPCharIndexAccess then begin
-      // TODO: Only dwarf 2
-        APasExpr.FixPCharIndexAccess := True;
-        APasExpr.ResetEvaluation;
-        ResValue := APasExpr.ResultValue;
-        if (ResValue=nil) or (not FPrettyPrinter.PrintValue(ResText2, ResValue, DispFormat, RepeatCnt)) then
-          ResText2 := 'Failed';
-        AResText := 'PChar: '+AResText+ LineEnding + 'String: '+ResText2;
-      end;
-
-      if Res then
-        begin
-        if AWatchValue <> nil then
-          begin
-          AWatchValue.Value := AResText; //IntToStr(APasExpr.ResultValue.AsInteger);
-          AWatchValue.TypeInfo := ATypeInfo;
-          if IsError(ResValue.LastError) then
-            AWatchValue.Validity := ddsError
-          else
-            AWatchValue.Validity := ddsValid;
-          end;
-        end
-      else
-        begin
-        AResText := 'Error';
-        if AWatchValue <> nil then
-          AWatchValue.Validity := ddsInvalid;
-        FreeAndNil(ATypeInfo);
-        end;
-      end;
-  finally
-    APasExpr.Free;
-    AContext.ReleaseReference;
-  end;
 end;
 
 function TFpDebugDebugger.CreateLineInfo: TDBGLineInfo;
@@ -2439,7 +3584,6 @@ end;
 
 procedure TFpDebugDebugger.FDbgControllerDebugInfoLoaded(Sender: TObject);
 begin
-  TFpDwarfInfo(FDbgController.CurrentProcess.DbgInfo).MemManager := FMemManager;
   if LineInfo <> nil then begin
     TFpLineInfo(LineInfo).DebugInfoChanged;
   end;
@@ -2466,57 +3610,6 @@ begin
   DoDbgEvent(ecModule, etModuleUnload, 'Unloaded: ' + n + ' (' + ALib.Name +')');
 end;
 
-procedure TFpDebugDebugger.DoWatchFreed(Sender: TObject);
-begin
-  FWatchEvalList.Remove(pointer(Sender));
-end;
-
-procedure TFpDebugDebugger.ProcessASyncWatches(Data: PtrInt);
-var
-  WatchValue: TWatchValue;
-  AVal: String;
-  AType: TDBGType;
-  t: QWord;
-  i: Integer;
-begin
-  FWatchAsyncQueued := False;
-  t := GetTickCount64;
-  i := 0;
-  // Do the stack first.
-  // TODO: have ONE proper queue for all async stuff
-  if TFPCallStackSupplier(CallStack).FReqList.Count = 0 then begin
-    repeat
-      if FWatchEvalList.Count = 0 then
-        exit;
-      WatchValue := TWatchValue(FWatchEvalList[0]);
-      FWatchEvalList.Delete(0);
-      WatchValue.RemoveFreeNotification(@DoWatchFreed);
-
-      EvaluateExpression(WatchValue, WatchValue.Expression, AVal, AType);
-      inc(i);
-    {$PUSH}{$Q-}
-    until (GetTickCount64 - t > 60) or (i > 30);
-    {$POP}
-  end;
-
-  if (not FWatchAsyncQueued) and (FWatchEvalList.Count > 0) then
-    begin
-    Application.QueueAsyncCall(@ProcessASyncWatches, 0);
-    FWatchAsyncQueued := True;
-    end
-  else
-    DoOnIdle;
-end;
-
-procedure TFpDebugDebugger.ClearWatchEvalList;
-begin
-  if Assigned(FWatchEvalList) then
-    while FWatchEvalList.Count > 0 do begin
-      TWatchValue(FWatchEvalList[0]).RemoveFreeNotification(@DoWatchFreed);
-      FWatchEvalList.Delete(0);
-    end;
-end;
-
 procedure TFpDebugDebugger.GetCurrentThreadAndStackFrame(out AThreadId,
   AStackFrame: Integer);
 var
@@ -2534,31 +3627,22 @@ begin
 end;
 
 function TFpDebugDebugger.GetContextForEvaluate(const ThreadId,
-  StackFrame: Integer): TFpDbgInfoContext;
+  StackFrame: Integer): TFpDbgSymbolScope;
 begin
-  Result := FindContext(ThreadId, StackFrame);
+  Result := FindSymbolScope(ThreadId, StackFrame);
   if Result <> nil then
-    Result.MemManager.DefaultContext := Result;
+    Result.MemManager.DefaultContext := Result.LocationContext;
 end;
 
 function TFpDebugDebugger.GetClassInstanceName(AnAddr: TDBGPtr): string;
 var
-  VMTAddr: TDBGPtr;
-  ClassNameAddr: TDBGPtr;
-  b: byte;
+  AnErr: TFpError;
 begin
   Result := '';
-  // Read address of the vmt
-  ReadAddress(AnAddr, VMTAddr);
-  if VMTAddr = 0 then
-    exit;
-  ReadAddress(VMTAddr+3*DBGPTRSIZE[FDbgController.CurrentProcess.Mode], ClassNameAddr);
-  if ClassNameAddr = 0 then
-    exit;
-  // read classname (as shortstring)
-  ReadData(ClassNameAddr, 1, b);
-  setlength(result,b);
-  ReadData(ClassNameAddr+1, b, result[1]);
+  if (FDbgController.CurrentProcess <> nil) then
+    TFpDwarfFreePascalSymbolClassMap.GetInstanceForDbgInfo(FDbgController.CurrentProcess.DbgInfo)
+    .GetInstanceClassNameFromPVmt
+      (AnAddr, FMemManager, DBGPTRSIZE[FDbgController.CurrentProcess.Mode], Result, AnErr);
 end;
 
 function TFpDebugDebugger.ReadAnsiString(AnAddr: TDbgPtr): string;
@@ -2580,30 +3664,21 @@ end;
 procedure TFpDebugDebugger.HandleSoftwareException(out
   AnExceptionLocation: TDBGLocationRec; var continue: boolean);
 var
-  AnExceptionObjectLocation: TDBGPtr;
+  AnExceptionObjectLocation, ExceptIP, ExceptFramePtr: TDBGPtr;
   ExceptionClass: string;
   ExceptionMessage: string;
-  RegDxDwarfIndex, RegFirstArg: Cardinal;
   ExceptItem: TBaseException;
 begin
-  // Using regvar:
-  // In all their wisdom, people decided to give the (r)dx register dwarf index
-  // 1 on for x86_64 and index 2 for i386.
-  if FDbgController.CurrentProcess.Mode=dm32 then begin
-    RegDxDwarfIndex:=2;
-    RegFirstArg := 0; // AX
-  end else begin
-    RegDxDwarfIndex:=1;
-    {$IFDEF windows}
-    // Must be Win64
-    RegFirstArg := 2; // RCX
-    {$ELSE}
-    RegFirstArg := 5; // RDI
-    {$ENDIF}
-  end;
+  if not FMemManager.ReadUnsignedInt(FDbgController.CurrentProcess.CallParamDefaultLocation(1),
+    SizeVal(SizeOf(ExceptIP)), ExceptIP, FDbgController.DefaultContext)
+  then
+    ExceptIP := 0;
+  AnExceptionLocation:=GetLocationRec(ExceptIP, -1);
 
-  AnExceptionLocation:=GetLocationRec(FDbgController.CurrentThread.RegisterValueList.FindRegisterByDwarfIndex(RegDxDwarfIndex).NumValue);
-  AnExceptionObjectLocation:=FDbgController.CurrentThread.RegisterValueList.FindRegisterByDwarfIndex(RegFirstArg).NumValue;
+  if not FMemManager.ReadUnsignedInt(FDbgController.CurrentProcess.CallParamDefaultLocation(0),
+    SizeVal(SizeOf(AnExceptionObjectLocation)), AnExceptionObjectLocation, FDbgController.DefaultContext)
+  then
+    AnExceptionObjectLocation := 0;
   ExceptionClass := '';
   ExceptionMessage := '';
   if AnExceptionObjectLocation <> 0 then begin
@@ -2618,120 +3693,235 @@ begin
     exit;
   end;
 
-
   DoException(deInternal, ExceptionClass, AnExceptionLocation, ExceptionMessage, continue);
+
+  if not &continue then begin
+    if FMemManager.ReadUnsignedInt(FDbgController.CurrentProcess.CallParamDefaultLocation(2),
+      SizeVal(SizeOf(ExceptFramePtr)), ExceptFramePtr, FDbgController.DefaultContext)
+    then
+      ExceptIP := SetStackFrameForBasePtr(ExceptFramePtr, True, ExceptIP);
+      if ExceptIP <> 0 then
+          AnExceptionLocation:=GetLocationRec(ExceptIP); // Assert was corrected
+  end;
+end;
+
+procedure TFpDebugDebugger.HandleBreakError(var continue: boolean);
+var
+  ErrNo: QWord;
+  ExceptIP, ExceptFramePtr: TDBGPtr;
+  ExceptName: string;
+  ExceptItem: TBaseException;
+  ExceptionLocation: TDBGLocationRec;
+begin
+  if not FMemManager.ReadUnsignedInt(FDbgController.CurrentProcess.CallParamDefaultLocation(1),
+    SizeVal(SizeOf(ExceptIP)), ExceptIP, FDbgController.DefaultContext)
+  then
+    ExceptIP := 0;
+  ExceptionLocation:=GetLocationRec(ExceptIP, -1);
+
+  if FMemManager.ReadUnsignedInt(FDbgController.CurrentProcess.CallParamDefaultLocation(0),
+    SizeVal(SizeOf(LongInt)), ErrNo, FDbgController.DefaultContext)
+  then
+    ExceptName := Format('RunError(%d)', [ErrNo])
+  else
+    ExceptName := 'RunError(unknown)';
+
+  ExceptItem := Exceptions.Find(ExceptName);
+  if (ExceptItem <> nil) and (ExceptItem.Enabled)
+  then begin
+    continue := True;
+    exit;
+  end;
+
+  DoException(deRunError, ExceptName, ExceptionLocation, RunErrorText[ErrNo], continue);
+
+  if not &continue then begin
+    if FMemManager.ReadUnsignedInt(FDbgController.CurrentProcess.CallParamDefaultLocation(2),
+      SizeVal(SizeOf(ExceptFramePtr)), ExceptFramePtr, FDbgController.DefaultContext)
+    then
+      SetStackFrameForBasePtr(ExceptFramePtr);
+
+    EnterPause(ExceptionLocation);
+  end;
+end;
+
+procedure TFpDebugDebugger.HandleRunError(var continue: boolean);
+var
+  ErrNo: QWord;
+  ExceptName: string;
+  ExceptItem: TBaseException;
+  ExceptionLocation: TDBGLocationRec;
+begin
+  // NO Addr / No Frame
+  ExceptionLocation:=GetLocationRec;
+
+  if FMemManager.ReadUnsignedInt(FDbgController.CurrentProcess.CallParamDefaultLocation(0),
+    SizeVal(SizeOf(Word)), ErrNo, FDbgController.DefaultContext)
+  then
+    ExceptName := Format('RunError(%d)', [ErrNo])
+  else
+    ExceptName := 'RunError(unknown)';
+
+  ExceptItem := Exceptions.Find(ExceptName);
+  if (ExceptItem <> nil) and (ExceptItem.Enabled)
+  then begin
+    continue := True;
+    exit;
+  end;
+
+  DoException(deRunError, ExceptName, ExceptionLocation, RunErrorText[ErrNo], continue);
+
+  if not &continue then begin
+    EnterPause(ExceptionLocation);
+  end;
 end;
 
 procedure TFpDebugDebugger.FreeDebugThread;
 begin
-  if FFpDebugThread = nil then
-    exit;
-  FFpDebugThread.Terminate;
-  RTLeventSetEvent(FFpDebugThread.StartDebugLoopEvent);
-  FFpDebugThread.WaitFor;
-  FFpDebugThread.Free;
-  FFpDebugThread := nil;
+  FWorkQueue.ThreadCount := 0;
+  FWorkThread := nil;
 end;
 
 procedure TFpDebugDebugger.FDbgControllerHitBreakpointEvent(
-  var continue: boolean; const Breakpoint: TFpDbgBreakpoint);
+  var continue: boolean; const Breakpoint: TFpDbgBreakpoint;
+  AnEventType: TFPDEvent; AMoreHitEventsPending: Boolean);
 var
   ABreakPoint: TDBGBreakPoint;
   ALocationAddr: TDBGLocationRec;
-  Context: TFpDbgInfoContext;
+  Context: TFpDbgSymbolScope;
   PasExpr: TFpPascalExpression;
+  Opts: TFpInt3DebugBreakOptions;
+  StackEntry: TDbgCallstackEntry;
+  s: String;
 begin
-  if FExceptionStepper.BreakpointHit(&continue, Breakpoint) then
-    exit;
+  // If a user single steps to an excepiton handler, do not open the dialog (there is no continue possible)
+  if AnEventType = deBreakpoint then
+    if FExceptionStepper.BreakpointHit(&continue, Breakpoint) then
+      exit;
 
-  if assigned(Breakpoint) then
-    begin
-      ABreakPoint := TFPBreakpoints(BreakPoints).Find(Breakpoint);
-      if ABreakPoint <> nil then begin
+  if assigned(Breakpoint) then begin
+    ABreakPoint := TFPBreakpoints(BreakPoints).Find(Breakpoint);
+    if ABreakPoint <> nil then begin
 
-        // TODO: parse expression when breakpoin is created / so invalid expressions do not need to be handled here
-        if ABreakPoint.Expression <> '' then begin
-          Context := GetContextForEvaluate(FDbgController.CurrentThreadId, 0);
-          if Context <> nil then begin
-            PasExpr := nil;
-            try
-              PasExpr := TFpPascalExpression.Create(ABreakPoint.Expression, Context);
-              PasExpr.ResultValue; // trigger full validation
-              if PasExpr.Valid and (svfBoolean in PasExpr.ResultValue.FieldFlags) and
-                 (not PasExpr.ResultValue.AsBool) // false => do not pause
-              then
-                &continue := True;
-            finally
-              PasExpr.Free;
-              Context.ReleaseReference;
-            end;
-
-            if &continue then
-              exit;
+      // TODO: parse expression when breakpoin is created / so invalid expressions do not need to be handled here
+      if ABreakPoint.Expression <> '' then begin
+        Context := GetContextForEvaluate(FDbgController.CurrentThreadId, 0);
+        if Context <> nil then begin
+          PasExpr := nil;
+          try
+            PasExpr := TFpPascalExpression.Create(ABreakPoint.Expression, Context);
+            PasExpr.ResultValue; // trigger full validation
+            if PasExpr.Valid and (svfBoolean in PasExpr.ResultValue.FieldFlags) and
+               (not PasExpr.ResultValue.AsBool) // false => do not pause
+            then
+              &continue := True;
+          finally
+            PasExpr.Free;
+            Context.ReleaseReference;
           end;
+
+          if &continue then
+            exit;
         end;
+      end;
 
-        ALocationAddr := GetLocation;
-        if Assigned(EventLogHandler) then
-          EventLogHandler.LogEventBreakPointHit(ABreakpoint, ALocationAddr);
+      ALocationAddr := GetLocation;
+      if Assigned(EventLogHandler) then
+        EventLogHandler.LogEventBreakPointHit(ABreakpoint, ALocationAddr);
 
-        if assigned(ABreakPoint) then
-          ABreakPoint.Hit(&continue);
+      if assigned(ABreakPoint) then
+        ABreakPoint.Hit(&continue);
 
-        if (not &continue) and (ABreakPoint.Kind = bpkData) and (OnFeedback <> nil) then begin
-          // For message use location(Address - 1)
-          OnFeedback(self,
-              Format('The Watchpoint for "%1:s" was triggered.%0:s%0:s', // 'Old value: %2:s%0:sNew value: %3:s',
-                     [LineEnding, ABreakPoint.WatchData{, AOldVal, ANewVal}]),
-              '', ftInformation, [frOk]);
-        end;
-      end
+      if (not &continue) and (ABreakPoint.Kind = bpkData) and (OnFeedback <> nil) then begin
+        // For message use location(Address - 1)
+        OnFeedback(self,
+            Format('The Watchpoint for "%1:s" was triggered.%0:s%0:s', // 'Old value: %2:s%0:sNew value: %3:s',
+                   [LineEnding, ABreakPoint.WatchData{, AOldVal, ANewVal}]),
+            '', ftInformation, [frOk]);
+      end;
     end
-  else if FQuickPause then
+  end
+  else
+  if (AnEventType = deHardCodedBreakpoint) and (FDbgController.CurrentThread <> nil) then begin
+    &continue:=true;
+    Opts := TFpDebugDebuggerProperties(GetProperties).HandleDebugBreakInstruction;
+    if not (dboIgnoreAll in Opts) then begin
+      &continue:=False;
+      if not AMoreHitEventsPending then
+        ALocationAddr := GetLocation;
+    end;
+    if  continue then
+      exit;
+  end
+  else if (AnEventType = deInternalContinue) and FQuickPause then
     begin
-      SetState(dsInternalPause);
       &continue:=true;
       exit;
     end
   else
     // Debugger returned after a step/next/step-out etc..
+  if not AMoreHitEventsPending then
     ALocationAddr := GetLocation;
 
-  EnterPause(ALocationAddr, &continue);
 
-  if &continue then
-    RunInternalPauseTasks;
+  if not continue then
+    FPauseForEvent := True;
+
+  if not AMoreHitEventsPending then begin
+    FQuickPause := False; // Ok, because we will SetState => RunQuickPauseTasks is not needed
+    if FPauseForEvent then
+      &continue := False; // Only continue, if ALL events did say to continue
+
+    EnterPause(ALocationAddr, &continue);
+  end;
 end;
 
 procedure TFpDebugDebugger.EnterPause(ALocationAddr: TDBGLocationRec;
   AnInternalPause: Boolean);
 begin
-  if State <> dsPause then begin
-    SetState(dsPause);
-    DoCurrent(ALocationAddr);
-  end;
-end;
-
-procedure TFpDebugDebugger.RunInternalPauseTasks;
-begin
-  // wait for any watches for Snapshots
-  while FWatchAsyncQueued or (TFPCallStackSupplier(CallStack).FReqList.Count > 0) do begin
-    if TFPCallStackSupplier(CallStack).FReqList.Count > 0 then
-      Application.Idle(False);
-    ProcessASyncWatches(0);
+  if AnInternalPause then begin
+    if not (State in [dsPause, dsInternalPause]) then begin
+      SetState(dsInternalPause);
+    end;
+  end
+  else begin
+    if State <> dsPause then begin
+      SetState(dsPause);
+      DoCurrent(ALocationAddr);
+    end;
   end;
 end;
 
 procedure TFpDebugDebugger.FDbgControllerCreateProcessEvent(var continue: boolean);
+var
+  addr: TDBGPtrArray;
 begin
   // This will trigger setting the breakpoints,
   // may also trigger the evaluation of the callstack or disassembler.
-  SetState(dsInternalPause);
+  FSendingEvents := True; // Let DoStateChange know that the debugger is paused
+  RunQuickPauseTasks(True);
+  FSendingEvents := False;
 
   FExceptionStepper.DoProcessLoaded;
 
   if assigned(OnConsoleOutput) then
     FConsoleOutputThread := TFpWaitForConsoleOutputThread.Create(self);
+
+  case FStartupCommand of
+    dcRunTo: begin
+      &continue := False;
+      if FDbgController.CurrentProcess.DbgInfo.HasInfo then begin
+        addr:=nil;
+        if FDbgController.CurrentProcess.DbgInfo.GetLineAddresses(FStartuRunToFile, FStartuRunToLine, addr)
+        then begin
+          &continue := true;
+          FDbgController.InitializeCommand(TDbgControllerRunToCmd.Create(FDbgController, addr));
+        end;
+      end;
+      if not &continue then
+        EnterPause(GetLocation);
+    end;
+  end;
 end;
 
 function TFpDebugDebugger.RequestCommand(const ACommand: TDBGCommand;
@@ -2742,12 +3932,15 @@ var
   addr: TDBGPtrArray;
   ResType: TDBGType;
   Cmd: TDBGCommand;
+  WorkItem: TFpThreadWorkerControllerRun;
+  AThreadId, AStackFrame: Integer;
+  EvalWorkItem: TFpThreadWorkerCmdEval;
 begin
   result := False;
   if assigned(FDbgController) then
     FDbgController.NextOnlyStopOnStartLine := TFpDebugDebuggerProperties(GetProperties).NextOnlyStopOnStartLine;
 
-  if (ACommand in [dcRun, dcStepOver, dcStepInto, dcStepOut, dcRunTo, dcJumpto,
+  if (ACommand in [dcRun, dcStepOver, dcStepInto, dcStepOut, dcStepTo, dcRunTo, dcJumpto,
       dcStepOverInstr, dcStepIntoInstr, dcAttach]) and
      not assigned(FDbgController.MainProcess)
   then
@@ -2764,7 +3957,7 @@ begin
     {$ifdef windows}
     FDbgController.ForceNewConsoleWin:=TFpDebugDebuggerProperties(GetProperties).ForceNewConsole;
     {$endif windows}
-    //FDbgController.AttachToPid := 0;
+    FDbgController.AttachToPid := 0;
     if ACommand = dcAttach then begin
       FDbgController.AttachToPid := StrToIntDef(String(AParams[0].VAnsiString), 0);
       Result := FDbgController.AttachToPid <> 0;
@@ -2773,24 +3966,38 @@ begin
         Exit;
       end;
     end;
-    FFpDebugThread := TFpDebugThread.Create(Self);
-    RTLeventWaitFor(FFpDebugThread.DebugLoopStoppedEvent);
-    RTLeventResetEvent(FFpDebugThread.DebugLoopStoppedEvent);
-    result := FFpDebugThread.StartSuccesfull;
-    if not result then
-      begin
+    FWorkQueue.ThreadCount := 1;
+    FWorkThread := FWorkQueue.Threads[0];
+    WorkItem := TFpThreadWorkerControllerRun.Create(Self);
+    FWorkQueue.PushItem(WorkItem);
+    FWorkQueue.WaitForItem(WorkItem, True);
+    Result := WorkItem.StartSuccesfull;
+    FWorkerThreadId := WorkItem.WorkerThreadId;
+    WorkItem.DecRef;
+    if not result then begin
       // TDebuggerIntf.SetFileName has set the state to dsStop, to make sure
       // that dcRun could be requested. Reset the filename so that the state
       // is set to dsIdle again and is set to dsStop on the next try
       // to run.
       FileName := '';
       FreeDebugThread;
+
+      if not IsError(FDbgController.LastError) then
+        ResText := 'Error starting process in debugger'
+      else
+        ResText := GetFpErrorHandler.ErrorAsString(FDbgController.LastError);
+      DoDbgEvent(ecProcess, etProcessExit, ResText); // or ecDebugger?
+      OnFeedback(self, ResText, '', ftError, [frOk]);
       Exit;
-      end;
-    SetState(dsInit);
+    end;
     // TODO: any step commond should run to "main" or "pascalmain"
     // Currently disabled in TFpDebugDebugger.GetSupportedCommands
-    StartDebugLoop;
+    FStartupCommand := ACommand;
+    if ACommand = dcRunTo then begin
+      FStartuRunToFile := AnsiString(AParams[0].VAnsiString);
+      FStartuRunToLine := AParams[1].VInteger;
+    end;
+    StartDebugLoop(dsInit);
     exit;
   end;
 
@@ -2800,7 +4007,6 @@ begin
     dcRun:
       begin
         Result := True;
-        SetState(dsRun);
         StartDebugLoop;
       end;
     dcStop:
@@ -2808,7 +4014,6 @@ begin
         FDbgController.Stop;
         if state=dsPause then
           begin
-          SetState(dsRun);
           StartDebugLoop;
           end;
         result := true;
@@ -2816,20 +4021,32 @@ begin
     dcStepIntoInstr:
       begin
         FDbgController.StepIntoInstr;
-        SetState(dsRun);
         StartDebugLoop;
         result := true;
       end;
     dcStepOverInstr:
       begin
         FDbgController.StepOverInstr;
-        SetState(dsRun);
         StartDebugLoop;
         result := true;
       end;
     dcPause:
       begin
         Result := FDbgController.Pause;
+      end;
+    dcStepTo:
+      begin
+        result := false;
+        if FDbgController.CurrentProcess.DbgInfo.HasInfo then
+          begin
+          addr:=nil;
+          if FDbgController.CurrentProcess.DbgInfo.GetLineAddresses(AnsiString(AParams[0].VAnsiString), AParams[1].VInteger, addr)
+          then begin
+            result := true;
+            FDbgController.InitializeCommand(TDbgControllerStepToCmd.Create(FDbgController, AnsiString(AParams[0].VAnsiString), AParams[1].VInteger));
+            StartDebugLoop;
+            end;
+          end;
       end;
     dcRunTo:
       begin
@@ -2841,7 +4058,6 @@ begin
           then begin
             result := true;
             FDbgController.InitializeCommand(TDbgControllerRunToCmd.Create(FDbgController, addr));
-            SetState(dsRun);
             StartDebugLoop;
             end;
           end;
@@ -2849,21 +4065,18 @@ begin
     dcStepOver:
       begin
         FDbgController.InitializeCommand(TDbgControllerStepOverOrFinallyCmd.Create(FDbgController));
-        SetState(dsRun);
         StartDebugLoop;
         result := true;
       end;
     dcStepInto:
       begin
         FDbgController.Step;
-        SetState(dsRun);
         StartDebugLoop;
         result := true;
       end;
     dcStepOut:
       begin
         FDbgController.StepOut(True);
-        SetState(dsRun);
         StartDebugLoop;
         result := true;
       end;
@@ -2871,16 +4084,25 @@ begin
       begin
         Result := FDbgController.Detach;
         if Result and (State in [dsPause, dsInternalPause]) then
-          StartDebugLoop;
+          StartDebugLoop(State); // Keep current State
       end;
     dcEvaluate:
       begin
         EvalFlags := TDBGEvaluateFlags(AParams[1].VInteger);
-        Result := EvaluateExpression(nil, String(AParams[0].VAnsiString),
-          ResText, ResType, EvalFlags);
-        if EvalFlags * [defNoTypeInfo, defSimpleTypeInfo, defFullTypeInfo] = [defNoTypeInfo]
-        then FreeAndNil(ResType);
-        TDBGEvaluateResultCallback(ACallback)(Self, Result, ResText, ResType);
+        GetCurrentThreadAndStackFrame(AThreadId, AStackFrame);
+        if FEvalWorkItem <> nil then begin
+          EvalWorkItem := FEvalWorkItem;
+          FEvalWorkItem := nil;
+          EvalWorkItem.Abort;
+          EvalWorkItem.DecRef;
+        end;
+        if defFullTypeInfo in EvalFlags then
+          FEvalWorkItem := TFpThreadWorkerCmdEval.Create(Self, twpInspect, String(AParams[0].VAnsiString),
+            AStackFrame, AThreadId, EvalFlags, TDBGEvaluateResultCallback(ACallback))
+        else
+          FEvalWorkItem := TFpThreadWorkerCmdEval.Create(Self, twpUser, String(AParams[0].VAnsiString),
+            AStackFrame, AThreadId, EvalFlags, TDBGEvaluateResultCallback(ACallback));
+        FWorkQueue.PushItem(FEvalWorkItem);
         Result := True;
       end;
     dcSendConsoleInput:
@@ -2895,32 +4117,43 @@ begin
   result := true;
 end;
 
-procedure TFpDebugDebugger.ExecuteInDebugThread(AMethod: TFpDbgAsyncMethod);
+function TFpDebugDebugger.ExecuteInDebugThread(AMethod: TFpDbgAsyncMethod
+  ): boolean;
+var
+  WorkItem: TFpThreadWorkerAsyncMeth;
 begin
-  if ThreadID = FFpDebugThread.ThreadID then begin
+  Result := True;
+  if ThreadID = FWorkerThreadId then begin
     AMethod();
     exit;
   end;
 
-  assert(not assigned(FFpDebugThread.AsyncMethod));
-  FFpDebugThread.AsyncMethod:=AMethod;
-  RTLeventSetEvent(FFpDebugThread.StartDebugLoopEvent);
-  RTLeventWaitFor(FFpDebugThread.DebugLoopStoppedEvent);
-  RTLeventResetEvent(FFpDebugThread.DebugLoopStoppedEvent);
-  FFpDebugThread.AsyncMethod:=nil;
+  Result := False;
+
+  WorkItem := TFpThreadWorkerAsyncMeth.Create(Self, AMethod);
+  FWorkQueue.PushItem(WorkItem);
+  FWorkQueue.WaitForItem(WorkItem, True);
+  WorkItem.DecRef;
 end;
 
-procedure TFpDebugDebugger.StartDebugLoop;
+procedure TFpDebugDebugger.StartDebugLoop(AState: TDBGState);
+var
+  WorkItem: TFpThreadWorkerRunLoop;
 begin
   {$ifdef DBG_FPDEBUG_VERBOSE}
   DebugLn(DBG_VERBOSE, 'StartDebugLoop');
   {$endif DBG_FPDEBUG_VERBOSE}
-  RTLeventSetEvent(FFpDebugThread.StartDebugLoopEvent);
+  SetState(AState);
+  WorkItem := TFpThreadWorkerRunLoop.Create(Self);
+  FWorkQueue.PushItem(WorkItem);
+  WorkItem.DecRef;
 end;
 
-procedure TFpDebugDebugger.DebugLoopFinished;
+procedure TFpDebugDebugger.DebugLoopFinished(Data: PtrInt);
 var
   Cont: boolean;
+  WorkItem: TFpThreadWorkerRunLoopAfterIdle;
+  c: Integer;
 begin
   LockRelease;
   try
@@ -2937,15 +4170,37 @@ begin
     then
       Threads.CurrentThreads.CurrentThreadId := FDbgController.CurrentThreadId;
 
-    FDbgController.SendEvents(Cont); // This may free the TFpDebugDebugger (self)
+    FPauseForEvent := False;
+    FSendingEvents := True;
+    try
+      FDbgController.SendEvents(Cont); // This may free the TFpDebugDebugger (self)
+      if State = dsRun then
+        RunQuickPauseTasks;
+    finally
+      FSendingEvents := False;
+    end;
 
-    FQuickPause:=false; // TODO: there may be other events: deInternalContinue, deLoadLibrary...
+    FQuickPause:=false;
 
-    if Cont then
-      begin
-      SetState(dsRun);
-      StartDebugLoop;
+    if Cont then begin
+      if State in [dsPause, dsInternalPause] then begin
+        FWorkQueue.Lock;
+        CheckAndRunIdle;
+        c := FWorkQueue.Count;
+        FWorkQueue.Unlock;
       end
+      else
+        c := 0;
+
+      if c = 0 then begin
+        StartDebugLoop;
+      end
+      else begin
+        WorkItem := TFpThreadWorkerRunLoopAfterIdle.Create(Self);
+        FWorkQueue.PushItem(WorkItem);
+        WorkItem.DecRef;
+      end;
+    end;
   finally
     UnlockRelease;
   end;
@@ -2954,6 +4209,15 @@ end;
 procedure TFpDebugDebugger.QuickPause;
 begin
   FQuickPause:=FDbgController.Pause;
+end;
+
+procedure TFpDebugDebugger.RunQuickPauseTasks(AForce: Boolean);
+begin
+  if AForce or
+     FQuickPause or
+     (TFPBreakpoints(Breakpoints).FDelayedRemoveBreakpointList.Count > 0)
+  then
+    TFPBreakpoints(Breakpoints).DoStateChange(dsRun);
 end;
 
 procedure TFpDebugDebugger.DoRelease;
@@ -2970,10 +4234,15 @@ begin
   inherited DoRelease;
 end;
 
-procedure TFpDebugDebugger.DoOnIdle;
+procedure TFpDebugDebugger.CheckAndRunIdle;
 begin
-  if not Assigned(OnIdle) then
+  if (State <> dsPause) or
+     (not Assigned(OnIdle)) or
+     (FWorkQueue.Count <> 0)
+  then
     exit;
+
+  DebugLnEnter(DBG_VERBOSE, ['>> TFpDebugDebugger.CheckAndRunIdle ']);
   FIsIdle := True;
   try
     OnIdle(Self);
@@ -2982,26 +4251,35 @@ begin
       DebugLn(['exception during idle ', E.ClassName, ': ', E.Message]);
   end;
   FIsIdle := False;
+  DebugLnExit(DBG_VERBOSE, ['<< TFpDebugDebugger.CheckAndRunIdle ']);
+end;
+
+procedure TFpDebugDebugger.DoBeforeState(const OldState: TDBGState);
+var
+  EvalWorkItem: TFpThreadWorkerCmdEval;
+begin
+  if not (State in [dsPause, dsInternalPause]) then begin
+    TFPThreads(Threads).StopWorkes;
+    TFPCallStackSupplier(CallStack).StopWorkes;
+    TFPWatches(Watches).StopWorkes;
+    TFPLocals(Locals).StopWorkes;
+
+    if FEvalWorkItem <> nil then begin
+      EvalWorkItem := FEvalWorkItem;
+      FEvalWorkItem := nil;
+      EvalWorkItem.Abort;
+      EvalWorkItem.DecRef;
+    end;
+  end;
+
+  inherited DoBeforeState(OldState);
 end;
 
 procedure TFpDebugDebugger.DoState(const OldState: TDBGState);
 begin
   LockRelease;
   try
-    if (State in [dsPause{, dsInternalPause}]) then // Make sure we have threads first // this can be removed, once threads are KEPT between pauses
-      Threads.RequestMasterData;
     inherited DoState(OldState);
-    if not (State in [dsPause, dsInternalPause]) then
-      begin
-      ClearWatchEvalList;
-      FWatchAsyncQueued := False;
-      end
-    else
-    if (State in [dsPause, dsInternalPause]) and
-      not(OldState in [dsPause, dsInternalPause{, dsInit}]) and
-      (not Assigned(FWatchEvalList) or (FWatchEvalList.Count = 0))
-    then
-      DoOnIdle;
   finally
     UnlockRelease;
   end;
@@ -3009,7 +4287,7 @@ end;
 
 function TFpDebugDebugger.GetIsIdle: Boolean;
 begin
-  Result := FIsIdle;
+  Result := (FWorkQueue.Count = 0) or FIsIdle;
 end;
 
 procedure TFpDebugDebugger.DoAddBreakLine;
@@ -3043,6 +4321,11 @@ begin
   FCacheBoolean:=FDbgController.CurrentProcess.ReadData(FCacheLocation, FCacheLine, FCachePointer^);
 end;
 
+procedure TFpDebugDebugger.DoReadPartialData;
+begin
+  FCacheBoolean:=FDbgController.CurrentProcess.ReadData(FCacheLocation, FCacheLine, FCachePointer^, FCacheBytesRead);
+end;
+
 procedure TFpDebugDebugger.DoPrepareCallStackEntryList;
 begin
   FCallStackEntryListThread.PrepareCallStackEntryList(FCallStackEntryListFrameRequired);
@@ -3055,14 +4338,17 @@ end;
 
 procedure TFpDebugDebugger.DoFindContext;
 begin
-  FCacheContext := FDbgController.CurrentProcess.FindContext(FCacheThreadId, FCacheStackFrame);
+  FCacheContext := FDbgController.CurrentProcess.FindSymbolScope(FCacheThreadId, FCacheStackFrame);
 end;
 
-procedure TFpDebugDebugger.DoGetParamsAsString;
+procedure TFpDebugDebugger.DoSetStackFrameForBasePtr;
 begin
-  FParamAsString := FParamAsStringStackEntry.GetParamsAsString(FParamAsStringPrettyPrinter);
+  FDbgController.CurrentThread.PrepareCallStackEntryList(7);
+  if (FCacheLocation = 0) and (FCacheLocation2 <> 0) then
+    FCacheStackFrame := FDbgController.CurrentThread.FindCallStackEntryByInstructionPointer(FCacheLocation2, 15, 1)
+  else
+    FCacheStackFrame := FDbgController.CurrentThread.FindCallStackEntryByBasePointer(FCacheLocation, 30, 1);
 end;
-
 
 function TFpDebugDebugger.AddBreak(const ALocation: TDbgPtr; AnEnabled: Boolean
   ): TFpDbgBreakpoint;
@@ -3071,6 +4357,7 @@ begin
   begin
     FCacheLocation:=ALocation;
     FCacheBoolean:=AnEnabled;
+    FCacheBreakpoint := nil;
     ExecuteInDebugThread(@DoAddBreakLocation);
     result := FCacheBreakpoint;
   end
@@ -3089,6 +4376,7 @@ begin
     FCacheFileName:=AFileName;
     FCacheLine:=ALine;
     FCacheBoolean:=AnEnabled;
+    FCacheBreakpoint := nil;
     ExecuteInDebugThread(@DoAddBreakLine);
     result := FCacheBreakpoint;
   end
@@ -3104,6 +4392,7 @@ begin
     FCacheFileName:=AFuncName;
     FCacheLib:=ALib;
     FCacheBoolean:=AnEnabled;
+    FCacheBreakpoint := nil;
     ExecuteInDebugThread(@DoAddBreakFuncLib);
     result := FCacheBreakpoint;
   end
@@ -3124,6 +4413,7 @@ begin
     FCacheLine:=ASize;
     FCacheReadWrite:=AReadWrite;
     FCacheScope:=AScope;
+    FCacheBreakpoint := nil;
     ExecuteInDebugThread(@DoAddBWatch);
     result := FCacheBreakpoint;
   end
@@ -3151,11 +4441,30 @@ begin
     FCacheLocation := AAdress;
     FCacheLine:=ASize;
     FCachePointer := @AData;
+    FCacheBoolean := False;
     ExecuteInDebugThread(@DoReadData);
     result := FCacheBoolean;
   end
   else
     result:=FDbgController.CurrentProcess.ReadData(AAdress, ASize, AData);
+end;
+
+function TFpDebugDebugger.ReadData(const AAdress: TDbgPtr;
+  const ASize: Cardinal; out AData; out ABytesRead: Cardinal): Boolean;
+begin
+  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FCacheLocation := AAdress;
+    FCacheLine:=ASize;
+    FCachePointer := @AData;
+    FCacheBoolean := False;
+    FCacheBytesRead := 0;
+    ExecuteInDebugThread(@DoReadPartialData);
+    result := FCacheBoolean;
+    ABytesRead := FCacheBytesRead;
+  end
+  else
+    result:=FDbgController.CurrentProcess.ReadData(AAdress, ASize, AData, ABytesRead);
 end;
 
 function TFpDebugDebugger.ReadAddress(const AAdress: TDbgPtr; out AData: TDBGPtr): Boolean;
@@ -3197,43 +4506,111 @@ begin
     AThread.PrepareCallStackEntryList(AFrameRequired);
 end;
 
-function TFpDebugDebugger.FindContext(AThreadId, AStackFrame: Integer): TFpDbgInfoContext;
+function TFpDebugDebugger.SetStackFrameForBasePtr(ABasePtr: TDBGPtr;
+  ASearchAssert: boolean; CurAddr: TDBGPtr): TDBGPtr;
+const
+  SYS_ASSERT_NAME = 'SYSUTILS_$$_ASSERT'; // AssertErrorHandler, in case the assert is hidden in the stack
+var
+  f: Integer;
+  CList: TDbgCallstackEntryList;
+  P: TFpSymbol;
+begin
+  Result := 0;
+  if FDbgController.CurrentThread = nil then
+    exit;
+  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
+  begin
+    FCacheLocation:=ABasePtr;
+    FCacheLocation2:=CurAddr;
+    ExecuteInDebugThread(@DoSetStackFrameForBasePtr);
+    f := FCacheStackFrame;
+  end
+  else begin
+    FDbgController.CurrentThread.PrepareCallStackEntryList(7);
+    if (ABasePtr = 0) and (CurAddr <> 0) then
+      f := FDbgController.CurrentThread.FindCallStackEntryByInstructionPointer(CurAddr, 15, 1)
+    else
+      f := FDbgController.CurrentThread.FindCallStackEntryByBasePointer(ABasePtr, 30, 1);
+  end;
+
+  if (f >= 2) and ASearchAssert and (ABasePtr <> 0) then begin
+    // stack is already prepared / exe in thread not needed
+    CList := FDbgController.CurrentThread.CallStackEntryList;
+    if (CList[f].AnAddress = CurAddr) then begin
+      P := CList[f-2].ProcSymbol;
+      if (P <> nil) and
+         ( (P.Name = 'FPC_ASSERT') or (P.Name = 'fpc_assert') or
+           (P.Name = 'ASSERT') or (P.Name = 'assert') or
+           (UpperCase(copy(P.Name, 1, length(SYS_ASSERT_NAME))) = SYS_ASSERT_NAME) )
+      then begin
+        dec(f);
+        Result := CList[f].AnAddress - 1;
+      end;
+    end;
+  end
+  else
+  if (ABasePtr = 0) and (CurAddr <> 0) and (f > 0) then begin
+    Result := CurAddr - 1; // found address on stack, so this is return address
+  end;
+
+  if f > 0 then begin
+    TFPCallStackSupplier(CallStack).FThreadForInitialFrame := FDbgController.CurrentThread.ID;
+    TFPCallStackSupplier(CallStack).FInitialFrame := f;
+  end;
+end;
+
+function TFpDebugDebugger.FindSymbolScope(AThreadId, AStackFrame: Integer): TFpDbgSymbolScope;
 begin
   if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
   begin
     FCacheThreadId := AThreadId;
     FCacheStackFrame := AStackFrame;
+    FCacheContext := nil;
     ExecuteInDebugThread(@DoFindContext);
     Result := FCacheContext;
   end
   else
-    Result := FDbgController.CurrentProcess.FindContext(AThreadId, AStackFrame);
+    Result := FDbgController.CurrentProcess.FindSymbolScope(AThreadId, AStackFrame);
 end;
 
-function TFpDebugDebugger.GetParamsAsString(AStackEntry: TDbgCallstackEntry;
-  APrettyPrinter: TFpPascalPrettyPrinter): string;
+procedure TFpDebugDebugger.StopAllWorkers;
 begin
-  if FDbgController.CurrentProcess.RequiresExecutionInDebuggerThread then
-  begin
-    FParamAsStringStackEntry := AStackEntry;
-    FParamAsStringPrettyPrinter := APrettyPrinter;
-    ExecuteInDebugThread(@DoGetParamsAsString);
-    Result := FParamAsString;
-  end
-  else
-    Result := AStackEntry.GetParamsAsString(APrettyPrinter);
+  TFPThreads(Threads).StopWorkes;
+  TFPCallStackSupplier(CallStack).StopWorkes;
+  TFPWatches(Watches).StopWorkes;
+  TFPLocals(Locals).StopWorkes;
+  if FEvalWorkItem <> nil then begin
+    FEvalWorkItem.Abort;
+    FEvalWorkItem.DecRef;
+  end;
+end;
+
+function TFpDebugDebugger.IsPausedAndValid: boolean;
+begin
+  Result := False;
+  if self = nil then
+    exit;
+  Result := (State in [dsPause, dsInternalPause]) and
+            (FDbgController <> nil) and
+            (FDbgController.CurrentProcess <> nil);
 end;
 
 constructor TFpDebugDebugger.Create(const AExternalDebugger: String);
 begin
   inherited Create(AExternalDebugger);
+  FLockList := TFpDbgLockList.Create;
+  FWorkQueue := TFpThreadPriorityWorkerQueue.Create(100);
+  FWorkQueue.OnQueueIdle := @CheckAndRunIdle;
   FExceptionStepper := TFpDebugExceptionStepping.Create(Self);
-  FWatchEvalList := TFPList.Create;
   FPrettyPrinter := TFpPascalPrettyPrinter.Create(sizeof(pointer));
   FMemReader := TFpDbgMemReader.Create(self);
   FMemConverter := TFpDbgMemConvertorLittleEndian.Create;
   FMemManager := TFpDbgMemManager.Create(FMemReader, FMemConverter);
-  FDbgController := TDbgController.Create;
+  FMemManager.MemLimits.MaxMemReadSize := TFpDebugDebuggerProperties(GetProperties).MemLimits.MaxMemReadSize;
+  FMemManager.MemLimits.MaxArrayLen := TFpDebugDebuggerProperties(GetProperties).MemLimits.MaxArrayLen;
+  FMemManager.MemLimits.MaxStringLen := TFpDebugDebuggerProperties(GetProperties).MemLimits.MaxStringLen;
+  FMemManager.MemLimits.MaxNullStringSearchLen := TFpDebugDebuggerProperties(GetProperties).MemLimits.MaxNullStringSearchLen;
+  FDbgController := TDbgController.Create(FMemManager);
   FDbgController.OnCreateProcessEvent:=@FDbgControllerCreateProcessEvent;
   FDbgController.OnHitBreakpointEvent:=@FDbgControllerHitBreakpointEvent;
   FDbgController.OnProcessExitEvent:=@FDbgControllerProcessExitEvent;
@@ -3249,26 +4626,29 @@ end;
 
 destructor TFpDebugDebugger.Destroy;
 begin
+  StopAllWorkers;
+
   if state in [dsPause, dsInternalPause] then
     try
       SetState(dsStop);
     except
     end;
-  if assigned(FFpDebugThread) then
-    FreeDebugThread;
-  ClearWatchEvalList;
+  StopAllWorkers; // In case state change added workes
+
   Application.RemoveAsyncCalls(Self);
   FreeAndNil(FDbgController);
   FreeAndNil(FPrettyPrinter);
-  FreeAndNil(FWatchEvalList);
   FreeAndNil(FMemManager);
   FreeAndNil(FMemConverter);
   FreeAndNil(FMemReader);
   FreeAndNil(FExceptionStepper);
   inherited Destroy;
+  FreeAndNil(FWorkQueue);
+  FreeAndNil(FLockList);
 end;
 
-function TFpDebugDebugger.GetLocationRec(AnAddress: TDBGPtr): TDBGLocationRec;
+function TFpDebugDebugger.GetLocationRec(AnAddress: TDBGPtr;
+  AnAddrOffset: Integer): TDBGLocationRec;
 var
   sym, symproc: TFpSymbol;
 begin
@@ -3284,7 +4664,9 @@ begin
     else
       result.Address := AnAddress;
 
-    sym := FDbgController.CurrentProcess.FindProcSymbol(result.Address);
+    {$PUSH}{$R-}{$Q-}
+    sym := FDbgController.CurrentProcess.FindProcSymbol(result.Address + AnAddrOffset);
+    {$POP}
     if sym = nil then
       Exit;
 
@@ -3293,8 +4675,8 @@ begin
     result.SrcFullName := sym.FileName;
 
     symproc := sym;
-    while not (symproc.kind in [skProcedure, skFunction]) do
-      symproc := symproc.Parent;
+    //while not (symproc.kind in [skProcedure, skFunction]) do
+    //  symproc := symproc.Parent;
 
     if assigned(symproc) then
       result.FuncName:=symproc.Name;
@@ -3340,21 +4722,47 @@ begin
   Result := TFpDebugDebuggerProperties.Create;
 end;
 
-function TFpDebugDebugger.GetSupportedCommands: TDBGCommands;
+function TFpDebugDebugger.GetCommands: TDBGCommands;
 begin
-  Result:=[dcRun, dcStop, dcStepIntoInstr, dcStepOverInstr, dcStepOver,
-           dcRunTo, dcPause, dcStepOut, dcStepInto, dcEvaluate, dcSendConsoleInput
-           {$IFDEF windows} , dcAttach, dcDetach {$ENDIF}
-           {$IFDEF linux} , dcAttach, dcDetach {$ENDIF}
-          ];
+  Result := inherited GetCommands;
   if State = dsStop then
     Result := Result - [dcStepInto, dcStepOver, dcStepOut, dcStepIntoInstr, dcStepOverInstr];
 end;
 
+procedure TFpDebugDebugger.LockCommandProcessing;
+begin
+  //inherited LockCommandProcessing;
+//  FWorkQueue.Lock;
+end;
+
+procedure TFpDebugDebugger.UnLockCommandProcessing;
+begin
+  //inherited UnLockCommandProcessing;
+//  FWorkQueue.Unlock;
+end;
+
+class function TFpDebugDebugger.GetSupportedCommands: TDBGCommands;
+begin
+  Result:=[dcRun, dcStop, dcStepIntoInstr, dcStepOverInstr, dcStepOver,
+           dcStepTo, dcRunTo, dcPause, dcStepOut, dcStepInto, dcEvaluate, dcSendConsoleInput
+           {$IFDEF windows} , dcAttach, dcDetach {$ENDIF}
+           {$IFDEF linux} , dcAttach, dcDetach {$ENDIF}
+          ];
+end;
+
+class function TFpDebugDebugger.SupportedCommandsFor(AState: TDBGState
+  ): TDBGCommands;
+begin
+  Result := inherited SupportedCommandsFor(AState);
+  if AState = dsStop then
+    Result := Result - [dcStepInto, dcStepOver, dcStepOut, dcStepIntoInstr, dcStepOverInstr];
+end;
+
 initialization
-  DBG_VERBOSE       := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
+  DBG_VERBOSE     := DebugLogger.FindOrRegisterLogGroup('DBG_VERBOSE' {$IFDEF DBG_VERBOSE} , True {$ENDIF} );
+  DBG_WARNINGS    := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
   DBG_BREAKPOINTS := DebugLogger.FindOrRegisterLogGroup('DBG_BREAKPOINTS' {$IFDEF DBG_BREAKPOINTS} , True {$ENDIF} );
-  FPDBG_COMMANDS := DebugLogger.FindOrRegisterLogGroup('FPDBG_COMMANDS' {$IFDEF FPDBG_COMMANDS} , True {$ENDIF} );
+  FPDBG_COMMANDS  := DebugLogger.FindOrRegisterLogGroup('FPDBG_COMMANDS' {$IFDEF FPDBG_COMMANDS} , True {$ENDIF} );
 
 end.
 

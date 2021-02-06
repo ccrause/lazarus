@@ -21,7 +21,8 @@ uses
   FpDbgUtil,
   UTF8Process,
   LazLoggerBase, Maps,
-  FpDbgCommon;
+  FpDbgCommon, FpdMemoryTools,
+  FpErrorMessages;
 
 type
   user_regs_struct64 = record
@@ -245,9 +246,11 @@ type
   TDbgLinuxThread = class(TDbgThread)
   private
     FUserRegs: TUserRegs;
+    FStoredUserRegs: TUserRegs;
     FUserRegsChanged: boolean;
     FExceptionSignal: cint;
     FIsPaused, FInternalPauseRequested, FIsInInternalPause: boolean;
+    FHasExited: Boolean;
     FIsSteppingBreakPoint: boolean;
     FDidResetInstructionPointer: Boolean;
     FHasThreadState: boolean;
@@ -266,6 +269,9 @@ type
     function DetectHardwareWatchpoint: Pointer; override;
     procedure BeforeContinue; override;
     procedure LoadRegisterValues; override;
+    procedure SetRegisterValue(AName: string; AValue: QWord); override;
+    procedure StoreRegisters; override;
+    procedure RestoreRegisters; override;
 
     function GetInstructionPointerRegisterValue: TDbgPtr; override;
     function GetStackBasePointerRegisterValue: TDbgPtr; override;
@@ -294,15 +300,16 @@ type
     function CreateWatchPointData: TFpWatchPointData; override;
   public
     class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings;
-      AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses): TDbgProcess; override;
-    class function AttachToInstance(AFileName: string; APid: Integer; AnOsClasses: TOSDbgClasses
+      AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager; out AnError: TFpError): TDbgProcess; override;
+    class function AttachToInstance(AFileName: string; APid: Integer; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager; out AnError: TFpError
       ): TDbgProcess; override;
     class function isSupported(ATargetInfo: TTargetDescriptor): boolean; override;
-    constructor Create(const AName: string; const AProcessID, AThreadID: Integer; AnOsClasses: TOSDbgClasses); override;
+    constructor Create(const AName: string; const AProcessID, AThreadID: Integer; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager); override;
     destructor Destroy; override;
 
     function ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean; override;
     function WriteData(const AAdress: TDbgPtr; const ASize: Cardinal; const AData): Boolean; override;
+    function CallParamDefaultLocation(AParamIdx: Integer): TFpDbgMemLocation; override;
 
     function CheckForConsoleOutput(ATimeOutMs: integer): integer; override;
     function GetConsoleOutput: string; override;
@@ -471,6 +478,10 @@ end;
 function TDbgLinuxThread.RequestInternalPause: Boolean;
 begin
   Result := False;
+  if FHasExited then begin
+    DebugLn(DBG_VERBOSE, ['PauseRequest for exited Thread ', ID]);
+    exit;
+  end;
   if FInternalPauseRequested or FIsPaused then
     exit;
 
@@ -492,6 +503,10 @@ function TDbgLinuxThread.CheckSignalForPostponing(AWaitedStatus: cint): Boolean;
 begin
   //Assert(not FIsPaused, 'Got WaitStatus while already paused');
   //assert(FExceptionSignal = 0, 'TDbgLinuxThread.CheckSignalForPostponing: FExceptionSignal = 0');
+  if FHasExited then begin
+    DebugLn(DBG_VERBOSE, ['Received double exit for Thread ', ID]);
+    exit(False);
+  end;
   Result := FIsPaused;
   DebugLn(DBG_VERBOSE and (Result), ['Warning: Thread already paused', ID]);
   if Result then
@@ -517,8 +532,7 @@ begin
 
   else
   if wifexited(AWaitedStatus) and (ID <> Process.ProcessID) then begin
-    Process.RemoveThread(ID); // Done, no postpone
-    Self.Free;
+    FHasExited := True;
   end
 
   else
@@ -705,6 +719,62 @@ begin
     result := FUserRegs.regs64[rsp];
 end;
 
+procedure TDbgLinuxThread.SetRegisterValue(AName: string; AValue: QWord);
+begin
+  if Process.Mode=dm32 then
+  begin
+    case AName of
+      'eip': FUserRegs.regs32[eip] := AValue;
+      'eax': FUserRegs.regs32[eax] := AValue;
+    else
+      raise Exception.CreateFmt('Setting the [%s] register is not supported', [AName]);
+    end;
+    FUserRegsChanged:=true;
+  end else
+    begin
+    case AName of
+      'rax': FUserRegs.regs64[rax] := AValue;
+      'rbx': FUserRegs.regs64[rbx] := AValue;
+      'rcx': FUserRegs.regs64[rcx] := AValue;
+      'rdx': FUserRegs.regs64[rdx] := AValue;
+      'rsi': FUserRegs.regs64[rsi] := AValue;
+      'rdi': FUserRegs.regs64[rdi] := AValue;
+      'rbp': FUserRegs.regs64[rbp] := AValue;
+      'rsp': FUserRegs.regs64[rsp] := AValue;
+
+      'r8': FUserRegs.regs64[r8] := AValue;
+      'r9': FUserRegs.regs64[r9] := AValue;
+      'r10': FUserRegs.regs64[r10] := AValue;
+      'r11': FUserRegs.regs64[r11] := AValue;
+      'r12': FUserRegs.regs64[r12] := AValue;
+      'r13': FUserRegs.regs64[r13] := AValue;
+      'r14': FUserRegs.regs64[r14] := AValue;
+      'r15': FUserRegs.regs64[r15] := AValue;
+
+      'rip': FUserRegs.regs64[rip] := AValue;
+
+      'cs': FUserRegs.regs64[cs] := AValue;
+      'fs': FUserRegs.regs64[fs] := AValue;
+      'gs': FUserRegs.regs64[gs] := AValue;
+    else
+      raise Exception.CreateFmt('Setting the [%s] register is not supported', [AName]);
+    end;
+    FUserRegsChanged:=true;
+  end;
+end;
+
+procedure TDbgLinuxThread.RestoreRegisters;
+begin
+  FUserRegs:=FStoredUserRegs;
+  FUserRegsChanged := true;
+end;
+
+procedure TDbgLinuxThread.StoreRegisters;
+begin
+  Assert(FHasThreadState);
+  FStoredUserRegs := FUserRegs;
+end;
+
 { TDbgLinuxProcess }
 
 function TDbgLinuxProcess.GetRequiresExecutionInDebuggerThread: boolean;
@@ -735,11 +805,11 @@ begin
 end;
 
 constructor TDbgLinuxProcess.Create(const AName: string; const AProcessID,
-  AThreadID: Integer; AnOsClasses: TOSDbgClasses);
+  AThreadID: Integer; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager);
 begin
   FMasterPtyFd:=-1;
   FPostponedSignals := TFpDbgLinuxSignalQueue.Create;
-  inherited Create(AName, AProcessID, AThreadID, AnOsClasses);
+  inherited Create(AName, AProcessID, AThreadID, AnOsClasses, AMemManager);
 end;
 
 destructor TDbgLinuxProcess.Destroy;
@@ -751,7 +821,8 @@ end;
 
 class function TDbgLinuxProcess.StartInstance(AFileName: string; AParams,
   AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string;
-  AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses): TDbgProcess;
+  AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager;
+  out AnError: TFpError): TDbgProcess;
 var
   PID: TPid;
   AProcess: TProcessUTF8;
@@ -800,7 +871,7 @@ begin
     PID:=AProcess.ProcessID;
 
     sleep(100);
-    result := TDbgLinuxProcess.Create(AFileName, Pid, -1, AnOsClasses);
+    result := TDbgLinuxProcess.Create(AFileName, Pid, -1, AnOsClasses, AMemManager);
     TDbgLinuxProcess(result).FMasterPtyFd := AMasterPtyFd;
     TDbgLinuxProcess(result).FProcProcess := AProcess;
   except
@@ -818,12 +889,13 @@ begin
 end;
 
 class function TDbgLinuxProcess.AttachToInstance(AFileName: string;
-  APid: Integer; AnOsClasses: TOSDbgClasses): TDbgProcess;
+  APid: Integer; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager;
+  out AnError: TFpError): TDbgProcess;
 begin
   Result := nil;
   fpPTrace(PTRACE_ATTACH, APid, nil, Pointer(PTRACE_O_TRACECLONE));
 
-  result := TDbgLinuxProcess.Create(AFileName, APid, 0, AnOsClasses);
+  result := TDbgLinuxProcess.Create(AFileName, APid, 0, AnOsClasses, AMemManager);
 
   // TODO: change the filename to the actual exe-filename. Load the correct dwarf info
 end;
@@ -946,6 +1018,30 @@ begin
   result := true;
 end;
 
+function TDbgLinuxProcess.CallParamDefaultLocation(AParamIdx: Integer
+  ): TFpDbgMemLocation;
+begin
+  case Mode of
+    dm32: case AParamIdx of
+        0: Result := RegisterLoc(0); // EAX
+        1: Result := RegisterLoc(2); // EDX
+        2: Result := RegisterLoc(1); // ECX
+      else
+        Result := UnInitializedLoc;
+      end;
+    dm64: case AParamIdx of
+        0: Result := RegisterLoc(5); // RDI
+        1: Result := RegisterLoc(4); // RSI
+        2: Result := RegisterLoc(1); // RDX
+        3: Result := RegisterLoc(2); // RCX
+        4: Result := RegisterLoc(8); // R8
+        5: Result := RegisterLoc(9); // R9
+      else
+        Result := UnInitializedLoc;
+      end;
+  end;
+end;
+
 function TDbgLinuxProcess.CheckForConsoleOutput(ATimeOutMs: integer): integer;
 Var
   f: TfdSet;
@@ -1006,7 +1102,7 @@ function TDbgLinuxProcess.Detach(AProcess: TDbgProcess; AThread: TDbgThread): bo
 begin
   RemoveAllBreakPoints;
 
-  fpPTrace(PTRACE_DETACH, AThread.ID, nil, pointer(wstopsig(TDbgLinuxThread(AThread).FExceptionSignal)));
+  fpPTrace(PTRACE_DETACH, AThread.ID, nil, pointer(TDbgLinuxThread(AThread).FExceptionSignal));
   Result := True;
 end;
 
@@ -1041,6 +1137,9 @@ begin
     exit;
   end;
 
+  if TDbgLinuxThread(AThread).FIsPaused then  // in case of deInternal, it may not be paused and can be ignored
+    AThread.NextIsSingleStep:=SingleStep;
+
   // check for pending events in other threads
   if FPostponedSignals.Count > 0 then begin
     {$IFDEF DebuglnLinuxDebugEvents}
@@ -1049,14 +1148,11 @@ begin
     exit;
   end;
 
-  if TDbgLinuxThread(AThread).FIsPaused then  // in case of deInternal, it may not be paused and can be ignored
-    AThread.NextIsSingleStep:=SingleStep;
-
   // check other threads if they need a singlestep
   for TDbgThread(ThreadToContinue) in FThreadMap do
     if (ThreadToContinue <> AThread) and ThreadToContinue.FIsPaused then begin
       IP := ThreadToContinue.GetInstructionPointerRegisterValue;
-      if HasInsertedBreakInstructionAtLocation(IP) then begin
+      if HasInsertedBreakInstructionAtLocation(IP) or ThreadToContinue.NextIsSingleStep then begin
         TempRemoveBreakInstructionCode(IP);
         ThreadToContinue.BeforeContinue;
 
@@ -1065,14 +1161,18 @@ begin
           {$IFDEF DebuglnLinuxDebugEvents}
           Debugln(['Single-stepping other TID: ', ThreadToContinue.ID]);
           {$ENDIF}
-          fpPTrace(PTRACE_SINGLESTEP, ThreadToContinue.ID, pointer(1), pointer(wstopsig(TDbgLinuxThread(ThreadToContinue).FExceptionSignal)));
-          TDbgLinuxThread(ThreadToContinue).ResetPauseStates; // So BeforeContinue will not run again
+          fpPTrace(PTRACE_SINGLESTEP, ThreadToContinue.ID, pointer(1), pointer(TDbgLinuxThread(ThreadToContinue).FExceptionSignal));
 
+          TDbgLinuxThread(ThreadToContinue).ResetPauseStates;
           ThreadToContinue.FIsPaused := True;
           if CheckNoError then begin
             PID := fpWaitPid(ThreadToContinue.ID, WaitStatus, __WALL);
             if PID <> ThreadToContinue.ID then begin
               DebugLn(DBG_WARNINGS, ['Error single stepping other thread ', ThreadToContinue.ID, ' waitpid got ', PID, ', ',WaitStatus, ' err ', Errno]);
+              break;
+            end;
+            if ThreadToContinue.NextIsSingleStep then begin
+              FPostponedSignals.AddSignal(PID, WaitStatus);
               break;
             end;
             if (wstopsig(WaitStatus) = SIGTRAP) then
@@ -1087,6 +1187,13 @@ begin
       end;
     end;
 
+  if FPostponedSignals.Count > 0 then begin
+    {$IFDEF DebuglnLinuxDebugEvents}
+    debugln(['Exit for DEFERRED SingleSteps event TID']);
+    {$ENDIF}
+    exit;
+  end;
+
   if TDbgLinuxThread(AThread).FIsPaused then  // in case of deInternal, it may not be paused and can be ignored
   if HasInsertedBreakInstructionAtLocation(AThread.GetInstructionPointerRegisterValue) then begin
     TempRemoveBreakInstructionCode(AThread.GetInstructionPointerRegisterValue);
@@ -1096,7 +1203,7 @@ begin
     {$IFDEF DebuglnLinuxDebugEvents}
     Debugln(['Single-stepping current']);
     {$ENDIF}
-    fpPTrace(PTRACE_SINGLESTEP, AThread.ID, pointer(1), pointer(wstopsig(TDbgLinuxThread(AThread).FExceptionSignal)));
+    fpPTrace(PTRACE_SINGLESTEP, AThread.ID, pointer(1), pointer(TDbgLinuxThread(AThread).FExceptionSignal));
     TDbgLinuxThread(AThread).ResetPauseStates;
     Result := CheckNoError;
     exit;
@@ -1113,7 +1220,7 @@ begin
       {$IFDEF DebuglnLinuxDebugEvents}
       Debugln(['RUN other TID: ', ThreadToContinue.ID]);
       {$ENDIF}
-      fpPTrace(PTRACE_CONT, ThreadToContinue.ID, pointer(1), pointer(wstopsig(ThreadToContinue.FExceptionSignal)));
+      fpPTrace(PTRACE_CONT, ThreadToContinue.ID, pointer(1), pointer(ThreadToContinue.FExceptionSignal));
       CheckNoError; // only log
       ThreadToContinue.ResetPauseStates;
     end;
@@ -1126,10 +1233,10 @@ begin
     {$IFDEF DebuglnLinuxDebugEvents}
     Debugln(['RUN ']);
     {$ENDIF}
-    if SingleStep then
-      fpPTrace(PTRACE_SINGLESTEP, AThread.ID, pointer(1), pointer(wstopsig(TDbgLinuxThread(AThread).FExceptionSignal)))
+    if AThread.NextIsSingleStep then
+      fpPTrace(PTRACE_SINGLESTEP, AThread.ID, pointer(1), pointer(TDbgLinuxThread(AThread).FExceptionSignal))
     else
-      fpPTrace(PTRACE_CONT, AThread.ID, pointer(1), pointer(wstopsig(TDbgLinuxThread(AThread).FExceptionSignal)));
+      fpPTrace(PTRACE_CONT, AThread.ID, pointer(1), pointer((TDbgLinuxThread(AThread).FExceptionSignal)));
     TDbgLinuxThread(AThread).ResetPauseStates;
     Result := CheckNoError;
   end;
@@ -1187,7 +1294,7 @@ function TDbgLinuxProcess.AnalyseDebugEvent(AThread: TDbgThread): TFPDEvent;
       exit;
 
     if not FThreadMap.GetData(PID, AThread) then
-        AThread := nil;
+      AThread := nil;
     DebugLn(DBG_VERBOSE, ['Got SIGNAL for thread: ', pid, ' Status: ',WaitStatus, ' Found thread:', AThread <> nil]);
   end;
 
@@ -1197,6 +1304,7 @@ var
   ThreadToPause, ThreadSignaled: TDbgLinuxThread;
   Pid: THandle;
   WaitStatus: cint;
+  it: TThreadMapUnLockedEnumerator;
 begin
   if AThread = nil then begin // should not happen... / just assume the most likely safe failbacks
     if FIsTerminating then
@@ -1261,16 +1369,16 @@ begin
         else
 // TODO: check it is not a real breakpoint
 // or end of single step
-          if TDbgLinuxThread(AThread).FInternalPauseRequested then begin
-            DebugLn(DBG_VERBOSE, ['Received late SigTrag for thread ', AThread.ID]);
-            result := deInternalContinue; // left over signal
-          end
-          else
-            begin
+//          if TDbgLinuxThread(AThread).FInternalPauseRequested then begin
+//            DebugLn(DBG_VERBOSE, ['Received late SigTrag for thread ', AThread.ID]);
+//            result := deInternalContinue; // left over signal
+//          end
+//          else
+//            begin
             result := deBreakpoint; // or pause requested
             if not TDbgLinuxThread(AThread).FIsSteppingBreakPoint then
               AThread.CheckAndResetInstructionPointerAfterBreakpoint;
-            end;
+//            end;
         end;
       SIGBUS:
         begin
@@ -1342,6 +1450,8 @@ begin
             then
               FPostponedSignals.AddSignal(PID, WaitStatus);
           end;
+          if ThreadToPause.FIsPaused or ThreadToPause.FHasExited then
+            break;
 
           DebugLn(DBG_VERBOSE and (ThreadToPause.FInternalPauseRequested), ['Re-Request Internal pause for ', ThreadToPause.ID]);
           ThreadToPause.FInternalPauseRequested:=false;
@@ -1363,9 +1473,21 @@ begin
     {$ENDIF}
   end;
 
+  it := TThreadMapUnLockedEnumerator.Create(FThreadMap); // At this point no other thread (ide-main, ...) can add an iterator to the map
+  it.First;
+  while not it.EOM do begin
+    TDbgThread(ThreadToPause) := it.Current;
+    if ThreadToPause.FHasExited then begin
+      Process.RemoveThread(ThreadToPause.ID); // TODO: postpone ?
+      ThreadToPause.Free;
+    end;
+    it.Next;
+  end;
+  it.Free;
+
   {$IFDEF DebuglnLinuxDebugEvents}
   for TDbgThread(ThreadToPause) in FThreadMap do
-  debugln([ThreadToPause.id, ' =athrd:', ThreadToPause = AThread, ' psd:', ThreadToPause.FIsPaused,ThreadToPause.FIsInInternalPause, ' exs:', ThreadToPause.FExceptionSignal]);
+  debugln([ThreadToPause.id, ' =athrd:', ThreadToPause = AThread, ' psd:', ThreadToPause.FIsPaused,ThreadToPause.FIsInInternalPause, ' exs:', ThreadToPause.FExceptionSignal, '  sstep:',ThreadToPause.NextIsSingleStep]);
   debugln('<<<<<<<<<<<<<<<<<<<<<<<<');
   {$ENDIF}
 

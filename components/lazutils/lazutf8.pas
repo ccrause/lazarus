@@ -33,7 +33,7 @@ uses
   {$ifdef windows}
   Windows,
   {$endif}
-  Classes, SysUtils, strutils;
+  Classes, SysUtils, StrUtils;
 
 // AnsiToUTF8 and UTF8ToAnsi need a widestring manager under Linux, BSD, MacOSX
 // but normally these OS use UTF-8 as system encoding so the widestringmanager
@@ -113,13 +113,9 @@ function UTF8Pos(const SearchForText, SearchInText: string; StartPos: SizeInt = 
 function UTF8PosP(SearchForText: PChar; SearchForTextLen: SizeInt;
   SearchInText: PChar; SearchInTextLen: SizeInt): PChar;
 function UTF8Copy(const s: string; StartCharIndex, CharCount: PtrInt): string;
-{$IFnDEF NO_CP_RTL}
 procedure UTF8Delete(var s: Utf8String; StartCharIndex, CharCount: PtrInt);
-{$ENDIF}
 procedure UTF8Delete(var s: String; StartCharIndex, CharCount: PtrInt);
-{$IFnDEF NO_CP_RTL}
 procedure UTF8Insert(const source: Utf8String; var s: Utf8String; StartCharIndex: PtrInt);
-{$ENDIF}
 procedure UTF8Insert(const source: String; var s: String; StartCharIndex: PtrInt);
 function UTF8StringReplace(const S, OldPattern, NewPattern: String;
   Flags: TReplaceFlags; ALanguage: string=''): String; inline;
@@ -177,10 +173,20 @@ function UTF8CompareStr(const S1, S2: string): PtrInt; inline;
 function UTF8CompareStrP(S1, S2: PChar): PtrInt;
 function UTF8CompareStr(S1: PChar; Count1: SizeInt; S2: PChar; Count2: SizeInt): PtrInt;
 function UTF8CompareText(const S1, S2: string): PtrInt;
+function UTF8CompareTextP(S1, S2: PChar): PtrInt;
+function UTF8CompareLatinTextFast(const S1, S2: String): PtrInt;
 function UTF8CompareStrCollated(const S1, S2: string): PtrInt; {$IFnDEF ACP_RTL}inline;{$endif}
 function CompareStrListUTF8LowerCase(List: TStringList; Index1, Index2: Integer): Integer;
 
 type
+
+  { TStringListUTF8Fast }
+
+  TStringListUTF8Fast = class(TStringList)
+  protected  // Uses UTF8CompareLatinTextFast for comparison.
+    function DoCompareText(const s1,s2 : string): PtrInt; override;
+  end;
+
   TConvertResult = (trNoError, trNullSrc, trNullDest, trDestExhausted,
     trInvalidChar, trUnfinishedChar);
 
@@ -209,7 +215,7 @@ var
   FPUpChars: array[char] of char;
 
 procedure ReplaceSubstring(var s: string; StartPos, Count: SizeInt;
-                           const Insertion: string);
+  const Insertion: string); deprecated 'Use it from unit LazStringUtils'; // Deprecated in 2.1 / 29.10.2020 / Remove in 2.3
 
 implementation
 
@@ -1091,14 +1097,12 @@ begin
   else begin
     MaxBytes:=PtrInt(PChar(s)+length(s)-StartBytePos);
     EndBytePos:=UTF8CodepointStart(StartBytePos,MaxBytes,CharCount);
-    if EndBytePos=nil then
-      Result:=copy(s,StartBytePos-PChar(s)+1,MaxBytes)
-    else
-      Result:=copy(s,StartBytePos-PChar(s)+1,EndBytePos-StartBytePos);
+    if EndBytePos<>nil then
+      MaxBytes:=EndBytePos-StartBytePos;
+    Result:=copy(s,StartBytePos-PChar(s)+1,MaxBytes);
   end;
 end;
 
-{$IFnDEF NO_CP_RTL}
 procedure UTF8Delete(var s: Utf8String; StartCharIndex, CharCount: PtrInt);
 var
   tmp: String;
@@ -1116,7 +1120,6 @@ begin
   tmp := '';
   SetCodePage(RawByteString(s), CP_UTF8, False);
 end;
-{$ENDIF NO_ACP_RTL}
 
 procedure UTF8Delete(var s: String; StartCharIndex, CharCount: PtrInt);
 var
@@ -1136,7 +1139,6 @@ begin
   end;
 end;
 
-{$IFnDEF NO_CP_RTL}
 {It's simper to copy the code from the variant with String parameters than writing a wrapper}
 procedure UTF8Insert(const source: UTF8String; var s: UTF8string;
   StartCharIndex: PtrInt);
@@ -1147,7 +1149,6 @@ begin
   if StartBytePos <> nil then
     Insert(source, s, StartBytePos-PChar(s)+1);
 end;
-{$ENDIF NO_CP_RTL}
 
 procedure UTF8Insert(const source: String; var s: String; StartCharIndex: PtrInt);
 var
@@ -1332,7 +1333,7 @@ begin
           else
             Break;
           end;
-          // already lower, or otherwhise not affected
+          // already lower, or otherwise not affected
         end;
       end;
     end;
@@ -2495,8 +2496,7 @@ begin
         inc(OutCounter);
       end;
     end
-    { Now everything else }
-    else
+    else   { Now everything else }
     begin
       CharLen := UTF8CodepointSize(@AInStr[InCounter]);
       CharProcessed := False;
@@ -2898,10 +2898,10 @@ const
     '#16', '#17', '#18', '#19', '#20', '#21', '#22', '#23',
     '#24', '#25', '#26', '#27', '#28', '#29', '#30', '#31');
   CEscapeStrings: Array[#0..#31] of string = (
-    '\0'   , '\0x01', '\0x02', '\0x03', '\0x04', '\0x05', '\0x06', '\0x07',
-    '\0x08', '\t'   , '\r'   , '\0x0B', '\0x0C', '\n'   , '\0x0E', '\0x0F',
+    '\0'   , '\0x01', '\0x02', '\0x03', '\0x04', '\0x05', '\0x06', '\a'   ,
+    '\b'   , '\t'   , '\r'   , '\v'   , '\f'   , '\n'   , '\0x0E', '\0x0F',
     '\0x10', '\0x11', '\0x12', '\0x13', '\0x14', '\0x15', '\0x16', '\0x17',
-    '\0x18', '\0x19', '\0x1A', '\0x1B', '\0x1C', '\0x1D', '\0x1E', '\0x1F');
+    '\0x18', '\0x19', '\0x1A', '\e'   , '\0x1C', '\0x1D', '\0x1E', '\0x1F');
   HexEscapeCStrings: Array[#0..#31] of string = (
     '\0x00', '\0x01', '\0x02', '\0x03', '\0x04', '\0x05', '\0x06', '\0x07',
     '\0x08', '\0x09', '\0x0A', '\0x0B', '\0x0C', '\0x0D', '\0x0E', '\0x0F',
@@ -3088,7 +3088,7 @@ begin
     TextLen := Utf8Length(AText);
     SubTextLen := Utf8Length(ASubText);
     if (TextLen >= SubTextLen) then
-      Result := (Utf8CompareText(Utf8Copy(AText,1,SubTextLen),ASubText) = 0);
+      Result := (UTF8CompareLatinTextFast(Utf8Copy(AText,1,SubTextLen),ASubText) = 0);
   end;
 end;
 
@@ -3102,7 +3102,7 @@ begin
     TextLen := Utf8Length(AText);
     SubTextLen := Utf8Length(ASubText);
     if (TextLen >= SubTextLen) then
-      Result := (Utf8CompareText(Utf8Copy(AText,TextLen-SubTextLen+1,SubTextLen),ASubText) = 0);
+      Result := (UTF8CompareLatinTextFast(Utf8Copy(AText,TextLen-SubTextLen+1,SubTextLen),ASubText) = 0);
   end;
 end;
 
@@ -3311,7 +3311,7 @@ end;
   Compare two UTF8 encoded strings, case sensitive.
 
   Internally it uses WideCompareStr on the first Utf8 codepoint that differs between S1 and S2
-  and therefor has proper colation on platforms where the WidestringManager supports this
+  and therefore has proper collation on platforms where the WidestringManager supports this
   (Windows, *nix with cwstring unit)
 ------------------------------------------------------------------------------}
 function UTF8CompareStr(const S1, S2: string): PtrInt;
@@ -3324,7 +3324,6 @@ function UTF8CompareStrP(S1, S2: PChar): PtrInt;
 begin
   Result:=UTF8CompareStr(S1,StrLen(S1),S2,StrLen(S2));
 end;
-
 
 function UTF8CompareStr(S1: PChar; Count1: SizeInt; S2: PChar; Count2: SizeInt): PtrInt;
 var
@@ -3355,7 +3354,7 @@ begin
         //writeln('UCS: B1=',IntToHex(B1,2),', B2=',IntToHex(B2,2));
         Break;
       end;
-      Inc(S1); Inc(S2); Inc(I);
+      Inc(S1); Inc(S2); Inc(i);
     end;
   end;
   if (i < Count) then
@@ -3394,14 +3393,81 @@ end;
   Params: S1, S2 - UTF8 encoded strings
   Returns: < 0 if S1 < S2, 0 if S1 = S2, > 0 if S1 > S2.
   Compare two UTF8 encoded strings, case insensitive.
-  Note: Use this function instead of AnsiCompareText.
   This function guarantees proper collation on all supported platforms.
   Internally it uses WideCompareText.
  ------------------------------------------------------------------------------}
- function UTF8CompareText(const S1, S2: String): PtrInt;
- begin
-   Result := WideCompareText(Utf8ToUtf16(S1),Utf8ToUtf16(S2));
- end;
+function UTF8CompareText(const S1, S2: String): PtrInt;
+begin
+  Result := WideCompareText(UTF8ToUTF16(S1),UTF8ToUTF16(S2));
+end;
+
+function UTF8CompareTextP(S1, S2: PChar): PtrInt;
+begin
+  Result := WideCompareText(UTF8ToUTF16(S1,StrLen(S1)), UTF8ToUTF16(S2,StrLen(S2)));
+end;
+
+function UTF8CompareLatinTextFast(const S1, S2: String): PtrInt;
+// Like UTF8CompareText but does not return strict alphabetical order.
+// The order is deterministic and good for binary search and such uses.
+// Optimizes comparison of single-byte encoding and also multi-byte portions
+// when they are equal. Otherwise falls back to WideCompareText.
+var
+  Count, Count1, Count2: sizeint;
+  Chr1, Chr2: Char;
+  P1, P2: PChar;
+  P1LastBytePointOffset: PChar;
+begin
+  Count1 := Length(S1);
+  Count2 := Length(S2);
+  if Count1 > Count2 then
+    Count := Count2
+  else
+    Count := Count1;
+  if Count > 0 then
+  begin
+    P1 := @S1[1];
+    P2 := @S2[1];
+    P1LastBytePointOffset := P1;
+    while Count > 0 do
+    begin
+      Chr1 := P1^;
+      Chr2 := P2^;
+
+      if Chr1 <> Chr2 then
+      begin
+        if (ord(Chr1) or ord(Chr2)) < 128 then
+        begin
+          P1LastBytePointOffset := P1;
+          if (Chr1 in ['A'..'Z']) then
+            inc(Chr1, $20);
+          if (Chr2 in ['A'..'Z']) then
+            inc(Chr2, $20);
+          if Chr1 <> Chr2 then
+            break;
+        end
+        else
+        begin
+          p2 := p2 + (P1LastBytePointOffset - P1);
+          p1 := P1LastBytePointOffset;
+          Exit(WideCompareText(
+            UTF8ToUTF16(p1, Length(s1) - (p1 - @S1[1])),
+            UTF8ToUTF16(p2, Length(s2) - (p2 - @S2[1]))
+          ));
+        end;
+      end
+      else
+      if (ord(Chr1) or ord(Chr2)) < 128 then
+        P1LastBytePointOffset := P1;
+
+      Inc(P1); Inc(P2);
+      Dec(Count);
+    end;
+  end;
+  if Count > 0 then
+    Result := Byte(Chr1)-Byte(Chr2)
+  else
+    Result := Count1-Count2;
+end;
 
 function UTF8CompareStrCollated(const S1, S2: string): PtrInt; {$IFnDEF ACP_RTL}inline;{$endif}
 begin
@@ -3910,6 +3976,7 @@ end;
 
 procedure ReplaceSubstring(var s: string; StartPos, Count: SizeInt;
   const Insertion: string);
+// This was moved to LazStringUtils and a deprecated copy was left here. Will be removed.
 var
   MaxCount: SizeInt;
   InsertionLen: SizeInt;
@@ -3966,6 +4033,14 @@ begin
     FPUpChars[c]:=upcase(c);
   end;
 end;
+
+{ TStringListUTF8Fast }
+
+function TStringListUTF8Fast.DoCompareText(const s1, s2: string): PtrInt;
+begin
+  Result:=UTF8CompareLatinTextFast(s1, s2);
+end;
+
 
 initialization
   InitFPUpchars;

@@ -92,8 +92,10 @@ unit OpenGLContext;
 interface
 
 uses
-  Classes, SysUtils, LCLProc, Forms, Controls, LCLType, LCLIntf, LResources,
-  Graphics, LMessages, WSLCLClasses, WSControls,
+  Classes, SysUtils,
+  // LCL
+  LCLType, LCLIntf, LResources, Forms, Controls, Graphics, LMessages,
+  WSLCLClasses, WSControls,
 {$IFDEF UseGtkGLX}
   GLGtkGlxContext;
 {$ENDIF}
@@ -180,6 +182,7 @@ type
     procedure SetSharedControl(const AValue: TCustomOpenGLControl);
     function IsOpenGLRenderAllowed: boolean;
   protected
+    class procedure WSRegisterClass; override;
     procedure WMPaint(var Message: TLMPaint); message LM_PAINT;
     procedure WMSize(var Message: TLMSize); message LM_SIZE;
     procedure UpdateFrameTimeDiff;
@@ -484,6 +487,17 @@ begin
     (ocoRenderAtDesignTime in Options);
 end;
 
+class procedure TCustomOpenGLControl.WSRegisterClass;
+const
+  Registered : Boolean = False;
+begin
+  if Registered then
+    Exit;
+  inherited WSRegisterClass;
+  RegisterWSComponent(TCustomOpenGLControl,TWSOpenGLControl);
+  Registered := True;
+end;
+
 procedure TCustomOpenGLControl.WMPaint(var Message: TLMPaint);
 begin
   Include(FControlState, csCustomPaint);
@@ -749,8 +763,9 @@ begin
   Result := False;
   if AWinControl=nil then ;
 end;
-
+{~bk
 initialization
   RegisterWSComponent(TCustomOpenGLControl,TWSOpenGLControl);
+}
 
 end.

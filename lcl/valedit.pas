@@ -162,6 +162,7 @@ type
     function GetDefaultEditor(Column: Integer): TWinControl; override;
     function GetRowCount: Integer;
     procedure KeyDown(var Key : Word; Shift : TShiftState); override;
+    procedure KeyPress(var Key: Char); override;
     procedure LoadContent(cfg: TXMLConfig; Version: Integer); override;
     procedure ResetDefaultColWidths; override;
     procedure SaveContent(cfg: TXMLConfig); override;
@@ -1315,6 +1316,21 @@ begin
     if RestoreCurrentRow then Key := 0;
 end;
 
+procedure TValueListEditor.KeyPress(var Key: Char);
+begin
+  inherited KeyPress(Key);
+  if (Key = Strings.NameValueSeparator) and (Col = 0) then
+  begin//move to Value column
+    Key := #0;
+    //Modified code from TCustomGrid.KeyDown
+    GridFlags := GridFlags + [gfEditingDone];
+    if MoveNextSelectable(True, 1, 0) then
+      Click;
+    GridFlags := GridFlags - [gfEditingDone];
+  end;
+end;
+
+
 procedure TValueListEditor.LoadContent(cfg: TXMLConfig; Version: Integer);
 var
   ContentSaved, HasColumnTitles, AlwaysShowEditor, HasSaveContent: Boolean;
@@ -1444,6 +1460,7 @@ procedure TValueListEditor.SetCells(ACol, ARow: Integer; const AValue: string);
 var
   I: Integer;
   Key, KeyValue, Line: string;
+  Sep: Char;
 begin
   if (ARow = 0) and (doColumnTitles in DisplayOptions) then
   begin
@@ -1454,7 +1471,25 @@ begin
     I:=ARow-FixedRows;
     if ACol=0 then
     begin
+      Sep := Strings.NameValueSeparator;
       Key := AValue;
+      {
+        A Key can never contain NameVlaueSeparator (by default an equal sign ('='))
+        While we disallow typing '=' inside the Key column
+        we cannot prevent the user from pasting text that contains a '='
+        This leads to strange effects since when we insert the Key/Value pair into
+        the Strings property, in effect the equal sign will be treated (by design) as the separator for the value part.
+        This in turn updates the Value column, but does not remove the equal sign from Key.
+        E.g. if both Key and Value celss are empty and you type '=' into an empty Key cell,
+        the Value cell will become '=='
+        Reported on forum: https://forum.lazarus.freepascal.org/index.php?topic=51977.0;topicseen
+      }
+      if (Pos(Sep, Key) > 0) then
+      begin
+        Key := StringReplace(Key, Sep, '', [rfReplaceAll]);
+        //update the content of the Column cell
+        inherited SetCells(ACol, ARow, Key);
+      end;
       KeyValue := Cells[1,ARow]
     end
     else
@@ -1559,7 +1594,7 @@ begin
     begin
       if (Index <> i) and (FStrings.Names[i] <> '') then
       begin
-        if (Utf8CompareText(FStrings.Names[i], NewValue) = 0) then
+        if (UTF8CompareLatinTextFast(FStrings.Names[i], NewValue) = 0) then
         begin
           Result := False;
           ShowMessage(Format(rsVLEDuplicateKey,[NewValue, i + FixedRows]));

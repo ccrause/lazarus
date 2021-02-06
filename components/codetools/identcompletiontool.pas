@@ -1448,12 +1448,12 @@ begin
     if FPCFulVersion>=30100 then
     begin
       // FromPosition and Count parameters are optional
-      AddCompilerFunction('Copy','const S:string[;FromPosition,Count:Integer]', 'string');
-      AddCompilerFunction('Copy','const A:array[;FromPosition,Count:Integer]', 'string');
+      AddCompilerFunction('Copy','const S:string[;FromPosition,Count:SizeInt]', 'string');
+      AddCompilerFunction('Copy','const A:array[;FromPosition,Count:SizeInt]', 'string');
     end else
     begin
-      AddCompilerFunction('Copy','const S:string;FromPosition,Count:Integer', 'string');
-      AddCompilerFunction('Copy','const A:array;FromPosition,Count:Integer', 'string');
+      AddCompilerFunction('Copy','const S:string;FromPosition,Count:SizeInt', 'string');
+      AddCompilerFunction('Copy','const A:array;FromPosition,Count:SizeInt', 'string');
     end;
     AddCompilerProcedure('Dec','var X:Ordinal;N:Integer=1');
     AddCompilerFunction('Default','T:Type','const');
@@ -1473,8 +1473,8 @@ begin
     AddCompilerProcedure('Inc','var X:Ordinal;N:Integer=1');
     AddCompilerProcedure('Include','var S:Set;X:Ordinal');
     AddCompilerProcedure('Initialize','var X');
-    AddCompilerFunction('Length','S:String','Ordinal');
-    AddCompilerFunction('Length','A:Array','Ordinal');
+    AddCompilerFunction('Length','S:String','SizeInt');
+    AddCompilerFunction('Length','A:Array','SizeInt');
     AddCompilerFunction('Low','Arg:TypeOrVariable','Ordinal');
     AddCompilerProcedure('New','var X:Pointer');
     AddCompilerFunction('ObjCSelector','String','SEL');
@@ -1486,15 +1486,24 @@ begin
     AddCompilerProcedure('ReadLn','');
     AddCompilerProcedure('ReadStr','S:String;var Args:Arguments');
     AddCompilerFunction('Seg','var X','LongInt');
-    AddCompilerProcedure('SetLength','var S:String;NewLength:Integer');
-    AddCompilerProcedure('SetLength','var A:Array;NewLength:Integer');
-    if Scanner.Values.IsDefined('FPC_HAS_CPSTRING') then
+    AddCompilerProcedure('SetLength','var S:String;NewLength:SizeInt');
+    AddCompilerProcedure('SetLength','var A:Array;NewLength:SizeInt');
+    if Scanner.Values.IsDefined('FPC_HAS_CPSTRING') then begin
       AddCompilerProcedure('SetString','out S:RawByteString;Buf:PAnsiChar;Len:SizeInt');
+      AddCompilerProcedure('SetString','out S:AnsiString;Buf:PAnsiChar;Len:SizeInt');
+      AddCompilerProcedure('SetString','out S:AnsiString;Buf:PWideChar;Len:SizeInt');
+      AddCompilerProcedure('SetString','out S:ShortString;Buf:PChar;Len:SizeInt');
+      AddCompilerProcedure('SetString','out S:UnicodeString;Buf:PUnicodeChar;Len:SizeInt');
+      AddCompilerProcedure('SetString','out S:UnicodeString;Buf:PChar;Len:SizeInt');
+      AddCompilerProcedure('SetString','out S:WideString;Buf:PWideChar;Len:SizeInt');
+      AddCompilerProcedure('SetString','out S:WideString;Buf:PChar;Len:SizeInt');
+    end;
     AddCompilerFunction('SizeOf','Identifier','Integer');
     AddCompilerFunction('Slice','var A:Array;Count:Integer','Array');
     AddCompilerProcedure('Str','const X[:Width[:Decimals]];var S:String');
     AddCompilerFunction('Succ','X:Ordinal', 'Ordinal');
     AddCompilerFunction('TypeInfo','Identifier', 'Pointer');
+    AddCompilerFunction('GetTypeKind','Identifier', 'TTypeKind');
     AddCompilerFunction('TypeOf','Identifier', 'Pointer');
     AddCompilerProcedure('Val','S:String;var V;var Code:Integer');
     AddCompilerFunction('Unaligned','var X','var'); // Florian declaration :)
@@ -1502,6 +1511,11 @@ begin
     AddCompilerProcedure('Write','Args:Arguments');
     AddCompilerProcedure('WriteLn','Args:Arguments');
     AddCompilerProcedure('WriteStr','var S:String;Args:Arguments');
+    if Scanner.PascalCompiler=pcPas2js then begin
+      AddCompilerFunction('Str','const X[:Width[:Decimals]]','string');
+      AddCompilerFunction('AWait','const Expr: T','T');
+      AddCompilerFunction('AWait','aType; p: TJSPromise','aType');
+    end;
   end;
 
   if (ilcfStartOfOperand in CurrentIdentifierList.ContextFlags) and
@@ -2606,6 +2620,7 @@ begin
         AddKeyWord('ThreadName');
         AddKeyWord('TypedAddress');
         AddKeyWord('TypeInfo');
+        AddKeyWord('GetTypeKind');
         AddKeyWord('UnDef');
         AddKeyWord('UnitPath');
         AddKeyWord('VarParaCopyOutCheck');
@@ -3260,13 +3275,22 @@ var
       AddCompilerProc('Seg','var X','LongInt');
       AddCompilerProc('SetLength','var S:String;NewLength:Integer');
       AddCompilerProc('SetLength','var A:Array;NewLength:Integer');
-      if Scanner.Values.IsDefined('FPC_HAS_CPSTRING') then
+      if Scanner.Values.IsDefined('FPC_HAS_CPSTRING') then begin
         AddCompilerProc('SetString','out S:RawByteString;Buf:PAnsiChar;Len:SizeInt');
+        AddCompilerProc('SetString','out S:AnsiString;Buf:PAnsiChar;Len:SizeInt');
+        AddCompilerProc('SetString','out S:AnsiString;Buf:PWideChar;Len:SizeInt');
+        AddCompilerProc('SetString','out S:ShortString;Buf:PChar;Len:SizeInt');
+        AddCompilerProc('SetString','out S:UnicodeString;Buf:PUnicodeChar;Len:SizeInt');
+        AddCompilerProc('SetString','out S:UnicodeString;Buf:PChar;Len:SizeInt');
+        AddCompilerProc('SetString','out S:WideString;Buf:PWideChar;Len:SizeInt');
+        AddCompilerProc('SetString','out S:WideString;Buf:PChar;Len:SizeInt');
+      end;
       AddCompilerProc('SizeOf','Identifier','Integer');
       AddCompilerProc('Slice','var A:Array;Count:Integer','Array');
       AddCompilerProc('Str','const X[:Width[:Decimals]];var S:String');
       AddCompilerProc('Succ','X:Ordinal', 'Ordinal');
       AddCompilerProc('TypeInfo','Identifier', 'Pointer');
+      AddCompilerProc('GetTypeKind','Identifier', 'TTypeKind');
       AddCompilerProc('TypeOf','Identifier', 'Pointer');
       AddCompilerProc('Val','S:String;var V;var Code:Integer');
       AddCompilerProc('Unaligned','var X','var');

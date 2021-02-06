@@ -34,8 +34,7 @@ unit SetReplace;
 interface
 
 uses
-  { delphi }
-  Classes,
+  Classes, SysUtils,
   { local }
   JcfSetBase, SettingsStream;
 
@@ -70,8 +69,6 @@ type
 implementation
 
 uses
-  { delphi }
-  SysUtils,
   { locals }
   JcfStringUtils;
 
@@ -87,8 +84,10 @@ begin
   SetSection('Replace');
   fcWords := TStringList.Create;
 
-  fcLeftWords  := TStringList.Create;
+  fcLeftWords := TStringList.Create;        // Will compare with CompareText.
+  {$IF FPC_FULLVERSION>=30200}fcLeftWords.UseLocale := False;{$ENDIF}
   fcRightWords := TStringList.Create;
+  {$IF FPC_FULLVERSION>=30200}fcRightWords.UseLocale := False;{$ENDIF}
 end;
 
 destructor TSetReplace.Destroy;

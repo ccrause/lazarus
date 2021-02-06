@@ -22,7 +22,12 @@ unit Printers;
 interface
 
 uses
-  Classes, SysUtils, LCLProc, Graphics;
+  Classes, SysUtils,
+  // LazUtils
+  LazLoggerBase, LazUTF8,
+  // LCL
+  LCLProc, Graphics;
+
 type
   TPrinter = Class;
   EPrinter = class(Exception);
@@ -132,6 +137,11 @@ type
     PaperRect: TPaperRect;
   end;
 
+  TCustomPaperItem = record
+    PaperSet: boolean;
+    Item: TPaperItem;
+  end;
+
   { TPaperSize }
 
   TPaperSize = Class(TObject)
@@ -156,10 +166,12 @@ type
     fInternalPapers    : array of TPaperItem;
     fDefaultPapers     : boolean;
     fDefaultPaperIndex : Integer;
+    fCustomPaper       : TCustomPaperItem;
     procedure CreateInternalPapers;
     procedure FillDefaultPapers;
     function GetDefaultPaperRect(const AName: string; var APaperRect:TPaperRect): Integer;
     function IndexOfDefaultPaper(const AName: string): Integer;
+    procedure SetPaperRect(AValue: TPaperRect);
   public
     constructor Create(aOwner : TPrinter); overload;
     destructor Destroy; override;
@@ -170,7 +182,7 @@ type
     property PaperName       : string read GetPaperName write SetPaperName;
     property DefaultPaperName: string read GetDefaultPaperName;
 
-    property PaperRect       : TPaperRect read GetPaperRect;
+    property PaperRect       : TPaperRect read GetPaperRect write SetPaperRect;
     property SupportedPapers : TStrings read GetSupportedPapers;
 
     property PaperRectOf[aName : string] : TPaperRect read PaperRectOfName;
@@ -232,7 +244,7 @@ type
      procedure DoNewPage; virtual;
      procedure DoBeginPage; virtual;
      procedure DoEndPage; virtual;
-     procedure DoEndDoc(aAborded : Boolean); virtual;
+     procedure DoEndDoc(aAborted : Boolean); virtual;
      procedure DoAbort; virtual;
      procedure DoResetPrintersList; virtual;
      procedure DoResetFontsList; virtual;
@@ -254,6 +266,7 @@ type
      function DoGetBinName: string; virtual;
      procedure DoSetBinName(aName: string); virtual;
      function DoGetPaperRect(aName : string; Var aPaperRc : TPaperRect) : Integer; virtual;
+     function DoSetPaperRect(aPaperRc: TPaperRect): boolean; virtual;
      function DoGetPrinterState: TPrinterState; virtual;
      procedure DoDestroy; virtual;
 
@@ -320,6 +333,9 @@ var
   
 implementation
 
+const
+  CUSTOM_PAPER_NAME = 'LCLCustomPaper';
+
 { TPrinter }
 
 constructor TPrinter.Create;
@@ -366,7 +382,7 @@ begin
   Include(fFlags, pfPrinting);
   Exclude(fFlags, pfAborted);
   fPageNumber := 1;
-  
+
   if not RawMode then begin
     Canvas.Refresh;
     TPrinterCanvas(Canvas).BeginDoc;
@@ -403,6 +419,7 @@ end;
 //Create an new page
 procedure TPrinter.NewPage;
 begin
+  Inc(fPageNumber);
   if TMethod(@Self.DoNewPage).Code = Pointer(@TPrinter.DoNewPage) then
   begin
     // DoNewPage has not been overriden, use the new method
@@ -412,7 +429,6 @@ begin
   begin
     // Use the old method as DoNewPage has been overriden in descendat TPrinter
     CheckPrinting(True);
-    Inc(fPageNumber);
     if not RawMode then
       TPrinterCanvas(Canvas).NewPage;
     DoNewPage;
@@ -422,7 +438,6 @@ end;
 procedure TPrinter.BeginPage;
 begin
   CheckPrinting(True);
-  inc(fPageNumber);
   if not RawMode then
     TPrinterCanvas(Canvas).BeginPage;
   DoBeginPage;
@@ -684,7 +699,7 @@ end;
 function TPrinter.GetPrinters: TStrings;
 begin
   if not Assigned(fPrinters) then
-    fPrinters:=TStringList.Create;
+    fPrinters:=TStringListUTF8Fast.Create;
   Result:=fPrinters;
   
   //Only 1 initialization
@@ -817,7 +832,7 @@ begin
   //Override this method
 end;
 
-procedure TPrinter.DoEndDoc(aAborded : Boolean);
+procedure TPrinter.DoEndDoc(aAborted : Boolean);
 begin
   //Override this method
 end;
@@ -952,6 +967,11 @@ function TPrinter.DoGetPaperRect(aName : string; var aPaperRc: TPaperRect): Inte
 begin
   Result:=-1;
   //Override this method
+end;
+
+function TPrinter.DoSetPaperRect(aPaperRc: TPaperRect): boolean;
+begin
+  result := false;
 end;
 
 //Get a state of current printer
@@ -1090,6 +1110,9 @@ function TPaperSize.GetPaperName: string;
 begin
   CheckSupportedPapers;
 
+  if fCustomPaper.PaperSet then
+    result := fCustomPaper.Item.PaperName
+  else
   if fDefaultPapers then
     Result := SupportedPapers[FDefaultPaperIndex]
   else
@@ -1101,6 +1124,9 @@ end;
 
 function TPaperSize.GetPaperRect: TPaperRect;
 begin
+  if fCustomPaper.PaperSet then
+    result := fCustomPaper.Item.PaperRect
+  else
   Result:=PaperRectOfName(PaperName);
 end;
 
@@ -1129,8 +1155,25 @@ begin
     end;
 end;
 
+procedure TPaperSize.SetPaperRect(AValue: TPaperRect);
+begin
+  fCustomPaper.PaperSet := true;
+  fCustomPaper.Item.PaperRect := AValue;
+  if not fDefaultPapers then
+    fOwnedPrinter.DoSetPaperRect(AValue);
+end;
+
 procedure TPaperSize.SetPaperName(const AName: string);
 begin
+
+  if fCustomPaper.PaperSet and (AName=fCustomPaper.Item.PaperName) then
+  begin
+    // update printer custom paper dimensions
+    if not fDefaultPapers and not fCustomPaper.Item.PaperRect.PhysicalRect.IsEmpty then
+      fOwnedPrinter.DoSetPaperRect(fCustomPaper.Item.PaperRect);
+    exit;
+  end;
+
   if SupportedPapers.IndexOf(aName)<>-1 then
   begin
     if aName<>PaperName then
@@ -1138,7 +1181,9 @@ begin
       if fDefaultPapers then
         FDefaultPaperIndex := IndexOfDefaultPaper(AName)
       else
-        FOwnedPrinter.DoSetPaperName(aName)
+        FOwnedPrinter.DoSetPaperName(aName);
+
+      fCustomPaper.PaperSet := false;
     end;
   end
   else
@@ -1150,6 +1195,13 @@ function TPaperSize.PaperRectOfName(const AName: string): TPaperRect;
 var TmpPaperRect : TPaperRect;
     Margins      : Integer;
 begin
+
+  if (fCustomPaper.PaperSet) and (AName=fCustomPaper.Item.PaperName) then
+  begin
+    result := fCustomPaper.Item.PaperRect;
+    exit;
+  end;
+
   FillChar(Result,SizeOf(Result),0);
 
   if SupportedPapers.IndexOf(AName)<>-1 then
@@ -1197,6 +1249,9 @@ begin
   fLastPrinterIndex:=-2;
   fOwnedPrinter:=aOwner;
   fSupportedPapers:=TStringList.Create;
+
+  FillChar(fCustomPaper, sizeOf(fCustomPaper), 0);
+  fCustomPaper.Item.PaperName := CUSTOM_PAPER_NAME;
 end;
 
 destructor TPaperSize.Destroy;
@@ -1346,12 +1401,13 @@ end;
 
 procedure TPrinterCanvas.NewPage;
 begin
+  Inc(fPageNum);
   BeginPage;
 end;
 
 procedure TPrinterCanvas.BeginPage;
 begin
-  Inc(fPageNum);
+
 end;
 
 procedure TPrinterCanvas.EndPage;

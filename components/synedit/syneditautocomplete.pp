@@ -44,7 +44,7 @@ unit SynEditAutoComplete;
 interface
 
 uses
-  LCLIntf, LCLType, LCLProc,
+  LCLIntf, LCLType, LCLProc, SysUtils, Menus,
   Classes, SynEdit, SynEditKeyCmds, SynEditPlugins,
   Controls;
 
@@ -138,9 +138,6 @@ type
 
 implementation
 
-uses
-  SysUtils, Menus;
-
 { TCustomSynAutoComplete }
 
 procedure TCustomSynAutoComplete.AddCompletion(AToken, AValue, AComment: string;
@@ -168,8 +165,7 @@ constructor TCustomSynAutoComplete.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   fAutoCompleteList := TStringList.Create;
-  TStringList(fAutoCompleteList).OnChange :=
-     @CompletionListChanged;
+  TStringList(fAutoCompleteList).OnChange := @CompletionListChanged;
   fCompletions := TStringList.Create;
   fCompletionComments := TStringList.Create;
   fCompletionValues := TStringList.Create;

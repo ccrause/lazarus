@@ -747,14 +747,11 @@ end;
 
  ------------------------------------------------------------------------------}
 function TQtWidgetSet.CreateRectRgn(X1,Y1,X2,Y2 : Integer): HRGN;
-var
-  QtRegion: TQtRegion;
 begin
-  QtRegion := TQtRegion.Create(True, X1, Y1, X2, Y2);
-  Result := HRGN(QtRegion);
+  Result := HRGN(TQtRegion.Create(True, X1, Y1, X2, Y2));
   {$ifdef VerboseQtWinAPI}
     WriteLn('Trace: [WinAPI CreateRectRgn] Result: ', dbghex(Result),
-     ' QRegionH: ', dbghex(PtrInt(QtRegion.Widget)));
+     ' QRegionH: ', dbghex(PtrUInt(TQtRegion(Result).Widget)));
   {$endif}
 end;
 
@@ -789,6 +786,7 @@ begin
   if not IsValidDC(hDC) then exit;
 
   TQtDeviceContext(hDC).Free;
+  Result := True;
 end;
 
 {------------------------------------------------------------------------------
@@ -1313,8 +1311,6 @@ var
   Pt: TPoint;
   ClipRect: TRect;
   B: Boolean;
-  S: String;
-  i: Integer;
 
   procedure CalculateOffsetWithAngle(const AFontAngle: Integer;
     var TextLeft,TextTop: Integer);
@@ -2758,6 +2754,7 @@ begin
     +b(rsqtOptionX11CMap)
     +b(rsqtOptionX11IM)
     +b(rsqtOptionX11InputStyle)
+    +b(rsqtOptionDisableAccurateFrame)
     {$ENDIF}
     ;
 end;
@@ -3896,15 +3893,6 @@ begin
       end;
     SM_CXBORDER, SM_CYBORDER:
       begin
-        //The height of a window border, in pixels
-        {$IFDEF QtUseAccurateFrame}
-        if (nIndex = SM_CYBORDER) and (WSFrameMargins.Top > 0) then
-          Result := WSFrameMargins.Bottom
-        else
-        if (nIndex = SM_CXBORDER) and (WSFrameMargins.Top > 0) then
-          Result := WSFrameMargins.Left
-        else
-        {$ENDIF}
         Result := GetPixelMetric(QStylePM_DefaultFrameWidth, nil, nil);
       end;
     SM_CXCURSOR:
@@ -4082,11 +4070,6 @@ begin
       end;
     SM_CYCAPTION:
       begin
-        {$IFDEF QtUseAccurateFrame}
-        if WSFrameMargins.Top > 0 then
-          Result := WSFrameMargins.Top
-        else
-        {$ENDIF}
         Result := GetPixelMetric(QStylePM_TitleBarHeight, nil, nil);
       end;
     SM_CYKANJIWINDOW:
@@ -4478,7 +4461,8 @@ end;
 function TQtWidgetSet.GetWindowRect(Handle: hwnd; var ARect: TRect): Integer;
 var
   APos: TQtPoint;
-  R: TRect;
+  R, AFrame: TRect;
+  AForm: TCustomForm;
 begin
   {$ifdef VerboseQtWinAPI}
     WriteLn('[WinAPI GetWindowRect]');
@@ -4488,13 +4472,29 @@ begin
   if not IsValidHandle(Handle) then
     exit;
 
-  {$IFDEF QTUSEACCURATEFRAME}
-  if TQtWidget(Handle).IsFramedWidget then
+  if (TQtWidget(Handle) is TQtMainWindow) and Assigned(TQtWidget(Handle).LCLObject) and
+    (TQtWidget(Handle).LCLObject.Parent = nil) and
+    not TQtMainWindow(Handle).FirstPaintEvent
+    {$IFDEF HASX11}and (QtWidgetSet.GetDummyWidgetFrame <> Rect(0, 0, 0, 0)){$ENDIF} then
   begin
-    ARect := TQtWidget(Handle).getFrameGeometry;
-    exit(-1);
+    AForm := TCustomForm(TQtWidget(Handle).LCLObject);
+    if not (AForm.FormStyle in [fsMDIChild, fsSplash]) and (AForm.BorderStyle <> bsNone) and
+      not IsFormDesign(AForm) then
+    begin
+      {$IFDEF HASX11}
+      R := AForm.BoundsRect;
+      AFrame := QtWidgetSet.GetDummyWidgetFrame;
+      // apply frame size to lcl form.
+      R.Right += AFrame.Left + AFrame.Right;
+      R.Bottom += AFrame.Top + AFrame.Bottom;
+      ARect := R; //this is now real size under x11 even on unmapped window :)
+      exit(-1);
+      {$ELSE}
+      QWidget_winID(TQtWidget(Handle).Widget);
+      {$ENDIF}
+    end;
   end;
-  {$ENDIF}
+
   APos := QtPoint(0,0);
   QWidget_mapToGlobal(TQtWidget(Handle).Widget, @APos, @APos);
 
@@ -4544,11 +4544,7 @@ begin
   {$endif}
   if Handle = 0 then
     Exit(False);
-  {$IFDEF QTUSEACCURATEFRAME}
-  if TQtWidget(Handle).IsFramedWidget then
-    ASize := TQtWidget(handle).getFrameSize
-  else
-  {$ENDIF}
+
   ASize := TQtWidget(Handle).getSize;
   Height := ASize.cy;
   Width := ASize.cx;
@@ -5097,12 +5093,12 @@ const
 
   function IconToMessageType(AType: cardinal): QMessageBoxIcon;
   begin
-    Result := QMessageBoxNoIcon;
     case AType of
-      1: Result := QMessageBoxInformation;
-      2: Result := QMessageBoxQuestion;
-      3: Result := QMessageBoxCritical;
-      4: Result := QMessageBoxWarning;
+      1: Result := QMessageBoxCritical; // MB_ICONERROR = $00000010;
+      2: Result := QMessageBoxQuestion; // MB_ICONQUESTION = $00000020;
+      3: Result := QMessageBoxWarning; // MB_ICONWARNING = $00000030;
+      4: Result := QMessageBoxInformation; // MB_ICONINFORMATION = $00000040;
+      else Result := QMessageBoxNoIcon;
     end;
   end;
 
@@ -5206,6 +5202,7 @@ var
   //OkStr: WideString;
   AParent: QWidgetH;
   DialogType, DefButton, DefIcon : Cardinal;
+  AQtString: QStringH;
 begin
   Result := 0;
   Str := GetUtf8String(lpText);
@@ -5218,6 +5215,12 @@ begin
   DefButton:= ((uType and $00000300) shr 8) + 1;
   DialogType:= (uType and $0000000F);
   DefIcon := (uType and $000000FF) shr 4;
+
+  //issue #37805 - we must show plain text.
+  AQtString := QString_Create(PWideString(@Str));
+  QString_toHtmlEscaped(AQtString, @Str);
+  QString_destroy(AQtString);
+
   case IconToMessageType(DefIcon) of
     QMessageBoxInformation: Result := QMessageBox_information(AParent, @TitleStr, @Str, ButtonToQtButtons(DialogType), ButtonToQtDefButton(DialogType, DefButton));
     QMessageBoxQuestion: Result := QMessageBox_question(AParent, @TitleStr, @Str, ButtonToQtButtons(DialogType), ButtonToQtDefButton(DialogType, DefButton));
@@ -5230,6 +5233,48 @@ begin
     end;
   end;
   Result := QtButtonToResult(Result);
+end;
+
+function TQtWidgetSet.MonitorFromPoint(ptScreenCoords: TPoint; dwFlags: DWord
+  ): HMONITOR;
+var
+  AQtPoint: TQtPoint;
+  Monitor: Integer;
+begin
+  Result := MONITOR_UNIMPL;
+  AQtPoint := QtPoint(ptScreenCoords.x, ptScreenCoords.y);
+  Monitor := QDesktopWidget_screenNumber(QApplication_desktop(), PQtPoint(@AQtPoint));
+  if (Monitor >= 0) then
+    Result := HMONITOR(Monitor + 1);
+end;
+
+function TQtWidgetSet.MonitorFromRect(lprcScreenCoords: PRect; dwFlags: DWord
+  ): HMONITOR;
+var
+  AQtPoint: TQtPoint;
+  Monitor: Integer;
+begin
+  Result := MONITOR_UNIMPL;
+  Monitor := -1;
+  if lprcScreenCoords <> nil then
+  begin
+    AQtPoint := QtPoint(lprcScreenCoords^.Left, lprcScreenCoords^.Top);
+    Monitor := QDesktopWidget_screenNumber(QApplication_desktop(), PQtPoint(@AQtPoint));
+  end;
+  if (Monitor >= 0) then
+    Result := HMONITOR(Monitor + 1);
+end;
+
+function TQtWidgetSet.MonitorFromWindow(hWnd: HWND; dwFlags: DWord): HMONITOR;
+var
+  Monitor: Integer;
+begin
+  Result := MONITOR_UNIMPL;
+  Monitor := -1;
+  if (hwnd > 0) and IsValidHandle(hWnd) then
+    Monitor := QDesktopWidget_screenNumber(QApplication_desktop(), TQtWidget(hWnd).Widget);
+  if (Monitor >= 0) then
+    Result := HMONITOR(Monitor + 1);
 end;
 
 {------------------------------------------------------------------------------
@@ -6767,12 +6812,100 @@ var
   OldBkColor: TColorRef;
   RestoreClip: Boolean;
   AClipRect: TRect;
+  AWindow: QWindowH;
+  AScreen: QScreenH;
+  AWidgetID: PtrUInt;
+
+  function NeedScaling(const ADstRect, ASrcRect: TRect): boolean;
+  var
+    R: TRect;
+    TgtW, TgtH,
+    ClpW, ClpH: integer;
+  begin
+
+    if not DstQDC.getClipping then
+      exit((Width <> SrcWidth) or (Height <> SrcHeight));
+
+    R := DstQDC.getClipRegion.getBoundingRect;
+
+    TgtW := ADstRect.Right - ADstRect.Left;
+    TgtH := ADstRect.Bottom - ADstRect.Top;
+    ClpW := R.Right - R.Left;
+    ClpH := R.Bottom - R.Top;
+
+    Result := PtInRect(R, Point(R.Left + 1, R.Top + 1)) and
+      (((ClpW <= TgtW) and (ClpH <= TgtH)) or ((TgtW < SrcWidth) and (TgtH < SrcHeight)));
+  end;
+
+  procedure RenderPixmap(APixmap: QPixmapH; AMaskImg: QImageH; const AHighQuality: boolean);
+  var
+    ATempPixmap: QPixmapH;
+    ABitmap: QBitmapH;
+    AMaskPix, AScaledPix: QPixmapH;
+    ARenderHints: QPainterRenderHints;
+    ARenderHint: Boolean;
+  begin
+    ATempPixmap := QPixmap_create();
+
+    ARenderHints := QPainter_renderHints(DstQDC.Widget);
+    ARenderHint := (AHighQuality and not EqualRect(DstRect, SrcRect)) and
+      ((ARenderHints and QPainterAntialiasing <> 0) or (ARenderHints and QPainterSmoothPixmapTransform <> 0) or
+       (ARenderHints and QPainterHighQualityAntialiasing <> 0));
+
+    if ARenderHint and (ARenderHints and QPainterSmoothPixmapTransform <> 0) then
+      ARenderHint := False; // do not touch render hints
+
+    if NeedScaling(DstRect, SrcRect) then
+      QPixmap_scaled(APixmap, ATempPixmap, Width, Height)
+    else
+      QPixmap_copy(APixmap, ATempPixmap, 0, 0, QPixmap_width(APixmap), QPixmap_height(APixmap));
+
+    if AMaskImg <> nil then
+    begin
+      // apply mask to pixmap
+      AScaledPix := QPixmap_create();
+      AMaskPix := QPixmap_create();
+      QPixmap_fromImage(AMaskPix, AMaskImg);
+      try
+
+        if IsRectEmpty(MaskRect) or (MaskRect.Size <> DstRect.Size) then
+        begin
+          if (QPixmap_width(ATempPixmap) < (DstRect.Right - DstRect.Left)) or
+            (QPixmap_Height(ATempPixmap) < (DstRect.Bottom - DstRect.Top)) then
+            QPixmap_scaled(AMaskPix, AScaledPix, QPixmap_width(ATempPixmap), QPixmap_height(ATempPixmap))
+          else
+            QPixmap_scaled(AMaskPix, AScaledPix, Width, Height);
+        end else
+          QPixmap_copy(AMaskPix, AScaledPix, MaskRect.Left, MaskRect.Top,
+            MaskRect.Right - MaskRect.Left, MaskRect.Bottom - MaskRect.Top);
+
+        ABitmap := QBitmap_Create(AScaledPix);
+
+        QPixmap_setMask(ATempPixmap, ABitmap);
+        QBitmap_Destroy(ABitmap);
+        QPixmap_destroy(AScaledPix);
+      finally
+        QPixmap_destroy(AMaskPix);
+      end;
+    end;
+
+    if ARenderHint then
+      QPainter_setRenderHint(DstQDC.Widget, QPainterSmoothPixmapTransform, True);
+
+    QPainter_drawPixmap(DstQDC.Widget, X, Y, Width, Height, ATempPixmap);
+
+    if ARenderHint then
+      QPainter_setRenderHint(DstQDC.Widget, QPainterSmoothPixmapTransform, not ARenderHint);
+
+    QPixmap_destroy(ATempPixmap);
+  end;
+
 begin
   {$ifdef VerboseQtWinAPI}
     WriteLn('[WinAPI StretchMaskBlt]',
      ' DestDC:', dbghex(DestDC),
      ' SrcDC:', dbghex(SrcDC),
-     ' Image:', dbghex(PtrInt(Image)),
+     ' Image:', dbghex(PtrUInt(Image)),
      ' X:', dbgs(X), ' Y:', dbgs(Y),
      ' W:', dbgs(Width), ' H:', dbgs(Height),
      ' XSrc:', dbgs(XSrc), ' YSrc:', dbgs(YSrc),
@@ -6782,22 +6915,6 @@ begin
   Result := False;
 
   SrcMatrix := QPainter_transform(SrcQDC.Widget);
-  if SrcQDC.vImage = nil then
-  begin
-    if SrcQDC.Parent <> nil then
-    begin
-      with SrcQDC.getDeviceSize do
-        TmpPixmap := QPixmap_create(x, y);
-      QScreen_grabWindow(QGuiApplication_primaryScreen, TmpPixmap, QWidget_winId(SrcQDC.Parent), 0, 0);
-      Image := QImage_create();
-      QPixmap_toImage(TmpPixmap, Image);
-      QPixmap_destroy(TmpPixmap);
-    end
-    else
-      Exit;
-  end
-  else
-    Image := SrcQDC.vImage.Handle;
 
   QTransform_map(SrcMatrix, XSrc, YSrc, @XSrc, @YSrc);
   // our map can have some transformations
@@ -6834,14 +6951,71 @@ begin
   DstRect := Bounds(X, Y, Width, Height);
   SrcRect := Bounds(XSrc, YSrc, SrcWidth, SrcHeight);
   MaskRect := Bounds(XMask, YMask, SrcWidth, SrcHeight);
-  // #0011187 - makes painting wrong
-  //DstQDC.CorrectCoordinates(DstRect);
-  //DstQDC.CorrectCoordinates(SrcRect);
-  //DstQDC.CorrectCoordinates(MaskRect);
+
   if Mask <> 0 then
     QMask := TQtImage(Mask).Handle
   else
     QMask := nil;
+
+  if ((Rop = SRCCOPY) and (SrcQDC.vImage <> nil) and (SrcQDC.vImage.Handle <> nil))
+    and not ((DstRect.Right < DstRect.Left) or (DstRect.Bottom < DstRect.Top)) then
+  begin
+    //issue #32137
+    TmpImage := QImage_Create();
+    QImage_copy(SrcQDC.vImage.Handle, TmpImage, XSrc, YSrc, SrcWidth, SrcHeight);
+
+    // #11713, #25590
+    if (QImage_format(TmpImage) = QImageFormat_RGB32) then
+    begin
+      Image := QImage_create();
+      QImage_convertToFormat(TmpImage, Image, QImageFormat_ARGB32);
+      QImage_destroy(TmpImage);
+      TmpImage := QImage_create(Image);
+      QImage_destroy(Image);
+    end;
+
+    TmpPixmap := QPixmap_create();
+    QPixmap_fromImage(TmpPixmap, TmpImage);
+
+    RenderPixmap(TmpPixmap, QMask,
+      QImage_format(SrcQDC.vImage.Handle) = QImageFormat_ARGB32);
+    QImage_destroy(TmpImage);
+    QPixmap_destroy(TmpPixmap);
+    exit(True);
+  end else
+  if SrcQDC.vImage = nil then
+  begin
+    if SrcQDC.Parent <> nil then
+    begin
+      AWidgetID := QWidget_winId(SrcQDC.Parent);
+      AWindow := QWidget_windowHandle(SrcQDC.Parent);
+      if AWindow <> nil then
+        AScreen := QWindow_screen(AWindow)
+      else
+        AScreen := QGuiApplication_primaryScreen();
+
+      if (Rop = SRCCOPY) and not ((DstRect.Right < DstRect.Left) or (DstRect.Bottom < DstRect.Top)) then
+      begin
+        TmpPixmap := QPixmap_create();
+        QScreen_grabWindow(AScreen, TmpPixmap, AWidgetID, XSrc,  YSrc, SrcWidth, SrcHeight);
+        RenderPixmap(TmpPixmap, QMask, QPixmap_hasAlphaChannel(TmpPixmap));
+        QPixmap_destroy(TmpPixmap);
+        exit(True);
+      end else
+      begin
+        with SrcQDC.getDeviceSize do
+          TmpPixmap := QPixmap_create(x, y);
+        QScreen_grabWindow(AScreen, TmpPixmap, AWidgetID, 0, 0);
+        Image := QImage_create();
+        QPixmap_toImage(TmpPixmap, Image);
+        QPixmap_destroy(TmpPixmap);
+      end;
+    end
+    else
+      Exit;
+  end
+  else
+    Image := SrcQDC.vImage.Handle;
 
   if (DstRect.Right < DstRect.Left) or (DstRect.Bottom < DstRect.Top) then
   begin
@@ -6956,14 +7130,17 @@ end;
   retrieves or sets the value of one of the system-wide parameters
  ------------------------------------------------------------------------------}
 function TQtWidgetSet.SystemParametersInfo(uiAction: DWord; uiParam: DWord; pvParam: Pointer; fWinIni: DWord): LongBool;
+var
+  AScreen: QScreenH;
+  R: TRect;
 begin
   case uiAction of
     SPI_GETWHEELSCROLLLINES: PDword(pvPAram)^ := QApplication_wheelScrollLines;
-    SPI_GETWORKAREA: begin
-      TRect(pvParam^):=Bounds(GetSystemMetrics(SM_XVIRTUALSCREEN),
-                              GetSystemMetrics(SM_YVIRTUALSCREEN),
-                              GetSystemMetrics(SM_CXVIRTUALSCREEN),
-                              GetSystemMetrics(SM_CYVIRTUALSCREEN));
+    SPI_GETWORKAREA:
+    begin
+      AScreen := QGuiApplication_primaryScreen();
+      QScreen_availableGeometry(AScreen, @R);
+      TRect(pvParam^) := R;
       Result:=True;
     end;
   else

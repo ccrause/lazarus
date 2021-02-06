@@ -116,7 +116,7 @@ end;
 
 function TProjectApplicationDescriptor.GetLocalizedDescription: string;
 begin
-  Result := GetLocalizedName + LineEnding+LineEnding + lisApplicationProgramDescriptor;
+  Result:=lisApplicationProgramDescriptor;
 end;
 
 function TProjectApplicationDescriptor.InitProject(AProject: TLazProject): TModalResult;
@@ -144,6 +144,9 @@ begin
     +'uses'+LineEnding
     +'  {$IFDEF UNIX}'+LineEnding
     +'  cthreads,'+LineEnding
+    +'  {$ENDIF}'+LineEnding
+    +'  {$IFDEF HASAMIGA}'+LineEnding
+    +'  athreads,'+LineEnding
     +'  {$ENDIF}'+LineEnding
     +'  Interfaces, // this includes the LCL widgetset'+LineEnding
     +'  Forms'+LineEnding
@@ -189,7 +192,7 @@ end;
 
 function TProjectSimpleProgramDescriptor.GetLocalizedDescription: string;
 begin
-  Result := GetLocalizedName + LineEnding+LineEnding + lisSimpleProgramProgramDescriptor;
+  Result:=lisSimpleProgramProgramDescriptor;
 end;
 
 function TProjectSimpleProgramDescriptor.InitProject(AProject: TLazProject): TModalResult;
@@ -239,7 +242,7 @@ end;
 
 function TProjectProgramDescriptor.GetLocalizedDescription: string;
 begin
-  Result := GetLocalizedName + LineEnding+LineEnding + lisProgramProgramDescriptor;
+  Result:=lisProgramProgramDescriptor;
 end;
 
 function TProjectProgramDescriptor.InitProject(AProject: TLazProject): TModalResult;
@@ -303,11 +306,10 @@ end;
 
 function TProjectManualProgramDescriptor.GetLocalizedDescription: string;
 begin
-  Result := GetLocalizedName + LineEnding+LineEnding + lisCustomProgramProgramDescriptor;
+  Result:=lisCustomProgramProgramDescriptor;
 end;
 
-function TProjectManualProgramDescriptor.InitProject(AProject: TLazProject
-  ): TModalResult;
+function TProjectManualProgramDescriptor.InitProject(AProject: TLazProject): TModalResult;
 var
   NewSource: String;
   MainFile: TLazProjectFile;
@@ -372,7 +374,7 @@ end;
 
 function TProjectConsoleApplicationDescriptor.GetLocalizedDescription: string;
 begin
-  Result := GetLocalizedName + LineEnding+LineEnding + lisConsoleApplicationProgramDescriptor;
+  Result:=lisConsoleApplicationProgramDescriptor;
 end;
 
 function TProjectConsoleApplicationDescriptor.InitProject(AProject: TLazProject
@@ -542,7 +544,7 @@ end;
 
 function TProjectLibraryDescriptor.GetLocalizedDescription: string;
 begin
-  Result := GetLocalizedName + LineEnding+LineEnding + lisLibraryProgramDescriptor;
+  Result:=lisLibraryProgramDescriptor;
 end;
 
 function TProjectLibraryDescriptor.InitProject(AProject: TLazProject): TModalResult;

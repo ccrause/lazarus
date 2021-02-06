@@ -140,6 +140,10 @@ msgstr "Constructor parametrit"
 msgid "Property type suffix"
 msgstr "Property tyypin liite"
 
+#: tcreatecodeform.letoplevelclassname.caption
+msgid "Toplevel class name"
+msgstr ""
+
 #: tcreatecodeform.leunitname.caption
 msgid "Unit name"
 msgstr "Käännösyksikön nimi"
@@ -395,6 +399,10 @@ msgstr "Merkkijonot lainausmerkkeihin"
 
 #: tmainform.misaveformatted.caption
 msgid "Save Formatted JSON"
+msgstr ""
+
+#: tmainform.mishowrest.caption
+msgid "Show REST panel"
 msgstr ""
 
 #: tmainform.misortmembers.caption

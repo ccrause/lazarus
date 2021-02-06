@@ -230,11 +230,15 @@ type
     property Source;
   end;
 
+  TVectorCoordKind = (vckCenterDir, vckStartEnd);
+
   TFieldSeries = class(TBasicPointSeries)
   private
     FArrow: TChartArrow;
     FPen: TPen;
+    FCoordKind: TVectorCoordKind;
     procedure SetArrow(AValue: TChartArrow);
+    procedure SetCoordKind(AValue: TVectorCoordKind);
     procedure SetPen(AValue: TPen);
   protected
     procedure AfterAdd; override;
@@ -272,6 +276,7 @@ type
     property Pen: TPen read FPen write SetPen;
     property Source;
     property ToolTargets default [nptPoint, nptXList, nptYList, nptCustom];
+    property VectorCoordKind: TVectorCoordKind read FCoordKind write SetCoordKind default vckCenterDir;
   end;
 
 implementation
@@ -418,7 +423,7 @@ begin
   symbol[4] := Rect(
     (r.Left * 2 + r.Right) div 3, center.y - bw,
     (r.Left + r.Right * 2) div 3, center.y + bw);
-  bw -= IfThen(FBoxPen.Style = psClear, 0, (FBoxPen.Width + 1) div 2);
+  bw -= Math.IfThen(FBoxPen.Style = psClear, 0, (FBoxPen.Width + 1) div 2);
   symbol[5] := Rect(center.x, center.y - bw, center.x, center.y + bw);
 
   if FIsVertical then
@@ -651,7 +656,7 @@ end;
 
 procedure TBubbleSeries.GetLegendItems(AItems: TChartLegendItems);
 begin
-  GetLegendItemsRect(AItems, BubbleBrush);
+  GetLegendItemsRect(AItems, BubbleBrush, BubblePen);
 end;
 
 function TBubbleSeries.GetNearestPoint(const AParams: TNearestPointParams;
@@ -893,7 +898,7 @@ begin
       UpdateLabelDirectionReferenceLevel(i, j, center);
       dir := GetLabelDirection(TDoublePointBoolArr(gp)[not IsRotated], center);
       with Marks.MeasureLabel(ADrawer, labelText) do
-        dist := IfThen(dir in [ldLeft, ldRight], cx, cy);
+        dist := Math.IfThen(dir in [ldLeft, ldRight], cx, cy);
       if Marks.DistanceToCenter then
         dist := dist div 2;
       m[dir] := Max(m[dir], dist + scMarksDistance);
@@ -1886,7 +1891,7 @@ end;
 function TFieldSeries.GetColor(AIndex: Integer): TColor;
 begin
   with Source.Item[AIndex]^ do
-    Result := TColor(IfThen(Color = clTAColor, FPen.Color, Color));
+    Result := TColor(Math.IfThen(Color = clTAColor, FPen.Color, Color));
 end;
 
 procedure TFieldSeries.GetLegendItems(AItems: TChartLegendItems);
@@ -1972,7 +1977,10 @@ end;
 function TFieldSeries.GetVector(AIndex: Integer): TDoublePoint;
 begin
   with Source.Item[AIndex]^ do
-    Result := DoublePoint(XList[0], YList[0]);
+    case FCoordKind of
+      vckCenterDir: Result := DoublePoint(XList[0], YList[0]);
+      vckStartEnd: Result := DoublePoint(XList[0]-X, YList[0]-Y);
+    end;
 end;
 
 function TFieldSeries.GetVectorPoints(AIndex: Integer;
@@ -1984,10 +1992,20 @@ begin
     if isNaN(X) or IsNaN(Y) or IsNaN(XList[0]) or IsNaN(YList[0]) then
       exit(false)
     else begin
-      dx := XList[0] * 0.5;
-      dy := YList[0] * 0.5;
-      AStartPt := DoublePoint(X - dx, Y - dy);
-      AEndPt := DoublePoint(X + dx, Y + dy);
+      case FCoordKind of
+        vckCenterDir:
+          begin
+            dx := XList[0] * 0.5;
+            dy := YList[0] * 0.5;
+            AStartPt := DoublePoint(X - dx, Y - dy);
+            AEndPt := DoublePoint(X + dx, Y + dy);
+          end;
+        vckStartEnd:
+          begin
+            AStartPt := DoublePoint(X, Y);
+            AEndPt := DoublePoint(XList[0], YList[0]);
+          end;
+      end;
       Result := true;
     end;
   end;
@@ -2057,6 +2075,15 @@ begin
   UpdateParentChart;
 end;
 
+procedure TFieldSeries.SetCoordKind(AValue: TVectorCoordkind);
+begin
+  if AValue <> FCoordKind then
+  begin
+    FCoordKind := AValue;
+    UpdateParentChart;
+  end;
+end;
+
 procedure TFieldSeries.SetPen(AValue: TPen);
 begin
   FPen.Assign(AValue);
@@ -2065,8 +2092,18 @@ end;
 procedure TFieldSeries.SetVector(AIndex: Integer; const AValue: TDoublePoint);
 begin
   with ListSource.Item[AIndex]^ do begin
-    XList[0] := AValue.X;
-    YList[0] := AValue.Y;
+    case FCoordKind of
+      vckCenterDir:
+        begin
+          XList[0] := AValue.X;
+          YList[0] := AValue.Y;
+        end;
+      vckStartEnd:
+        begin
+          XList[0] := X + AValue.X;
+          YList[0] := Y + AValue.Y;
+        end;
+    end;
   end;
 end;
 

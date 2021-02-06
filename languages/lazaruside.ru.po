@@ -5,7 +5,7 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "POT-Creation-Date: \n"
-"PO-Revision-Date: 2020-02-25 00:25+0300\n"
+"PO-Revision-Date: 2020-10-24 02:08+0300\n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
 "X-Poedit-Bookmarks: -1,-1,-1,-1,-1,-1,-1,3325,-1,-1\n"
@@ -4562,8 +4562,8 @@ msgstr "О проекте Lazarus"
 
 #: lazarusidestrconsts.lisaboutlazarusmsg
 #, object-pascal-format
-msgid "License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.%sLazarus is an IDE to create graphical and console applications with Free Pascal. Free Pascal is Pascal and Object Pascal compiler that runs on Windows, Linux, Mac OS X, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing we need more developers."
-msgstr "Лицензия: GPL/LGPL. Обратитесь к исходному коду Lazarus и Free Pascal за подробностями.%sLazarus - это IDE для создания графических и консольных приложений при помощи компилятора Free Pascal. Free Pascal - это компилятор языков Pascal и Object Pascal, работающий под Windows, Linux, Mac OS X, FreeBSD, и другими ОС.%sLazarus - это недостающий элемент, который позволит вам разрабатывать программы для всех вышеперечисленных платформ в Delphi-подобном окружении. Эта IDE является инструментом RAD, включающим в себя редактор форм.%sТак как проект Lazarus растёт, он нуждается в большем количестве разработчиков."
+msgid "License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.%sLazarus is an IDE to create graphical and console applications with Free Pascal. Free Pascal is a Pascal and Object Pascal compiler that runs on Windows, Linux, macOS, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi-like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing, we need more developers."
+msgstr "Лицензия: GPL/LGPL. Обратитесь к исходному коду Lazarus и Free Pascal за подробностями.%sLazarus - это IDE для создания графических и консольных приложений при помощи компилятора Free Pascal. Free Pascal - это компилятор языков Pascal и Object Pascal, работающий под Windows, Linux, macOS, FreeBSD и другими ОС.%sLazarus - это недостающий элемент, который позволит вам разрабатывать программы для всех вышеперечисленных платформ в Delphi-подобном окружении. Эта IDE является инструментом RAD, включающим в себя редактор форм.%sТак как проект Lazarus растёт, он нуждается в большем количестве разработчиков."
 
 #: lazarusidestrconsts.lisaboutnocontributors
 msgid "Cannot find contributors list."
@@ -5017,10 +5017,6 @@ msgstr "Показывать палитру компонентов полнос�
 msgid "If component palette spans over more lines, show them all and not only one."
 msgstr "Показывать все строки палитры компонентов, если она занимает несколько."
 
-#: lazarusidestrconsts.lisautocheckmodifiedfiles
-msgid "Automatically check (select) modified files"
-msgstr "Автоматически выбирать изменённые файлы"
-
 #: lazarusidestrconsts.lisautocompletionoff
 msgid "Auto completion: off"
 msgstr "Автодополнение: выключено"
@@ -5057,6 +5053,22 @@ msgstr "не завершать выделенное"
 #: lazarusidestrconsts.lisautomaticallyinvokeafterpoint
 msgid "Automatically invoke after point"
 msgstr "Автоматически вызывать после ввода точки"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontype
+msgid "Automatically invoke on typing"
+msgstr "Автоматически вызывать при наборе текста"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeminlength
+msgid "Only complete if word is longer or equal"
+msgstr "Завершать только слова не короче"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeonlywordend
+msgid "Only complete when at end of word"
+msgstr "Завершать только в конце слова"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeusetimer
+msgid "Use completion box delay"
+msgstr "Использовать задержку вывода окна автозавершения"
 
 #: lazarusidestrconsts.lisautomaticallyonlinebreak
 msgid "line break"
@@ -8464,6 +8476,10 @@ msgstr "Продолжить при обработанных"
 msgid "Resume Unhandled"
 msgstr "Продолжить при необработанных"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmshowexitcodeonstop
+msgid "Show message on stop with Error (Exit-code <> 0)"
+msgstr "Показывать сообщение при остановке с ошибкой (код выхода не равен нулю)"
+
 #: lazarusidestrconsts.lisdebugoptionsfrmshowmessageonstop
 msgid "Show message on stop"
 msgstr "Показывать сообщение при остановке"
@@ -8854,6 +8870,10 @@ msgstr "Перечитать выбранные файлы с диска"
 msgid "Some files have changed on disk:"
 msgstr "Некоторые файлы изменены на диске:"
 
+#: lazarusidestrconsts.lisdiskdiffsomefileshavelocalchanges
+msgid "Some files have local changes. Either local or external changes will be overwritten."
+msgstr "Некоторые файлы были изменены локально. Будут отброшены локальные либо внешние изменения."
+
 #: lazarusidestrconsts.lisdistinguishbigandsmalllettersegaanda
 msgid "Distinguish big and small letters e.g. A and a"
 msgstr "Различать регистр букв, например, А и а"
@@ -9084,6 +9104,34 @@ msgstr "Дублирующийся модуль"
 #, object-pascal-format
 msgid "Duplicate unit \"%s\" in \"%s\""
 msgstr "Дублирующийся модуль \"%s\" в \"%s\""
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollin
+msgid "Amount to scroll in"
+msgstr "Шаг прокрутки"
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollin2
+msgid "Amount to scroll in (%)"
+msgstr "Шаг прокрутки (%)"
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollinmax
+msgid "Amount to scroll in (Max)"
+msgstr "Шаг прокрутки (максимум)"
+
+#: lazarusidestrconsts.lisdynpkgautoscrollondeletepa
+msgid "Auto Scroll on delete past left border"
+msgstr "Автоматическая прокрутка при удалении за левую границу"
+
+#: lazarusidestrconsts.lisdynpkgautoscrollontypepast
+msgid "Auto Scroll on type past right border"
+msgstr "Автоматическая прокрутка при вводе за правую границу"
+
+#: lazarusidestrconsts.lisdynpkgtriggeronmincharsofw
+msgid "Trigger on min chars (% of width)"
+msgstr "Минимум для срабатывания (% ширины)"
+
+#: lazarusidestrconsts.lisdynpkgtriggeronmincharsvis
+msgid "Trigger on min chars visible"
+msgstr "Минимум для срабатывания"
 
 #: lazarusidestrconsts.lisedit
 msgctxt "lazarusidestrconsts.lisedit"
@@ -9581,6 +9629,10 @@ msgstr "Вычислить выражение"
 msgid "E&valuate"
 msgstr "&Вычислить"
 
+#: lazarusidestrconsts.lisevaluateall
+msgid "Evaluate all"
+msgstr "Вычислить все"
+
 #: lazarusidestrconsts.lisevaluatemodify
 msgid "&Evaluate/Modify"
 msgstr "&Вычислить/Изменить"
@@ -9656,6 +9708,11 @@ msgstr "Выполнить команду до"
 #: lazarusidestrconsts.lisexecutionstopped
 msgid "Execution stopped"
 msgstr "Исполнение остановлено"
+
+#: lazarusidestrconsts.lisexecutionstoppedexitcode
+#, object-pascal-format
+msgid "Execution stopped with exit-code %1:d ($%2:s)"
+msgstr "Исполнение остановлено с кодом выхода %1:d ($%2:s)"
 
 #: lazarusidestrconsts.lisexit
 msgctxt "lazarusidestrconsts.lisexit"
@@ -13782,8 +13839,9 @@ msgid "Run &Parameters ..."
 msgstr "П&араметры запуска ..."
 
 #: lazarusidestrconsts.lismenuruntocursor
-msgid "Step over to &Cursor"
-msgstr "Шаг в обход до &курсора"
+msgctxt "lazarusidestrconsts.lismenuruntocursor"
+msgid "Run to Cursor"
+msgstr "Запустить до курсора"
 
 #: lazarusidestrconsts.lismenurunwithoutdebugging
 msgid "Run without Debugging"
@@ -13899,6 +13957,11 @@ msgstr "Шаг в обход инструкции"
 msgctxt "lazarusidestrconsts.lismenustepoverinstrhint"
 msgid "Step Over Instruction"
 msgstr "Шаг в обход инструкции"
+
+#: lazarusidestrconsts.lismenusteptocursor
+msgctxt "lazarusidestrconsts.lismenusteptocursor"
+msgid "Step over to &Cursor"
+msgstr "Шаг в обход до &курсора"
 
 #: lazarusidestrconsts.lismenuswapcaseselection
 msgid "Swap Case in Selection"
@@ -15427,6 +15490,10 @@ msgstr "(доступен в сети)"
 msgid "Call %sRegister%s procedure of selected unit"
 msgstr "Вызвать процедуру %sRegister%s выбранного модуля"
 
+#: lazarusidestrconsts.lispckeditcheckavailabilityonline
+msgid "Check availability online"
+msgstr "Проверить доступность в сети"
+
 #: lazarusidestrconsts.lispckeditcleanupdependencies
 msgid "Clean up dependencies ..."
 msgstr "Очистить зависимости ..."
@@ -16842,10 +16909,6 @@ msgstr "Добавить файлы редактора"
 msgid "Invalid Min-Max version"
 msgstr "Неверные версии (минимальная/максимальная)"
 
-#: lazarusidestrconsts.lisprojaddinvalidpascalunitname
-msgid "Invalid Pascal unit name"
-msgstr "Неверное имя модуля Паскаля"
-
 #: lazarusidestrconsts.lisprojaddinvalidversion
 msgid "Invalid version"
 msgstr "Неверная версия"
@@ -16924,11 +16987,6 @@ msgstr "Имя модуля \"%s\" уже имеется в проекте%s(в 
 #, object-pascal-format
 msgid "The unit name \"%s\" already exists in the selection%swith file: \"%s\"."
 msgstr "Имя модуля \"%s\" уже имеется в выделенном%s(в файле: \"%s\")."
-
-#: lazarusidestrconsts.lisprojaddtheunitnameisnotavalidpascalidentifier
-#, object-pascal-format
-msgid "The unit name \"%s\" is not a valid Pascal identifier."
-msgstr "Имя модуля \"%s\" не является корректным идентификатором Паскаля."
 
 #: lazarusidestrconsts.lisprojaddunitnamealreadyexists
 msgid "Unit name already exists"
@@ -20080,6 +20138,11 @@ msgstr "Идентификатор модуля существует"
 msgid "%s unit %s in package %s"
 msgstr "%s Модуль %s в пакете %s"
 
+#: lazarusidestrconsts.lisunitmustsavebeforeinherit
+#, object-pascal-format
+msgid "Unit \"%s\" must be saved before it can be inherited from. Save now?"
+msgstr "Перед наследованием от модуля \"%s\" его требуется сохранить. Сделать это сейчас?"
+
 #: lazarusidestrconsts.lisunitnamealreadyexistscap
 msgid "Unitname already in project"
 msgstr "Модуль с таким именем уже имеется в проекте"
@@ -21030,6 +21093,10 @@ msgstr "&Старшая:"
 msgid "Mi&nor version:"
 msgstr "&Младшая:"
 
+#: lazarusidestrconsts.rsnewsearchwithsamecriteria
+msgid "New search with same criteria"
+msgstr "Новый поиск по тем же условиям"
+
 #: lazarusidestrconsts.rsotherinfo
 msgid "Other info"
 msgstr "Прочие сведения"
@@ -21037,6 +21104,10 @@ msgstr "Прочие сведения"
 #: lazarusidestrconsts.rspooutputdirectory
 msgid "PO Output Directory:"
 msgstr "Каталог вывода файлов PO:"
+
+#: lazarusidestrconsts.rsrefreshthesearch
+msgid "Refresh the search"
+msgstr "Обновить результаты поиска"
 
 #: lazarusidestrconsts.rsresource
 msgid "Resource"
@@ -21062,10 +21133,6 @@ msgstr "&Ревизия:"
 #: lazarusidestrconsts.rsselectaninheritedentry
 msgid "Select an inherited entry"
 msgstr "Выбрать унаследованный элемент"
-
-#: lazarusidestrconsts.rsstartanewsearch
-msgid "Start a new search"
-msgstr "Начать новый поиск"
 
 #: lazarusidestrconsts.rsversionnumbering
 msgid "Version numbering"
@@ -21874,6 +21941,10 @@ msgstr "Переместить курсор вверх на одну стран�
 msgctxt "lazarusidestrconsts.srkmecpaste"
 msgid "Paste"
 msgstr "Вставить"
+
+#: lazarusidestrconsts.srkmecpasteascolumns
+msgid "Paste (as Columns)"
+msgstr "Вставить (как столбцы)"
 
 #: lazarusidestrconsts.srkmecpause
 msgid "pause program"

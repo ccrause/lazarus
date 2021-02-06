@@ -37,12 +37,13 @@ interface
 {off $DEFINE VerboseDesignerSelect}
 
 uses
-  // RTL + FCL + LCL
-  Types, Classes, Math, SysUtils, variants, TypInfo,
+  // RTL + FCL
+  Types, Classes, Math, SysUtils, Variants, TypInfo,
+  // LCL
   LCLProc, LCLType, LResources, LCLIntf, LMessages, InterfaceBase,
-  Forms, Controls, GraphType, Graphics, Dialogs, ExtCtrls, Menus, ClipBrd,
+  Forms, Controls, Graphics, Dialogs, ExtCtrls, Menus, ClipBrd,
   // LazUtils
-  LazFileUtils, LazFileCache,
+  GraphType, LazFileUtils, LazFileCache, LazLoggerBase,
   // IDEIntf
   IDEDialogs, PropEdits, PropEditUtils, ComponentEditors, MenuIntf,
   IDEImagesIntf, FormEditingIntf, ComponentReg, IDECommands, LazIDEIntf,
@@ -79,12 +80,13 @@ type
 
   TDesignerFlag = (
     dfHasSized,
+    dfNeedPainting,
     dfDuringPaintControl,
+    dfDuringDeletePers,
+    dfDestroyingForm,
     dfShowEditorHints,
     dfShowComponentCaptions,
-    dfShowNonVisualComponents,
-    dfDestroyingForm,
-    dfNeedPainting
+    dfShowNonVisualComponents
     );
   TDesignerFlags = set of TDesignerFlag;
 
@@ -229,8 +231,7 @@ type
     procedure DoShowObjectInspector;
     procedure DoChangeZOrder(TheAction: Integer);
 
-    procedure GiveComponentsNames;
-    procedure NotifyPersistentAdded(APersistent: TPersistent);
+    procedure NotifyComponentAdded(AComponent: TComponent);
     function  ComponentClassAtPos(const AClass: TComponentClass;
                                   const APos: TPoint; const UseRootAsDefault,
                                   IgnoreHidden: boolean): TComponent;
@@ -759,11 +760,10 @@ begin
     FOnSetDesigning(Self,NewComponent,True);
 
   if EnvironmentOptions.CreateComponentFocusNameProperty then
-    // ask user for name
-    ShowComponentNameDialog(LookupRoot,NewComponent);
+    ShowComponentNameDialog(LookupRoot,NewComponent);  // ask user for name
 
   // tell IDE about the new component (e.g. add it to the source)
-  NotifyPersistentAdded(NewComponent);
+  NotifyComponentAdded(NewComponent);
 
   // creation completed
   // -> select new component
@@ -1213,7 +1213,7 @@ begin
   try
     // copy components to stream
     if not CopySelectionToStream(AllComponentsStream) then exit;
-    SetLength(AllComponentText,AllComponentsStream.Size);
+    SetLength(AllComponentText{%H-},AllComponentsStream.Size);
     if AllComponentText<>'' then begin
       AllComponentsStream.Position:=0;
       AllComponentsStream.Read(AllComponentText[1],length(AllComponentText));
@@ -1290,7 +1290,7 @@ function TDesigner.DoInsertFromStream(s: TStream;
   PasteParent: TWinControl; PasteFlags: TComponentPasteSelectionFlags): Boolean;
 var
   NewSelection: TPersistentSelectionList;
-  NewComponents: TFPList;
+  NewComps: TFPList;
 
   procedure FindUniquePosition(AComponent: TComponent);
   var
@@ -1309,7 +1309,7 @@ var
       i:=AParent.ControlCount-1;
       while i>=0 do begin
         OverlappedControl:=AParent.Controls[i];
-        if (NewComponents.IndexOf(OverlappedControl)<0)
+        if (NewComps.IndexOf(OverlappedControl)<0)
         and (OverlappedControl.Left=P.X)
         and (OverlappedControl.Top=P.Y) then begin
           inc(P.X,NonVisualCompWidth);
@@ -1352,7 +1352,7 @@ begin
   //debugln('TDesigner.DoInsertFromStream B s.Size=',dbgs(s.Size),' S.Position=',dbgs(S.Position));
   if PasteParent=nil then PasteParent:=GetPasteParent;
   NewSelection:=TPersistentSelectionList.Create;
-  NewComponents:=TFPList.Create;
+  NewComps:=TFPList.Create;
   try
     Form.DisableAutoSizing{$IFDEF DebugDisableAutoSizing}('TDesigner.DoInsertFromStream'){$ENDIF};
     try
@@ -1364,16 +1364,16 @@ begin
       end;
 
       // create components and add to LookupRoot
-      FOnPasteComponent(Self,FLookupRoot,s,PasteParent,NewComponents);
+      FOnPasteComponent(Self,FLookupRoot,s,PasteParent,NewComps);
       // add new component to new selection
-      for i:=0 to NewComponents.Count-1 do begin
-        NewComponent:=TComponent(NewComponents[i]);
+      for i:=0 to NewComps.Count-1 do begin
+        NewComponent:=TComponent(NewComps[i]);
         NewSelection.Add(NewComponent);
         // set new nice bounds
         if cpsfFindUniquePositions in PasteFlags then
           FindUniquePosition(NewComponent);
         // finish adding component
-        NotifyPersistentAdded(NewComponent);
+        NotifyComponentAdded(NewComponent);
         Modified;
         // add action in undo list
         AddUndoAction(NewComponent, uopAdd, i = 0, 'Name', '', NewComponent.Name);
@@ -1386,7 +1386,7 @@ begin
       Form.EnableAutoSizing{$IFDEF DebugDisableAutoSizing}('TDesigner.DoInsertFromStream'){$ENDIF};
     end;
   finally
-    NewComponents.Free;
+    NewComps.Free;
     if NewSelection.Count>0 then
       Selection.AssignSelection(NewSelection);
     NewSelection.Free;
@@ -1628,27 +1628,26 @@ begin
   Modified;
   OI := FormEditingHook.GetCurrentObjectInspector;
   if Assigned(OI) then
-    OI.ComponentTree.RebuildComponentNodes;
+    OI.ComponentTree.BuildComponentNodes(True);
 end;
 
-procedure TDesigner.GiveComponentsNames;
+procedure TDesigner.NotifyComponentAdded(AComponent: TComponent);
 var
   i: Integer;
-  CurComponent: TComponent;
-begin
-  if LookupRoot=nil then exit;
-  for i:=0 to LookupRoot.ComponentCount-1 do begin
-    CurComponent:=LookupRoot.Components[i];
-    if CurComponent.Name='' then
-      CurComponent.Name:=UniqueName(CurComponent.ClassName);
-  end;
-end;
-
-procedure TDesigner.NotifyPersistentAdded(APersistent: TPersistent);
+  SubContrl: TControl;
 begin
   try
-    GiveComponentsNames;
-    GlobalDesignHook.PersistentAdded(APersistent,false);
+    if AComponent.Name='' then
+      AComponent.Name:=UniqueName(AComponent.ClassName);
+    // Iterating Controls is needed at least for Side1 and Side2 of TPairSplitter.
+    if AComponent is TWinControl then
+      for i:=0 to TWinControl(AComponent).ControlCount-1 do
+      begin
+        SubContrl:=TWinControl(AComponent).Controls[i];
+        if (SubContrl.Owner<>AComponent) and (SubContrl.Name='') then
+          SubContrl.Name:=UniqueName(SubContrl.ClassName);
+      end;
+    GlobalDesignHook.PersistentAdded(AComponent,false);
   except
     on E: Exception do
       IDEMessageDialog('Error:',E.Message,mtError,[mbOk]);
@@ -1710,36 +1709,26 @@ begin
 end;
 
 function TDesigner.InvokeComponentEditor(AComponent: TComponent): boolean;
-var
-  CompEditor: TBaseComponentEditor;
 begin
   Result:=false;
   DebugLn('TDesigner.InvokeComponentEditor A ',AComponent.Name,':',AComponent.ClassName);
-  CompEditor:=TheFormEditor.GetComponentEditor(AComponent);
-  if CompEditor=nil then begin
-    DebugLn('TDesigner.InvokeComponentEditor',
-      ' WARNING: no component editor found for ',
-        AComponent.Name,':',AComponent.ClassName);
+  PopupMenuComponentEditor:=TheFormEditor.GetComponentEditor(AComponent);
+  if PopupMenuComponentEditor=nil then begin
+    DebugLn('TDesigner.InvokeComponentEditor WARNING: no component editor found for ',
+            AComponent.Name,':',AComponent.ClassName);
     exit;
   end;
-  DebugLn('TDesigner.InvokeComponentEditor B ',CompEditor.ClassName);
+  DebugLn('TDesigner.InvokeComponentEditor B ',PopupMenuComponentEditor.ClassName);
   try
-    CompEditor.Edit;
+    PopupMenuComponentEditor.Edit;
     Result:=true;
   except
     on E: Exception do begin
       DebugLn('TDesigner.InvokeComponentEditor ERROR: ',E.Message);
-      IDEMessageDialog(Format(lisErrorIn, [CompEditor.ClassName]),
+      IDEMessageDialog(Format(lisErrorIn, [PopupMenuComponentEditor.ClassName]),
         Format(lisTheComponentEditorOfClassHasCreatedTheError,
-               [CompEditor.ClassName, LineEnding, E.Message]),
+               [PopupMenuComponentEditor.ClassName, LineEnding, E.Message]),
         mtError,[mbOk]);
-    end;
-  end;
-  try
-    CompEditor.Free;
-  except
-    on E: Exception do begin
-      DebugLn('TDesigner.InvokeComponentEditor ERROR freeing component editor: ',E.Message);
     end;
   end;
 end;
@@ -2190,8 +2179,7 @@ begin
   end;
 end;
 
-procedure TDesigner.MouseDownOnControl(Sender: TControl;
-  var TheMessage: TLMMouse);
+procedure TDesigner.MouseDownOnControl(Sender: TControl; var TheMessage: TLMMouse);
 var
   CompIndex:integer;
   SelectedCompClass: TRegisteredComponent;
@@ -2254,7 +2242,7 @@ begin
     DebugLn(', No CTRL down');
   {$ENDIF}
 
-  if (MouseDownComponent <> nil) and (MouseDownComponent is TControl) then
+  if MouseDownComponent is TControl then
   begin
     MouseDownControl:=TControl(MouseDownComponent);
     p:=MouseDownControl.ScreenToClient(Form.ClientToScreen(MouseDownPos));
@@ -2279,8 +2267,7 @@ begin
   if Button=mbLeft then begin
     // left button
     // -> check if a grabber was activated
-    Selection.ActiveGrabber:=
-      Selection.GrabberAtPos(MouseDownPos.X, MouseDownPos.Y);
+    Selection.ActiveGrabber:=Selection.GrabberAtPos(MouseDownPos.X, MouseDownPos.Y);
     SetCaptureControl(ParentForm);
 
     if SelectedCompClass = nil then begin
@@ -2355,12 +2342,7 @@ procedure TDesigner.MouseUpOnControl(Sender : TControl; var TheMessage:TLMMouse)
 var
   Button: TMouseButton;
   Shift: TShiftState;
-  SenderParentForm: TCustomForm;
-  RubberBandWasActive: boolean;
-  PopupPos: TPoint;
   SelectedCompClass: TRegisteredComponent;
-  SelectionChanged, NewRubberbandSelection: boolean;
-  DesignSender: TControl;
 
   procedure DoAddComponent;
   var
@@ -2405,16 +2387,15 @@ var
       NewWidth:=0;
       NewHeight:=0;
     end;
-
     //DebugLn(['AddComponent ',dbgsName(NewComponentClass)]);
     if NewComponentClass = nil then exit;
-
-    AddComponent(SelectedCompClass, NewComponentClass, NewParent, NewLeft, NewTop, NewWidth, NewHeight);
+    AddComponent(SelectedCompClass,NewComponentClass,NewParent,NewLeft,NewTop,NewWidth,NewHeight);
   end;
 
   procedure RubberbandSelect;
   var
     MaxParentComponent: TComponent;
+    SelectionChanged, NewRubberSelection: boolean;
   begin
     if (ssShift in Shift)
     and (Selection.SelectionForm<>nil)
@@ -2427,8 +2408,7 @@ var
     end;
 
     // check if start new selection or add/remove:
-    NewRubberbandSelection:= (not (ssShift in Shift))
-      or (Selection.SelectionForm<>Form);
+    NewRubberSelection:= (not (ssShift in Shift)) or (Selection.SelectionForm<>Form);
     // update non visual components
     MoveNonVisualComponentsIntoForm;
     // if user press the Control key, then component candidates are only
@@ -2442,7 +2422,7 @@ var
       MaxParentComponent:=FLookupRoot;
     SelectionChanged:=false;
     Selection.SelectWithRubberBand(
-      FLookupRoot,Mediator,NewRubberbandSelection,ssShift in Shift,
+      FLookupRoot,Mediator,NewRubberSelection,ssShift in Shift,
       SelectionChanged,MaxParentComponent);
     if Selection.Count=0 then begin
       Selection.Add(FLookupRoot);
@@ -2455,34 +2435,13 @@ var
     Form.Invalidate;
   end;
 
-  procedure PointSelect;
-  begin
-    if not (ssShift in Shift) then
-    begin
-      // select only the mouse down component
-      Selection.AssignPersistent(MouseDownComponent);
-      if (ssDouble in MouseDownShift) and (Selection.SelectionForm = Form) then
-      begin
-        // Double Click -> invoke 'Edit' of the component editor
-        FShiftState := Shift;
-        InvokeComponentEditor(MouseDownComponent);
-        FShiftState := [];
-      end;
-    end;
-  end;
-
-  procedure DisableRubberBand;
-  begin
-    if Selection.RubberbandActive then
-      Selection.RubberbandActive := False;
-  end;
-
 var
-  Handled: Boolean;
-  i, j: Integer;
+  SenderParentForm: TCustomForm;
   SelectedPersistent: TSelectedControl;
-  MouseDownControl: TControl;
-  p: types.TPoint;
+  DesignSender, MouseDownControl: TControl;
+  RubberBandWasActive, Handled: Boolean;
+  p, PopupPos: TPoint;
+  i, j: Integer;
 begin
   FHintTimer.Enabled := False;
   FHintWindow.Visible := False;
@@ -2493,10 +2452,8 @@ begin
   DesignSender:=GetDesignControl(Sender);
   SenderParentForm:=GetDesignerForm(DesignSender);
   //DebugLn(['TDesigner.MouseUpOnControl DesignSender=',dbgsName(DesignSender),' SenderParentForm=',dbgsName(SenderParentForm),' ',TheMessage.XPos,',',TheMessage.YPos]);
-  if (MouseDownComponent=nil) or (SenderParentForm=nil)
-  or (SenderParentForm<>Form)
-  or ((Selection.SelectionForm<>nil)
-    and (Selection.SelectionForm<>Form)) then
+  if (MouseDownComponent=nil) or (SenderParentForm=nil) or (SenderParentForm<>Form)
+  or ( (Selection.SelectionForm<>nil) and (Selection.SelectionForm<>Form) ) then
   begin
     MouseDownComponent:=nil;
     MouseDownSender:=nil;
@@ -2518,7 +2475,7 @@ begin
   DebugLn('');
   {$ENDIF}
 
-  if (MouseDownComponent <> nil) and (MouseDownComponent is TControl) then
+  if MouseDownComponent is TControl then
   begin
     MouseDownControl:=TControl(MouseDownComponent);
     p:=MouseDownControl.ScreenToClient(Form.ClientToScreen(MouseUpPos));
@@ -2591,40 +2548,41 @@ begin
       begin
         // new selection
         if RubberBandWasActive then
-        begin
-          // rubberband selection
-          RubberbandSelect;
-        end else
-        begin
-          // point selection
-          PointSelect;
+          RubberbandSelect     // rubberband selection
+        else if not (ssShift in Shift) then
+        begin          // point selection, select only the mouse down component
+          Selection.AssignPersistent(MouseDownComponent);
+          if (ssDouble in MouseDownShift) and (Selection.SelectionForm = Form) then
+          begin        // Double Click -> invoke 'Edit' of the component editor
+            PopupMenuComponentEditor := GetComponentEditorForSelection;
+            Assert(Assigned(PopupMenuComponentEditor),
+                  'TDesigner.MouseUpOnControl: no component editor found for '
+                  +MouseDownComponent.Name+':'+MouseDownComponent.ClassName);
+            PopupMenuComponentEditor.Edit;
+          end;
         end;
       end
       else
         Selection.UpdateBounds;
     end else
-    begin
-      // create new a component on the form
-      DoAddComponent;
-    end;
+      DoAddComponent;  // create new a component on the form
   end
   else if Button=mbRight then
   begin
     // right click -> popup menu
-    DisableRubberBand;
+    Selection.RubberbandActive := False;
     Selection.EndUpdate;
     if EnvironmentOptions.RightClickSelects
     and (not Selection.IsSelected(MouseDownComponent))
-    and (Shift - [ssRight] = []) then
-      PointSelect;
+    and (Shift - [ssRight] = []) then    // select only the mouse down component
+      Selection.AssignPersistent(MouseDownComponent);
     PopupMenuComponentEditor := GetComponentEditorForSelection;
     BuildPopupMenu;
     PopupPos := Form.ClientToScreen(MouseUpPos);
     FDesignerPopupMenu.Popup(PopupPos.X, PopupPos.Y);
     Selection.BeginUpdate;
   end;
-
-  DisableRubberBand;
+  Selection.RubberbandActive := False;
   LastMouseMovePos.X:=-1;
   if (not Selection.OnlyVisualComponentsSelected and ShowComponentCaptions)
   or (dfHasSized in FFlags) then
@@ -2683,7 +2641,7 @@ begin
   MouseMoveComponent := MouseDownComponent;
   if MouseMoveComponent = nil then
     MouseMoveComponent := ComponentAtPos(LastMouseMovePos.X, LastMouseMovePos.Y, True, True);
-  if (MouseMoveComponent <> nil) and (MouseMoveComponent is TControl) then
+  if MouseMoveComponent is TControl then
   begin
     MouseMoveControl:=TControl(MouseMoveComponent);
     p:=MouseMoveControl.ScreenToClient(Form.ClientToScreen(LastMouseMovePos));
@@ -2777,10 +2735,9 @@ begin
           end;
         end
         else
-        begin
-          // rubberband sizing (selection or creation)
+        begin          // rubberband sizing (selection or creation)
           Selection.RubberBandBounds := Rect(MouseDownPos.X, MouseDownPos.Y,
-                                                    LastMouseMovePos.X, LastMouseMovePos.Y);
+                                             LastMouseMovePos.X, LastMouseMovePos.Y);
           if SelectedCompClass = nil then
             Selection.RubberbandType := rbtSelection
           else
@@ -3032,8 +2989,10 @@ end;
 procedure TDesigner.DoDeletePersistent(APersistent: TPersistent; FreeIt: boolean);
 var
   Hook: TPropertyEditorHook;
+  Special: Boolean;
 begin
   if APersistent=nil then exit;
+  Include(FFlags, dfDuringDeletePers);
   try
     //debugln(['TDesigner.DoDeletePersistent A ',dbgsName(APersistent),' FreeIt=',FreeIt]);
     // unselect component
@@ -3054,22 +3013,29 @@ begin
     end;
     // call component deleting handlers
     Hook:=GetPropertyEditorHook;
-    if Hook<>nil then
+    if Assigned(Hook) then
       Hook.PersistentDeleting(APersistent);
+    Special := (Copy(APersistent.ClassName,1,3) = 'TPS') // A hack for PSScript plugins. ToDo...
+      or ((APersistent is TWinControl) and TWinControl(APersistent).IsSpecialSubControl);
     // delete component
     if APersistent is TComponent then
       TheFormEditor.DeleteComponent(TComponent(APersistent),FreeIt)
     else if FreeIt then
       APersistent.Free;
+    // call ComponentDeleted handler
+    if Assigned(FOnPersistentDeleted) then begin
+      if Special then       // Special treatment is needed for TPairSplitterSide.
+        FOnPersistentDeleted(Self,nil)          // Will rebuild whole OI Tree.
+      else
+        FOnPersistentDeleted(Self,APersistent);
+    end;
+    if Assigned(Hook) then
+      Hook.PersistentDeleted(APersistent);
   finally
     // unmark component
     DeletingPersistent.Remove(APersistent);
+    Exclude(FFlags, dfDuringDeletePers);
   end;
-  // call ComponentDeleted handler
-  if Assigned(FOnPersistentDeleted) then
-    FOnPersistentDeleted(Self,APersistent);
-  if Hook<>nil then
-    Hook.PersistentDeleted;
 end;
 
 function TDesigner.GetSelectedComponentClass: TRegisteredComponent;
@@ -3212,7 +3178,10 @@ begin
     {$IFDEF VerboseDesigner}
     DebugLn('[TDesigner.Notification] opRemove ',dbgsName(AComponent));
     {$ENDIF}
-    DoDeletePersistent(AComponent,false);
+    // Notification is usually triggered by TheFormEditor.DeleteComponent
+    //  in DoDeletePersistent. Don't call it again.
+    if not (dfDuringDeletePers in FFlags) then // Needed eg. for TControlSelection
+      DoDeletePersistent(AComponent,false);    //  with copy/paste.
   end;
 end;
 
@@ -3775,7 +3744,7 @@ end;
 
 function TDesigner.ComponentIsIcon(AComponent: TComponent): boolean;
 begin
-  Result:=DesignerProcs.ComponentIsNonVisual(AComponent);
+  Result:=ComponentIsNonVisual(AComponent);
   if Result and (Mediator<>nil) then
     Result:=Mediator.ComponentIsIcon(AComponent);
 end;
@@ -3877,8 +3846,7 @@ begin
 end;
 
 function TDesigner.ComponentClassAtPos(const AClass: TComponentClass;
-  const APos: TPoint; const UseRootAsDefault, IgnoreHidden: boolean
-  ): TComponent;
+  const APos: TPoint; const UseRootAsDefault, IgnoreHidden: boolean): TComponent;
 var
   s: TComponentSearch;
   MediatorFlags: TDMCompAtPosFlags;
@@ -3905,7 +3873,6 @@ begin
       s.Free;
     end;
   end;
-
   if (Result = nil) and UseRootAsDefault and (FLookupRoot.InheritsFrom(AClass)) then
     Result := LookupRoot;
 end;
@@ -4304,16 +4271,16 @@ procedure TDesigner.HintTimer(Sender: TObject);
     end;
   end;
 
-  function GetSelectionSizeHintText: String;
-  begin
-    Result := Format('%d x %d', [Selection.Width, Selection.Height]);
-  end;
-
   function ParentComponent(AComponent: TComponent): TComponent;
   begin
     Result := AComponent.GetParentComponent;
     if (Result = nil) and ComponentIsIcon(AComponent) then
       Result := AComponent.Owner;
+  end;
+
+  function GetSelectionSizeHintText: String;
+  begin
+    Result := Format('%d x %d', [Selection.Width, Selection.Height]);
   end;
 
   function GetSelectionPosHintText: String;
@@ -4382,7 +4349,6 @@ begin
     // components are either resize or move
     if (Selection.LookupRoot <> Form) or (Selection.Count = 0) then
       Exit;
-
     if Selection.ActiveGrabber <> nil then
       AHint := GetSelectionSizeHintText
     else

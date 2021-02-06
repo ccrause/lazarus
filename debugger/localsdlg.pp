@@ -36,9 +36,17 @@ unit LocalsDlg;
 interface
 
 uses
-  SysUtils, Classes, Forms, ClipBrd, LCLProc, LazLoggerBase, strutils,
-  IDEWindowIntf, DebuggerStrConst,
-  ComCtrls, ActnList, Menus, BaseDebugManager, Debugger, DebuggerDlg;
+  SysUtils, Classes, StrUtils,
+  // LCL
+  Forms, ClipBrd, ComCtrls, ActnList, Menus,
+  // LazUtils
+  LazLoggerBase, LazUTF8,
+  // IdeIntf
+  IDEWindowIntf,
+  // DebuggerIntf
+  DbgIntfDebuggerBase,
+  // IDE
+  DebuggerStrConst, BaseDebugManager, Debugger, DebuggerDlg;
 
 type
 
@@ -51,6 +59,7 @@ type
     actCopyValue: TAction;
     actCopyAll: TAction;
     actCopyRAWValue: TAction;
+    actEvaluateAll: TAction;
     actWath: TAction;
     ActionList1: TActionList;
     lvLocals: TListView;
@@ -62,11 +71,13 @@ type
     MenuItem6: TMenuItem;
     MenuItem7: TMenuItem;
     MenuItem8: TMenuItem;
+    MenuItem9: TMenuItem;
     PopupMenu1: TPopupMenu;
     procedure actCopyAllExecute(Sender: TObject);
     procedure actCopyAllUpdate(Sender: TObject);
     procedure actCopyNameExecute(Sender: TObject);
     procedure actCopyValueExecute(Sender: TObject);
+    procedure actEvaluateAllExecute(Sender: TObject);
     procedure actEvaluateExecute(Sender: TObject);
     procedure actInspectExecute(Sender: TObject);
     procedure actInspectUpdate(Sender: TObject);
@@ -74,6 +85,14 @@ type
     procedure actWathExecute(Sender: TObject);
   private
     FUpdateFlags: set of (ufNeedUpdating);
+    EvaluateAllCallbackItem: TListItem;
+    procedure CopyRAWValueEvaluateCallback(Sender: TObject; ASuccess: Boolean;
+      ResultText: String; ResultDBGType: TDBGType);
+    procedure CopyValueEvaluateCallback(Sender: TObject; ASuccess: Boolean;
+      ResultText: String; ResultDBGType: TDBGType);
+    procedure EvaluateAllCallback(Sender: TObject; ASuccess: Boolean;
+      ResultText: String; ResultDBGType: TDBGType);
+
     procedure LocalsChanged(Sender: TObject);
     function  GetThreadId: Integer;
     function  GetSelectedThreads(Snap: TSnapshot): TIdeThreads;
@@ -93,6 +112,7 @@ type
   end;
 
 function ValueToRAW(const AValue: string): string;
+function ExtractValue(AValue: string; AType: string = ''): string;
 
 implementation
 
@@ -138,10 +158,22 @@ var
     begin
       Inc(I);
       xNum := '';
-      while (I <= M) and (AValue[I] in ['0'..'9']) do
-      begin
-        xNum := xNum + AValue[I]; // not really fast, but OK for this purpose
+      if (I <= M) and (AValue[I]='$') then
+      begin // hex
+        xNum := xNum + AValue[I];
         Inc(I);
+        while (I <= M) and (AValue[I] in ['0'..'9', 'A'..'F', 'a'..'f']) do
+        begin
+          xNum := xNum + AValue[I]; // not really fast, but OK for this purpose
+          Inc(I);
+        end;
+      end else
+      begin // dec
+        while (I <= M) and (AValue[I] in ['0'..'9']) do
+        begin
+          xNum := xNum + AValue[I]; // not really fast, but OK for this purpose
+          Inc(I);
+        end;
       end;
       if TryStrToInt(xNum, xCharOrd) then
       begin
@@ -216,6 +248,26 @@ begin
     ProcessOther;
 end;
 
+function ExtractValue(AValue: string; AType: string): string;
+var
+  StringStart: SizeInt;
+begin
+  Result := AValue;
+  if (AType='') and (AValue<>'') and CharInSet(AValue[1], ['a'..'z', 'A'..'Z']) then // no type - guess from AValue
+  begin
+    StringStart := Pos('(', AValue);
+    if StringStart>0 then
+      AType := Copy(AValue, 1, StringStart-1);
+  end;
+  AType := Lowercase(AType);
+  if (Pos('char', AType)>0) or (Pos('string', AType)>0) then // extract string value
+  begin
+    StringStart := Pos('''', Result);
+    if StringStart>0 then
+      Delete(Result, 1, StringStart-1);
+  end;
+end;
+
 { TLocalsDlg }
 
 constructor TLocalsDlg.Create(AOwner: TComponent);
@@ -234,6 +286,7 @@ begin
   actInspect.Caption := lisInspect;
   actWath.Caption := lisWatch;
   actEvaluate.Caption := lisEvaluateModify;
+  actEvaluateAll.Caption := lisEvaluateAll;
   actCopyName.Caption := lisLocalsDlgCopyName;
   actCopyValue.Caption := lisLocalsDlgCopyValue;
   actCopyRAWValue.Caption := lisLocalsDlgCopyRAWValue;
@@ -250,9 +303,12 @@ end;
 
 procedure TLocalsDlg.actCopyRAWValueExecute(Sender: TObject);
 begin
-  Clipboard.Open;
-  Clipboard.AsText := ValueToRAW(lvLocals.Selected.SubItems[0]);
-  Clipboard.Close;
+  if not DebugBoss.Evaluate(lvLocals.Selected.Caption, @CopyRAWValueEvaluateCallback, []) then
+  begin
+    Clipboard.Open;
+    Clipboard.AsText := ValueToRAW(lvLocals.Selected.SubItems[0]);
+    Clipboard.Close;
+  end;
 end;
 
 procedure TLocalsDlg.actWathExecute(Sender: TObject);
@@ -261,10 +317,17 @@ var
   Watch: TCurrentWatch;
 begin
   S := lvLocals.Selected.Caption;
+  if s = '' then
+    exit;
   if DebugBoss.Watches.CurrentWatches.Find(S) = nil then
   begin
-    Watch := DebugBoss.Watches.CurrentWatches.Add(S);
-    Watch.Enabled := True;
+    DebugBoss.Watches.CurrentWatches.BeginUpdate;
+    try
+      Watch := DebugBoss.Watches.CurrentWatches.Add(S);
+      Watch.Enabled := True;
+    finally
+      DebugBoss.Watches.CurrentWatches.EndUpdate;
+    end;
   end;
   DebugBoss.ViewDebugDialog(ddtWatches);
 end;
@@ -309,15 +372,30 @@ end;
 
 procedure TLocalsDlg.actCopyValueExecute(Sender: TObject);
 begin
-  Clipboard.Open;
-  Clipboard.AsText := lvLocals.Selected.SubItems[0];
-  Clipboard.Close;
+  if not DebugBoss.Evaluate(lvLocals.Selected.Caption, @CopyValueEvaluateCallback, []) then
+  begin
+    Clipboard.Open;
+    Clipboard.AsText := lvLocals.Selected.SubItems[0];
+    Clipboard.Close;
+  end
+end;
+
+procedure TLocalsDlg.actEvaluateAllExecute(Sender: TObject);
+var
+  I: Integer;
+begin
+  for I := 0 to lvLocals.Items.Count-1 do
+  begin
+    EvaluateAllCallbackItem := lvLocals.Items[I];
+    DebugBoss.Evaluate(EvaluateAllCallbackItem.Caption, @EvaluateAllCallback, []);
+  end;
+  EvaluateAllCallbackItem := nil;
 end;
 
 procedure TLocalsDlg.LocalsChanged(Sender: TObject);
 var
   n, idx: Integer;                               
-  List: TStringList;
+  List: TStringListUTF8Fast;
   Item: TListItem;
   S: String;
   Locals: TIDELocals;
@@ -352,7 +430,7 @@ begin
     Caption:= lisLocals;
   end;
 
-  List := TStringList.Create;
+  List := TStringListUTF8Fast.Create;
   try
     BeginUpdate;
     try
@@ -383,12 +461,12 @@ begin
           // New entry
           Item := lvLocals.Items.Add;
           Item.Caption := Locals.Names[n];
-          Item.SubItems.Add(Locals.Values[n]);
+          Item.SubItems.Add(ExtractValue(Locals.Values[n]));
         end
         else begin
           // Existing entry
           Item := TListItem(List.Objects[idx]);
-          Item.SubItems[0] := Locals.Values[n];
+          Item.SubItems[0] := ExtractValue(Locals.Values[n]);
           List.Delete(idx);
         end;
       end;
@@ -471,6 +549,17 @@ begin
   lvLocals.EndUpdate;
 end;
 
+procedure TLocalsDlg.EvaluateAllCallback(Sender: TObject; ASuccess: Boolean;
+  ResultText: String; ResultDBGType: TDBGType);
+begin
+  if ASuccess then
+  begin
+    if Assigned(EvaluateAllCallbackItem) then
+      EvaluateAllCallbackItem.SubItems[0] := ExtractValue(ResultText, ResultDBGType.TypeName);
+  end;
+  FreeAndNil(ResultDBGType);
+end;
+
 function TLocalsDlg.ColSizeGetter(AColId: Integer; var ASize: Integer): Boolean;
 begin
   if (AColId - 1 >= 0) and (AColId - 1 < lvLocals.ColumnCount) then begin
@@ -487,6 +576,30 @@ begin
     COL_LOCALS_NAME:   lvLocals.Column[0].Width := ASize;
     COL_LOCALS_VALUE:  lvLocals.Column[1].Width := ASize;
   end;
+end;
+
+procedure TLocalsDlg.CopyRAWValueEvaluateCallback(Sender: TObject;
+  ASuccess: Boolean; ResultText: String; ResultDBGType: TDBGType);
+begin
+  Clipboard.Open;
+  if ASuccess then
+    Clipboard.AsText := ValueToRAW(ExtractValue(ResultText, ResultDBGType.TypeName))
+  else
+    Clipboard.AsText := ValueToRAW(lvLocals.Selected.SubItems[0]);
+  Clipboard.Close;
+  FreeAndNil(ResultDBGType);
+end;
+
+procedure TLocalsDlg.CopyValueEvaluateCallback(Sender: TObject;
+  ASuccess: Boolean; ResultText: String; ResultDBGType: TDBGType);
+begin
+  Clipboard.Open;
+  if ASuccess then
+    Clipboard.AsText := ExtractValue(ResultText, ResultDBGType.TypeName)
+  else
+    Clipboard.AsText := lvLocals.Selected.SubItems[0];
+  Clipboard.Close;
+  FreeAndNil(ResultDBGType);
 end;
 
 initialization

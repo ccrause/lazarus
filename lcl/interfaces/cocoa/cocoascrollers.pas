@@ -31,7 +31,6 @@ uses
   cocoa_extra, CocoaPrivate;
 
 type
-
   { TCocoaScrollView }
 
   TCocoaScrollView = objcclass(NSScrollView)

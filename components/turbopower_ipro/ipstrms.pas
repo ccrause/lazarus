@@ -42,14 +42,10 @@ interface
 
 uses
   SysUtils, Classes,
-  {$IFDEF IP_LAZARUS}
   // LCL
   LCLType,
   // LazUtils
   FPCAdds, LazFileUtils, IntegerList,
-  {$ELSE}
-  Windows, // put Windows behind Classes because of THandle
-  {$ENDIF}
   IpUtils,
   IpConst;
 
@@ -147,7 +143,7 @@ type
       FBufPos  : Longint;
       FBufSize : Longint;
       FDirty   : Boolean;
-      FSize    : {$IFDEF IP_LAZARUS}TStreamSeekType{$ELSE}longint{$ENDIF};
+      FSize    : TStreamSeekType;
       FStream  : TStream;
 
     protected {- methods }
@@ -161,7 +157,7 @@ type
       constructor CreateEmpty;
       destructor  Destroy; override;
 
-      procedure Flush;                                                 {!!.12}
+      procedure Flush;
         { Flush any unwritten changes to the stream. }
       procedure FreeStream;
       function ReadChar(var aCh : AnsiChar) : Boolean;
@@ -170,7 +166,7 @@ type
       function Write(const Buffer; Count : Longint) : Longint; override;
 
     public {-properties }
-      property FastSize: {$IFDEF IP_LAZARUS}TStreamSeekType{$ELSE}longint{$ENDIF}
+      property FastSize: TStreamSeekType
         read FSize;
       property Stream : TStream
         read FStream write bsSetStream;
@@ -215,7 +211,7 @@ type
       destructor Destroy; override;
 
       function  AtEndOfStream : Boolean;
-      procedure bsInitForNewStream; override;                        {!!.01}
+      procedure bsInitForNewStream; override;
       function  ReadLine : string;
       function  ReadLineArray(aCharArray : PAnsiChar; aLen : Longint) : Longint;
       function  ReadLineZ(aSt : PAnsiChar; aMaxLen : Longint) : PAnsiChar;
@@ -350,26 +346,21 @@ end;
 
 procedure TIpMemMapStream.CloseFile;
 begin
-  {$IFDEF IP_LAZARUS}
   writeln('TIpMemMapStream.CloseFile ToDo');
-  {$ELSE}
-  if mmFileHandle <> 0 then
-    CloseHandle(mmFileHandle);
-  {$ENDIF}
+{  if mmFileHandle <> 0 then
+    CloseHandle(mmFileHandle);}
 end;
 
 {-----------------------------------------------------------------------------}
 
 procedure TIpMemMapStream.CloseMap;
 begin
-  {$IFDEF IP_LAZARUS}
   writeln('TIpMemMapStream.CloseMap ToDo');
-  {$ELSE}
-  FlushViewOfFile(mmPointer, 0);
+{  FlushViewOfFile(mmPointer, 0);
   UnMapViewOfFile(mmPointer);
   if mmMapHandle <> 0 then
     CloseHandle(mmMapHandle);
-  {$ENDIF}
+}
 end;
 
 {-----------------------------------------------------------------------------}
@@ -383,11 +374,10 @@ end;
 {-----------------------------------------------------------------------------}
 
 procedure TIpMemMapStream.OpenFile;
-{$IFDEF IP_LAZARUS}
 begin
   writeln('TIpMemMapStream.OpenFile ToDo');
 end;
-{$ELSE}
+(*
 var
   CreateMode,
   Flags,
@@ -427,16 +417,15 @@ begin
     raise EIpBaseException.Create(SysErrorMessage(GetLastError) + SFilename +
                                   mmFileName);
 end;
-{$ENDIF}
+*)
 
 {-----------------------------------------------------------------------------}
 
 procedure TIpMemMapStream.OpenMap;
-{$IFDEF IP_LAZARUS}
 begin
   writeln('TIpMemMapStream.OpenMap ToDo');
 end;
-{$ELSE}
+(*
 var
   AccessMode,
   ProtectMode,
@@ -480,7 +469,7 @@ begin
                                   mmFileName);
   mmPos := 0;
 end;
-{$ENDIF}
+*)
 
 {-----------------------------------------------------------------------------}
 
@@ -495,9 +484,8 @@ begin
     SavPos := mmPos;
   CloseMap;
 
-  {$IFDEF IP_LAZARUS}
   writeln('TIpMemMapStream.Resize ToDo');
-  {$ELSE}
+(*
   { Update the size of the file. }
   if SetFilePointer(mmFileHandle, NewSize, nil, FILE_BEGIN) <> $FFFFFFFF then begin
     if SetEndOfFile(mmFileHandle) = false then
@@ -507,7 +495,7 @@ begin
   else
     raise EIpBaseException.Create(SysErrorMessage(GetLastError) + SFilename +
                                   mmFileName);
-  {$ENDIF}
+*)
 
   { Update internal size information. }
   FSize := NewSize;
@@ -737,7 +725,6 @@ begin
     raise EIpBaseException.Create(SCannotWriteToStream);
   FDirty := false;
 end;
-{Begin !!.12}
 
 {-----------------------------------------------------------------------------}
 
@@ -746,7 +733,6 @@ begin
   if FDirty then
     bsWriteToStream;
 end;
-{End !!.12}
 
 {-----------------------------------------------------------------------------}
 
@@ -1151,32 +1137,12 @@ begin
      be less than it because we read the last line of all and it was
      short}
     StLen := FixedLineLength;
-    {$IFDEF MSWindows}
     SetLength(Result, StLen);
-    {$ELSE}
-    {$IFDEF IP_LAZARUS}
-    SetLength(Result, StLen);
-    {$ELSE}
-    if (StLen > 255) then
-      StLen := 255;
-    Result[0] := char(StLen);
-    {$ENDIF}
-    {$ENDIF}
     if (Len < StLen) then
       FillChar(Result[Len+1], StLen-Len, ' ');
   end
   else {LineTerminator is not ltNone} begin
-    {$IFDEF MSWindows}
     SetLength(Result, Len);
-    {$ELSE}
-    {$IFDEF IP_LAZARUS}
-    SetLength(Result, Len);
-    {$ELSE}
-    if (Len > 255) then
-      Len := 255;
-    Result[0] := char(Len);
-    {$ENDIF}
-    {$ENDIF}
   end;
   {read the line}
   Seek(CurPos, soFromBeginning);
@@ -1514,7 +1480,6 @@ end;
 {-----------------------------------------------------------------------------}
 
 procedure TIpAnsiTextStream.WriteLine(const aSt : string);
-{Rewritten !!.15}
 begin
   if Length(aSt) > 0 then
     WriteLineArray(@aSt[1], length(aSt))
@@ -1587,22 +1552,16 @@ begin
 
   FHandle := THandle(FileOpen(FFileName, fmShareDenyNone + fmOpenReadWrite));
   if (Handle = IpFileOpenFailed) then
-{$IFDEF Version6OrHigher}
-    RaiseLastOSError; 
-{$ELSE}
-    RaiseLastWin32Error;
-{$ENDIF}
+    RaiseLastOSError;
 end;
 
 destructor TIpDownloadFileStream.Destroy;
 begin
-  {$IFDEF IP_LAZARUS}
   writeln('ToDo: TIpDownloadFileStream.Destroy ');
-  {$ELSE}
-  FlushFileBuffers(FHandle);
+{  FlushFileBuffers(FHandle);
   if (Handle <> INVALID_HANDLE_VALUE) then
     CloseHandle(Handle);
-  {$ENDIF}
+}
   inherited Destroy;
 end;
 
@@ -1619,16 +1578,15 @@ begin
     raise EIpBaseException.Create(SBadPath);
 
   { Create a new uniquely named file in that folder. }
-  FFileName := GetTemporaryFile(FPath);                                {!!.12}
+  FFileName := GetTemporaryFile(FPath);
 end;
 
 function TIpDownloadFileStream.Read(var Buffer; Count : Longint) : Longint;
-{$IFDEF IP_LAZARUS}
 begin
   writeln('ToDo: TIpDownloadFileStream.Read ');
   Result:=0;
 end;
-{$ELSE}
+{
 var
   ReadOK : Bool;
 begin
@@ -1639,31 +1597,22 @@ begin
     Result := 0;
   end;
 end;
-{$ENDIF}
+}
 
 procedure TIpDownloadFileStream.Rename(aNewName : string);
 var
   NewFullName : string;
 begin
-  {$IFDEF IP_LAZARUS}
   writeln('ToDo: TIpDownloadFileStream.Rename ');
-  {$ENDIF}
   {close the current handle}
-  {$IFNDEF IP_LAZARUS}
-  CloseHandle(Handle);
-  {$ENDIF}
+
+//  CloseHandle(Handle);
   FHandle := IpFileOpenFailed;
   {calculate the full new name}
   NewFullName := FPath + '\' + aNewName;
   {rename the file}
-{$IFDEF Version6OrHigher}
-  {$IFNDEF IP_LAZARUS}
-  if not MoveFile(PAnsiChar(FFileName), PAnsiChar(NewFullName)) then
+  if not RenameFile(FFileName, NewFullName) then
     RaiseLastOSError;
-  {$ENDIF}
-{$ELSE}
-  Win32Check(MoveFile(PAnsiChar(FFileName), PAnsiChar(NewFullName)));
-{$ENDIF}
   {open up the same file, but with its new name}
   FFileName := NewFullName;
   try
@@ -1673,35 +1622,20 @@ begin
   end;
 
   if (Handle = IpFileOpenFailed) then
-{$IFDEF Version6OrHigher}
     RaiseLastOSError;
-{$ELSE}
-    RaiseLastWin32Error;
-{$ENDIF}
 
   FRenamed  := true;
 end;
 
 procedure TIpDownloadFileStream.Move(aNewName : string);
 begin
-  {$IFDEF IP_LAZARUS}
   writeln('ToDo: TIpDownloadFileStream.Move ');
-  {$ENDIF}
   {close the current handle}
-  {$IFNDEF IP_LAZARUS}
-  CloseHandle(Handle);
-  {$ENDIF}
+  //CloseHandle(Handle);
   FHandle := IpFileOpenFailed;
-  {copy the file}                                                      {!!.01}
-{$IFDEF Version6OrHigher}
-  {$IFNDEF IP_LAZARUS}
-  if not CopyFile(PAnsiChar(FFileName), PAnsiChar(aNewName), False) then
+  {copy the file}
+  if not RenameFile(FFileName, aNewName) then
     RaiseLastOSError;
-  {$ENDIF}
-{$ELSE}
-  Win32Check(CopyFile(PAnsiChar(FFileName),                            {!!.01}
-    PAnsiChar(aNewName), False));                                      {!!.01}
-{$ENDIF}
 
   {open up the same file, but with its new name}
   FFileName := aNewName;
@@ -1712,32 +1646,24 @@ begin
   end;
 
   if (Handle = IpFileOpenFailed) then
-{$IFDEF Version6OrHigher}
     RaiseLastOSError;
-{$ELSE}
-    RaiseLastWin32Error;
-{$ENDIF}
 
   FRenamed  := true;
 end;
 
 function TIpDownloadFileStream.Seek(Offset : Longint; Origin : Word) : Longint;
 begin
-  {$IFDEF IP_LAZARUS}
   writeln('ToDo: TIpDownloadFileStream.Seek');
   Result := 0;
-  {$ELSE}
-  Result := SetFilePointer(Handle, Offset, nil, Origin);
-  {$ENDIF}
+  //Result := SetFilePointer(Handle, Offset, nil, Origin);
 end;
 
 function TIpDownloadFileStream.Write(const Buffer; Count : Longint) : Longint;
-{$IFDEF IP_LAZARUS}
 begin
   writeln('ToDo: TIpDownloadFileStream.Write');
   Result:=Count;
 end;
-{$ELSE}
+{
 var
   WriteOK : Bool;
 begin
@@ -1748,7 +1674,7 @@ begin
     Result := 0
   end;
 end;
-{$ENDIF}
+}
 
 
 { TIpByteStream }

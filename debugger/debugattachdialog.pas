@@ -100,8 +100,6 @@ begin
 end;
 {$else}
 {$ifdef linux}
-uses
-  LazUTF8Classes;
 
 function EnumerateProcesses(AList: TRunningProcessInfoList): boolean;
 
@@ -110,7 +108,7 @@ function EnumerateProcesses(AList: TRunningProcessInfoList): boolean;
     S: TStream;
     Sz: Integer;
   begin
-    S := TFileStreamUTF8.Create('/proc/' + IntToStr(Pid) + '/cmdline', fmOpenRead or fmShareDenyNone);
+    S := TFileStream.Create('/proc/' + IntToStr(Pid) + '/cmdline', fmOpenRead or fmShareDenyNone);
     try
       SetLength(Result, 255);
       Sz := S.Read(Result[1], 255);
@@ -218,15 +216,15 @@ end;
 
 function GetPidForAttach: string;
 var
-  ProcessList: TRunningProcessInfoList;
+  ProcessLst: TRunningProcessInfoList;
 begin
   Result := '';
 
-  ProcessList := TRunningProcessInfoList.Create(True);
+  ProcessLst := TRunningProcessInfoList.Create(True);
   try
     // Check if we can enumerate processes.
-    if not DebugBoss.FillProcessList(ProcessList) then
-      if not EnumerateProcesses(ProcessList) then
+    if not DebugBoss.FillProcessList(ProcessLst) then
+      if not EnumerateProcesses(ProcessLst) then
       begin
         // If we can't just ask PID as string.
         InputQuery(rsAttachTo, rsEnterPID, Result);
@@ -236,14 +234,14 @@ begin
     // Enumerate.
     DebugAttachDialogForm := TDebugAttachDialogForm.Create(nil);
     try
-      if DebugAttachDialogForm.ChooseProcess(ProcessList, Result) <> mrOK then
+      if DebugAttachDialogForm.ChooseProcess(ProcessLst, Result) <> mrOK then
         Result := '';
     finally
       FreeAndNil(DebugAttachDialogForm);
     end;
 
   finally
-    FreeAndNil(ProcessList);
+    FreeAndNil(ProcessLst);
   end;
 end;
 
@@ -285,7 +283,7 @@ procedure TDebugAttachDialogForm.lvProcessesSelectItem(Sender: TObject; Item: TL
 var
   info: TRunningProcessInfo;
 begin
-  if (Item.Index <> -1) And Selected then
+  if (Item <> nil) and (Item.Index <> -1) And Selected then
   begin
     info := TRunningProcessInfo(FList.Items[Item.Index]);
     FPidString := IntToStr(info.PID);

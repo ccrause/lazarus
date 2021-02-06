@@ -59,7 +59,7 @@ uses
   SynEditHighlighter, SynEditHighlighterFoldBase, SynHighlighterPas,
   SynEditMarkupHighAll, SynEditKeyCmds, SynEditMarkupIfDef, SynEditMiscProcs,
   SynPluginMultiCaret, SynEditPointClasses,
-  SynEditMarkupFoldColoring,
+  SynEditMarkupFoldColoring, SynEditTextTabExpander,
   etSrcEditMarks, LazarusIDEStrConsts;
 
 type
@@ -79,7 +79,7 @@ type
     procedure SetLineMap(Index: Integer; AValue: Integer);
     procedure SetLineMapCount(AValue: integer);
   public
-    procedure SetHighlighterTokensLine(ALine: TLineIdx; out ARealLine: TLineIdx); override;
+    procedure SetHighlighterTokensLine(ALine: TLineIdx; out ARealLine: TLineIdx; out AStartBytePos, ALineByteLen: Integer); override;
     function GetLinesCount: Integer; override;
     function TextToViewIndex(AIndex: TLineIdx): TLineRange; override;
     function ViewToTextIndex(AIndex: TLineIdx): TLineIdx; override;
@@ -96,7 +96,7 @@ type
     procedure TextSizeChanged(Sender: TObject);
   protected
     procedure DoPaint(ACanvas: TCanvas; AClip: TRect); override;
-    procedure SetTextArea(const ATextArea: TLazSynTextArea); override;
+    procedure SetTextArea(ATextArea: TLazSynTextArea); override;
   end;
 
   { TSourceLazSynSurfaceManager }
@@ -108,8 +108,8 @@ type
     FTopLineCount: Integer;
     procedure SetTopLineCount(AValue: Integer);
   protected
-    function GetLeftGutterArea: TLazSynSurface; override;
-    function GetRightGutterArea: TLazSynSurface; override;
+    function GetLeftGutterArea: TLazSynSurfaceWithText; override;
+    function GetRightGutterArea: TLazSynSurfaceWithText; override;
     function GetTextArea: TLazSynTextArea; override;
   protected
     procedure SetBackgroundColor(AValue: TColor); override;
@@ -124,6 +124,7 @@ type
     procedure SetHighlighter(AValue: TSynCustomHighlighter); override;
   protected
     procedure DoPaint(ACanvas: TCanvas; AClip: TRect); override;
+    procedure DoDisplayViewChanged; override;
     procedure BoundsChanged; override;
   public
     constructor Create(AOwner: TWinControl; AnOriginalManager: TLazSynSurfaceManager);
@@ -242,6 +243,7 @@ type
     FCaretStamp: Int64;
     FMarkupIdentComplWindow: TSynMarkupIdentComplWindow;
     FShowTopInfo: boolean;
+    FFoldView: TSynEditFoldedView;
     FTopInfoNestList: TLazSynEditNestedFoldsList;
     FSyncroEdit: TSynPluginSyncroEdit;
     FTemplateEdit: TSynPluginTemplateEdit;
@@ -1204,11 +1206,11 @@ begin
   SetLength(FLineMap, AValue);
 end;
 
-procedure TSourceLazSynTopInfoView.SetHighlighterTokensLine(ALine: TLineIdx; out
-  ARealLine: TLineIdx);
+procedure TSourceLazSynTopInfoView.SetHighlighterTokensLine(ALine: TLineIdx;
+  out ARealLine: TLineIdx; out AStartBytePos, ALineByteLen: Integer);
 begin
   CurrentTokenLine := ALine;
-  inherited SetHighlighterTokensLine(FLineMap[ALine], ARealLine);
+  inherited SetHighlighterTokensLine(FLineMap[ALine], ARealLine, AStartBytePos, ALineByteLen);
 end;
 
 function TSourceLazSynTopInfoView.GetLinesCount: Integer;
@@ -1250,8 +1252,7 @@ begin
   Gutter.Paint(ACanvas, Self, AClip, 0, -1);
 end;
 
-procedure TSourceLazSynSurfaceGutter.SetTextArea(
-  const ATextArea: TLazSynTextArea);
+procedure TSourceLazSynSurfaceGutter.SetTextArea(ATextArea: TLazSynTextArea);
 begin
   inherited SetTextArea(ATextArea);
   ATextArea.AddTextSizeChangeHandler(@TextSizeChanged);
@@ -1271,12 +1272,12 @@ begin
   BoundsChanged;
 end;
 
-function TSourceLazSynSurfaceManager.GetLeftGutterArea: TLazSynSurface;
+function TSourceLazSynSurfaceManager.GetLeftGutterArea: TLazSynSurfaceWithText;
 begin
   Result := FOriginalManager.LeftGutterArea;
 end;
 
-function TSourceLazSynSurfaceManager.GetRightGutterArea: TLazSynSurface;
+function TSourceLazSynSurfaceManager.GetRightGutterArea: TLazSynSurfaceWithText;
 begin
   Result := FOriginalManager.RightGutterArea;
 end;
@@ -1351,6 +1352,11 @@ procedure TSourceLazSynSurfaceManager.DoPaint(ACanvas: TCanvas; AClip: TRect);
 begin
   FOriginalManager.Paint(ACanvas, AClip);
   FExtraManager.Paint(ACanvas, AClip);
+end;
+
+procedure TSourceLazSynSurfaceManager.DoDisplayViewChanged;
+begin
+  FOriginalManager.DisplayView := DisplayView;
 end;
 
 procedure TSourceLazSynSurfaceManager.BoundsChanged;
@@ -1448,10 +1454,10 @@ var
     end;
   NodeFoldType: TPascalCodeFoldBlockType;
 begin
-  if (not FShowTopInfo) or (not HandleAllocated) or (TextView.HighLighter = nil) then exit;
-  if FSrcSynCaretChangedLock or not(TextView.HighLighter is TSynPasSyn) then exit;
+  if (not FShowTopInfo) or (not HandleAllocated) or (FFoldView.HighLighter = nil) then exit;
+  if FSrcSynCaretChangedLock or not(FFoldView.HighLighter is TSynPasSyn) then exit;
 
-  if TextView.HighLighter.NeedScan then begin
+  if FFoldView.HighLighter.NeedScan then begin
     FSrcSynCaretChangedNeeded := True;
     exit;
   end;
@@ -1604,7 +1610,6 @@ begin
     m := TSourceSynEditMarkupHighlightAllMulti.Create(self);
     if PaintLock > 0 then
       m.IncPaintLock;
-    m.FoldView := TSynEditFoldedView(FoldedTextBuffer);
     if Highlighter <> nil then
       m.WordBreakChars := Highlighter.WordBreakChars + TSynWhiteChars;
     FUserWordsList.Add(m);
@@ -1743,6 +1748,7 @@ var
   MarkupFoldColors: TSynEditMarkupFoldColors;
 begin
   inherited Create(AOwner);
+  FFoldView := TSynEditFoldedView(TextViewsManager.SynTextViewByClass[TSynEditFoldedView]);
   FCaretColor := clNone;
   FUserWordsList := TFPList.Create;
   FTemplateEdit:=TSynPluginTemplateEdit.Create(Self);
@@ -1772,7 +1778,7 @@ begin
   GetCaretObj.AddChangeHandler(@SrcSynCaretChanged);
 
   FTopInfoDisplay := TSourceLazSynTopInfoView.Create;
-  FTopInfoDisplay.NextView := ViewedTextBuffer.DisplayView;
+  FTopInfoDisplay.NextView := TextViewsManager.SynTextViewByClass[TSynEditStringTabExpander].DisplayView;
   TSourceLazSynSurfaceManager(FPaintArea).TopLineCount := 0;
 //  TSourceLazSynSurfaceManager(FPaintArea).ExtraManager.TextArea.BackgroundColor := clSilver;
   TSourceLazSynSurfaceManager(FPaintArea).ExtraManager.DisplayView := FTopInfoDisplay;
@@ -1820,7 +1826,7 @@ end;
 
 function TIDESynEditor.TextIndexToViewPos(aTextIndex: Integer): Integer;
 begin
-  Result := TextView.TextIndexToViewPos(aTextIndex - 1);
+  Result := ToPos(TextView.TextToViewIndex(ToIdx(aTextIndex)));
 end;
 
 {$IFDEF WinIME}
@@ -1944,11 +1950,6 @@ end;
 
 procedure TIDESynGutterLOvProviderPascal.BufferChanged(Sender: TObject);
 begin
-  TSynEditStringList(Sender).RemoveHanlders(self);
-  TSynEditStringList(TextBuffer).AddChangeHandler(senrHighlightChanged,
-    @HighlightChanged);
-  TSynEditStringList(TextBuffer).AddNotifyHandler(senrTextBufferChanged,
-    @BufferChanged);
   //LineCountChanged(nil, 0, 0);
   HighlightChanged(nil,-1,-1);
 end;
@@ -2125,15 +2126,15 @@ begin
   SingleLine := False;
   Color  := $D4D4D4;
   Color2 := $E8E8E8;
-  TSynEditStringList(TextBuffer).AddChangeHandler(senrHighlightChanged,
+  ViewedTextBuffer.AddChangeHandler(senrHighlightChanged,
     @HighlightChanged);
-  TSynEditStringList(TextBuffer).AddNotifyHandler(senrTextBufferChanged,
+  ViewedTextBuffer.AddNotifyHandler(senrTextBufferChanged,
     @BufferChanged);
 end;
 
 destructor TIDESynGutterLOvProviderPascal.Destroy;
 begin
-  TSynEditStringList(TextBuffer).RemoveHanlders(self);
+  ViewedTextBuffer.RemoveHanlders(self);
   inherited Destroy;
 end;
 
@@ -2243,10 +2244,8 @@ begin
           Priority := 20;
         with TSynGutterLOvProviderModifiedLines.Create(Providers) do
           Priority := 9;
-        with TSynGutterLOvProviderCurrentPage.Create(Providers) do begin
+        with TSynGutterLOvProviderCurrentPage.Create(Providers) do
           Priority := 1;
-          FoldedTextBuffer := TSynEditFoldedView(TIDESynEditor(Self.SynEdit).FoldedTextBuffer);
-        end;
         with TIDESynGutterLOvProviderPascal.Create(Providers) do
           Priority := 0;
       end;
@@ -2280,6 +2279,7 @@ procedure TIDESynGutterMarks.PaintLine(aScreenLine: Integer; Canvas: TCanvas; AC
 var
   aGutterOffs, TxtIdx: Integer;
   HasAnyMark: Boolean;
+  iRange: TLineRange;
 
   procedure DrawDebugMark(Line: Integer);
   var
@@ -2308,7 +2308,10 @@ begin
   CheckTextBuffer;
   aGutterOffs := 0;
   HasAnyMark := PaintMarks(aScreenLine, Canvas, AClip, aGutterOffs);
-  TxtIdx := FoldView.TextIndex[aScreenLine];
+  aScreenLine := aScreenLine + ToIdx(GutterArea.TextArea.TopLine);
+  TxtIdx:= ViewedTextBuffer.DisplayView.ViewToTextIndexEx(aScreenLine, iRange);
+  if aScreenLine <> iRange.Top then
+    exit;
   if (TxtIdx < 0) or (TxtIdx >= TSynEdit(SynEdit).Lines.Count) then
     exit;
   if (not HasAnyMark) and (HasDebugMarks) and (TxtIdx < FDebugMarkInfo.Count) and
@@ -2457,10 +2460,13 @@ end;
 function TIDESynGutterMarks.DebugLineToSourceLine(aLinePos: Integer): Integer;
 var
   i, c: LongInt;
+  MaxCnt: Integer;
 begin
   CheckTextBuffer;
   if (aLinePos < 1) or (not HasDebugMarks) then exit(aLinePos);
   Result := aLinePos - 1; // 0 based
+  MaxCnt := FDebugMarkInfo.Count;
+  Result := MinMax(Result, 0, MaxCnt - 1);
   if (FDebugMarkInfo[Result] = 0) or (FDebugMarkInfo[Result] > aLinePos) then begin
     i := Result;
     repeat
@@ -2825,8 +2831,8 @@ begin
   end;
 
 
-  HasFolds := FoldView.TextIndexToViewPos(y2) - FoldView.TextIndexToViewPos(y1) <> y2 - y1;
-  //debugln(['*** HasFolds=', HasFolds, ' y1=',y1, ' y2=',y2, ' VP1=',FoldView.TextIndexToViewPos(y1), ' VP2=',FoldView.TextIndexToViewPos(y2)]);
+  HasFolds := FoldView.TextToViewIndex(y2) - FoldView.TextToViewIndex(y1) <> y2 - y1;
+  //debugln(['*** HasFolds=', HasFolds, ' y1=',y1, ' y2=',y2, ' VP1=',FoldView.TextToViewIndex(y1), ' VP2=',FoldView.TextToViewIndex(y2)]);
 
   FProv := FoldView.FoldProvider;
   Tree := TIDESynEditor(SynEdit).FMarkupIfDef.IfDefTree;

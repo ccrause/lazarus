@@ -248,13 +248,13 @@ type
     property ParentFont;
     property ParentShowHint;
     property PopupMenu;
-    property ReadOnly;
     property ShowHint;
     property Style;
     property StyleEx;
     property TabOrder;
     property TabStop;
     property Text;
+    property TextHint;
     property Visible;
   end;
 
@@ -393,6 +393,7 @@ type
     property TabOrder;
     property TabStop;
     property Text;
+    property TextHint;
     property Visible;
   end;
 

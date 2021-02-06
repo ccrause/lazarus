@@ -19,22 +19,6 @@
  ***************************************************************************
 }
 
-{
-  Adding support for new connection types requires implementing a Data Dictionary for your connection type
-  see fcl-db/src/datadict for many implementations.
-  When done so, add the unit to the uses clause in the implementation, register it in RegisterDDEngines
-  and likely add a connection callback to RegisterConnectionCallBacks.
-}
-
-{ MS-SQL server connection}
-{$IF FPC_FULLVERSION>30001}
-{$DEFINE HAVEMSSQLCONN}
-{$ENDIF}
-
-{ MySQL 5.6 and 5.7 connections }
-{$IF FPC_FULLVERSION>30100}
-{$DEFINE HAVEMYSQL5657CONN}
-{$ENDIF}
 
 unit frmmain;
 
@@ -227,6 +211,7 @@ type
     procedure OpenRecentDatadict(Sender: TObject);
     procedure LVDictsKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure MIDataDictClick(Sender: TObject);
+    procedure DoCloseTabClick(Sender: TObject);
     procedure PMAllPopup(Sender: TObject);
     procedure SaveAsExecute(Sender: TObject);
     procedure TVAllDblClick(Sender: TObject);
@@ -240,8 +225,11 @@ type
     procedure AddRecentConnectionList(RC: TRecentConnection; AssumeNew: Boolean);
     procedure AddRecentConnectionTree(RC: TRecentConnection; AssumeNew: Boolean);
     procedure CheckParams;
+    function CloseConnectionEditor(aTab: TConnectionEditor): TModalResult;
     function CloseCurrentConnection: TModalResult;
     function CloseCurrentTab(AddCancelClose: Boolean = False): TModalResult;
+    function CloseDataEditor(DD: TDataDictEditor; AddCancelClose: Boolean): TModalResult;
+    function CloseTab(aTab : TTabsheet; AddCancelClose: Boolean = False): TModalResult;
     procedure DeleteRecentConnection;
     procedure DeleteRecentDataDict;
     procedure DoShowNewConnectionTypes(ParentMenu: TMenuItem);
@@ -310,29 +298,8 @@ implementation
 { $DEFINE HAVEMSSQLCONN}
 
 uses
-  frmselectconnectiontype,
-  // Data dictionary support for
-  fpdddbf,     // DBF
-  {$ifndef win64}
-  fpddfb,      // Firebird
-  fpddmysql40, // MySQL 4.0
-  fpddmysql41, // MySQL 4.1
-  fpddmysql50, // MySQL 5.0
-  fpddmysql51, // MySQL 5.1
-  fpddmysql55, // MySQL 5.5
-  {$ifdef HAVEMYSQL5657CONN}
-  fpddmysql56, // MySQL 5.6
-  fpddmysql57, // MySQL 5.7
-  {$endif HAVEMYSQL5657CONN}
-  fpddoracle,  // Oracle
-  fpddpq,      // PostgreSQL
-  {$endif}
-  fpddsqlite3, // SQLite 3
-  fpddodbc,    // Any ODBC supported
-  {$ifdef HAVEMSSQLCONN}
-  fpddmssql,
-  {$endif HAVEMSSQLCONN}
-  frmimportdd,frmgeneratesql,fpddsqldb,frmSQLConnect,fpstdexports;
+  frmselectconnectiontype, reglddfeatures,
+  frmimportdd,frmgeneratesql,fpddsqldb,frmSQLConnect;
 
 { ---------------------------------------------------------------------
   TMainform events
@@ -452,8 +419,9 @@ begin
   //
   // Register DD engines.
   RegisterDDEngines;
+  RegisterExportFormats;
+
   // Register standard export formats.
-  RegisterStdFormats;
   FRecentDicts:=TRecentDataDicts.Create(TRecentDataDict);
   FRecentConnections:=TRecentConnections.Create(TRecentConnection);
   FN:=SysToUTF8(GetAppConfigDir(False));
@@ -586,25 +554,7 @@ end;
 procedure TMainForm.RegisterDDEngines;
 
 begin
-{$ifndef win64}
-  RegisterFBDDEngine;
-  RegisterMySQL40DDEngine;
-  RegisterMySQL41DDEngine;
-  RegisterMySQL50DDEngine;
-  RegisterMySQL51DDEngine;
-  RegisterMySQL55DDEngine;
-{$ifdef HAVEMYSQL5657CONN}
-  RegisterMySQL56DDEngine;
-  RegisterMySQL57DDEngine;
-{$endif}
-  RegisterOracleDDEngine;
-  RegisterPostgreSQLDDengine;
-{$endif}
-  RegisterSQLite3DDEngine;
-  RegisterODBCDDengine;
-{$IFDEF HAVEMSSQLCONN}
-  RegisterMSSQLDDEngine;
-{$ENDIF}
+  RegisterEngines;
 end;
 
 procedure TMainForm.RegisterConnectionCallBacks;
@@ -629,17 +579,14 @@ begin
     MaybeRegisterConnectionStringCallback('TSQLDBMySql5DDEngine',@GetSQLConnectionDlg);
     MaybeRegisterConnectionStringCallback('TSQLDBMySql51DDEngine',@GetSQLConnectionDlg);
     MaybeRegisterConnectionStringCallback('TSQLDBMySql55DDEngine',@GetSQLConnectionDlg);
-{$ifdef HAVEMYSQL5657CONN}
     MaybeRegisterConnectionStringCallback('TSQLDBMySql56DDEngine',@GetSQLConnectionDlg);
     MaybeRegisterConnectionStringCallback('TSQLDBMySql57DDEngine',@GetSQLConnectionDlg);
-{$ENDIF}
     MaybeRegisterConnectionStringCallback('TSQLDBODBCDDEngine',@GetSQLConnectionDlg);
     MaybeRegisterConnectionStringCallback('TSQLDBPOSTGRESQLDDEngine',@GetSQLConnectionDlg);
     MaybeRegisterConnectionStringCallback('TSQLDBFBDDEngine',@GetSQLConnectionDlg);
     MaybeRegisterConnectionStringCallback('TSQLDBSQLite3DDEngine',@GetSQLConnectionDlg);
-{$IFDEF HAVEMSSQLCONN}
     MaybeRegisterConnectionStringCallback('TSQLDBMSSQLDDEngine',@GetSQLConnectionDlg);
-{$ENDIF}
+
   finally
     L.free;
   end;
@@ -747,6 +694,7 @@ Var
 
 begin
   LVConnections.Items.Clear;
+  FNRecentConnections.DeleteChildren;
   For I:=0 to FRecentConnections.Count-1 do
     begin
     RC:=FRecentConnections[i];
@@ -1360,41 +1308,57 @@ begin
     Result:=CloseCurrentTab(True)<>mrCancel;
 end;
 
+
 function TMainForm.CloseCurrentTab(AddCancelClose: Boolean): TModalResult;
 
 begin
-  If (CurrentEditor<>Nil) then
-    Result:=CloseCurrentEditor(AddCancelClose)
-  else if (CurrentConnection<>Nil) then
-    begin
-    CloseCurrentConnection;
+  Result:=CloseTab(PCItems.ActivePage,AddCancelClose);
+end;
+
+function TMainForm.CloseTab(aTab : TTabsheet; AddCancelClose: Boolean = False): TModalResult;
+
+begin
+  If (aTab is TDataDictEditor) then
+    Result:=CloseDataEditor(aTab as TDataDictEditor,AddCancelClose)
+  else if (aTab is TConnectionEditor) then
+    Result:=CloseConnectionEditor(aTab as TConnectionEditor)
+  else
     Result:=mrOK;
-    end;
+end;
+
+function TMainForm.CloseConnectionEditor(aTab : TConnectionEditor): TModalResult;
+
+begin
+  aTab.Frame.DisConnect;
+  Application.ReleaseComponent(aTab);
+  aTab.Free;
+  Result:=mrOK;
 end;
 
 function TMainForm.CloseCurrentConnection: TModalResult;
 
-Var
-  CE : TConnectionEditor;
-
 begin
-  CE:=CurrentConnection;
-  CE.Frame.DisConnect;
-  Application.ReleaseComponent(CE);
-  CE.Free;
-  Result:=mrOK;
+  if CurrentConnection<>Nil then
+    Result:=CloseConnectionEditor(CurrentConnection)
+  else
+    Result:=mrOK;
 end;
+
 
 function TMainForm.CloseCurrentEditor(AddCancelClose: Boolean): TModalResult;
 
+begin
+  Result:=CloseDataEditor(CurrentEditor,AddCancelClose);
+end;
+
+function TMainForm.CloseDataEditor(DD : TDataDictEditor;AddCancelClose: Boolean): TModalResult;
+
 Var
-  DD : TDataDictEditor;
   Msg : String;
   DDF : TRecentDataDict;
 
 begin
   Result:=mrYes;
-  DD:=CurrentEditor;
   If (DD=Nil) then
     Exit;
   If DD.Modified then
@@ -1646,6 +1610,12 @@ begin
   ShowDDImports;
 end;
 
+procedure TMainForm.DoCloseTabClick(Sender: TObject);
+
+begin
+  CloseTab(Sender as TTabSheet,True);
+end;
+
 procedure TMainForm.PMAllPopup(Sender: TObject);
 
 Type
@@ -1868,6 +1838,7 @@ begin
   Result.Parent:=PCDD;
   Result.Frame.Description:=AName;
   Result.ImageIndex:=18;
+  Result.Caption:=aName;
   PCDD.ActivePage:=Result;
 end;
 

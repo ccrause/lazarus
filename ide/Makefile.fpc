@@ -64,7 +64,7 @@ ifneq ($(findstring $(OS_TARGET),win32 win64),)
 LCL_PLATFORM=win32
 else
 ifeq ($(OS_TARGET),darwin)
-LCL_PLATFORM=carbon
+LCL_PLATFORM=cocoa
 else
 LCL_PLATFORM=gtk2
 endif
@@ -78,14 +78,6 @@ DBG_OPTIONS=-gw
 endif
 
 #
-# LibPaths
-ifeq ($(OS_TARGET),darwin)
-ifneq ($(LCL_PLATFORM),carbon)
-LAZARUS_LIBPATHS=-Fl/usr/X11R6/lib -Fl/sw/lib
-endif
-endif
-
-#
 # idemake.cfg
 LAZARUS_OPT=$(LAZARUS_LIBPATHS)
 
@@ -96,11 +88,14 @@ DEFAULT_IDE_OPTIONS= $(LAZARUS_LIBPATHS) \
   -Fu../components/codetools/units/$(CPU_TARGET)-$(OS_TARGET) \
   -Fu../components/debuggerintf/lib/$(CPU_TARGET)-$(OS_TARGET) \
   -Fu../components/lazutils/lib/$(CPU_TARGET)-$(OS_TARGET) \
+  -Fu../components/freetype/lib/$(CPU_TARGET)-$(OS_TARGET) \
   -Fu../lcl/units/$(CPU_TARGET)-$(OS_TARGET) \
   -Fu../lcl/units/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM) \
+  -Fu../components/buildintf/units/$(CPU_TARGET)-$(OS_TARGET) \
   -Fu../components/ideintf/units/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM) \
   -Fu../components/synedit/units/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM) \
   -Fu../components/lazcontrols/lib/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM) \
+  -Fu../components/lazcontrols/design/lib/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM) \
   -Fu../components/lazdebuggergdbmi/units/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM) \
   -Fu../units/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM)
 
@@ -108,7 +103,6 @@ DEFAULT_IDE_OPTIONS= $(LAZARUS_LIBPATHS) \
 # Options to compile an IDE with a lot of packages
 BIG_IDE_OPTIONS=-dBigIDE $(DEFAULT_IDE_OPTIONS) \
   -Fu../components/synedit/design/units/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM) \
-  -Fu../components/lazcontrols/design/lib/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM) \
   -Fu../components/rtticontrols/lib/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM) \
   -Fu../components/cairocanvas/lib/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM) \
   -Fu../components/printers/lib/$(CPU_TARGET)-$(OS_TARGET)/$(LCL_PLATFORM) \

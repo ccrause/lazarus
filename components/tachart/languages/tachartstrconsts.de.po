@@ -10,7 +10,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Language: de\n"
-"X-Generator: Poedit 2.2\n"
+"X-Generator: Poedit 2.4.2\n"
 "X-Poedit-SourceCharset: UTF-8\n"
 
 #: tachartstrconsts.descolor
@@ -215,6 +215,10 @@ msgstr "Die Anzahl der Fitparameter kann nicht kleiner als 1 sein."
 msgid "Expression result type must be integer or float. Got \"%s\"."
 msgstr "Der Typ des Ausdrucksergebnisses muss integer oder float sein, ist aber \"%s\"."
 
+#: tachartstrconsts.rserrnumericaloverflow
+msgid "Numerical overflow."
+msgstr ""
+
 #: tachartstrconsts.rsexpressioncolormapseries
 msgid "Math expression color map series"
 msgstr "Math. Funktion (farb-kodiert)"
@@ -274,6 +278,10 @@ msgstr "Quadratsumme der Residuen"
 #: tachartstrconsts.rsfittotalsumofsquares
 msgid "Total sum of squares (SST)"
 msgstr "Gesamte Quadratsumme (SST)"
+
+#: tachartstrconsts.rsfittvalue
+msgid "t value"
+msgstr ""
 
 #: tachartstrconsts.rsfitvarianceratio
 msgid "Variance ratio F"
@@ -413,6 +421,10 @@ msgstr "Punkt"
 #: tachartstrconsts.rspolarseries
 msgid "Polar series"
 msgstr "Polar-Diagramm"
+
+#: tachartstrconsts.rspolygonseries
+msgid "Polygon series"
+msgstr "Polygon-Diagramm"
 
 #: tachartstrconsts.rspsclear
 msgctxt "tachartstrconsts.rspsclear"

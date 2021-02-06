@@ -33,13 +33,13 @@ unit DesignerProcs;
 interface
 
 uses
-  Classes, SysUtils, Types, typinfo,
+  Classes, SysUtils, Types, typinfo, Contnrs,
   // LazUtils
   LazLoggerBase, LazTracer,
   // LCL
-  LCLIntf, LCLType, Forms, Controls, Graphics,
+  LCLIntf, LCLType, Forms, Controls, Graphics, Menus, ActnList,
   // IdeIntf
-  FormEditingIntf;
+  FormEditingIntf, ComponentReg;
 
 type
   TDesignerDCFlag = (
@@ -89,13 +89,7 @@ type
 const
   NonVisualCompBorder = 2;
 
-
-type
-  TOnComponentIsInvisible = procedure(AComponent: TComponent;
-                                      var Invisible: boolean) of object;
-var
-  OnComponentIsInvisible: TOnComponentIsInvisible;
-
+procedure ScaleNonVisual(aParent: TComponent; AFromPPI, AToPPI: Integer);
 function NonVisualCompWidth: integer;
 function GetParentLevel(AControl: TControl): integer;
 function ControlIsInDesignerVisible(AControl: TControl): boolean;
@@ -118,15 +112,16 @@ function GetComponentWidth(AComponent: TComponent): integer;
 function GetComponentHeight(AComponent: TComponent): integer;
 
 procedure InvalidateDesignerRect(aHandle: HWND; ARect: pRect);
-
 procedure WriteComponentStates(aComponent: TComponent; Recursive: boolean;
   const Prefix: string = '');
 
-procedure ScaleNonVisual(const aParent: TComponent;
-  const AFromPPI, AToPPI: Integer);
 
 implementation
 
+var
+  // Speed optimization for invisible components. No need to search
+  // the whole palette if found in InvisibleClasses.
+  InvisibleClasses: TClassList;
 
 function GetParentFormRelativeTopLeft(Component: TComponent): TPoint;
 var
@@ -334,8 +329,7 @@ begin
   end;
 end;
 
-procedure ScaleNonVisual(const aParent: TComponent; const AFromPPI,
-  AToPPI: Integer);
+procedure ScaleNonVisual(aParent: TComponent; AFromPPI, AToPPI: Integer);
 var
   I: Integer;
   Comp: TComponent;
@@ -370,21 +364,37 @@ end;
 
 function ControlIsInDesignerVisible(AControl: TControl): boolean;
 begin
-  Result:=true;
   while AControl<>nil do begin
-    if csNoDesignVisible in AControl.ControlStyle then begin
-      Result:=false;
-      exit;
-    end;
+    if csNoDesignVisible in AControl.ControlStyle then
+      exit(false);
     AControl:=AControl.Parent;
   end;
+  Result:=true;
 end;
 
 function ComponentIsInvisible(AComponent: TComponent): boolean;
+var
+  RegComp: TRegisteredComponent;
 begin
-  Result:=false;
-  if Assigned(OnComponentIsInvisible) then
-    OnComponentIsInvisible(AComponent,Result);
+  if (AComponent is TControl) then
+    Result:=(csNoDesignVisible in TControl(AComponent).ControlStyle)
+  else begin
+    if InvisibleClasses=Nil then begin
+      InvisibleClasses:=TClassList.Create;
+      InvisibleClasses.Add(TMenuItem);
+      InvisibleClasses.Add(TAction);
+    end;
+    // Optimization: search class types from list first.
+    if InvisibleClasses.IndexOf(AComponent.ClassType) > -1 then
+      Exit(True);
+    Assert(Assigned(IDEComponentPalette), 'ComponentIsInvisible: IDEComponentPalette=Nil');
+    RegComp:=IDEComponentPalette.FindRegComponent(AComponent.ClassType);
+    Result:=(RegComp=nil) or (RegComp.OrigPageName='');
+    if Result then begin
+      DebugLn(['---ComponentIsInvisible: Adding ', AComponent, ' to InvisibleClasses.---']);
+      InvisibleClasses.Add(AComponent.ClassType);
+    end;
+  end;
 end;
 
 function ComponentIsNonVisual(AComponent: TComponent): boolean;
@@ -554,6 +564,9 @@ end;
 
 initialization
   OnGetDesignerForm:=nil;
+
+finalization
+  InvisibleClasses.Free;
 
 end.
 

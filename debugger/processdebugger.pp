@@ -38,8 +38,15 @@ unit ProcessDebugger;
 interface
 
 uses
-  Classes, SysUtils, FileUtil, UTF8Process, LazFileUtils, DbgIntfDebuggerBase,
-  Process, Debugger, LCLProc, BaseDebugManager, Dialogs, ProcessList;
+  Classes, SysUtils, Process,
+  // LCL
+  Dialogs,
+  // LazUtils
+  FileUtil, UTF8Process, LazFileUtils, LazLoggerBase,
+  // DebuggerIntf
+  DbgIntfDebuggerBase,
+  // IDE
+  ProcessList, Debugger;
 
 type
 
@@ -53,7 +60,7 @@ type
     function  ProcessRun: Boolean;
     function  ProcessStop: Boolean;
   protected
-    function  GetSupportedCommands: TDBGCommands; override;
+    class function  GetSupportedCommands: TDBGCommands; override;
     function  RequestCommand(const ACommand: TDBGCommand; const AParams: array of const;
       const {%H-}ACallback: TMethod): Boolean; override;
   public
@@ -156,7 +163,7 @@ begin
   Result := True;
 end;
 
-function TProcessDebugger.GetSupportedCommands: TDBGCommands;
+class function TProcessDebugger.GetSupportedCommands: TDBGCommands;
 begin
   Result := [dcRun, dcStop, dcEnvironment]
 end;

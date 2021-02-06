@@ -9,15 +9,23 @@ unit FpDbgInfo;
     Holds the Value of a Symbol according to its type.
 
   TFpSymbol should not hold any Data, except for information that is in the
-  debug info (dwarf/stabs).
+  debug info (dwarf/stabs/hardcoded/other..?).
+
+  TFpSymbol however, might expose methods which can be used to obtain relevant
+  data.
+
   All Data read from the target must be in TFpValue.
-  Target adta includes Address (can be indirect via ref or pointer, Size and
+  Target data includes Address (can be indirect via ref or pointer, Size and
   Boundaries (Sub range / Array).
 
   This means that TFpSymbol (stType or stValue) should be re-usable. There can
   be multiple TFpValue for each TFpSymbol. (even for stValue, as in an
   Array the Symbol itself is repeated / Array of record: the same member occurs
   over and over)
+
+  On the other hand, one generic TFpValue class should be used to access all
+  kinds of TFpSymbol. In practice this is not possible, but it is something to
+  strive for.
 
   ---
   A Variable value in the target typically consists of:
@@ -33,7 +41,9 @@ interface
 
 uses
   Classes, SysUtils, DbgIntfBaseTypes, FpDbgLoader, FpdMemoryTools, FpErrorMessages,
-  LazLoggerBase, LazClasses, FpDbgCommon;
+  LazLoggerBase, LazClasses, FpDbgCommon,
+  // Register all image reader classes
+  FpImgReaderWinPE, FpImgReaderElf, FpImgReaderMacho;
 
 type
 
@@ -111,6 +121,11 @@ type
     function GetAsWideString: WideString; virtual;
     function GetAsFloat: Extended; virtual;
 
+    procedure SetAsCardinal(AValue: QWord); virtual;
+    procedure SetAsInteger(AValue: Int64); virtual;
+    procedure SetAsBool(AValue: Boolean); virtual;
+    procedure SetAsString(AValue: AnsiString); virtual;
+
     function GetAddress: TFpDbgMemLocation;  virtual;
     function DoGetSize(out ASize: TFpDbgValueSize): Boolean; virtual;
     function GetDataAddress: TFpDbgMemLocation;  virtual;
@@ -121,7 +136,7 @@ type
     function GetOrdLowBound: Int64; virtual;
 
     function GetMember({%H-}AIndex: Int64): TFpValue; virtual;
-    function GetMemberByName({%H-}AIndex: String): TFpValue; virtual;
+    function GetMemberByName(const AIndex: String): TFpValue; virtual;
     function GetMemberCount: Integer; virtual;
     function GetIndexType({%H-}AIndex: Integer): TFpSymbol; virtual;
     function GetIndexTypeCount: Integer; virtual;
@@ -143,10 +158,10 @@ type
     property Kind: TDbgSymbolKind read GetKind;
     property FieldFlags: TFpValueFieldFlags read GetFieldFlags;
 
-    property AsInteger: Int64 read GetAsInteger;
-    property AsCardinal: QWord read GetAsCardinal;
-    property AsBool: Boolean read GetAsBool;
-    property AsString: AnsiString read GetAsString;
+    property AsInteger: Int64 read GetAsInteger write SetAsInteger;
+    property AsCardinal: QWord read GetAsCardinal write SetAsCardinal;
+    property AsBool: Boolean read GetAsBool write SetAsBool;
+    property AsString: AnsiString read GetAsString write SetAsString;
     property AsWideString: WideString read GetAsWideString;
     property AsFloat: Extended read GetAsFloat;
 
@@ -167,6 +182,9 @@ type
     // memdump
   public
     function GetTypeCastedValue(ADataVal: TFpValue): TFpValue; virtual; // only if Symbol is a type
+
+    function GetInstanceClassName(out AClassName: String): boolean; virtual;
+
 // base class? Or Member includes member from base
     (* Member:
        * skClass, skStructure:
@@ -196,6 +214,7 @@ type
     property ParentTypeInfo: TFpSymbol read GetParentTypeInfo; // For members, the class in which this member is declared
 
     property LastError: TFpError read GetLastError;
+    procedure ResetError;
   end;
 
   { TFpValueConstNumber }
@@ -226,7 +245,7 @@ type
     function GetFieldFlags: TFpValueFieldFlags; override;
     function GetAsString: AnsiString; override;
   public
-    constructor Create(AValue: AnsiString);
+    constructor Create(const AValue: AnsiString);
   end;
 
   { TFpValueConstWideChar }
@@ -240,7 +259,7 @@ type
     function GetFieldFlags: TFpValueFieldFlags; override;
     function GetAsString: AnsiString; override;
   public
-    constructor Create(AValue: AnsiString);
+    constructor Create(const AValue: AnsiString);
   end;
 
   { TFpValueConstString }
@@ -254,7 +273,7 @@ type
     function GetFieldFlags: TFpValueFieldFlags; override;
     function GetAsString: AnsiString; override;
   public
-    constructor Create(AValue: AnsiString);
+    constructor Create(const AValue: AnsiString);
   end;
 
   { TFpValueConstFloat }
@@ -313,6 +332,8 @@ type
     destructor Destroy; override;
   end;
 
+  TFpDbgSymbolScope = class;
+
   { TFpSymbol }
 
   TFpSymbol = class(TRefCountedObject)
@@ -348,12 +369,12 @@ type
     function GetOrdinalValue: Int64; virtual;
 
     function GetNestedSymbol({%H-}AIndex: Int64): TFpSymbol; virtual;
-    function GetNestedSymbolByName({%H-}AIndex: String): TFpSymbol; virtual;
+    function GetNestedSymbolByName(const AIndex: String): TFpSymbol; virtual;
     function GetNestedSymbolCount: Integer; virtual;
   protected
     property EvaluatedFields: TFpSymbolFields read FEvaluatedFields write FEvaluatedFields;
     // Cached fields
-    procedure SetName(AValue: String); inline;
+    procedure SetName(const AValue: String); inline;
     procedure SetKind(AValue: TDbgSymbolKind); inline;
     procedure SetSymbolType(AValue: TDbgSymbolType); inline;
     procedure SetAddress(AValue: TFpDbgMemLocation); inline;
@@ -411,6 +432,8 @@ type
     //
     property Flags: TDbgSymbolFlags read GetFlags;
     property Parent: TFpSymbol read GetParent; deprecated;
+    function GetInstanceClassName(AValueObj: TFpValue; out AClassName: String): boolean; virtual;
+
     // for Subranges  // Type-Symbols only?
     // TODO: flag bounds as cardinal if needed
     function GetValueBounds(AValueObj: TFpValue; out ALowBound, AHighBound: Int64): Boolean; virtual;
@@ -425,6 +448,8 @@ type
     // TypeCastValue| only fon stType symbols, may return nil
     // Returns a reference to caller / caller must release
     function TypeCastValue({%H-}AValue: TFpValue): TFpValue; virtual;
+
+    function CreateSymbolScope(ALocationContext: TFpDbgLocationContext): TFpDbgSymbolScope; virtual;
   end;
 
   { TFpSymbolForwarder }
@@ -449,27 +474,109 @@ type
     function GetHasOrdinalValue: Boolean; override;
     function GetOrdinalValue: Int64; override;
     function GetNestedSymbol(AIndex: Int64): TFpSymbol; override;
-    function GetNestedSymbolByName(AIndex: String): TFpSymbol; override;
+    function GetNestedSymbolByName(const AIndex: String): TFpSymbol; override;
     function GetNestedSymbolCount: Integer; override;
   public
+    function GetInstanceClassName(AValueObj: TFpValue; out AClassName: String): boolean; override;
     function GetValueBounds(AValueObj: TFpValue; out ALowBound, AHighBound: Int64): Boolean; override;
     function GetValueLowBound(AValueObj: TFpValue; out ALowBound: Int64): Boolean; override;
     function GetValueHighBound(AValueObj: TFpValue; out AHighBound: Int64): Boolean; override;
   end;
 
-  { TFpDbgInfoContext }
+  { TFpDbgSymbolScope }
 
-  TFpDbgInfoContext = class(TFpDbgAddressContext)
+  TFpDbgSymbolScope = class(TRefCountedObject)
+  private
+    FLocationContext: TFpDbgLocationContext;
   protected
     function GetSymbolAtAddress: TFpSymbol; virtual;
     function GetProcedureAtAddress: TFpValue; virtual;
     function GetMemManager: TFpDbgMemManager; virtual;
+    function GetSizeOfAddress: Integer; virtual;
   public
+    constructor Create(ALocationContext: TFpDbgLocationContext);
+    destructor Destroy; override;
     property SymbolAtAddress: TFpSymbol read GetSymbolAtAddress;
     property ProcedureAtAddress: TFpValue read GetProcedureAtAddress;
     // search this, and all parent context
     function FindSymbol(const {%H-}AName: String): TFpValue; virtual;
     property MemManager: TFpDbgMemManager read GetMemManager;
+    property SizeOfAddress: Integer read GetSizeOfAddress;
+    property LocationContext: TFpDbgLocationContext read FLocationContext;
+  end;
+
+  { TFpDbgSimpleLocationContext }
+
+  TFpDbgSimpleLocationContext = class(TFpDbgLocationContext)
+  private
+    FMemManager: TFpDbgMemManager;
+    FAddress: TDbgPtr;
+    FThreadId: Integer;
+    FStackFrame: Integer;
+    FSizeOfAddr: Integer;
+  protected
+    function GetMemManager: TFpDbgMemManager; override;
+    function GetAddress: TDbgPtr; override;
+    function GetThreadId: Integer; override;
+    function GetStackFrame: Integer; override;
+    function GetSizeOfAddress: Integer; override;
+  public
+    constructor Create(AMemManager: TFpDbgMemManager; AnAddress: TDbgPtr; AnSizeOfAddr, AThreadId: Integer; AStackFrame: Integer);
+  end;
+
+  { TFpDbgCallMemReader }
+
+  // This is basically a wrapper on another TFpDbgMemReaderBase. But with the
+  // possibility to override the value of some registers.
+  // It is used to evaluate function-results.
+  TFpDbgCallMemReader = class(TFpDbgMemReaderBase)
+  private
+    type TRegisterValue = record IsSet: boolean; Value: TDBGPtr end;
+  private
+    FRegisterCache: array of TRegisterValue;
+    FBaseMemReader: TFpDbgMemReaderBase;
+  public
+    constructor Create(ABaseMemReader: TFpDbgMemReaderBase);
+    function ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean; override;
+    function ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal; ADest: Pointer; out ABytesRead: Cardinal): Boolean; override;
+    function ReadMemoryEx(AnAddress, AnAddressSpace: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean; override;
+    function ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr; AContext: TFpDbgLocationContext): Boolean; override;
+    function WriteRegister(ARegNum: Cardinal; const AValue: TDbgPtr; AContext: TFpDbgLocationContext): Boolean; override;
+    function RegisterSize(ARegNum: Cardinal): Integer; override;
+    procedure SetRegisterValue(ARegNum: Cardinal; AValue: TDbgPtr);
+  end;
+
+  { TFpDbgInfoAbstractCallContext }
+
+  // This class is used to represent the context, just after the debugger made
+  // the debugee call some function.
+  // The special addition to make this work is that it is possible to set a
+  // register-value by calling SetRegisterValue. Further this class is an empty
+  // wrapper.
+
+  { TFpDbgAbstractCallContext }
+
+  TFpDbgAbstractCallContext = class(TFpDbgLocationContext)
+  private
+    FBaseContext: TFpDbgLocationContext;
+    FMemManager: TFpDbgMemManager;
+    FMemReader: TFpDbgCallMemReader;
+    FIsValid: Boolean;
+    FMessage: string;
+  protected
+    function GetMemManager: TFpDbgMemManager; override;
+    function GetAddress: TDbgPtr; override;
+    function GetThreadId: Integer; override;
+    function GetStackFrame: Integer; override;
+    function GetSizeOfAddress: Integer; override;
+  public
+    constructor Create(const ABaseContext: TFpDbgLocationContext; AMemReader: TFpDbgMemReaderBase; AMemConverter: TFpDbgMemConvertor);
+    destructor Destroy; override;
+
+    procedure SetRegisterValue(ARegNum: Cardinal; AValue: TDbgPtr);
+    procedure SetError(const Message: string);
+    property IsValid: Boolean read FIsValid;
+    property Message: string read FMessage;
   end;
 
   { TDbgInfo }
@@ -477,25 +584,25 @@ type
   TDbgInfo = class(TObject)
   private
     FHasInfo: Boolean;
+    FMemManager: TFpDbgMemManager;
   protected
     FTargetInfo: TTargetDescriptor;
     procedure SetHasInfo;
   public
-    constructor Create({%H-}ALoaderList: TDbgImageLoaderList); virtual;
+    constructor Create({%H-}ALoaderList: TDbgImageLoaderList; AMemManager: TFpDbgMemManager); virtual;
     (* Context should be searched by Thread, and StackFrame. The Address can be
        derived from this.
        However a different Address may be froced.
        TODO: for now address may be needed, as stack decoding is not done yet
     *)
-    function FindContext(AThreadId, AStackFrame: Integer; {%H-}AAddress: TDbgPtr = 0): TFpDbgInfoContext; virtual;
-    function FindContext({%H-}AAddress: TDbgPtr): TFpDbgInfoContext; virtual; deprecated 'use FindContext(thread,stack,address)';
-    function ContextFromProc(AThreadId, AStackFrame: Integer; AProcSym: TFpSymbol): TFpDbgInfoContext; virtual;
+    function FindSymbolScope(ALocationContext: TFpDbgLocationContext; {%H-}AAddress: TDbgPtr = 0): TFpDbgSymbolScope; virtual;
     function FindProcSymbol(AAddress: TDbgPtr): TFpSymbol; virtual; overload;
     function FindProcSymbol(const {%H-}AName: String): TFpSymbol; virtual; overload;
     property HasInfo: Boolean read FHasInfo;
     function GetLineAddresses(const AFileName: String; ALine: Cardinal; var AResultList: TDBGPtrArray): Boolean; virtual;
     //property MemManager: TFpDbgMemReaderBase read GetMemManager write SetMemManager;
     property TargetInfo: TTargetDescriptor read FTargetInfo write FTargetInfo;
+    property MemManager: TFpDbgMemManager read FMemManager;
   end;
 
 function dbgs(ADbgSymbolKind: TDbgSymbolKind): String; overload;
@@ -506,6 +613,123 @@ function dbgs(ADbgSymbolKind: TDbgSymbolKind): String;
 begin
   Result := '';
   WriteStr(Result, ADbgSymbolKind);
+end;
+
+{ TFpDbgCallMemReader }
+
+constructor TFpDbgCallMemReader.Create(ABaseMemReader: TFpDbgMemReaderBase);
+begin
+  FBaseMemReader := ABaseMemReader;
+end;
+
+function TFpDbgCallMemReader.ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean;
+begin
+  Result := FBaseMemReader.ReadMemory(AnAddress, ASize, ADest);
+end;
+
+function TFpDbgCallMemReader.ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal; ADest: Pointer; out ABytesRead: Cardinal): Boolean;
+begin
+  Result := FBaseMemReader.ReadMemory(AnAddress, ASize, ADest, ABytesRead);
+end;
+
+function TFpDbgCallMemReader.ReadMemoryEx(AnAddress, AnAddressSpace: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean;
+begin
+  Result := FBaseMemReader.ReadMemoryEx(AnAddress, AnAddressSpace, ASize, ADest);
+end;
+
+function TFpDbgCallMemReader.ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr; AContext: TFpDbgLocationContext): Boolean;
+begin
+  if (ARegNum < Length(FRegisterCache)) and (FRegisterCache[ARegNum].IsSet) then
+    begin
+    AValue := FRegisterCache[ARegNum].Value;
+    Result := True;
+    end
+  else
+    Result := FBaseMemReader.ReadRegister(ARegNum, AValue, AContext);
+end;
+
+function TFpDbgCallMemReader.RegisterSize(ARegNum: Cardinal): Integer;
+begin
+  Result := FBaseMemReader.RegisterSize(ARegNum);
+end;
+
+procedure TFpDbgCallMemReader.SetRegisterValue(ARegNum: Cardinal; AValue: TDbgPtr);
+var
+  OldSize, i: Integer;
+begin
+  if High(FRegisterCache) < ARegNum then
+    begin
+    OldSize := Length(FRegisterCache);
+    SetLength(FRegisterCache, ARegNum +1);
+    for i := OldSize to High(FRegisterCache) do
+      FRegisterCache[i].IsSet := False;
+    end;
+  FRegisterCache[ARegNum].IsSet := True;
+  FRegisterCache[ARegNum].Value := AValue;
+end;
+
+function TFpDbgCallMemReader.WriteRegister(ARegNum: Cardinal; const AValue: TDbgPtr; AContext: TFpDbgLocationContext): Boolean;
+begin
+  Result := FBaseMemReader.WriteRegister(ARegNum, AValue, AContext);
+end;
+
+constructor TFpDbgAbstractCallContext.Create(
+  const ABaseContext: TFpDbgLocationContext; AMemReader: TFpDbgMemReaderBase;
+  AMemConverter: TFpDbgMemConvertor);
+begin
+  FBaseContext:=ABaseContext;
+  FBaseContext.AddReference;
+
+  FMemReader := TFpDbgCallMemReader.Create(AMemReader);
+  FMemManager := TFpDbgMemManager.Create(FMemReader, AMemConverter);
+
+  FIsValid := True;
+
+  Inherited Create;
+end;
+
+destructor TFpDbgAbstractCallContext.Destroy;
+begin
+  FMemManager.Free;
+  FMemReader.Free;
+  FBaseContext.ReleaseReference;
+  inherited Destroy;
+end;
+
+function TFpDbgAbstractCallContext.GetAddress: TDbgPtr;
+begin
+  Result := FBaseContext.Address;
+end;
+
+function TFpDbgAbstractCallContext.GetMemManager: TFpDbgMemManager;
+begin
+  Result := FMemManager;
+end;
+
+function TFpDbgAbstractCallContext.GetSizeOfAddress: Integer;
+begin
+  Result := FBaseContext.SizeOfAddress;
+end;
+
+function TFpDbgAbstractCallContext.GetStackFrame: Integer;
+begin
+  Result := FBaseContext.StackFrame;
+end;
+
+function TFpDbgAbstractCallContext.GetThreadId: Integer;
+begin
+  Result := FBaseContext.ThreadId;
+end;
+
+procedure TFpDbgAbstractCallContext.SetRegisterValue(ARegNum: Cardinal; AValue: TDbgPtr);
+begin
+  FMemReader.SetRegisterValue(ARegNum, AValue);
+end;
+
+procedure TFpDbgAbstractCallContext.SetError(const Message: string);
+begin
+  FIsValid := False;
+  FMessage := Message;
 end;
 
 { TFpValueConstString }
@@ -525,7 +749,7 @@ begin
   Result := Value;
 end;
 
-constructor TFpValueConstString.Create(AValue: AnsiString);
+constructor TFpValueConstString.Create(const AValue: AnsiString);
 begin
   inherited Create;
   FValue := AValue;
@@ -548,7 +772,7 @@ begin
   Result := Value;
 end;
 
-constructor TFpValueConstChar.Create(AValue: AnsiString);
+constructor TFpValueConstChar.Create(const AValue: AnsiString);
 begin
   inherited Create;
   FValue := AValue;
@@ -571,7 +795,7 @@ begin
   Result := Value;
 end;
 
-constructor TFpValueConstWideChar.Create(AValue: AnsiString);
+constructor TFpValueConstWideChar.Create(const AValue: AnsiString);
 begin
   inherited Create;
   FValue := AValue;
@@ -604,6 +828,21 @@ function TFpValue.GetTypeCastedValue(ADataVal: TFpValue): TFpValue;
 begin
   assert(False, 'TFpValue.GetTypeCastedValue: False');
   Result := nil;
+end;
+
+function TFpValue.GetInstanceClassName(out AClassName: String): boolean;
+var
+  ti: TFpSymbol;
+begin
+  ti := TypeInfo;
+  Result := ti <> nil;
+  if Result then
+    Result := ti.GetInstanceClassName(Self, AClassName);
+end;
+
+procedure TFpValue.ResetError;
+begin
+  FLastError := NoError;
 end;
 
 function TFpValue.GetTypeInfo: TFpSymbol;
@@ -692,7 +931,7 @@ begin
   Result := nil;
 end;
 
-function TFpValue.GetMemberByName(AIndex: String): TFpValue;
+function TFpValue.GetMemberByName(const AIndex: String): TFpValue;
 begin
   Result := nil;
 end;
@@ -762,6 +1001,26 @@ end;
 function TFpValue.GetAsInteger: Int64;
 begin
   Result := 0;
+end;
+
+procedure TFpValue.SetAsCardinal(AValue: QWord);
+begin
+  SetLastError(CreateError(fpErrChangeVariableNotSupported));
+end;
+
+procedure TFpValue.SetAsInteger(AValue: Int64);
+begin
+  SetLastError(CreateError(fpErrChangeVariableNotSupported));
+end;
+
+procedure TFpValue.SetAsBool(AValue: Boolean);
+begin
+  SetLastError(CreateError(fpErrChangeVariableNotSupported));
+end;
+
+procedure TFpValue.SetAsString(AValue: AnsiString);
+begin
+  SetLastError(CreateError(fpErrChangeVariableNotSupported));
 end;
 
 { TPasParserConstNumberSymbolValue }
@@ -880,7 +1139,7 @@ end;
 
 function TFpValueTypeDefinition.GetKind: TDbgSymbolKind;
 begin
-  Result := skNone;
+  Result := skType;
 end;
 
 function TFpValueTypeDefinition.GetDbgSymbol: TFpSymbol;
@@ -903,24 +1162,85 @@ end;
 
 { TDbgInfoAddressContext }
 
-function TFpDbgInfoContext.GetMemManager: TFpDbgMemManager;
+function TFpDbgSymbolScope.GetMemManager: TFpDbgMemManager;
+begin
+  Result := LocationContext.MemManager;
+end;
+
+constructor TFpDbgSymbolScope.Create(ALocationContext: TFpDbgLocationContext);
+begin
+  FLocationContext := ALocationContext;
+  FLocationContext.AddReference;
+  inherited Create;
+  AddReference;
+end;
+
+destructor TFpDbgSymbolScope.Destroy;
+begin
+  inherited Destroy;
+  FLocationContext.ReleaseReference;
+end;
+
+function TFpDbgSymbolScope.GetProcedureAtAddress: TFpValue;
+var
+  Sym: TFpSymbol;
+begin
+  Result := nil;
+  Sym := SymbolAtAddress;
+  if Sym <> nil then
+    Result := Sym.Value;
+end;
+
+function TFpDbgSymbolScope.GetSizeOfAddress: Integer;
+begin
+  Result := LocationContext.SizeOfAddress;
+end;
+
+function TFpDbgSymbolScope.GetSymbolAtAddress: TFpSymbol;
 begin
   Result := nil;
 end;
 
-function TFpDbgInfoContext.GetProcedureAtAddress: TFpValue;
-begin
-  Result := SymbolAtAddress.Value;
-end;
-
-function TFpDbgInfoContext.GetSymbolAtAddress: TFpSymbol;
+function TFpDbgSymbolScope.FindSymbol(const AName: String): TFpValue;
 begin
   Result := nil;
 end;
 
-function TFpDbgInfoContext.FindSymbol(const AName: String): TFpValue;
+function TFpDbgSimpleLocationContext.GetMemManager: TFpDbgMemManager;
 begin
-  Result := nil;
+  Result := FMemManager;
+end;
+
+function TFpDbgSimpleLocationContext.GetAddress: TDbgPtr;
+begin
+  Result := fAddress;
+end;
+
+function TFpDbgSimpleLocationContext.GetThreadId: Integer;
+begin
+  Result := fThreadId;
+end;
+
+function TFpDbgSimpleLocationContext.GetStackFrame: Integer;
+begin
+  Result := fStackFrame;
+end;
+
+function TFpDbgSimpleLocationContext.GetSizeOfAddress: Integer;
+begin
+  Result := FSizeOfAddr;
+end;
+
+constructor TFpDbgSimpleLocationContext.Create(AMemManager: TFpDbgMemManager;
+  AnAddress: TDbgPtr; AnSizeOfAddr, AThreadId: Integer; AStackFrame: Integer);
+begin
+  inherited Create;
+  AddReference;
+  FMemManager := AMemManager;
+  FAddress := AnAddress;
+  FSizeOfAddr := AnSizeOfAddr;
+  FThreadId := AThreadId;
+  FStackFrame := AStackFrame;
 end;
 
 { TFpSymbol }
@@ -953,6 +1273,13 @@ begin
   Result := DoReadSize(AValueObj, ASize);
 end;
 
+function TFpSymbol.GetInstanceClassName(AValueObj: TFpValue; out
+  AClassName: String): boolean;
+begin
+  AClassName := '';
+  Result := False;
+end;
+
 function TFpSymbol.GetValueBounds(AValueObj: TFpValue; out ALowBound,
   AHighBound: Int64): Boolean;
 begin
@@ -974,6 +1301,12 @@ begin
 end;
 
 function TFpSymbol.TypeCastValue(AValue: TFpValue): TFpValue;
+begin
+  Result := nil;
+end;
+
+function TFpSymbol.CreateSymbolScope(ALocationContext: TFpDbgLocationContext
+  ): TFpDbgSymbolScope;
 begin
   Result := nil;
 end;
@@ -1051,7 +1384,7 @@ begin
   Result := nil;
 end;
 
-function TFpSymbol.GetNestedSymbolByName(AIndex: String): TFpSymbol;
+function TFpSymbol.GetNestedSymbolByName(const AIndex: String): TFpSymbol;
 begin
   Result := nil;
 end;
@@ -1098,7 +1431,7 @@ begin
   Include(FEvaluatedFields, sfiMemberVisibility);
 end;
 
-procedure TFpSymbol.SetName(AValue: String);
+procedure TFpSymbol.SetName(const AValue: String);
 begin
   FName := AValue;
   Include(FEvaluatedFields, sfiName);
@@ -1305,6 +1638,18 @@ begin
     Result := 0;  //  Result := inherited GetOrdinalValue;
 end;
 
+function TFpSymbolForwarder.GetInstanceClassName(AValueObj: TFpValue; out
+  AClassName: String): boolean;
+var
+  p: TFpSymbol;
+begin
+  p := GetForwardToSymbol;
+  if p <> nil then
+    Result := p.GetInstanceClassName(AValueObj, AClassName)
+  else
+    Result := inherited GetInstanceClassName(AValueObj, AClassName);
+end;
+
 function TFpSymbolForwarder.GetValueBounds(AValueObj: TFpValue; out
   ALowBound, AHighBound: Int64): Boolean;
 var
@@ -1352,7 +1697,8 @@ begin
     Result := nil;  //  Result := inherited GetMember(AIndex);
 end;
 
-function TFpSymbolForwarder.GetNestedSymbolByName(AIndex: String): TFpSymbol;
+function TFpSymbolForwarder.GetNestedSymbolByName(const AIndex: String
+  ): TFpSymbol;
 var
   p: TFpSymbol;
 begin
@@ -1376,24 +1722,15 @@ end;
 
 { TDbgInfo }
 
-constructor TDbgInfo.Create(ALoaderList: TDbgImageLoaderList);
+constructor TDbgInfo.Create(ALoaderList: TDbgImageLoaderList;
+  AMemManager: TFpDbgMemManager);
 begin
+  FMemManager := AMemManager;
   inherited Create;
 end;
 
-function TDbgInfo.FindContext(AThreadId, AStackFrame: Integer;
-  AAddress: TDbgPtr): TFpDbgInfoContext;
-begin
-  Result := nil;;
-end;
-
-function TDbgInfo.FindContext(AAddress: TDbgPtr): TFpDbgInfoContext;
-begin
-  Result := nil;
-end;
-
-function TDbgInfo.ContextFromProc(AThreadId, AStackFrame: Integer;
-  AProcSym: TFpSymbol): TFpDbgInfoContext;
+function TDbgInfo.FindSymbolScope(ALocationContext: TFpDbgLocationContext;
+  AAddress: TDbgPtr): TFpDbgSymbolScope;
 begin
   Result := nil;
 end;

@@ -39,8 +39,7 @@ uses
   // CodeTools
   CodeToolManager, DefineTemplates, CodeCache, LinkScanner, FileProcs,
   // LazUtils
-  LConvEncoding, FileUtil, LazFileUtils, LazUTF8, LazUTF8Classes, LazStringUtils,
-  AvgLvlTree,
+  LConvEncoding, FileUtil, LazFileUtils, LazUTF8, LazStringUtils, AvgLvlTree,
   // IDEIntf
   ComponentReg, IDEDialogs, LazIDEIntf, PackageIntf, ProjectIntf,
   IDEExternToolIntf, IDEOptEditorIntf,
@@ -136,7 +135,7 @@ type
     // The user selected path when searching missing units.
     fPrevSelectedPath: string;
     // Missing units that are commented automatically in all units.
-    fAllCommentedUnits: TStringList;
+    fAllCommentedUnits: TStringListUTF8Fast;
     function DoMissingUnits({%H-}AUsedUnitsTool: TUsedUnitsTool): integer; virtual;
     function GetCachedUnitPath(const AUnitName: string): string;
   protected
@@ -178,10 +177,10 @@ type
     // Main unit with resource code
     fMainUnitConverter: TDelphiUnit;
     // Unit search path for project settings.
-    fUnitSearchPaths: TStringList;
+    fUnitSearchPaths: TStringListUTF8Fast;
     // Units that are found and will be added to project or package and converted.
-    fUnitsToAddToProject: TStringList;
-    fFilesToDelete: TStringList;
+    fUnitsToAddToProject: TStringListUTF8Fast;
+    fFilesToDelete: TStringListUTF8Fast;
     fUseThreads: boolean;              // The project/package uses TThread.
     function ConvertSub: TModalResult;
     procedure CleanUpCompilerOptionsSearchPaths(Options: TBaseCompilerOptions);
@@ -958,16 +957,16 @@ constructor TConvertDelphiProjPack.Create(const AFilename, ADescription: string)
 begin
   inherited Create(AFilename, ADescription);
   fUseThreads:=False;
-  fUnitSearchPaths:=TStringList.Create;
+  fUnitSearchPaths:=TStringListUTF8Fast.Create;
   fUnitSearchPaths.Delimiter:=';';
   fUnitSearchPaths.StrictDelimiter:=True;
   fCachedUnitNames:=TStringToStringTree.Create(False);
   fCachedRealFileNames:=TStringToStringTree.Create(True);
-  fAllCommentedUnits:=TStringList.Create;
+  fAllCommentedUnits:=TStringListUTF8Fast.Create;
   fAllCommentedUnits.Sorted:=True;
-  fUnitsToAddToProject:=TStringList.Create;
+  fUnitsToAddToProject:=TStringListUTF8Fast.Create;
   fUnitsToAddToProject.Sorted:=True;
-  fFilesToDelete:=TStringList.Create;
+  fFilesToDelete:=TStringListUTF8Fast.Create;
   fFilesToDelete.Sorted:=True;
   fMainUnitConverter:=nil;
 end;
@@ -992,7 +991,7 @@ var
   StartTime, EndTime: TDateTime;
   s: string;
 begin
-  if CompareFileExt(fSettings.MainFilename,'.dproj',false)=0 then begin
+  if CompareFileExtQuick(fSettings.MainFilename,'dproj')=0 then begin
     fErrorMsg := lisConvDprojFileNotSupportedYet;
     Exit(mrCancel);
   end;
@@ -1010,7 +1009,7 @@ begin
       fLazPMainFilename:=fSettings.DelphiToLazFilename(fSettings.MainFilename,
                                                        fLazPMainSuffix, false);
       // Find Delphi project / package file name
-      if CompareFileExt(fSettings.MainFilename,fDelphiPSuffix,false)=0 then
+      if CompareFileExtQuick(fSettings.MainFilename,fDelphiPSuffix)=0 then
         fDelphiPFilename:=fSettings.MainFilename
       else
         fDelphiPFilename:=ChangeFileExt(fSettings.MainFilename,fDelphiPSuffix);
@@ -1245,13 +1244,13 @@ end;
 
 function TConvertDelphiProjPack.ExtractOptionsFromCFG(const CFGFilename: string): TModalResult;
 var
-  sl: TStringListUTF8;
+  sl: TStringList;
   i: Integer;
   Line, s: string;
   c: char;
 begin
   try
-    sl:=TStringListUTF8.Create;
+    sl:=TStringList.Create;
     try
       sl.LoadFromFile(CFGFilename);
       for i:=0 to sl.Count-1 do begin
@@ -1385,7 +1384,6 @@ begin
       // Delete from file system because compiler would find it otherwise.
       if not DeleteFileUTF8(s) then
         exit(mrCancel);
-      //fFilesToDelete.Delete(i);
       fSettings.AddLogLine(mluNote, Format(lisConvDeletedFile,[s]));
     end;
   end;
@@ -1578,7 +1576,7 @@ begin
     // Check unitname and create UnitInfo.
     CurUnitInfo:=LazProject.UnitInfoWithFilename(AFileName);
     if CurUnitInfo=nil then begin
-      if FilenameIsPascalUnit(AFileName) then begin
+      if FilenameHasPascalExt(AFileName) then begin
         CurUnitInfo:=LazProject.UnitWithUnitname(PureUnitName);
         Assert(CurUnitInfo=nil,
           Format('TConvertDelphiProject.AddUnit: Unitname %s exists twice',[PureUnitName]));
@@ -1865,7 +1863,6 @@ var
   PkgFile, OffendingUnit: TPkgFile;
   CodeBuffer: TCodeBuffer;
   Flags: TPkgFileFlags;
-  HasRegisterProc: boolean;
   PureUnitName: String;
 begin
   Result:=mrOK;
@@ -1877,7 +1874,7 @@ begin
   PkgFile:=LazPackage.FindPkgFile(AFileName,true,false);
   if PkgFile=nil then begin
     PureUnitName:=ExtractFileNameOnly(AFileName);
-    if FilenameIsPascalUnit(AFileName) then begin
+    if FilenameHasPascalExt(AFileName) then begin
       // Check unitname
       OffendingUnit:=LazPackage.FindUnit(PureUnitName);
       Assert(OffendingUnit=nil,
@@ -1887,13 +1884,12 @@ begin
     // Check if the unit has a Register procedure.
     // ToDo: Optimize. The source is read again during unit conversion.
     CodeBuffer:=CodeToolBoss.LoadFile(AFilename, true, false);
-    if CodeBuffer<>nil then
-      if CodeToolBoss.HasInterfaceRegisterProc(CodeBuffer, HasRegisterProc) then
-        if HasRegisterProc then begin
-          Include(Flags, pffHasRegisterProc);
-          fSettings.AddLogLine(mluNote, Format(lisConvAddingFlagForRegister,[PureUnitName]),
-                               fLazPMainFilename);
-        end;
+    if (CodeBuffer<>nil) and CodeToolBoss.HasInterfaceRegisterProc(CodeBuffer) then
+    begin
+      Include(Flags, pffHasRegisterProc);
+      fSettings.AddLogLine(mluNote, Format(lisConvAddingFlagForRegister,[PureUnitName]),
+                           fLazPMainFilename);
+    end;
     // Add new unit to package
     LazPackage.AddFile(AFileName, PureUnitName, pftUnit, Flags, cpNormal);
   end;

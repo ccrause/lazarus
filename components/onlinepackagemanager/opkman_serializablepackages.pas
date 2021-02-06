@@ -172,6 +172,8 @@ type
     FDisplayName: String;
     FCategory: String;
     FCommunityDescription: String;
+    FExternalDependencies: String;
+    FOrphanedPackage: Integer;
     FRepositoryFileName: String;
     FRepositoryFileSize: Int64;
     FRepositoryFileHash: String;
@@ -214,7 +216,9 @@ type
     property Name: String read FName write FName;
     property DisplayName: String read FDisplayName write FDisplayName;
     property Category: String read FCategory write FCategory;
-    property CommunityDescription: string read FCommunityDescription write FCommunityDescription;
+    property CommunityDescription: String read FCommunityDescription write FCommunityDescription;
+    property ExternalDependecies: String read FExternalDependencies write FExternalDependencies;
+    property OrphanedPackage: Integer read FOrphanedPackage write FOrphanedPackage;
     property Checked: Boolean read FChecked write FChecked;
     property RepositoryFileName: String read FRepositoryFileName write FRepositoryFileName;
     property RepositoryFileSize: int64 read FRepositoryFileSize write FRepositoryFileSize;
@@ -582,7 +586,7 @@ begin
   for I := 0 to FLazarusPackages.Count - 1 do
   begin
     Result := TLazarusPackage(FLazarusPackages.Items[I]);
-    if UpperCase(Result.Name) = UpperCase(APackageName) then
+    if CompareText(Result.Name, APackageName) = 0 then
       Exit;
   end;
   Result := nil;
@@ -766,20 +770,17 @@ function TSerializablePackages.FindMetaPackage(const AValue: String;
   const AFindPackageBy: TFindPackageBy): TMetaPackage;
 var
   I: Integer;
-  NeedToBreak: Boolean;
+  S: String;
 begin
   Result := nil;
   for I := 0 to Count - 1 do
   begin
     case AFindPackageBy of
-      fpbPackageName: NeedToBreak := UpperCase(Items[I].Name) = UpperCase(AValue);
-      fpbRepositoryFilename: NeedToBreak := UpperCase(Items[I].RepositoryFileName) = UpperCase(AValue)
+      fpbPackageName:        S := Items[I].Name;
+      fpbRepositoryFilename: S := Items[I].RepositoryFileName;
     end;
-    if NeedToBreak then
-    begin
-      Result := Items[I];
-      Break;
-    end;
+    if CompareText(S, AValue) = 0 then
+      Exit(Items[I]);
   end;
 end;
 
@@ -806,23 +807,19 @@ function TSerializablePackages.FindPackageIndex(const AValue: String;
   const AFindPackageBy: TFindPackageBy): Integer;
 var
   I: Integer;
-  NeedToBreak: Boolean;
+  S: String;
 begin
   Result := -1;
   for I := 0 to Count - 1 do
   begin
     case AFindPackageBy of
-      fpbPackageName: NeedToBreak := Items[I].Name = AValue;
-      fpbRepositoryFilename: NeedToBreak := Items[I].RepositoryFileName = AValue
+      fpbPackageName:        S := Items[I].Name;
+      fpbRepositoryFilename: S := Items[I].RepositoryFileName;
     end;
-    if NeedToBreak then
-    begin
-      Result := I;
-      Break;
-    end;
+    if S = AValue then
+      Exit(I);
   end;
 end;
-
 
 function TSerializablePackages.FindLazarusPackage(const APackageName: String): TLazarusPackage;
 var
@@ -833,7 +830,7 @@ begin
   begin
     for J := 0 to Items[I].FLazarusPackages.Count - 1 do
     begin
-      if UpperCase(TLazarusPackage(Items[I].FLazarusPackages.Items[J]).Name) = UpperCase(APackageName) then
+      if CompareText(TLazarusPackage(Items[I].FLazarusPackages.Items[J]).Name, APackageName) = 0 then
       begin
         Result := TLazarusPackage(Items[I].FLazarusPackages.Items[J]);
         Break;
@@ -856,6 +853,8 @@ begin
     AMetaPackage.DisplayName := PackageData.Get('DisplayName');
     AMetaPackage.Category := PackageData.Get('Category');
     AMetaPackage.CommunityDescription := PackageData.Get('CommunityDescription');
+    AMetaPackage.ExternalDependecies := PackageData.Get('ExternalDependecies');
+    AMetaPackage.OrphanedPackage := PackageData.Get('OrphanedPackage');
     AMetaPackage.RepositoryFileName := PackageData.Get('RepositoryFileName');
     AMetaPackage.RepositoryFileSize := PackageData.Get('RepositoryFileSize');
     AMetaPackage.RepositoryFileHash := PackageData.Get('RepositoryFileHash');
@@ -1311,6 +1310,8 @@ begin
     APackageData.Add('DisplayName', AMetaPackage.DisplayName);
     APackageData.Add('Category', AMetaPackage.Category);
     APackageData.Add('CommunityDescription', AMetaPackage.CommunityDescription);
+    APackageData.Add('ExternalDependecies', AMetaPackage.ExternalDependecies);
+    APackageData.Add('OrphanedPackage', AMetaPackage.OrphanedPackage);
     APackageData.Add('RepositoryFileName', AMetaPackage.RepositoryFileName);
     APackageData.Add('RepositoryFileSize', AMetaPackage.RepositoryFileSize);
     APackageData.Add('RepositoryFileHash', AMetaPackage.RepositoryFileHash);
@@ -1391,7 +1392,7 @@ begin
         for J := 0 to PackageEditingInterface.GetPackageCount - 1 do
         begin
           IDEPackage := PackageEditingInterface.GetPackages(J);
-          if UpperCase(ExtractFileName(IDEPackage.Filename)) = UpperCase(PackageName) then
+          if CompareText(ExtractFileName(IDEPackage.Filename), PackageName) = 0 then
           begin
             LazarusPkg := FindLazarusPackage(PackageName);
             if LazarusPkg <> nil then

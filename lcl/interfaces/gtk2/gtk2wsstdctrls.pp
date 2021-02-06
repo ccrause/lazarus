@@ -25,9 +25,9 @@ uses
   glib2,  gdk2, gtk2,
   Classes, SysUtils, Math,
   // LazUtils
-  LazLoggerBase, LazTracer,
+  LazLoggerBase, LazTracer, LazStringUtils,
   // LCL
-  Controls, Graphics, StdCtrls, LMessages, LCLType, LazUtf8Classes, LazUTF8,
+  Controls, Graphics, StdCtrls, LMessages, LCLType, LazUTF8,
   // Widgetset
   WSControls, WSProc, WSStdCtrls, Gtk2Int, Gtk2Def,
   Gtk2CellRenderer, Gtk2Globals, Gtk2Proc, InterfaceBase,
@@ -129,6 +129,7 @@ type
     class procedure SetItemIndex(const ACustomComboBox: TCustomComboBox; NewIndex: integer); override;
     class procedure SetMaxLength(const ACustomComboBox: TCustomComboBox; NewLength: integer); override;
     class procedure SetStyle(const ACustomComboBox: TCustomComboBox; NewStyle: TComboBoxStyle); override;
+    class procedure SetReadOnly(const ACustomComboBox: TCustomComboBox; NewReadOnly: boolean); override;
 
     class function  GetItems(const ACustomComboBox: TCustomComboBox): TStrings; override;
     class procedure Sort(const ACustomComboBox: TCustomComboBox; {%H-}AList: TStrings; IsSorted: boolean); override;
@@ -409,6 +410,25 @@ begin
     Result := PGtkEntry(GTK_BIN(Widget)^.child)
   else
     Result := nil;
+end;
+
+procedure gtkDefaultPopupMenuDeactivate(Widget: PGtkWidget; data: gPointer); cdecl;
+begin
+  LastMouse.Button := 0;
+  LastMouse.ClickCount := 0;
+  LastMouse.Down := False;
+  LastMouse.MousePos := Point(0, 0);
+  LastMouse.Time := 0;
+  LastMouse.WinControl := nil;
+end;
+
+function gtkDefaultPopupMenuCloseFix(Widget: PGtkWidget; Menu: PGtkMenu;
+  data: gPointer): gboolean; cdecl;
+begin
+  // needed because closing popup menu without clicking on any menu item
+  // freezes various controls, eg SpeedButton
+  g_signal_connect(PGtkObject(Menu), 'deactivate',
+    gtk_signal_func(@gtkDefaultPopupMenuDeactivate), nil);
 end;
 
 {$I gtk2memostrings.inc}
@@ -1062,6 +1082,9 @@ begin
     SetCallback(LM_COPY, PGtkObject(AGtkWidget), AWidgetInfo^.LCLObject);
     SetCallback(LM_PASTE, PGtkObject(AGtkWidget), AWidgetInfo^.LCLObject);
   end;
+
+  g_signal_connect_after(PGtkObject(AGtkWidget), 'populate-popup',
+    gtk_signal_func(@gtkDefaultPopupMenuCloseFix), AWidgetInfo);
 end;
 
 class procedure TGtk2WSCustomEdit.GetPreferredSize(const AWinControl: TWinControl;
@@ -1091,6 +1114,8 @@ var
   Mess : TLMessage;
 begin
   if not WSCheckHandleAllocated(AWinControl, 'SetText') then
+    Exit;
+  if TCustomEdit(AWinControl).NumbersOnly and not IsNumber(AText) then
     Exit;
   {$IFDEF VerboseTWinControlRealText}
   DebugLn(['TGtkWSCustomEdit.SetText START ',DbgSName(AWinControl),' AText="',AText,'"']);
@@ -1131,6 +1156,8 @@ var
   Mess : TLMessage;
 begin
   if not WSCheckHandleAllocated(ACustomEdit, 'SetSelText') then
+    Exit;
+  if ACustomEdit.NumbersOnly and not IsNumber(NewSelText) then
     Exit;
   Widget:={%H-}PGtkWidget(ACustomEdit.Handle);
   if GTK_IS_SPIN_BUTTON(Widget) then
@@ -1275,28 +1302,6 @@ begin
   end;
 end;
 
-function gtk2WSDelayedSelStart(Data: Pointer): gboolean; cdecl;
-var
-  Entry: PGtkEntry;
-begin
-  Result := False;
-  Entry := PGtkEntry(PWidgetInfo(Data)^.CoreWidget);
-  gtk_editable_set_position(PGtkEditable(Entry), PWidgetInfo(Data)^.CursorPos);
-  g_idle_remove_by_data(Data);
-end;
-
-function gtk2WSDelayedSetSelLength(Data: Pointer): gboolean; cdecl;
-var
-  Entry: PGtkEntry;
-begin
-  Result := False;
-  Entry := PGtkEntry(PWidgetInfo(Data)^.CoreWidget);
-  gtk_entry_select_region(Entry,
-      PWidgetInfo(Data)^.CursorPos,
-      PWidgetInfo(Data)^.CursorPos + PWidgetInfo(Data)^.SelLength);
-  g_idle_remove_by_data(Data);
-end;
-
 class procedure TGtk2WSCustomEdit.SetCaretPos(const ACustomEdit: TCustomEdit;
   const NewPos: TPoint);
 var
@@ -1317,12 +1322,7 @@ begin
     NewStart := Min(NewPos.X, Entry^.text_length);
   WidgetInfo := GetWidgetInfo(Entry);
   WidgetInfo^.CursorPos := NewStart;
-  if LockOnChange(PgtkObject(Entry),0) > 0 then
-  begin
-    // postpone
-    g_idle_add(@gtk2WSDelayedSelStart, WidgetInfo);
-  end else
-    gtk_editable_set_position(PGtkEditable(Entry), NewStart);
+  gtk_editable_set_position(PGtkEditable(Entry), NewStart);
 end;
 
 class procedure TGtk2WSCustomEdit.SetEchoMode(const ACustomEdit: TCustomEdit;
@@ -1390,12 +1390,7 @@ begin
     NewPos := Min(NewStart, Entry^.text_length);
   WidgetInfo := GetWidgetInfo(Entry);
   WidgetInfo^.CursorPos := NewPos;
-  if LockOnChange(PgtkObject(Entry),0) > 0 then
-  begin
-    // postpone
-    g_idle_add(@gtk2WSDelayedSelStart, WidgetInfo);
-  end else
-    gtk_editable_set_position(PGtkEditable(Entry), NewPos);
+  gtk_editable_set_position(PGtkEditable(Entry), NewPos);
 end;
 
 class procedure TGtk2WSCustomEdit.SetSelLength(
@@ -1414,13 +1409,9 @@ begin
   if WidgetInfo^.CursorPos = 0 then
     WidgetInfo^.CursorPos := SelStart;
   WidgetInfo^.SelLength := NewLength;
-  if LockOnChange(PgtkObject(Entry),0) > 0 then
-    // delay setting of selection length. issue #20890
-    g_idle_add(@gtk2WSDelayedSetSelLength, WidgetInfo)
-  else
-    gtk_entry_select_region(Entry,
-      SelStart,
-      SelStart + NewLength);
+  gtk_entry_select_region(Entry,
+    SelStart + NewLength,
+    SelStart );
 end;
 
 class procedure TGtk2WSCustomEdit.SetAlignment(const ACustomEdit: TCustomEdit;
@@ -1595,7 +1586,7 @@ begin
   g_object_set_data(G_OBJECT(renderer), 'widgetinfo', AWidgetInfo);
   gtk_cell_layout_clear(PGtkCellLayout(AWidget));
   gtk_cell_layout_pack_start(PGtkCellLayout(AWidget), renderer, True);
-  if not (ACustomComboBox.Style in [csOwnerDrawFixed, csOwnerDrawVariable, csOwnerDrawEditableFixed, csOwnerDrawEditableVariable]) then
+  if not ACustomComboBox.Style.IsOwnerDrawn then
     gtk_cell_layout_set_attributes(PGtkCellLayout(AWidget), renderer, ['text', 0, nil]);
   gtk_cell_layout_set_cell_data_func(PGtkCellLayout(AWidget), renderer,
     @LCLIntfCellRenderer_CellDataFunc, AWidgetInfo, nil);
@@ -1723,7 +1714,7 @@ begin
   else
     InputObject := AGtkObject;
 
-  if TCustomComboBox(AWinControl).Style in [csDropDownList, csOwnerDrawFixed, csOwnerDrawVariable] then
+  if not TCustomComboBox(AWinControl).Style.HasEditBox then
   begin
     // Just a combobox without a edit should handle its own keys. Issue #32458
     Gtk2WidgetSet.SetCallbackDirect(LM_KEYDOWN, InputObject, AWinControl);
@@ -1747,7 +1738,7 @@ begin
 
   // And now the same for the Button in the combo
   if AButton<>nil then begin
-    if TCustomComboBox(AWinControl).Style in [csDropDownList, csOwnerDrawFixed, csOwnerDrawVariable] then
+    if not TCustomComboBox(AWinControl).Style.HasEditBox then
     begin
       // Just a combobox without a edit should handle its own keys. Issue #32458
       Gtk2WidgetSet.SetCallbackDirect(LM_KEYDOWN, AButton, AWinControl);
@@ -1790,6 +1781,10 @@ begin
     g_signal_connect(AMenu, 'show', G_CALLBACK(@GtkPopupShowCB), AWidgetInfo);
     g_signal_connect_after(AMenu, 'selection-done', G_CALLBACK(@GtkPopupHideCB), AWidgetInfo);
   end;
+
+  if TCustomComboBox(AWinControl).Style.HasEditBox then
+    g_signal_connect_after(PGtkObject(GTK_BIN(ComboWidget)^.child), 'populate-popup',
+      gtk_signal_func(@gtkDefaultPopupMenuCloseFix), AWidgetInfo);
 
   if (gtk_major_version >= 2) and (gtk_minor_version >= 10) then
     g_signal_connect(ComboWidget, 'notify', TGCallback(@GtkNotifyCB), AWidgetInfo);
@@ -2045,19 +2040,22 @@ var
 begin
   WidgetInfo := GetWidgetInfo({%H-}Pointer(ACustomComboBox.Handle));
   p := WidgetInfo^.CoreWidget;
-  case NewStyle of
-    csDropDown,
-    csSimple,
-    csOwnerDrawEditableFixed,
-    csOwnerDrawEditableVariable:
-      NeedEntry := True;
-    csDropDownList,
-    csOwnerDrawFixed,
-    csOwnerDrawVariable:
-      NeedEntry := False;
-  end;
+  NeedEntry := NewStyle.HasEditBox;
   if gtk_is_combo_box_entry(p) = NeedEntry then Exit;
   ReCreateCombo(ACustomComboBox, NeedEntry, WidgetInfo);
+end;
+
+class procedure TGtk2WSCustomComboBox.SetReadOnly(
+  const ACustomComboBox: TCustomComboBox; NewReadOnly: boolean);
+var
+  WidgetInfo: PWidgetInfo;
+  Entry: PGtkEntry;
+begin
+  WidgetInfo := GetWidgetInfo({%H-}Pointer(ACustomComboBox.Handle));
+
+  Entry := GetComboBoxEntry(WidgetInfo^.CoreWidget);
+  if (Entry<>nil) and (ACustomComboBox.Style in [csDropDown, csOwnerDrawEditableFixed, csOwnerDrawEditableVariable, csSimple]) then
+    gtk_entry_set_editable(PGtkEditable(Entry), not NewReadOnly);
 end;
 
 class function TGtk2WSCustomComboBox.GetItems(
@@ -2177,7 +2175,6 @@ var
   ACustomComboBox: TCustomComboBox;
   ItemList: TGtkListStoreStringList;
   LCLIndex: PLongint;
-  NeedEntry: Boolean;
 begin
   ACustomComboBox := TCustomComboBox(AWinControl);
 
@@ -2190,18 +2187,7 @@ begin
 
   ListStore := gtk_list_store_new (2, [G_TYPE_STRING, G_TYPE_POINTER, nil]);
 
-  case ACustomComboBox.Style of
-    csDropDown,
-    csSimple,
-    csOwnerDrawEditableFixed,
-    csOwnerDrawEditableVariable:
-      NeedEntry := True;
-    csDropDownList,
-    csOwnerDrawFixed,
-    csOwnerDrawVariable:
-      NeedEntry := False;
-  end;
-  if NeedEntry then
+  if ACustomComboBox.Style.HasEditBox then
     ComboWidget := gtk_combo_box_entry_new_with_model(GTK_TREE_MODEL (ListStore), 0)
   else
     ComboWidget := gtk_combo_box_new_with_model(GTK_TREE_MODEL (ListStore));

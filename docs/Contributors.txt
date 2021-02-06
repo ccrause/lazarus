@@ -13,6 +13,7 @@ Andreas Hausladen
 Andreas Schneider
 Andrew Haines
 Andrew Johnson
+Andrey Sobol
 Andrey Zubarev
 Anton A. Panferov
 Anton Kavalenka
@@ -64,6 +65,7 @@ Dimitrios Chr. Ioannidis
 Diogo Piçarra
 Dirk Schiphorst
 Dmitry Boyarintsev
+Domingo Galmés
 Dominique Louis
 Don Siders
 Ere Maijala
@@ -243,5 +245,6 @@ Zeljan Rikalo
 Zheng Jian Ping aka "robsean" - Simplified Chinese translation
 Žilvinas Ledas
 Zoë Peterson
+Zoltanleo
 
 #and special thanks to the FPC team.

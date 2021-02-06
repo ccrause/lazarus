@@ -24,14 +24,14 @@ uses
   {$IFDEF UNIX}
   BaseUnix, Unix,
   {$ENDIF}
-  SysUtils, Classes, types,
+  SysUtils, Classes, types, Math, FPImage,
   // LazUtils
-  LazUTF8, Translations, IntegerList,
+  LazUtilities, LazLoggerBase, LazTracer, LazUTF8, IntegerList, GraphType,
   // LCL
-  LCLPlatformDef, InterfaceBase, LCLProc, LCLStrConsts, LCLType, LMessages,
-  Controls, Forms, FPImage, Graphics, GraphUtil, GraphType, IntfGraphics,
-  LazGtk3, LazGdk3, LazGlib2, LazGObject2, LazCairo1, LazPango1, LazPangoCairo1, LazGio2,
-  LazGdkPixbuf2, gtk3widgets, gtk3objects, gtk3procs;
+  LCLPlatformDef, InterfaceBase, LCLProc, LCLType, LMessages, LCLMessageGlue,
+  Controls, Forms, Graphics, GraphUtil, IntfGraphics,
+  LazGtk3, LazGdk3, LazGlib2, LazGObject2, LazCairo1, LazPango1, LazGio2,
+  LazGdkPixbuf2, gtk3widgets, gtk3objects, gtk3procs, gtk3boxes;
 
 type
 
@@ -124,6 +124,7 @@ type
     procedure DCRedraw(CanvasHandle: HDC); override;
     procedure DCSetAntialiasing(CanvasHandle: HDC; AEnabled: Boolean); override;
     procedure SetDesigning(AComponent: TComponent); override;
+    function  GetLCLCapability(ACapability: TLCLCapability): PtrUInt; override;
 
     function CreateTimer(Interval: integer; TimerFunc: TWSTimerProc): THandle; override;
     function DestroyTimer(TimerHandle: THandle): boolean; override;
@@ -150,16 +151,9 @@ function Gtk3WidgetFromGtkWidget(const AWidget: PGtkWidget): TGtk3Widget;
 function HwndFromGtkWidget(AWidget: PGtkWidget): HWND;
 
 implementation
-uses
-  Math, LCLMessageGlue,
-  {%H-}Gtk3WSFactory{%H-};
 
-const
-  GTK_RESPONSE_LCL_ALL = -10;
-  GTK_RESPONSE_LCL_YESTOALL = -3; // GTK_RESPONSE_ACCEPT;
-  GTK_RESPONSE_LCL_RETRY = -12;
-  GTK_RESPONSE_LCL_IGNORE = -13;
-  GTK_RESPONSE_LCL_NOTOALL = -14;
+uses
+  {%H-}Gtk3WSFactory{%H-};
 
 {------------------------------------------------------------------------------
   Function: FillStandardDescription
@@ -191,9 +185,9 @@ begin
   Desc.BluePrec := 8;
 
   Desc.AlphaShift := 24;
-  Desc.RedShift := 16;
+  Desc.RedShift := 0;
   Desc.GreenShift := 8;
-//  Desc.BlueShift := 0;
+  Desc.BlueShift := 16;
 
   // Qt wants dword-aligned data
   Desc.MaskLineEnd := rileDWordBoundary;
@@ -217,6 +211,16 @@ function HwndFromGtkWidget(AWidget: PGtkWidget): HWND;
 begin
   Result := HWND(Gtk3WidgetFromGtkWidget(AWidget));
 end;
+
+function TGtk3WidgetSet.GetLCLCapability(ACapability: TLCLCapability): PtrUInt;
+begin
+  case ACapability of
+  lcTextHint: Result := LCL_CAPABILITY_YES;
+  else
+    Result := inherited GetLCLCapability(ACapability);
+  end;
+end;
+
 
 {$i gtk3object.inc}
 {$i gtk3winapi.inc}

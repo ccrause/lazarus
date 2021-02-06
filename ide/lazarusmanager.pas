@@ -95,7 +95,7 @@ uses
   // LCL
   Forms, Controls, Dialogs,
   // LazUtils
-  UTF8Process, FileUtil, LazFileUtils, LazUtilities, LazUTF8, LazUTF8Classes,
+  UTF8Process, FileUtil, LazFileUtils, LazUtilities, LazUTF8,
   // CodeTools
   FileProcs,
   // IdeIntf
@@ -113,13 +113,13 @@ type
     FProcess: TProcessUTF8;
     FWantsRestart: boolean;
   public
-    constructor Create(const LazarusPath: string; const CommandLine: string;
-      EnvOverrides: TStringList = nil);
+    constructor Create;
     destructor Destroy; override;
     procedure Execute;
     procedure WaitOnExit;
     property WantsRestart: boolean read FWantsRestart;
     property OnStart: TNotifyEvent read FOnStart write FOnStart;
+    property Process: TProcessUTF8 read FProcess;
   end;
   
 type
@@ -136,10 +136,10 @@ type
     FShowSplashOption: boolean;
     function RenameLazarusExecutable(const Directory: string): TModalResult;
     procedure LazarusProcessStart(Sender: TObject);
-    procedure WaitForLazarus;
   public
     destructor Destroy; override;
     procedure Initialize;
+    procedure WaitForLazarus;
     procedure Run;
     procedure ShowSplash;
     property ShowSplashOption: boolean read FShowSplashOption write FShowSplashOption;
@@ -247,7 +247,7 @@ begin
   SplashForm := nil;
 
   // get command line parameters
-  FCmdLineParams := TStringList.Create;
+  FCmdLineParams := TStringListUTF8Fast.Create;
   ParseCommandLine(FCmdLineParams, FLazarusPID, FShowSplashOption);
   if FShowSplashOption then
     ShowSplash;
@@ -274,6 +274,16 @@ begin
 end;
 
 procedure TLazarusManager.Run;
+
+  procedure AddExpandedParam(Params: TStringList; Param: string);
+  begin
+    // skip startlazarus params
+    if LeftStr(Param,length(StartLazarusPidOpt))=StartLazarusPidOpt then
+      exit;
+    // expand filenames and append
+    Params.Add(ExpandParamFile(Param));
+  end;
+
 var
   Restart: boolean;
   DefaultDir: String;
@@ -283,8 +293,9 @@ var
   MsgResult: TModalResult;
   StartPath: String;
   EnvOverrides: TStringList;
+  Params: TStringList;
+  i: Integer;
 begin
-  WaitForLazarus;
   try
     StartPath:=ExpandFileNameUTF8(ParamStrUTF8(0));
     if FileIsSymlink(StartPath) then
@@ -368,44 +379,57 @@ begin
         end;
       end;
       {$IFDEF darwin}
-      if FileExistsUTF8(FLazarusPath+'.app') then begin
+      if DirectoryExistsUTF8(FLazarusPath+'.app') then begin
         // start the bundle instead
         FLazarusPath:= FLazarusPath+'.app';// /Contents/MacOS/'+ExtractFileName(FLazarusPath);
       end;
       {$ENDIF}
 
-      DebugLn(['TLazarusManager.Run starting ',FLazarusPath,' ...']);
+      DebugLn(['Info: (startlazarus) [TLazarusManager.Run] starting ',FLazarusPath,' ...']);
       EnvOverrides:=TStringList.Create;
+      Params:=TStringList.Create;
+      FLazarusProcess := TLazarusProcess.Create;
       try
         {$IFDEF Linux}
         EnvOverrides.Values['LIBOVERLAY_SCROLLBAR']:='0';
         {$ENDIF}
+        FLazarusProcess.Process.Executable:=fLazarusPath;
+        if (EnvOverrides<>nil) and (EnvOverrides.Count>0) then
+          AssignEnvironmentTo(FLazarusProcess.Process.Environment,EnvOverrides);
         {$IFDEF darwin}
-        // "open" process runs a bundle, but doesn't wait for it to finish execution
-        // "startlazarus" logic suggests that the Lazarus process would be waited
-        // and if the special 99 (ExitCodeRestartLazarus) code is received,
-        // would repeat the restart process.
-        // Since "open" doesn't play nice with "startlazarus" logic.
-        // The arguments would not indicate that lazarus was started by startlazarus
-        FLazarusProcess :=
-          TLazarusProcess.Create('open',
-               ' -a ' + FLazarusPath + ' --args  --no-splash-screen ' + GetCommandLineParameters(FCmdLineParams, False)+' '+FCmdLineFiles,
-               EnvOverrides);
+        // GUI bundles must be opened by "open".
+        // "open" runs a bundle, but doesn't wait for it to finish execution.
+        // startlazarus will exit and lazarus has to start a new startlazarus
+        // when it needs a restart
+        FLazarusProcess.Process.Executable:='/usr/bin/open';
+        Params.Add('-a');
+        Params.Add(FLazarusPath);
+        Params.Add('--args');
         {$ELSE}
-        FLazarusProcess :=
-          TLazarusProcess.Create(FLazarusPath,
-               GetCommandLineParameters(FCmdLineParams, True)+' '+FCmdLineFiles,
-               EnvOverrides);
+        // tell lazarus, startlazarus is waiting for its exitcode
+        // When the special 99 (ExitCodeRestartLazarus) code is received,
+        // start a new lazars
+        Params.Add(StartedByStartLazarusOpt);
         {$ENDIF}
+        Params.Add(NoSplashScreenOptLong);
+        for i:=0 to FCmdLineParams.Count-1 do
+          AddExpandedParam(Params,FCmdLineParams[i]);
+        FLazarusProcess.Process.Parameters.AddStrings(Params);
       finally
+        Params.Free;
         EnvOverrides.Free;
       end;
       // clear the command line files, so that they are passed only once.
       FCmdLineFiles:='';
       FLazarusProcess.OnStart := @LazarusProcessStart;
+      DebugLn(['Info: (startlazarus) [TLazarusManager.Run] exe',FLazarusProcess.Process.Executable,' Params=[',FLazarusProcess.Process.Parameters.Text,']']);
       FLazarusProcess.Execute;
+      {$IFDEF darwin}
+      Restart:=false;
+      {$ELSE}
       FLazarusProcess.WaitOnExit;
       Restart := FLazarusProcess.WantsRestart;
+      {$ENDIF}
       FreeAndNil(FLazarusProcess);
     end;
   until not Restart;
@@ -425,22 +449,12 @@ end;
 
 { TLazarusProcess }
 
-constructor TLazarusProcess.Create(const LazarusPath: string;
-  const CommandLine: string; EnvOverrides: TStringList);
-var
-  Params: TStringListUTF8;
+constructor TLazarusProcess.Create;
 begin
   FProcess := TProcessUTF8.Create(nil);
   FProcess.InheritHandles := false;
   FProcess.Options := [];
   FProcess.ShowWindow := swoShow;
-  Params:=TStringListUTF8.Create;
-  SplitCmdLineParams(CommandLine,Params);
-  FProcess.Executable:=LazarusPath;
-  FProcess.Parameters:=Params;
-  Params.Free;
-  if (EnvOverrides<>nil) and (EnvOverrides.Count>0) then
-    AssignEnvironmentTo(FProcess.Environment,EnvOverrides);
 end;
 
 destructor TLazarusProcess.Destroy;

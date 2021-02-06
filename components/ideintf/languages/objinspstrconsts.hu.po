@@ -298,15 +298,41 @@ msgstr "IfNDef"
 msgid "Set value"
 msgstr "Érték megadása"
 
-#: objinspstrconsts.lisunabletofindparserfortool
-#, object-pascal-format
-msgid "Unable to find parser for tool \"%s\""
-msgstr "Nem található elemző az eszközhöz: \"%s\""
+#: objinspstrconsts.lrsbufdsfilters
+msgid "XML data files|*.xml;Binary data files|*.dat"
+msgstr ""
 
-#: objinspstrconsts.lisunabletofindparserwithname
-#, object-pascal-format
-msgid "Unable to find parser with name \"%s\""
-msgstr "Nem található \"%s\" nevű elemző"
+#: objinspstrconsts.lrscopyfromdataset
+msgid "Copy data from other dataset"
+msgstr ""
+
+#: objinspstrconsts.lrscreatedataset
+msgid "Create dataset"
+msgstr ""
+
+#: objinspstrconsts.lrsdatasetactive
+msgid "Dataset is already active, close it first."
+msgstr ""
+
+#: objinspstrconsts.lrsloadfromfile
+msgid "Load data from file"
+msgstr ""
+
+#: objinspstrconsts.lrsnodatasetsavailableforcopy
+msgid "No dataset available to copy data from."
+msgstr ""
+
+#: objinspstrconsts.lrsprovidedatafilename
+msgid "Select a data file to save data to"
+msgstr ""
+
+#: objinspstrconsts.lrssavetofile
+msgid "Save data to file"
+msgstr ""
+
+#: objinspstrconsts.lrsselectdatafilename
+msgid "Select a file with data to load into dataset"
+msgstr ""
 
 #: objinspstrconsts.nbcesaddpage
 msgctxt "objinspstrconsts.nbcesaddpage"
@@ -482,10 +508,6 @@ msgstr "Törlés megerősítése"
 msgctxt "objinspstrconsts.oiscopycomponents"
 msgid "&Copy"
 msgstr "&Másolás"
-
-#: objinspstrconsts.oiscreateanewpascalunit
-msgid "Create a new pascal unit."
-msgstr "Egy új Pascal unit létrehozása."
 
 #: objinspstrconsts.oiscreatedefaultevent
 msgid "Create default event"
@@ -866,10 +888,6 @@ msgstr "Beállítás alapértelmezettre: %s"
 #: objinspstrconsts.oissettodefaulthint
 msgid "Set property value to Default"
 msgstr "A tulajdonság értéke legyen Alapértelmezett"
-
-#: objinspstrconsts.oisshowalloutputlines
-msgid "Show all output lines"
-msgstr "A kimenet összes sorának megjelenítése"
 
 #: objinspstrconsts.oisshowclasses
 msgid "Show classes"
@@ -1279,10 +1297,6 @@ msgstr "Szűrőszerkesztő"
 #: objinspstrconsts.pefiltername
 msgid "Filter name"
 msgstr "Szűrő név"
-
-#: objinspstrconsts.pirsunit
-msgid "Pascal unit"
-msgstr "Pascal unit"
 
 #: objinspstrconsts.rscdalignment
 msgid "Alignment"

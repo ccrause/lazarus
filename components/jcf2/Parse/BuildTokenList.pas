@@ -38,6 +38,8 @@ unit BuildTokenList;
 interface
 
 uses
+  SysUtils, StrUtils,
+  Forms,
   { local }
   Tokens, SourceToken, SourceTokenList;
 
@@ -61,6 +63,7 @@ type
     function ForwardChar(const piOffset: integer): Char;
     function ForwardChars(const piOffset, piCount: integer): String;
     procedure Consume(const piCount: integer = 1);
+    procedure UndoConsume(const piCount: integer = 1);
     function EndOfFile: boolean;
     function EndOfFileAfter(const piChars: integer): boolean;
 
@@ -107,13 +110,12 @@ type
 implementation
 
 uses
-  Forms, SysUtils,
   { local }
   JcfStringUtils, JcfSystemUtils,
   JcfRegistrySettings;
 
 const
-  CurlyLeft = '{'; //widechar(123);
+  CurlyLeft =  '{'; //widechar(123);
   CurlyRight = '}'; //widechar(125);
 
 function CheckMultiByte(const pcChar: char): boolean;
@@ -121,6 +123,13 @@ begin
   Result := False;
   if GetRegSettings.CheckMultiByteChars then
     Result := IsMultiByte(pcChar);
+end;
+
+function CharIsOctDigit(const c: Char): Boolean;
+const
+  OctDigits: set of Char = [ '0', '1', '2', '3', '4', '5', '6', '7'];
+begin
+  Result := (c in OctDigits);
 end;
 
 { TBuildTokenList }
@@ -268,8 +277,8 @@ end;
 
 function TBuildTokenList.TryCurlyComment(const pcToken: TSourceToken): boolean;
 var
-  liCommentLength: integer;
-  lNestedDepth: integer;
+  liCommentLength, lNestedDepth: integer;
+
   procedure MoveToCommentEnd;
   var
     lForwardChar: char;
@@ -282,7 +291,7 @@ var
       lForwardChar:=ForwardChar(liCommentLength);
       if CheckMultiByte(lForwardChar) then
       begin
-        liCommentLength := liCommentLength + 2;
+        Inc(liCommentLength, 2);
         continue;
       end;
       Inc(liCommentLength);
@@ -296,6 +305,8 @@ var
     end;
   end;
 
+var
+  lLen, lPos: integer;
 begin
   Result := False;
   if Current <> '{' then
@@ -313,9 +324,30 @@ begin
     pcToken.CommentStyle := eCurlyBrace;
 
   MoveToCommentEnd;
-
   pcToken.SourceCode := CurrentChars(liCommentLength);
   Consume(liCommentLength);
+
+  if pcToken.CommentStyle=eCompilerDirective then  // {$I %XXX%} {$include %XXX%}
+  begin
+    lPos:=0;
+    lLen:=length(pcToken.SourceCode);
+    if AnsiStartsText('{$I', pcToken.SourceCode) then
+      if AnsiStartsText('{$INCLUDE', pcToken.SourceCode) then
+        lPos := 10
+      else
+        lPos := 4;
+    if (lPos>0) and (lPos<lLen) and (CharIsWhiteSpace(pcToken.SourceCode[lPos])) then
+    begin
+      while (lPos<=lLen) and CharIsWhiteSpace(pcToken.SourceCode[lPos]) do
+        Inc(lPos);
+      if (lPos<lLen) and (pcToken.SourceCode[lPos]='%') then
+      begin
+        pcToken.CommentStyle := eNotAComment;
+        pcToken.WordType:=wtIdentifier;
+        pcToken.TokenType:=ttIdentifier;
+      end;
+    end;
+  end;
 
   Result := True;
 end;
@@ -444,14 +476,32 @@ end;
 
 
 function TBuildTokenList.TryWord(const pcToken: TSourceToken): boolean;
+
 begin
   Result := False;
 
-  if not CharIsWordChar(Current) then
-    exit;
-
-  pcToken.SourceCode := Current;
-  Consume;
+  // support reserved words as identifiers
+  // example.
+  // var &type:integer;
+  if Current='&' then
+  begin
+    if CharIsOctDigit(ForwardChar(1)) then
+      Exit;
+    pcToken.SourceCode := Current;
+    Consume;
+    if not CharIsWordChar(Current) then
+    begin
+      pcToken.TokenType := ttAmpersand;
+      exit;
+    end;
+  end
+  else
+  begin
+    if not CharIsWordChar(Current) then
+      exit;
+    pcToken.SourceCode := Current;
+    Consume;
+  end;
 
   { concat any subsequent word chars }
   while CharIsWordChar(Current) or CharIsDigit(Current) do
@@ -638,11 +688,25 @@ begin
     pcToken.SourceCode := pcToken.SourceCode + Current;
     Consume;
   end;
+  // msdos i8086 segment:offset
+  // $SSSS:$OOOO
+  if (lbHasDecimalSep=false) and (Current=':') and (ForwardChar(1)='$') then
+  begin
+    pcToken.SourceCode := pcToken.SourceCode + Current;
+    Consume;
+    pcToken.SourceCode := pcToken.SourceCode + Current;
+    Consume;
+    while Current in NativeHexDigits do
+    begin
+      pcToken.SourceCode := pcToken.SourceCode + Current;
+      Consume;
+    end;
+  end;
 
   Result := True;
 end;
 
-{ ~bk 2014.11.01 - Bin numbers are prefixed with % }
+{ Bin numbers are prefixed with % }
 function TBuildTokenList.TryBinNumber(const pcToken: TSourceToken): boolean;
 begin
   Result := False;
@@ -667,19 +731,22 @@ end;
 
 { ~pktb 2017.05.19 - Oct numbers are prefixed with & }
 function TBuildTokenList.TryOctNumber(const pcToken: TSourceToken): boolean;
-function CharIsOctDigit(const c: Char): Boolean;
-const
-  OctDigits: set of AnsiChar = [
-    '0', '1', '2', '3', '4', '5', '6', '7'];
-begin
-  Result := (c in OctDigits);
-end;
 begin
   Result := False;
 
   { starts with a & }
   if Current <> '&' then
     exit;
+
+  //ISN'T A Octal Number.
+  if not CharIsOctDigit(ForwardChar(1)) then
+  begin
+    pcToken.TokenType  := ttAmpersand;
+    pcToken.SourceCode := Current;
+    Consume;
+    result:=true;
+    exit;
+  end;
 
   pcToken.TokenType  := ttNumber;
   pcToken.SourceCode := Current;
@@ -764,14 +831,12 @@ function TBuildTokenList.TryPunctuation(const pcToken: TSourceToken): boolean;
     if (chLast = '*') and (ch <> '*') then
       exit;
 
-
     // "<<" is the start of two nested generics,
     // likewise '>>' is not an operator, it is two "end-of-generic" signs in sucession
     if (chLast = '<') and (ch = '<') then
-      exit;
+      exit(True);    // <<
     if (chLast = '>') and (ch = '>') then
-      exit;
-
+      exit(True);    // >>
 
     Result := CharIsPuncChar(ch);
   end;
@@ -782,7 +847,6 @@ var
   lcLast:      Char;
 begin
   Result := False;
-
   if not CharIsPuncChar(Current) then
     exit;
 
@@ -799,6 +863,12 @@ begin
     Consume;
   end;
 
+  if length(pcToken.SourceCode) > 2 then  // nested generic    specialize TC1<TC2<TC3<integer>>>=record  end;
+  begin
+    // only consume the first >
+    UndoConsume(Length(pcToken.SourceCode) - 1);
+    pcToken.SourceCode := pcToken.SourceCode[1];
+  end;
   { try to recognise the punctuation as an operator }
   TypeOfToken(pcToken.SourceCode, leWordType, leTokenType);
   if leTokenType <> ttUnknown then
@@ -812,7 +882,6 @@ end;
 function TBuildTokenList.TrySingleCharToken(const pcToken: TSourceToken): boolean;
 begin
   Result := False;
-
   pcToken.TokenType := TypeOfToken(Current);
   if pcToken.TokenType <> ttUnknown then
   begin
@@ -878,6 +947,11 @@ end;
 procedure TBuildTokenList.Consume(const piCount: integer);
 begin
   inc(fiCurrentIndex, piCount);
+end;
+
+procedure TBuildTokenList.UndoConsume(const piCount: integer);
+begin
+  dec(fiCurrentIndex, piCount);
 end;
 
 function TBuildTokenList.EndOfFile: boolean;

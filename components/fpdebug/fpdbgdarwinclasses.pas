@@ -22,7 +22,8 @@ uses
   FpDbgUtil,
   UTF8Process,
   LazLoggerBase,
-  FpDbgCommon;
+  FpDbgCommon, FpdMemoryTools,
+  FpErrorMessages;
 
 type
   x86_thread_state32_t = record
@@ -146,13 +147,14 @@ type
     function AnalyseDebugEvent(AThread: TDbgThread): TFPDEvent; override;
     function CreateWatchPointData: TFpWatchPointData; override;
   public
-    class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses): TDbgProcess; override;
+    class function StartInstance(AFileName: string; AParams, AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string; AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager; out AnError: TFpError): TDbgProcess; override;
     class function isSupported(ATargetInfo: TTargetDescriptor): boolean; override;
-    constructor Create(const AName: string; const AProcessID, AThreadID: Integer; AnOsClasses: TOSDbgClasses); override;
+    constructor Create(const AName: string; const AProcessID, AThreadID: Integer; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager); override;
     destructor Destroy; override;
 
     function ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean; override;
     function WriteData(const AAdress: TDbgPtr; const ASize: Cardinal; const AData): Boolean; override;
+    function CallParamDefaultLocation(AParamIdx: Integer): TFpDbgMemLocation; override;
 
     function CheckForConsoleOutput(ATimeOutMs: integer): integer; override;
     function GetConsoleOutput: string; override;
@@ -620,11 +622,11 @@ begin
 end;
 
 constructor TDbgDarwinProcess.Create(const AName: string; const AProcessID,
-  AThreadID: Integer; AnOsClasses: TOSDbgClasses);
+  AThreadID: Integer; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager);
 var
   aKernResult: kern_return_t;
 begin
-  inherited Create(AName, AProcessID, AThreadID, AnOsClasses);
+  inherited Create(AName, AProcessID, AThreadID, AnOsClasses, AMemManager);
 
   GetDebugAccessRights;
   aKernResult:=task_for_pid(mach_task_self, AProcessID, FTaskPort);
@@ -642,7 +644,8 @@ end;
 
 class function TDbgDarwinProcess.StartInstance(AFileName: string; AParams,
   AnEnvironment: TStrings; AWorkingDirectory, AConsoleTty: string;
-  AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses): TDbgProcess;
+  AFlags: TStartInstanceFlags; AnOsClasses: TOSDbgClasses; AMemManager: TFpDbgMemManager;
+  out AnError: TFpError): TDbgProcess;
 var
   PID: TPid;
   AProcess: TProcessUTF8;
@@ -699,7 +702,7 @@ begin
     PID:=AProcess.ProcessID;
 
     sleep(100);
-    result := TDbgDarwinProcess.Create(AFileName, Pid, -1, AnOsClasses);
+    result := TDbgDarwinProcess.Create(AFileName, Pid, -1, AnOsClasses, AMemManager);
     TDbgDarwinProcess(result).FMasterPtyFd := AMasterPtyFd;
     TDbgDarwinProcess(result).FProcProcess := AProcess;
     TDbgDarwinProcess(result).FExecutableFilename := AnExecutabeFilename;
@@ -718,13 +721,8 @@ end;
 class function TDbgDarwinProcess.isSupported(ATargetInfo: TTargetDescriptor
   ): boolean;
 begin
-  Result := inherited isSupported(ATargetInfo);
-end;
-
-class function TDbgLinuxProcess.isSupported(target: TTargetDescriptor): boolean;
-begin
-  result := (target.OS = osDarwin) and
-            (target.machineType = mtX86_64);
+  result := (ATargetInfo.OS = osDarwin) and
+            (ATargetInfo.machineType = mtX86_64);
 end;
 
 function TDbgDarwinProcess.ReadData(const AAdress: TDbgPtr;
@@ -768,6 +766,23 @@ begin
     end;
 
   result := true;
+end;
+
+function TDbgDarwinProcess.CallParamDefaultLocation(AParamIdx: Integer
+  ): TFpDbgMemLocation;
+begin
+  case Mode of
+    dm32: case AParamIdx of
+        0: Result := RegisterLoc(0); // EAX
+        1: Result := RegisterLoc(2); // EDX
+        2: Result := RegisterLoc(1); // ECX
+      end;
+    dm64: case AParamIdx of
+        0: Result := RegisterLoc(5); // RDI
+        1: Result := RegisterLoc(4); // RSI
+        2: Result := RegisterLoc(1); // RDX
+      end;
+  end;
 end;
 
 function TDbgDarwinProcess.CheckForConsoleOutput(ATimeOutMs: integer): integer;

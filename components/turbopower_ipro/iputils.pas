@@ -36,21 +36,12 @@ interface
 
 uses
   SysUtils, Classes, Controls, Registry, ComCtrls,
-  {$IFDEF IP_LAZARUS}
-  LCLType, GraphType, LCLIntf, LMessages, LazFileUtils, lazutf8classes, LCLProc;
-  {$ELSE}
-  Messages, Windows, ExtCtrls, SyncObjs;
-  {$ENDIF}
-
+  LCLType, GraphType, LCLIntf, LMessages, LazFileUtils, LCLProc;
 
 const
   InternetProfessionalVersion = 1.15;
-
-resourcestring
-  sLongVersion = 'Version %.2f';
   sShortVersion = 'v%.2f';
 
-const
   IpMsgBase = WM_USER + $0E90;
 
   CM_IPASYNCRESULT      = IpMsgBase + 0;
@@ -77,9 +68,7 @@ const
   CM_IPSMTPEVENT        = IpMsgBase + 21;
   CM_IPPOP3EVENT        = IpMsgBase + 22;
   CM_IPNNTPEVENT        = IpMsgBase + 23;
-  {$IFDEF IP_LAZARUS}
   CM_IPHOTINVOKE        = IpMsgBase + 24;
-  {$ENDIF}
 
 type
   TIpLineTerminator = (ltNone, ltCR, ltLF, ltCRLF, ltOther);
@@ -111,11 +100,7 @@ type
 
   TIpBaseAccess = class
   private
-   {$IFDEF IP_LAZARUS}
     baPropCS : TCriticalSection;
-   {$ELSE}
-    baPropCS : TRTLCriticalSection;
-   {$ENDIF}
   public
     constructor Create; virtual;
     destructor Destroy; override;
@@ -125,11 +110,7 @@ type
 
   TIpBasePersistent = class(TPersistent)
   private
-   {$IFDEF IP_LAZARUS}
     bpPropCS : TCriticalSection;
-   {$ELSE}
-    bpPropCS : TRTLCriticalSection;
-   {$ENDIF}
   public
     constructor Create; virtual;
     destructor Destroy; override;
@@ -214,10 +195,8 @@ type
     QueryDelim : AnsiChar;
   end;
   
-  {$IFDEF IP_LAZARUS}
   procedure Initialize(var AddrRec: TIpAddrRec);
   procedure Finalize(var AddrRec: TIpAddrRec);
-  {$ENDIF}
 
   function ExtractEntityName(const NamePath: string): string;
   function ExtractEntityPath(const NamePath: string): string;
@@ -258,16 +237,12 @@ implementation
 
 { Allow other processes a chance to run }
 function SafeYield : LongInt;
-{$IFNDEF IP_LAZARUS}
-var
-  Msg : TMsg;
-{$ENDIF}
 begin
   SafeYield := 0;
-  {$IFDEF IP_LAZARUS}
   writeln('ToDo: IpUtils.SafeYield');
-  exit;
-  {$ELSE}
+(*
+  var
+    Msg : TMsg;
   if PeekMessage(Msg, 0, 0, 0, PM_REMOVE) then begin
     if Msg.Message = wm_Quit then
       {Re-post quit message so main message loop will terminate}
@@ -278,8 +253,7 @@ begin
     end;
     {Return message so caller can act on message if necessary}
     SafeYield := MAKELONG(Msg.Message, Msg.hwnd);
-  end;
-  {$ENDIF}
+*)
 end;
 
 { Trim leading and trailing spaces from a string }
@@ -461,7 +435,6 @@ begin
     Result := Result + (Idx - 1);
 end;
 
-{$IFDEF IP_LAZARUS}
 procedure Initialize(var AddrRec: TIpAddrRec);
 begin
   AddrRec.QueryDelim:=#0;
@@ -480,7 +453,6 @@ begin
     Query      :='';
   end;
 end;
-{$ENDIF}
 
 const
   CrcBufSize = 2048;
@@ -551,7 +523,7 @@ function InternetSumOfFile(const FileName : string) : DWORD;
 var
   FileSt : TFileStream;
 begin
-  FileSt := TFileStreamUTF8.Create(FileName, CrcFileMode);
+  FileSt := TFileStream.Create(FileName, CrcFileMode);
   try
     Result := InternetSumOfStream(FileSt, 0);
   finally
@@ -767,9 +739,9 @@ end;
 { Calculates the MD5 Digest of a file }
 function MD5SumOfFile(const FileName : string) : string;
 var
-  FileSt : TFileStreamUTF8;
+  FileSt : TFileStream;
 begin
-  FileSt := TFileStreamUTF8.Create(FileName, CrcFileMode);
+  FileSt := TFileStream.Create(FileName, CrcFileMode);
   try
     Result := MD5SumOfStream(FileSt);
   finally
@@ -865,7 +837,6 @@ end;
 
 { Compares two fixed size structures }
 function IpCompStruct(const S1, S2; Size : Cardinal) : Integer;
-{$IFDEF IP_LAZARUS}
 {$IFDEF CPUI386}
 asm
   push   edi
@@ -891,34 +862,6 @@ end;
 begin
   Result := CompareMemRange(@S1, @S2, Size);
 end;
-{$ENDIF}
-{$ELSE}
-{$IFDEF CPU386}
-asm
-  push   edi
-  push   esi
-  mov    esi, eax
-  mov    edi, edx
-  xor    eax, eax
-  or     ecx, ecx
-  jz     @@CSDone
-
-  repe   cmpsb
-  je     @@CSDone
-
-  inc    eax
-  ja     @@CSDone
-  or     eax, -1
-
-@@CSDone:
-  pop    esi
-  pop    edi
-end;
-{$ELSE}
-begin
-  Result := CompareMemRange(@S1, @S2, Size);
-end;
-{$ENDIF}
 {$ENDIF}
 
 function IpCharCount(const Buffer; BufSize : DWORD; C : AnsiChar) : DWORD;
@@ -1090,17 +1033,13 @@ end;
 { Returns an appropriate string for the given parameters }
 class function TIpBaseComponent.GetLogString(const S, D1, D2, D3: DWORD): string;
 begin
-  {$IFDEF IP_LAZARUS}
   if (S=0) or (D1=0) or (D2=0) or (D3=0) then ; // avoid hints
-  {$ENDIF}
-  Result := '!!!! Unhandled log entry'#10#13;
+    Result := '!!!! Unhandled log entry'#10#13;
 end;
 
 procedure TIpBaseComponent.SetVersion(const Value: string);
 begin
-  {$IFDEF IP_LAZARUS}
   if (Value='') then ; // avoid hints
-  {$ENDIF}
   { Intentionally empty }
 end;
 
@@ -1113,9 +1052,7 @@ end;
 
 procedure TIpBaseWinControl.SetVersion(const Value : string);
 begin
-  {$IFDEF IP_LAZARUS}
   if (Value='') then ; // avoid hints
-  {$ENDIF}
   { Intentionally empty }
 end;
 
@@ -1187,11 +1124,7 @@ begin
   for i := 1 to Length(Result) do begin
     case Result[i] of
       '|': Result[i] := ':';
-      {$IFDEF IP_LAZARUS}
       '/': Result[i] := DirectorySeparator;
-      {$ELSE}
-      '/': Result[i] := '\';
-      {$ENDIF}
     else
       { leave it alone };
     end;
@@ -1212,11 +1145,7 @@ begin
   for i := 1 to Length(Result) do begin
     case Result[i] of
       ':': Result[i] := '|';
-      {$IFDEF IP_LAZARUS}
       DirectorySeparator: Result[i] := '/';
-      {$ELSE}
-      '\': Result[i] := '/';
-      {$ENDIF}
     else
       { leave it alone };
     end;
@@ -1227,7 +1156,7 @@ end;
 function IpParseURL(const URL : string; var Rslt : TIpAddrRec) : Boolean;
 { Splits URL into components }
 
-{!!.03 -- rewritten
+{ -- rewritten
   - Parsing UserName and Password fields out of Mailto: urls of the form:
       mailto:user:pass@myserver.net
   - Username and Password fields added to TIpAddrRec in support of
@@ -1321,9 +1250,7 @@ var
   State : TUrlParseState;
   PotAuth, PotPath : string;
   SchemeSeen: Boolean;
-  {$IFDEF IP_LAZARUS}
   SlashCount: integer;
-  {$ENDIF}
 
 procedure ProcessChar;
 begin
@@ -1402,9 +1329,7 @@ begin
               SchemeSeen := True;
               PotAuth := '';
               State := psSchemeSlashes;
-              {$IFDEF IP_LAZARUS}
               SlashCount := 0;
-              {$ENDIF}
             end
             else begin
 
@@ -1458,9 +1383,7 @@ begin
           SchemeSeen := True;
           PotAuth := '';
           State := psSchemeSlashes;
-          {$IFDEF IP_LAZARUS}
           SlashCount := 0;
-          {$ENDIF}
         end;
 
         'A'..'Z', 'a'..'z': begin
@@ -1487,30 +1410,25 @@ begin
     end;
 
     psSchemeSlashes: begin
-      {$IFDEF IP_LAZARUS}
       inc(SlashCount);
       if (p^ <> '/') or (SlashCount > 2) then
-      {$ENDIF}
-      case P^ of
-        {$IFNDEF IP_LAZARUS}
-        '/': { ignore };
-        {$ENDIF}
-        '.', '\'{$IFDEF IP_LAZARUS},'/'{$ENDIF}: begin { start of a local path }
-          PotPath := PotPath + P^;
-          State := psLocalPath;
-        end;
+        case P^ of
+          '.', '\','/': begin { start of a local path }
+            PotPath := PotPath + P^;
+            State := psLocalPath;
+          end;
 
-        else begin
-          if CharPos('@', URL) > 0 then begin
-            PotAuth := P^;
-            State := psUserName;
-          end
           else begin
-            PotAuth := P^;
-            State := psPotAuth;
+            if CharPos('@', URL) > 0 then begin
+              PotAuth := P^;
+              State := psUserName;
+            end
+            else begin
+              PotAuth := P^;
+              State := psPotAuth;
+            end;
           end;
         end;
-      end;
     end;
 
 
@@ -2102,7 +2020,7 @@ Canonical Internet header date strings are in one of three standard formats:
   Sun Nov  6 08:49:37 1994        ; ANSI C's asctime() format
 }
 
-{!!.03 -- rewritten to handle common variants such as the Day or Month name
+{-- rewritten to handle common variants such as the Day or Month name
 to be fully spelled out where they are not in the canonical form, or to have
 a 4 digit year in the RFC 850 style
 }
@@ -2659,13 +2577,12 @@ end;
 
 { returns the current local TimeZone "bias" in minutes from UTC (GMT) }
 function TimeZoneBias : Integer;
-{$IFDEF IP_LAZARUS}
 begin
   Result:=0;
   writeln('TimeZoneBias ToDo');
 end;
-{$ELSE}
-{$IFDEF VERSION3}
+
+(*
 const
   TIME_ZONE_ID_UNKNOWN  = 0;
   TIME_ZONE_ID_STANDARD = 1;
@@ -2681,7 +2598,7 @@ begin
     TIME_ZONE_ID_DAYLIGHT : Result := TZI.Bias + TZI.DaylightBias;
   end;
 end;
-{$ENDIF}
+*)
 
 { Format TDateTime to standard HTTP date string }
 function DateTimeToINetDateTimeStr(DateTime: TDateTime): string;
@@ -2703,7 +2620,6 @@ end;
 { File/Directory Stuff }
 
 { Retreive Windows "MIME" type for a particular file extension }
-{$IFDEF IP_LAZARUS}
 {$ifndef MSWindows}
 {define some basic mime types}
 const MimeTypeExt : Array[0..4] of String = ('.htm','.html','.txt','.jpg','.png');
@@ -2746,104 +2662,36 @@ begin
   //DebugLn('IpUtils.GetLocalContent File:'+TheFileName+' Result:'+result);
 end;
 
-{$ELSE}
-{ Retreive Windows "MIME" type for a particular file extension }
-function GetLocalContent(const TheFileName: string): string;
-var
-  Reg : TRegistry;
-  Ext : string;
-begin
-  Result := '';
-  Ext := ExtractFileExt(TheFileName);
-
-  Reg := nil;
-  try
-    Reg := TRegistry.Create;
-    Reg.RootKey := HKEY_CLASSES_ROOT;
-    if Reg.OpenKey(Ext, True) then
-      Result := Reg.ReadString('Content Type');
-  finally
-    Reg.CloseKey;
-    Reg.Free;
-  end;
-end;
-{$ENDIF}
-
 { Determine if a directory exists }
 function DirExists(Dir : string): Boolean;
-{$IFDEF IP_LAZARUS}
 begin
   Result:=DirPathExists(Dir);
 end;
-{$ELSE}
-var
-  Attributes : Integer;
-begin
-  Attributes := GetFileAttributes(PAnsiChar(Dir));
-  Result := (Attributes <> -1) and
-    (Attributes and FILE_ATTRIBUTE_DIRECTORY <> 0);
-end;
-{$ENDIF}
 
-{Begin !!.12}
 { Get temporary filename as string }
 function GetTemporaryFile(const Path : string) : string;
-{$IFDEF IP_LAZARUS}
 begin
   Result:=GetTempFileNameUTF8(Path,'IP_');
 end;
-{$ELSE}
-var
-  TempFileName : array [0..MAX_PATH] of AnsiChar;
-begin
-  { Create a new uniquely named file in that folder. }
-  GetTempFileName(PAnsiChar(Path), 'IP_', 0, TempFileName);
-  Result := TempFileName;
-end;
-{$ENDIF}
-{End !!.12}
 
 { Get Windows system TEMP path in a string }
 function GetTemporaryPath: string;
-{$IFDEF IP_LAZARUS}
 begin
   writeln('ToDo: IpUtils.GetTemporaryPath');
   Result:='';
 end;
-{$ELSE}
-var
-  PathBuf : array [0..MAX_PATH] of char;
-begin
-  GetTempPath(MAX_PATH + 1, PathBuf);
-  Result := StrPas(PathBuf);
-end;
-{$ENDIF}
 
 { Append backslash to DOS path if needed }
 function AppendBackSlash(APath : string) : string;
 begin
-{$IFDEF IP_LAZARUS}
   Result := AppendPathDelim(APath);
-{$ELSE}
-  Result := APath;
-  if (Result <> '') and (Result[Length(APath)] <> '\') then
-    Result := Result + '\';
-{$ENDIF}
 end;
 
 { Remove trailing backslash from a DOS path if needed }
 function RemoveBackSlash(APath: string) : string;
 begin
-{$IFDEF IP_LAZARUS}
   Result := ChompPathDelim(APath);
-{$ELSE}
-  Result := APath;
-  if Result[Length(Result)] = '\' then
-    Delete(Result, Length(Result), 1);
-{$ENDIF}
 end;
-
-
 
 {***********************************************}
 

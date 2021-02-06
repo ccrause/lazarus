@@ -34,9 +34,9 @@ uses
   // LCL
   LCLProc, LCLType, LCLIntf, Forms, Menus,
   // LazUtils
-  LazMethodList, LazLoggerBase,
+  LazLoggerBase, LazTracer, LazMethodList,
   // IdeIntf
-  PropEdits, IDEImagesIntf;
+  IDEImagesIntf;
   
 const
   { editor commands constants. see syneditkeycmds.pp for more
@@ -274,10 +274,12 @@ const
   ecPause                   = ecFirstLazarus + 411;
   ecStepInto                = ecFirstLazarus + 412;
   ecStepOver                = ecFirstLazarus + 413;
-  ecRunToCursor             = ecFirstLazarus + 414;
+  ecStepToCursor             = ecFirstLazarus + 414;
   ecStopProgram             = ecFirstLazarus + 415;
   ecResetDebugger           = ecFirstLazarus + 416;
   ecRunParameters           = ecFirstLazarus + 417;
+  ecRunToCursor             = ecFirstLazarus + 418;
+
   ecBuildFile               = ecFirstLazarus + 431;
   ecRunFile                 = ecFirstLazarus + 432;
   ecConfigBuildFile         = ecFirstLazarus + 433;
@@ -1933,7 +1935,7 @@ begin
 end;
 
 const
-  IDEEditorCommandStrs: array[0..322] of TIdentMapEntry = (
+  IDEEditorCommandStrs: array[0..323] of TIdentMapEntry = (
   // search
     (Value: ecFind;                                   Name: 'ecFind'),
     (Value: ecFindAgain;                              Name: 'ecFindAgain'),
@@ -2151,6 +2153,7 @@ const
     (Value: ecPause;                                  Name: 'ecPause'),
     (Value: ecStepInto;                               Name: 'ecStepInto'),
     (Value: ecStepOver;                               Name: 'ecStepOver'),
+    (Value: ecStepToCursor;                            Name: 'ecStepToCursor'),
     (Value: ecRunToCursor;                            Name: 'ecRunToCursor'),
     (Value: ecStopProgram;                            Name: 'ecStopProgram'),
     (Value: ecResetDebugger;                          Name: 'ecResetDebugger'),

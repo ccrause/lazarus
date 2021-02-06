@@ -40,8 +40,8 @@ See http://www.gnu.org/licenses/gpl.html
 interface
 
 uses
-  { delphi }
-  Registry, Classes,
+  Registry, Classes, SysUtils,
+  Dialogs,
   { local }
   ConvertTypes;
 
@@ -190,8 +190,6 @@ var
 implementation
 
 uses
-  { delphi }
-  {$ifndef fpc}Windows,{$endif} SysUtils, Dialogs,
   { jcf }
   JcfStringUtils, JcfSystemUtils, JcfMiscFunctions;
 
@@ -281,8 +279,10 @@ begin
   // New registry location
   fcReg := TRegIniFile.Create(REG_ROOT_KEY);
 
-  fcExclusionsFiles := TStringList.Create;
-  fcExclusionsDirs  := TStringList.Create;
+  fcExclusionsFiles := TStringList.Create;      // Will compare with CompareText.
+  {$IF FPC_FULLVERSION>=30200}fcExclusionsFiles.UseLocale := False;{$ENDIF}
+  fcExclusionsDirs := TStringList.Create;
+  {$IF FPC_FULLVERSION>=30200}fcExclusionsDirs.UseLocale := False;{$ENDIF}
 end;
 
 destructor TJCFRegistrySettings.Destroy;
@@ -636,7 +636,6 @@ begin
     mcRegistrySettings := TJCFRegistrySettings.Create;
     mcRegistrySettings.ReadAll;
   end;
-
   Result := mcRegistrySettings;
 end;
 

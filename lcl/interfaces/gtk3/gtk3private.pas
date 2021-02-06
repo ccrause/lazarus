@@ -21,7 +21,12 @@ unit gtk3private;
 
 interface
 
-uses Classes, SysUtils, Controls, LazGtk3, LazGObject2, LazGLib2, LazUtf8Classes;
+uses
+  Classes, SysUtils,
+  // LazUtils
+  LazUTF8,
+  // LCL
+  Controls, LazGtk3, LazGObject2, LazGLib2;
 
 type
 
@@ -315,12 +320,12 @@ end;
  ------------------------------------------------------------------------------}
 procedure TGtkListStoreStringList.Sort;
 var
-  sl: TStringList;
+  sl: TStringListUTF8Fast;
   OldSorted: Boolean;
 begin
   BeginUpdate;
   // sort internally (sorting in the widget would be slow and unpretty ;)
-  sl := TStringList.Create;
+  sl := TStringListUTF8Fast.Create;
   sl.Assign(Self);
   sl.Sort;
   OldSorted := Sorted;
@@ -388,7 +393,7 @@ begin
       // => don't change if the content is already the same
       if Sorted then
       begin
-        CmpList := TStringList.Create;
+        CmpList := TStringListUTF8Fast.Create;
         CmpList.Assign(TStrings(Source));
         TStringList(CmpList).Sort;
       end
@@ -661,7 +666,6 @@ end;
 procedure TGtkListStoreStringList.Insert(Index: Integer; const S: String);
 var
   li: TGtkTreeIter;
-  LCLIndex: PInteger;
 begin
   if (Index < 0) or (Index > Count)
   then begin
@@ -914,9 +918,9 @@ end;
 
 procedure TGtk3MemoStrings.LoadFromFile(const FileName: string);
 var
-  TheStream: TFileStreamUTF8;
+  TheStream: TFileStream;
 begin
-  TheStream:=TFileStreamUtf8.Create(FileName,fmOpenRead or fmShareDenyWrite);
+  TheStream:=TFileStream.Create(FileName,fmOpenRead or fmShareDenyWrite);
   try
     LoadFromStream(TheStream);
   finally
@@ -926,9 +930,9 @@ end;
 
 procedure TGtk3MemoStrings.SaveToFile(const FileName: string);
 var
-  TheStream: TFileStreamUTF8;
+  TheStream: TFileStream;
 begin
-  TheStream:=TFileStreamUtf8.Create(FileName,fmCreate);
+  TheStream:=TFileStream.Create(FileName,fmCreate);
   try
     SaveToStream(TheStream);
   finally

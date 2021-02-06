@@ -43,11 +43,11 @@ uses
   // LCL
   Forms,
   // LazUtils
-  Laz2_XMLCfg, LazFileCache, LazUTF8Classes, LazFileUtils, FileUtil,
-  LazTracer, LazUtilities, AvgLvlTree,
+  Laz2_XMLCfg, LazFileCache, LazFileUtils, FileUtil, LazUtilities, LazTracer,
+  AvgLvlTree,
   // Codetools
   FileProcs, CodeToolManager,
-  // IdeIntf
+  // BuildIntf
   PackageDependencyIntf, PackageLinkIntf, PackageIntf, MacroIntf,
   // IDE
   IDEProcs, EnvironmentOpts, LazConf, IDECmdLine, PackageDefs;
@@ -392,7 +392,7 @@ procedure TLazPackageLinks.UpdateGlobalLinks;
   begin
     Result:=false;
     PkgName:='';
-    if CompareFileExt(Filename,'.lpl',false)<>0 then exit;
+    if CompareFileExt(Filename,'lpl',true)<>0 then exit;
     StartPos:=1;
     // parse identifier
     if (StartPos>length(Filename))
@@ -434,7 +434,7 @@ var
   NewPkgName: string;
   PkgVersion: TPkgVersion;
   CurPkgLink, OldPkgLink, OtherPkgLink: TLazPackageLink;
-  sl: TStringListUTF8;
+  sl: TStringList;
   LPLFilename: String;
   LPKFilename, LazDir: string;
   Files: TStrings;
@@ -454,7 +454,7 @@ begin
   UnmappedGlobalLinks:=FGlobalLinks;
   FGlobalLinks:=TAvlTree.Create(@ComparePackageLinks);
   MappedGlobalLinks:=TAvlTree.Create(@ComparePackageLinks);
-  Files:=TStringListUTF8.Create;
+  Files:=TStringList.Create;
   PkgVersion:=TPkgVersion.Create;
   try
     GlobalLinksDir:=GetGlobalLinkDirectory;
@@ -463,14 +463,14 @@ begin
     LazDir:=EnvironmentOptions.GetParsedLazarusDirectory;
     for i:=0 to Files.Count-1 do begin
       LPLFilename:=GlobalLinksDir+Files[i];
-      if CompareFileExt(LPLFilename,'lpl')<>0 then continue;
+      if CompareFileExt(LPLFilename,'lpl',true)<>0 then continue;
       if (not ParseFilename(Files[i],NewPkgName,PkgVersion))
       then begin
         DebugLn('Warning: (lazarus) suspicious pkg link file found (name): ',LPLFilename);
         continue;
       end;
       LPKFilename:='';
-      sl:=TStringListUTF8.Create;
+      sl:=TStringList.Create;
       try
         sl.LoadFromFile(LPLFilename);
         if sl.Count<=0 then begin

@@ -65,7 +65,7 @@ uses
   Classes, SysUtils,
   {$IF FPC_FULLVERSION>=30001}jsonscanner,{$ENDIF} jsonparser, fpjson,
   // LazUtils
-  FileUtil, LazFileUtils, LazUTF8, LazUTF8Classes, LConvEncoding, LazLoggerBase,
+  FileUtil, LazFileUtils, LazUTF8, LConvEncoding, LazLoggerBase,
   AvgLvlTree, StringHashList;
 
 type
@@ -402,14 +402,14 @@ begin
     begin
       if (ArgErr2 = 0) then
       begin
-        Result := Utf8CompareText(Extr1, Extr2) = 0;
+        Result := UTF8CompareLatinTextFast(Extr1, Extr2) = 0;
       end
       else
       begin
         //Extr2 can have dangling %'s
         //e.g. Extr1 = "%s %d" Extr2 = "%s %d {%H}", it does not make sense, but it's not illegal
         if (ArgErr2 = Utf8Length(Extr1)+1) and not (ArgErr2 > Utf8Length(Extr2)) then Extr2 := Utf8Copy(Extr2,1,ArgErr2-1);
-        Result := Utf8CompareText(Extr1, Extr2) = 0;
+        Result := UTF8CompareLatinTextFast(Extr1, Extr2) = 0;
       end;
     end
     else
@@ -418,7 +418,7 @@ begin
       //Only compare until the last valid argument in Extr1
       if (ArgErr1 = Utf8Length(Extr1)) then Utf8Delete(Extr1, ArgErr1, 1);
       if Utf8Length(Extr2) > Utf8Length(Extr1) then Extr2 := Utf8Copy(Extr2, 1, Utf8Length(Extr1));
-      Result := Utf8CompareText(Extr1, Extr2) = 0;
+      Result := UTF8CompareLatinTextFast(Extr1, Extr2) = 0;
     end;
     //writeln('CompareFormatArgs: Result = ',Result);
   end;
@@ -432,7 +432,7 @@ begin
   Result:=false;
   AUnitName:='';
   Language:='';
-  if CompareFileExt(Filename, '.po', false)=0 then
+  if CompareFileExtQuick(Filename, 'po')=0 then
   begin
     NameWithoutExt:=ExtractFileNameWithoutExt(Filename);
     Ext:=ExtractFileExt(NameWithoutExt);
@@ -509,11 +509,12 @@ end;
 
 function UpdatePOFile(RSTFiles: TStrings; const POFilename: string): boolean;
 var
-  InputLines: TStringListUTF8;
+  InputLines: TStringList;
   Filename: string;
   BasePoFile: TPoFile;
   i: Integer;
   E: EPOFileError;
+  ExtLrj: Boolean;
 begin
   Result := false;
 
@@ -525,7 +526,7 @@ begin
     exit;
   end;
 
-  InputLines := TStringListUTF8.Create;
+  InputLines := TStringList.Create;
   try
     // Read base po items
     if FileExistsUTF8(POFilename) then
@@ -539,19 +540,19 @@ begin
     // Update po file with lrj, rst/rsj of RSTFiles
     for i:=0 to RSTFiles.Count-1 do begin
       Filename:=RSTFiles[i];
-      if (CompareFileExt(Filename,'.lrj')=0) or
-         (CompareFileExt(Filename,'.rst')=0) or
-         (CompareFileExt(Filename,'.rsj')=0) then
+      ExtLrj :=    (CompareFileExtQuick(Filename,'lrj')=0);
+      if ExtLrj or (CompareFileExtQuick(Filename,'rst')=0) or
+                   (CompareFileExtQuick(Filename,'rsj')=0) then
         try
           //DebugLn('');
           //DebugLn(['AddFiles2Po Filename="',Filename,'"']);
           InputLines.Clear;
           InputLines.LoadFromFile(FileName);
 
-          if CompareFileExt(Filename,'.lrj')=0 then
+          if ExtLrj then
             BasePOFile.UpdateStrings(InputLines, stLrj)
           else
-            if CompareFileExt(Filename,'.rsj')=0 then
+            if CompareFileExtQuick(Filename,'rsj')=0 then
               BasePOFile.UpdateStrings(InputLines, stRsj)
             else
               BasePOFile.UpdateStrings(InputLines, stRst);
@@ -734,7 +735,7 @@ var
   f: TStream;
 begin
   FPoName := AFilename;
-  f := TFileStreamUTF8.Create(AFilename, fmOpenRead or fmShareDenyNone);
+  f := TFileStream.Create(AFilename, fmOpenRead or fmShareDenyNone);
   try
     Create(f, Full);
     if FHeader=nil then
@@ -1482,9 +1483,9 @@ end;
 
 procedure TPOFile.SaveToFile(const AFilename: string);
 var
-  OutLst: TStringListUTF8;
+  OutLst: TStringList;
 begin
-  OutLst := TStringListUTF8.Create;
+  OutLst := TStringList.Create;
   try
     SaveToStrings(OutLst);
     OutLst.SaveToFile(AFilename);

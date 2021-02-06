@@ -4855,7 +4855,7 @@ msgstr "אודות לזרוס"
 #: lazarusidestrconsts.lisaboutlazarusmsg
 #, object-pascal-format, fuzzy, badformat
 #| msgid "License: GPL/LGPL%sLazarus is an IDE to create (graphical and console) applications with Free Pascal. Free Pascal is a (L)GPL'ed Pascal and Object Pascal compiler that runs on Windows, Linux, Mac OS X, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing we need more developers."
-msgid "License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.%sLazarus is an IDE to create graphical and console applications with Free Pascal. Free Pascal is Pascal and Object Pascal compiler that runs on Windows, Linux, Mac OS X, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing we need more developers."
+msgid "License: GPL/LGPL. See Lazarus and Free Pascal sources for license details.%sLazarus is an IDE to create graphical and console applications with Free Pascal. Free Pascal is a Pascal and Object Pascal compiler that runs on Windows, Linux, macOS, FreeBSD and more.%sLazarus is the missing part of the puzzle that will allow you to develop programs for all of the above platforms in a Delphi-like environment. The IDE is a RAD tool that includes a form designer.%sAs Lazarus is growing, we need more developers."
 msgstr "רשיון: GPL/GPL%s לזארוס הוא IDE ליצירת יישומים (גרפיים או למסוף) בשפת free pascal. free pascal היא מהדר פסקל ופסקל מונחה עצמים ברשיון GPL/LGPL  שרץ על חלונות, ליבוקס,  מאק - גרסה 10, FreeBSD ועוד. לזארוס הוא החלק החסר בפאזל שמאפשר לך לפתח תוכנות לכל מערכות ההפעלה האלו בסביבה דמויית דלפי. ה IDE הוא כלי RAD הכולל מעצב טפסים. ככל שלזארוס גדלה אנו זקוקים ליותר מפתחים.ראה במקורות של לזארוס ו Free Pascal את פרטי הרשיון."
 
 #: lazarusidestrconsts.lisaboutnocontributors
@@ -5331,10 +5331,6 @@ msgstr ""
 msgid "If component palette spans over more lines, show them all and not only one."
 msgstr ""
 
-#: lazarusidestrconsts.lisautocheckmodifiedfiles
-msgid "Automatically check (select) modified files"
-msgstr ""
-
 #: lazarusidestrconsts.lisautocompletionoff
 msgid "Auto completion: off"
 msgstr "השלמה אוטומטית: כבה"
@@ -5371,6 +5367,22 @@ msgstr ""
 #: lazarusidestrconsts.lisautomaticallyinvokeafterpoint
 msgid "Automatically invoke after point"
 msgstr "הפעל אוטומטית אחרי נקודה"
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontype
+msgid "Automatically invoke on typing"
+msgstr ""
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeminlength
+msgid "Only complete if word is longer or equal"
+msgstr ""
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeonlywordend
+msgid "Only complete when at end of word"
+msgstr ""
+
+#: lazarusidestrconsts.lisautomaticallyinvokeontypeusetimer
+msgid "Use completion box delay"
+msgstr ""
 
 #: lazarusidestrconsts.lisautomaticallyonlinebreak
 msgid "line break"
@@ -8914,6 +8926,10 @@ msgstr "המשך במטופל"
 msgid "Resume Unhandled"
 msgstr "המשך בלא מטופל"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmshowexitcodeonstop
+msgid "Show message on stop with Error (Exit-code <> 0)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmshowmessageonstop
 msgid "Show message on stop"
 msgstr "הראה הודעה בעצירה"
@@ -9321,6 +9337,10 @@ msgstr ""
 msgid "Some files have changed on disk:"
 msgstr "מספר קבצים השתנו בדיסק:"
 
+#: lazarusidestrconsts.lisdiskdiffsomefileshavelocalchanges
+msgid "Some files have local changes. Either local or external changes will be overwritten."
+msgstr ""
+
 #: lazarusidestrconsts.lisdistinguishbigandsmalllettersegaanda
 msgid "Distinguish big and small letters e.g. A and a"
 msgstr "הבחן בין אותיות גדולות וקטנות למשל A ו a"
@@ -9555,6 +9575,34 @@ msgstr ""
 #: lazarusidestrconsts.lisduplicateunitin
 #, object-pascal-format
 msgid "Duplicate unit \"%s\" in \"%s\""
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollin
+msgid "Amount to scroll in"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollin2
+msgid "Amount to scroll in (%)"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgamounttoscrollinmax
+msgid "Amount to scroll in (Max)"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgautoscrollondeletepa
+msgid "Auto Scroll on delete past left border"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgautoscrollontypepast
+msgid "Auto Scroll on type past right border"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgtriggeronmincharsofw
+msgid "Trigger on min chars (% of width)"
+msgstr ""
+
+#: lazarusidestrconsts.lisdynpkgtriggeronmincharsvis
+msgid "Trigger on min chars visible"
 msgstr ""
 
 #: lazarusidestrconsts.lisedit
@@ -10064,6 +10112,10 @@ msgstr "חשב את הביטוי"
 msgid "E&valuate"
 msgstr "חשב"
 
+#: lazarusidestrconsts.lisevaluateall
+msgid "Evaluate all"
+msgstr ""
+
 #: lazarusidestrconsts.lisevaluatemodify
 msgid "&Evaluate/Modify"
 msgstr ""
@@ -10141,6 +10193,11 @@ msgstr "ביצוע פקודה לפני"
 #: lazarusidestrconsts.lisexecutionstopped
 msgid "Execution stopped"
 msgstr "הריצה נעצרה"
+
+#: lazarusidestrconsts.lisexecutionstoppedexitcode
+#, object-pascal-format
+msgid "Execution stopped with exit-code %1:d ($%2:s)"
+msgstr ""
 
 #: lazarusidestrconsts.lisexit
 msgctxt "lazarusidestrconsts.lisexit"
@@ -14578,7 +14635,8 @@ msgstr "הרץ פרמטרים ..."
 #: lazarusidestrconsts.lismenuruntocursor
 #, fuzzy
 #| msgid "Run to &Cursor"
-msgid "Step over to &Cursor"
+msgctxt "lazarusidestrconsts.lismenuruntocursor"
+msgid "Run to Cursor"
 msgstr "רוץ עד לסמן"
 
 #: lazarusidestrconsts.lismenurunwithoutdebugging
@@ -14731,6 +14789,11 @@ msgstr "צעד מעבר להוראה"
 msgctxt "lazarusidestrconsts.lismenustepoverinstrhint"
 msgid "Step Over Instruction"
 msgstr "צעד מעבר להוראה"
+
+#: lazarusidestrconsts.lismenusteptocursor
+msgctxt "lazarusidestrconsts.lismenusteptocursor"
+msgid "Step over to &Cursor"
+msgstr ""
 
 #: lazarusidestrconsts.lismenuswapcaseselection
 #, fuzzy
@@ -16317,6 +16380,10 @@ msgstr ""
 msgid "Call %sRegister%s procedure of selected unit"
 msgstr "קרא לפרוצדורת הרישום של היחידה שנבחרה"
 
+#: lazarusidestrconsts.lispckeditcheckavailabilityonline
+msgid "Check availability online"
+msgstr ""
+
 #: lazarusidestrconsts.lispckeditcleanupdependencies
 msgid "Clean up dependencies ..."
 msgstr ""
@@ -17832,12 +17899,6 @@ msgstr "הוסף קבצי עורך"
 msgid "Invalid Min-Max version"
 msgstr "גירסה מינימלית-מקסימלית לא חוקית"
 
-#: lazarusidestrconsts.lisprojaddinvalidpascalunitname
-#, fuzzy
-#| msgid "Invalid pascal unit name"
-msgid "Invalid Pascal unit name"
-msgstr "שם לא חוקי של יחידת פסקל "
-
 #: lazarusidestrconsts.lisprojaddinvalidversion
 msgid "Invalid version"
 msgstr "גירסה לא חוקית"
@@ -17922,12 +17983,6 @@ msgstr "שם היחידה  %s%s%s כבר קיים בפרוייקט עם קובץ
 #| msgid "The unit name %s%s%s already exists in the selection%swith file: %s%s%s."
 msgid "The unit name \"%s\" already exists in the selection%swith file: \"%s\"."
 msgstr "שם היחידה  %s%s%s כבר קיים בבחירה עם קובץ:  %s%s%s."
-
-#: lazarusidestrconsts.lisprojaddtheunitnameisnotavalidpascalidentifier
-#, object-pascal-format, fuzzy, badformat
-#| msgid "The unit name %s%s%s is not a valid Pascal identifier."
-msgid "The unit name \"%s\" is not a valid Pascal identifier."
-msgstr "שם היחידה  %s%s%s אינו מזהה חוקי של פסקל."
 
 #: lazarusidestrconsts.lisprojaddunitnamealreadyexists
 msgid "Unit name already exists"
@@ -21221,6 +21276,11 @@ msgstr "מזהה היחידה קיים"
 msgid "%s unit %s in package %s"
 msgstr "יחידה s% בחבילה %s%s"
 
+#: lazarusidestrconsts.lisunitmustsavebeforeinherit
+#, object-pascal-format
+msgid "Unit \"%s\" must be saved before it can be inherited from. Save now?"
+msgstr ""
+
 #: lazarusidestrconsts.lisunitnamealreadyexistscap
 msgid "Unitname already in project"
 msgstr "שם היחידה כבר קיים בפרוייקט"
@@ -22201,6 +22261,10 @@ msgstr "גירסה ראשית:"
 msgid "Mi&nor version:"
 msgstr "גירסה משנית"
 
+#: lazarusidestrconsts.rsnewsearchwithsamecriteria
+msgid "New search with same criteria"
+msgstr ""
+
 #: lazarusidestrconsts.rsotherinfo
 msgid "Other info"
 msgstr "מידע אחר"
@@ -22208,6 +22272,10 @@ msgstr "מידע אחר"
 #: lazarusidestrconsts.rspooutputdirectory
 msgid "PO Output Directory:"
 msgstr "ספריית הפלט של קבצי PO"
+
+#: lazarusidestrconsts.rsrefreshthesearch
+msgid "Refresh the search"
+msgstr ""
 
 #: lazarusidestrconsts.rsresource
 msgid "Resource"
@@ -22233,10 +22301,6 @@ msgstr "עידכון:"
 #: lazarusidestrconsts.rsselectaninheritedentry
 msgid "Select an inherited entry"
 msgstr "בחר ערך מורש"
-
-#: lazarusidestrconsts.rsstartanewsearch
-msgid "Start a new search"
-msgstr "התחל חיפוש חדש"
 
 #: lazarusidestrconsts.rsversionnumbering
 msgid "Version numbering"
@@ -23100,6 +23164,10 @@ msgstr "הזז את הסמן דף אחד למעלה"
 msgctxt "lazarusidestrconsts.srkmecpaste"
 msgid "Paste"
 msgstr "הדבק מלוח הגזירים למיקום הנוכחי"
+
+#: lazarusidestrconsts.srkmecpasteascolumns
+msgid "Paste (as Columns)"
+msgstr ""
 
 #: lazarusidestrconsts.srkmecpause
 msgid "pause program"

@@ -336,7 +336,9 @@ QObjectH = class(TObject) end;
   QNetworkAccessManagerH = class(QObjectH) end;
   QNetworkCookieJarH = class(QObjectH) end;
   QScreenH = class(QObjectH) end;
+{$ifndef QT_NO_SESSIONMANAGER}
   QSessionManagerH = class(QObjectH) end;
+{$endif}
   QShortcutH = class(QObjectH) end;
   QSocketNotifierH = class(QObjectH) end;
   QStyleH = class(QObjectH) end;
@@ -5467,8 +5469,7 @@ type
   QDrag_actionChanged_Event = procedure (action: QtDropAction) of object cdecl;
   QDrag_targetChanged_Event = procedure (newTarget: QObjectH) of object cdecl;
 
-
-
+{$ifndef QT_NO_SESSIONMANAGER}
 type
   QSessionManagerRestartHint = ( // QSessionManager::RestartHint (1)
     QSessionManagerRestartIfRunning, QSessionManagerRestartAnyway, QSessionManagerRestartImmediately, QSessionManagerRestartNever );
@@ -5489,6 +5490,7 @@ procedure QSessionManager_setManagerProperty(handle: QSessionManagerH; name: PWi
 procedure QSessionManager_setManagerProperty(handle: QSessionManagerH; name: PWideString; value: QStringListH); cdecl; external Qt5PasLib name 'QSessionManager_setManagerProperty2';
 function QSessionManager_isPhase2(handle: QSessionManagerH): Boolean; cdecl; external Qt5PasLib name 'QSessionManager_isPhase2';
 procedure QSessionManager_requestPhase2(handle: QSessionManagerH); cdecl; external Qt5PasLib name 'QSessionManager_requestPhase2';
+{$endif}
 
 function QGuiApplication_Create(argc: PInteger; argv: PPAnsiChar; AnonParam3: Integer = ApplicationFlags): QGuiApplicationH; cdecl; external Qt5PasLib name 'QGuiApplication_Create';
 procedure QGuiApplication_Destroy(handle: QGuiApplicationH); cdecl; external Qt5PasLib name 'QGuiApplication_Destroy'; 
@@ -5539,9 +5541,10 @@ type
   QGuiApplication_lastWindowClosed_Event = procedure () of object cdecl;
   QGuiApplication_focusObjectChanged_Event = procedure (focusObject: QObjectH) of object cdecl;
   QGuiApplication_focusWindowChanged_Event = procedure (focusWindow: QWindowH) of object cdecl;
+  {$ifndef QT_NO_SESSIONMANAGER}
   QGuiApplication_commitDataRequest_Event = procedure (sessionManager: QSessionManagerH) of object cdecl;
   QGuiApplication_saveStateRequest_Event = procedure (sessionManager: QSessionManagerH) of object cdecl;
-
+  {$endif}
 
 
 type
@@ -5857,7 +5860,7 @@ procedure QWindow_cursor(handle: QWindowH; retval: QCursorH); cdecl; external Qt
 procedure QWindow_setCursor(handle: QWindowH; AnonParam1: QCursorH); cdecl; external Qt5PasLib name 'QWindow_setCursor';
 procedure QWindow_unsetCursor(handle: QWindowH); cdecl; external Qt5PasLib name 'QWindow_unsetCursor';
 function QWindow_focusObject(handle: QWindowH): QObjectH; cdecl; external Qt5PasLib name 'QWindow_focusObject';
-function QWindow_fromWinID(id: PtrUInt): QWindowH; cdecl; external Qt5PasLib name 'QWindow_fromWinId';
+function QWindow_fromWinID(id: PtrUInt): QWindowH; cdecl; external Qt5PasLib name 'QWindow_fromWinID';
 procedure QWindow_requestActivate(handle: QWindowH); cdecl; external Qt5PasLib name 'QWindow_requestActivate';
 procedure QWindow_setVisible(handle: QWindowH; visible: boolean); cdecl; external Qt5PasLib name 'QWindow_setVisible';
 procedure QWindow_show(handle: QWindowH); cdecl; external Qt5PasLib name 'QWindow_show';
@@ -14809,9 +14812,10 @@ procedure QGuiApplication_hook_hook_screenAdded(handle: QGuiApplication_hookH; h
 procedure QGuiApplication_hook_hook_lastWindowClosed(handle: QGuiApplication_hookH; hook: QGuiApplication_lastWindowClosed_Event); cdecl; external Qt5PasLib name 'QGuiApplication_hook_hook_lastWindowClosed';
 procedure QGuiApplication_hook_hook_focusObjectChanged(handle: QGuiApplication_hookH; hook: QGuiApplication_focusObjectChanged_Event); cdecl; external Qt5PasLib name 'QGuiApplication_hook_hook_focusObjectChanged';
 procedure QGuiApplication_hook_hook_focusWindowChanged(handle: QGuiApplication_hookH; hook: QGuiApplication_focusWindowChanged_Event); cdecl; external Qt5PasLib name 'QGuiApplication_hook_hook_focusWindowChanged';
+{$ifndef QT_NO_SESSIONMANAGER}
 procedure QGuiApplication_hook_hook_commitDataRequest(handle: QGuiApplication_hookH; hook: QGuiApplication_commitDataRequest_Event); cdecl; external Qt5PasLib name 'QGuiApplication_hook_hook_commitDataRequest';
 procedure QGuiApplication_hook_hook_saveStateRequest(handle: QGuiApplication_hookH; hook: QGuiApplication_saveStateRequest_Event); cdecl; external Qt5PasLib name 'QGuiApplication_hook_hook_saveStateRequest';
-
+{$endif}
 function QApplication_hook_Create(handle: QObjectH): QApplication_hookH; cdecl; external Qt5PasLib name 'QApplication_hook_Create';
 procedure QApplication_hook_Destroy(handle: QApplication_hookH); cdecl; external Qt5PasLib name 'QApplication_hook_Destroy'; 
 procedure QApplication_hook_hook_focusChanged(handle: QApplication_hookH; hook: QApplication_focusChanged_Event); cdecl; external Qt5PasLib name 'QApplication_hook_hook_focusChanged';

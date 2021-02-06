@@ -29,7 +29,7 @@ uses
   // LCL
   Controls, StdCtrls, Graphics, LCLType, LMessages, LCLProc, LCLMessageGlue, Forms,
   // LazUtils
-  LazUTF8, LazUTF8Classes, TextStrings,
+  LazUTF8, TextStrings,
   // Widgetset
   WSStdCtrls, WSLCLClasses, WSControls, WSProc,
   // LCL Cocoa
@@ -54,6 +54,7 @@ type
     class function CreateHandle(const AWinControl: TWinControl; const AParams: TCreateParams): TLCLIntfHandle; override;
     class function  GetText(const AWinControl: TWinControl; var AText: String): Boolean; override;
     class procedure SetText(const AWinControl: TWinControl; const AText: String); override;
+    class procedure SetFont(const AWinControl: TWinControl; const AFont: TFont); override;
   end;
 
   { TLCLComboboxCallback }
@@ -86,8 +87,9 @@ type
     class procedure SetSelStart(const ACustomComboBox: TCustomComboBox; NewStart: integer); override;
     class procedure SetSelLength(const ACustomComboBox: TCustomComboBox; NewLength: integer); override;}
     class procedure SetItemIndex(const ACustomComboBox: TCustomComboBox; NewIndex: integer); override;
-    {class procedure SetMaxLength(const ACustomComboBox: TCustomComboBox; NewLength: integer); override;
-    class procedure SetStyle(const ACustomComboBox: TCustomComboBox; NewStyle: TComboBoxStyle); override;}
+    {class procedure SetMaxLength(const ACustomComboBox: TCustomComboBox; NewLength: integer); override;}
+    class procedure SetStyle(const ACustomComboBox: TCustomComboBox; NewStyle: TComboBoxStyle); override;
+    class procedure SetReadOnly(const ACustomComboBox: TCustomComboBox; NewReadOnly: boolean); override;
     class procedure SetDropDownCount(const ACustomComboBox: TCustomComboBox; NewCount: Integer); override;
 
     class function  GetItems(const ACustomComboBox: TCustomComboBox): TStrings; override;
@@ -100,6 +102,7 @@ type
        WithThemeSpace: Boolean); override;
 
     class procedure SetText(const AWinControl: TWinControl; const AText: String); override;
+    class procedure SetTextHint(const ACustomComboBox: TCustomComboBox; const ATextHint: string); override;
   end;
 
   { TCocoaWSCustomListBox }
@@ -156,6 +159,7 @@ type
     class procedure Undo(const ACustomEdit: TCustomEdit); override;
 
     class procedure SetText(const AWinControl: TWinControl; const AText: String); override;
+    class procedure SetTextHint(const ACustomEdit: TCustomEdit; const ATextHint: string); override;
   end;
   
   { TCocoaMemoStrings }
@@ -165,7 +169,6 @@ type
     FTextView: TCocoaTextView;
   public
     class procedure GetLineStart(const s: AnsiString; LineIndex: Integer; var Offset, LinesSkipped: Integer);
-    class function GetLinesCount(const s: AnsiString): Integer;
   protected
     function GetTextStr: string; override;
     procedure SetTextStr(const Value: string); override;
@@ -211,6 +214,7 @@ type
     class procedure SetWordWrap(const ACustomMemo: TCustomMemo; const NewWordWrap: boolean); override;
     class procedure SetReadOnly(const ACustomEdit: TCustomEdit; NewReadOnly: boolean); override;
 
+    class function GetTextLen(const AWinControl: TWinControl; var ALength: Integer): Boolean; override;
     class procedure SetText(const AWinControl: TWinControl; const AText: String); override;
     class function GetText(const AWinControl: TWinControl; var AText: String): Boolean; override;
   end;
@@ -331,6 +335,8 @@ procedure TextFieldSetBorderStyle(txt: NSTextField; astyle: TBorderStyle);
 procedure RadioButtonSwitchSiblings(checkedRadio: NSButton);
 procedure ButtonSetState(btn: NSButton; NewState: TCheckBoxState;
   SkipChangeEvent: Boolean = true);
+procedure TextFieldSetTextHint(txt: NSTextField; const str: string);
+procedure ObjSetTextHint(obj: NSObject; const str: string);
 
 procedure ScrollViewSetScrollStyles(AScroll: TCocoaScrollView; AStyles: TScrollStyle);
 
@@ -484,26 +490,40 @@ begin
   AScroll.setAutohidesScrollers(ScrollerAutoHide[AStyles]);
 end;
 
+procedure TextFieldSetTextHint(txt: NSTextField; const str: string);
+var
+  ns : NSString;
+begin
+  if not Assigned(txt) then Exit;
+  ns := NSStringUtf8(str);
+  txt.setPlaceholderString(ns);
+  ns.release;
+end;
+
+procedure ObjSetTextHint(obj: NSObject; const str: string);
+begin
+  if not Assigned(obj) or not obj.isKindOfClass(NSTextField) then Exit;
+  TextFieldSetTextHint(NSTextField(obj), str);
+end;
+
 function ComboBoxStyleIsReadOnly(AStyle: TComboBoxStyle): Boolean;
 begin
-  Result := AStyle in [csDropDownList, csOwnerDrawFixed,  csOwnerDrawVariable];
+  Result := not AStyle.HasEditBox;
 end;
 
 function ComboBoxIsReadOnly(cmb: TCustomComboBox): Boolean;
 begin
-  Result := Assigned(cmb)
-            and (ComboBoxStyleIsReadOnly(cmb.Style) or cmb.ReadOnly);
+  Result := Assigned(cmb) and (ComboBoxStyleIsReadOnly(cmb.Style));
 end;
 
 function ComboBoxIsOwnerDrawn(AStyle: TComboBoxStyle): Boolean;
 begin
-  Result := AStyle in [csOwnerDrawFixed, csOwnerDrawVariable,
-    csOwnerDrawEditableFixed, csOwnerDrawEditableVariable];
+  Result := AStyle.IsOwnerDrawn;
 end;
 
 function ComboBoxIsVariable(AStyle: TComboBoxStyle): Boolean;
 begin
-  Result := AStyle in [csOwnerDrawVariable, csOwnerDrawEditableVariable];
+  Result := AStyle.IsVariable;
 end;
 
 procedure ComboBoxSetBorderStyle(box: NSComboBox; astyle: TBorderStyle);
@@ -979,7 +999,10 @@ end;
 
 class procedure TCocoaWSCustomEdit.SetColor(const AWinControl: TWinControl);
 var
-  field: TCocoaTextField;
+  field : TCocoaTextField;
+  w     : NSWindow;
+  rsp   : NSResponder;
+  ed    : TCocoaFieldEditor;
 begin
   field := GetTextField(AWinControl);
   if not Assigned(field) then Exit;
@@ -988,6 +1011,16 @@ begin
     field.setBackgroundColor( NSColor.textBackgroundColor )
   else
     field.setBackgroundColor( ColorToNSColor(ColorToRGB(AWinControl.Color)));
+
+  w := NSView(AWinControl.Handle).window;
+  if not Assigned(w) then Exit;
+  rsp := w.firstResponder;
+  if (Assigned(rsp)) and (rsp.isKindOfClass(TCocoaFieldEditor)) then
+  begin
+    ed := TCocoaFieldEditor(rsp);
+    if (NSObject(ed.delegate) = NSView(AWinControl.Handle)) then
+      ed.lclReviseCursorColor;
+  end;
 end;
 
 class procedure TCocoaWSCustomEdit.SetBorderStyle(
@@ -997,8 +1030,13 @@ var
 begin
   field := GetTextField(AWinControl);
   if not Assigned(field) then Exit;
+  {$ifdef BOOLFIX}
   field.setBordered_( ObjCBool(ABorderStyle <> bsNone) );
   field.setBezeled_( ObjCBool(ABorderStyle <> bsNone) );
+  {$else}
+  field.setBordered( ABorderStyle <> bsNone );
+  field.setBezeled( ABorderStyle <> bsNone );
+  {$endif}
   UpdateFocusRing(field, ABorderStyle);
 end;
 
@@ -1102,8 +1140,13 @@ begin
     end;
   end;
 
+  {$ifdef BOOLFIX}
   lHandle.setEditable_(ObjCBool(not NewReadOnly));
   lHandle.setSelectable_(1); // allow to select read-only text (LCL compatible)
+  {$ELSE}
+  lHandle.setEditable( not NewReadOnly);
+  lHandle.setSelectable(true); // allow to select read-only text (LCL compatible)
+  {$ENDIF}
 
   if Assigned(ed) then begin
     ed.goingReadOnly := false;
@@ -1181,6 +1224,14 @@ begin
   end;
 end;
 
+class procedure TCocoaWSCustomEdit.SetTextHint(const ACustomEdit: TCustomEdit;
+  const ATextHint: string);
+begin
+  if NSAppKitVersionNumber <= NSAppKitVersionNumber10_10 then Exit;
+  if (ACustomEdit.HandleAllocated) then
+    ObjSetTextHint(NSObject(ACustomEdit.Handle), ATextHint);
+end;
+
 { TCocoaMemoStrings }
 
 function LineBreaksToUnix(const src: string): string;
@@ -1228,19 +1279,22 @@ begin
   Offset:=i;
 end;
 
-class function TCocoaMemoStrings.GetLinesCount(const s: AnsiString): Integer;
-var
-  ofs : Integer;
-begin
-  Result:=0;
-  ofs:=0;
-  GetLineStart(s, -1, ofs, Result);
-end;
-
 function TCocoaMemoStrings.GetCount:Integer;
+var
+  s      : NSString;
+  i      : LongWord;
+  strLen : LongWord;
 begin
-  Result:=GetLinesCount(GetTextStr);
-  inc(Result);
+  s := FTextView.string_;
+  // it's a very nice example for Apple's docs
+  // https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/TextLayout/Tasks/CountLines.html
+  strLen := s.length;
+  i := 0;
+  Result := 0;
+  while (i < strLen) do begin
+    i := NSMaxRange(s.lineRangeForRange(NSMakeRange(i, 0)));
+    inc(Result);
+  end;
 end;
 
 function TCocoaMemoStrings.Get(Index:Integer):string;
@@ -1334,9 +1388,9 @@ end;
 
 procedure TCocoaMemoStrings.LoadFromFile(const FileName: string);
 var
-  TheStream: TFileStreamUTF8;
+  TheStream: TFileStream;
 begin
-  TheStream:=TFileStreamUtf8.Create(FileName,fmOpenRead or fmShareDenyWrite);
+  TheStream:=TFileStream.Create(FileName,fmOpenRead or fmShareDenyWrite);
   try
     LoadFromStream(TheStream);
   finally
@@ -1346,9 +1400,9 @@ end;
 
 procedure TCocoaMemoStrings.SaveToFile(const FileName: string);
 var
-  TheStream: TFileStreamUTF8;
+  TheStream: TFileStream;
 begin
-  TheStream:=TFileStreamUtf8.Create(FileName,fmCreate);
+  TheStream:=TFileStream.Create(FileName,fmCreate);
   try
     SaveToStream(TheStream);
   finally
@@ -1672,6 +1726,17 @@ begin
     txt.setEditable(not NewReadOnly);
 end;
 
+class function TCocoaWSCustomMemo.GetTextLen(const AWinControl: TWinControl;
+  var ALength: Integer): Boolean;
+var
+  txt: TCocoaTextView;
+begin
+  txt := GetTextView(AWinControl);
+  Result := Assigned(txt);
+  if Result then
+    ALength := txt.string_.lengthOfBytesUsingEncoding(NSUTF8StringEncoding);
+end;
+
 class procedure TCocoaWSCustomMemo.SetScrollbars(const ACustomMemo: TCustomMemo; const NewScrollbars: TScrollStyle);
 begin
   ScrollViewSetScrollStyles(TCocoaScrollView(ACustomMemo.Handle), NewScrollbars);
@@ -1787,7 +1852,7 @@ begin
   if not Assigned(AWinControl) or not AWinControl.HandleAllocated then Exit;
   ACustomComboBox:= TCustomComboBox(AWinControl);
 
-  if ACustomComboBox.ReadOnly then
+  if ComboBoxStyleIsReadOnly(ACustomComboBox.Style) then
     //Result := TCocoaReadOnlyComboBox(ACustomComboBox.Handle).indexOfSelectedItem
   else
   begin
@@ -1828,7 +1893,7 @@ begin
     Exit;
   end;
 
-  if ACustomComboBox.ReadOnly then
+  if ComboBoxStyleIsReadOnly(ACustomComboBox.Style) then
     idx := TCocoaReadOnlyComboBox(ACustomComboBox.Handle).indexOfSelectedItem
   else
     idx := TCocoaComboBox(ACustomComboBox.Handle).indexOfSelectedItem;
@@ -1846,7 +1911,7 @@ begin
   if (not Assigned(ACustomComboBox)) or (not ACustomComboBox.HandleAllocated) then
     Exit;
 
-  if ACustomComboBox.ReadOnly then
+  if ComboBoxStyleIsReadOnly(ACustomComboBox.Style) then
   begin
     rocmb := TCocoaReadOnlyComboBox(ACustomComboBox.Handle);
     rocmb.lastSelectedItemIndex := NewIndex;
@@ -1856,13 +1921,38 @@ begin
     TCocoaComboBox(ACustomComboBox.Handle).selectItemAtIndex(NewIndex);
 end;
 
+class procedure TCocoaWSCustomComboBox.SetStyle(
+  const ACustomComboBox: TCustomComboBox; NewStyle: TComboBoxStyle);
+begin
+  if (not Assigned(ACustomComboBox)) or (not ACustomComboBox.HandleAllocated) then
+    Exit;
+  RecreateWnd(ACustomComboBox);
+end;
+
+class procedure TCocoaWSCustomComboBox.SetReadOnly(
+  const ACustomComboBox: TCustomComboBox; NewReadOnly: boolean);
+var
+  box : NSComboBox;
+begin
+  if (not Assigned(ACustomComboBox)) or (not ACustomComboBox.HandleAllocated) then
+    Exit;
+  if not (NSObject(ACustomComboBox.Handle).isKindOfClass(NSComboBox)) then Exit;
+  box := NSComboBox(ACustomComboBox.Handle);
+  box.setEditable(not NewReadOnly);
+  {$ifdef BOOLFIX}
+  box.setSelectable_(1);
+  {$ELSE}
+  box.setSelectable(true);
+  {$endif}
+end;
+
 class procedure TCocoaWSCustomComboBox.SetDropDownCount(const ACustomComboBox:
   TCustomComboBox;NewCount:Integer);
 begin
   if (not Assigned(ACustomComboBox)) or (not ACustomComboBox.HandleAllocated) then
     Exit;
 
-  if ACustomComboBox.ReadOnly then Exit;
+  if ComboBoxStyleIsReadOnly(ACustomComboBox.Style) then Exit;
   TCocoaComboBox(ACustomComboBox.Handle).setNumberOfVisibleItems(NewCount);
 end;
 
@@ -1874,7 +1964,7 @@ begin
     Exit;
   end;
 
-  if ACustomComboBox.ReadOnly then
+  if ComboBoxStyleIsReadOnly(ACustomComboBox.Style) then
     Result:=TCocoaReadOnlyComboBox(ACustomComboBox.Handle).list
   else
     Result:=TCocoaComboBox(ACustomComboBox.Handle).list;
@@ -1889,7 +1979,7 @@ begin
     Exit;
   end;
 
-  if ACustomComboBox.ReadOnly then
+  if ComboBoxStyleIsReadOnly(ACustomComboBox.Style) then
     Result := 26 // ToDo
   else
     Result:=Round(TCocoaComboBox(ACustomComboBox.Handle).itemHeight);
@@ -1901,7 +1991,7 @@ begin
   if (not Assigned(ACustomComboBox)) or (not ACustomComboBox.HandleAllocated) then
     Exit;
 
-  if ACustomComboBox.ReadOnly then
+  if ComboBoxStyleIsReadOnly(ACustomComboBox.Style) then
     Exit // ToDo
   else
     TCocoaComboBox(ACustomComboBox.Handle).setItemHeight(AItemHeight);
@@ -1923,6 +2013,16 @@ begin
     ControlSetTextWithChangeEvent(NSControl(AWinControl.Handle), AText);
 end;
 
+class procedure TCocoaWSCustomComboBox.SetTextHint(
+  const ACustomComboBox: TCustomComboBox; const ATextHint: string);
+begin
+  if NSAppKitVersionNumber <= NSAppKitVersionNumber10_10 then
+    Exit;
+  if (not Assigned(ACustomComboBox)) or (not ACustomComboBox.HandleAllocated) then
+    Exit;
+  ObjSetTextHint(NSObject(ACustomComboBox.Handle), ATextHint);
+end;
+
 { TCocoaWSToggleBox }
 
 class function TCocoaWSToggleBox.CreateHandle(const AWinControl:TWinControl;
@@ -1931,7 +2031,7 @@ var
   btn: NSButton;
   cl: NSButtonCell;
 begin
-  btn := AllocButton(AWinControl, TLCLButtonCallBack, AParams, CocoaToggleBezel, CocoaToggleType);
+  btn := AllocButton(AWinControl, TLCLCheckBoxCallback, AParams, CocoaToggleBezel, CocoaToggleType);
   cl := NSButtonCell(NSButton(btn).cell);
   cl.setShowsStateBy(cl.showsStateBy or NSContentsCellMask);
   Result := TLCLIntfHandle(btn);
@@ -2052,6 +2152,20 @@ begin
   box.setTitle(ControlTitleToNSStr(AText));
 end;
 
+class procedure TCocoaWSCustomGroupBox.SetFont(const AWinControl: TWinControl;
+  const AFont: TFont);
+var
+  box: TCocoaGroupBox;
+  fn : NSFont;
+begin
+  if not AWinControl.HandleAllocated then Exit;
+  box := TCocoaGroupBox(AWinControl.Handle);
+  fn := TCocoaFont(AFont.Reference.Handle).Font;
+  if AFont.Size = 0 then
+    fn := NSFont.fontWithDescriptor_size(fn.fontDescriptor, NSFont.smallSystemFontSize);
+  box.setTitleFont(fn);
+end;
+
 { TCocoaWSCustomListBox }
 
 function GetListBox(AWinControl: TWinControl): TCocoaTableListView;
@@ -2087,6 +2201,7 @@ var
   list    : TCocoaTableListView;
   scroll  : TCocoaScrollView;
   lclListBox: TCustomListBox absolute AWinControl;
+  cb  : TLCLListBoxCallback;
 begin
   list := AllocCocoaTableListView.lclInitWithCreateParams(AParams);
   if not Assigned(list) then
@@ -2094,7 +2209,8 @@ begin
     Result := 0;
     Exit;
   end;
-  list.callback := TLCLListBoxCallback.CreateWithView(list, AWinControl);
+  cb := TLCLListBoxCallback.CreateWithView(list, AWinControl);
+  list.callback := cb;
   list.addTableColumn(NSTableColumn.alloc.init);
   list.setHeaderView(nil);
   list.setDataSource(list);
@@ -2119,6 +2235,7 @@ begin
     Result := 0;
     Exit;
   end;
+  cb.HandleFrame := scroll;
   scroll.callback := list.callback;
   scroll.setHasVerticalScroller(true);
   scroll.setAutohidesScrollers(true);
@@ -2270,7 +2387,7 @@ var
 begin
   view := GetListBox(ACustomListBox);
   ListBoxSetStyle(view, TCustomListBox(ACustomListBox).Style);
-  view.setNeedsDisplay;
+  view.setNeedsDisplay_(true);
 end;
 
 class procedure TCocoaWSCustomListBox.SetTopIndex(const ACustomListBox: TCustomListBox; const NewTopIndex: integer);

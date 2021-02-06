@@ -38,19 +38,55 @@ Known Issues:
 unit SynEditMiscClasses;
 
 {$I synedit.inc}
+{$INLINE off}
 
 interface
 
 uses
   Classes, SysUtils,
   // LazUtils
-  LazMethodList,
+  LazMethodList, LazUtilities, LazLoggerBase,
   // LCL
-  LCLIntf, LCLType, LCLProc, Graphics, Controls, Clipbrd, ImgList,
+  LCLIntf, LCLType, Graphics, Controls, Clipbrd, ImgList,
   // SynEdit
-  SynEditHighlighter, SynEditMiscProcs, SynEditTypes, LazSynEditText, SynEditPointClasses;
+  SynEditHighlighter, SynEditMiscProcs, SynEditTypes, LazSynEditText, SynEditPointClasses, SynEditMouseCmds,
+  SynEditTextBase;
+
+const
+  SYNEDIT_DEFAULT_MOUSE_OPTIONS = [];
+
+  // MouseAction related options MUST NOT be included here
+  SYNEDIT_DEFAULT_OPTIONS = [
+    eoAutoIndent,
+    eoScrollPastEol,
+    eoSmartTabs,
+    eoTabsToSpaces,
+    eoTrimTrailingSpaces,
+    eoGroupUndo,
+    eoBracketHighlight
+  ];
+
+  SYNEDIT_DEFAULT_OPTIONS2 = [
+    eoFoldedCopyPaste,
+    eoOverwriteBlock,
+    eoAcceptDragDropEditing
+  ];
+
+  // Those will be prevented from being set => so evtl they may be removed
+  SYNEDIT_UNIMPLEMENTED_OPTIONS = [
+    eoAutoSizeMaxScrollWidth,  //TODO Automatically resizes the MaxScrollWidth property when inserting text
+    eoDisableScrollArrows,     //TODO Disables the scroll bar arrow buttons when you can't scroll in that direction any more
+    eoDropFiles,               //TODO Allows the editor accept file drops
+    eoHideShowScrollbars,      //TODO if enabled, then the scrollbars will only show when necessary.  If you have ScrollPastEOL, then it the horizontal bar will always be there (it uses MaxLength instead)
+    eoSmartTabDelete,          //TODO similar to Smart Tabs, but when you delete characters
+    ////eoSpecialLineDefaultFg,    //TODO disables the foreground text color override when using the OnSpecialLineColor event
+    eoAutoIndentOnPaste,       // Indent text inserted from clipboard
+    eoSpacesToTabs             // Converts space characters to tabs and spaces
+  ];
 
 type
+
+  TSynUndoRedoItemEvent = function (Caller: TObject; Item: TSynEditUndoItem): Boolean of object;
 
   { TSynWordBreaker }
 
@@ -94,30 +130,244 @@ type
   end;
 
   TLazSynSurface = class;
+  TSynSelectedColor = class;
+  TSynBookMarkOpt = class;
 
   { TSynEditBase }
 
   TSynEditBase = class(TCustomControl)
+  private
+    FMouseOptions: TSynEditorMouseOptions;
+    fReadOnly: Boolean;
+    fHideSelection: boolean;
+    fBookMarkOpt: TSynBookMarkOpt;
+    fExtraCharSpacing: integer;
+    fExtraLineSpacing: integer;
+    procedure BookMarkOptionsChanged(Sender: TObject);
+    procedure SetHideSelection(Value: boolean);
   protected
     FWordBreaker: TSynWordBreaker;
     FBlockSelection: TSynEditSelection;
     FScreenCaret: TSynEditScreenCaret;
+    FOptions: TSynEditorOptions;
+    FOptions2: TSynEditorOptions2;
+    procedure DoTopViewChanged(Sender: TObject); virtual; abstract;
     function GetMarkupMgr: TObject; virtual; abstract;
     function GetLines: TStrings; virtual; abstract;
+    function GetCanRedo: boolean; virtual; abstract;
+    function GetCanUndo: boolean; virtual; abstract;
     function GetCaretObj: TSynEditCaret; virtual; abstract;
+    function GetModified: Boolean; virtual; abstract;
+    function GetReadOnly: boolean; virtual;
+    function GetIsBackwardSel: Boolean;
+    function GetHighlighterObj: TObject; virtual; abstract;
+    function GetMarksObj: TObject; virtual; abstract;
+    function GetSelText: string;
+    function GetSelAvail: Boolean;
+    function GetSelectedColor: TSynSelectedColor; virtual; abstract;
+    function GetTextViewsManager: TSynTextViewsManager; virtual; abstract;
     procedure SetLines(Value: TStrings); virtual; abstract;
-    function GetViewedTextBuffer: TSynEditStrings; virtual; abstract;
+    function GetViewedTextBuffer: TSynEditStringsLinked; virtual; abstract;
     function GetFoldedTextBuffer: TObject; virtual; abstract;
     function GetTextBuffer: TSynEditStrings; virtual; abstract;
     function GetPaintArea: TLazSynSurface; virtual; abstract; // TLazSynSurfaceManager
+    procedure SetModified(Value: boolean); virtual; abstract;
+    procedure SetMouseOptions(AValue: TSynEditorMouseOptions); virtual;
+    procedure SetReadOnly(Value: boolean); virtual;
+    procedure StatusChanged(AChanges: TSynStatusChanges); virtual; abstract;
+    procedure SetOptions(AOptions: TSynEditorOptions); virtual; abstract;
+    procedure SetOptions2(AOptions2: TSynEditorOptions2); virtual; abstract;
+    procedure SetSelectedColor(const aSelectedColor: TSynSelectedColor); virtual; abstract;
+
+    function GetCharsInWindow: Integer; virtual; abstract;
+    function GetCharWidth: integer; virtual; abstract;
+    function GetLeftChar: Integer; virtual; abstract;
+    function GetLineHeight: integer; virtual; abstract;
+    function GetLinesInWindow: Integer; virtual; abstract;
+    function GetTopLine: Integer; virtual; abstract;
+    procedure SetLeftChar(Value: Integer); virtual; abstract;
+    procedure SetTopLine(Value: Integer); virtual; abstract;
+
+    function GetBlockBegin: TPoint; virtual; abstract;
+    function GetBlockEnd: TPoint; virtual; abstract;
+    function GetSelEnd: Integer; virtual; abstract;
+    function GetSelStart: Integer; virtual; abstract;
+    procedure SetBlockBegin(Value: TPoint); virtual; abstract;
+    procedure SetBlockEnd(Value: TPoint); virtual; abstract;
+    procedure SetSelEnd(const Value: Integer); virtual; abstract;
+    procedure SetSelStart(const Value: Integer); virtual; abstract;
+    procedure SetSelTextExternal(const Value: string); virtual; abstract;
+
+    function GetMouseActions: TSynEditMouseActions; virtual; abstract;
+    function GetMouseSelActions: TSynEditMouseActions; virtual; abstract;
+    function GetMouseTextActions: TSynEditMouseActions; virtual; abstract;
+    procedure SetMouseActions(const AValue: TSynEditMouseActions); virtual; abstract;
+    procedure SetMouseSelActions(const AValue: TSynEditMouseActions); virtual; abstract;
+    procedure SetMouseTextActions(AValue: TSynEditMouseActions); virtual; abstract;
+
+    procedure SetExtraCharSpacing(const AValue: integer); virtual;
+    procedure SetExtraLineSpacing(const AValue: integer); virtual;
+
+    function GetCaretX : Integer; virtual; abstract;
+    function GetCaretY : Integer; virtual; abstract;
+    function GetCaretXY: TPoint; virtual; abstract;
+    procedure SetCaretX(const Value: Integer); virtual; abstract;
+    procedure SetCaretY(const Value: Integer); virtual; abstract;
+    procedure SetCaretXY(Value: TPoint); virtual; abstract;
+    function GetLogicalCaretXY: TPoint; virtual; abstract;
+    procedure SetLogicalCaretXY(const NewLogCaretXY: TPoint); virtual; abstract;
 
     property MarkupMgr: TObject read GetMarkupMgr;
     property FoldedTextBuffer: TObject read GetFoldedTextBuffer;                // TSynEditFoldedView
-    property ViewedTextBuffer: TSynEditStrings read GetViewedTextBuffer;        // As viewed internally (with uncommited spaces / TODO: expanded tabs, folds). This may change, use with care
+    property ViewedTextBuffer: TSynEditStringsLinked read GetViewedTextBuffer;        // As viewed internally (with uncommited spaces / TODO: expanded tabs, folds). This may change, use with care
     property TextBuffer: TSynEditStrings read GetTextBuffer;                    // (TSynEditStringList) No uncommited (trailing/trimmable) spaces
     property WordBreaker: TSynWordBreaker read FWordBreaker;
   public
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
+
+    function FindGutterFromGutterPartList(const APartList: TObject): TObject; virtual; abstract;
+  public
+    // Caret
+    function CaretXPix: Integer; virtual; abstract;
+    function CaretYPix: Integer; virtual; abstract;
+
+    function ScreenXYToTextXY(AScreenXY: TPhysPoint; LimitToLines: Boolean = True): TPhysPoint; virtual; abstract;
+    function TextXYToScreenXY(APhysTextXY: TPhysPoint): TPhysPoint; virtual; abstract;
+
+    procedure GetWordBoundsAtRowCol(const XY: TPoint; out StartX, EndX: integer); virtual; abstract;
+    function GetWordAtRowCol(XY: TPoint): string; virtual; abstract;
+
+    // Cursor
+    procedure UpdateCursorOverride; virtual; abstract;
+  public
+    // Undo Redo
+    procedure BeginUndoBlock{$IFDEF SynUndoDebugBeginEnd}(ACaller: String = ''){$ENDIF}; virtual; abstract;
+    procedure BeginUpdate(WithUndoBlock: Boolean = True); virtual; abstract;
+    procedure EndUndoBlock{$IFDEF SynUndoDebugBeginEnd}(ACaller: String = ''){$ENDIF}; virtual; abstract;
+    procedure EndUpdate; virtual; abstract;
+
+    procedure ClearUndo; virtual; abstract;
+    procedure Redo; virtual; abstract;
+    procedure Undo; virtual; abstract;
+    property CanRedo: boolean read GetCanRedo;
+    property CanUndo: boolean read GetCanUndo;
+  public
+    // matching brackets
+    procedure FindMatchingBracket; virtual; abstract;
+    function FindMatchingBracket(PhysStartBracket: TPoint;
+                                 StartIncludeNeighborChars, MoveCaret,
+                                 SelectBrackets, OnlyVisible: Boolean
+                                ): TPoint; virtual; abstract; // Returns Physical
+    function FindMatchingBracketLogical(LogicalStartBracket: TPoint;
+                                        StartIncludeNeighborChars, MoveCaret,
+                                        SelectBrackets, OnlyVisible: Boolean
+                                       ): TPoint; virtual; abstract; // Returns Logical
+  public
+    // handlers
+    procedure RegisterCommandHandler(AHandlerProc: THookedCommandEvent;
+      AHandlerData: pointer; AFlags: THookedCommandFlags = [hcfPreExec, hcfPostExec]); virtual; abstract;
+    procedure UnregisterCommandHandler(AHandlerProc: THookedCommandEvent); virtual; abstract;
+
+    procedure RegisterMouseActionSearchHandler(AHandlerProc: TSynEditMouseActionSearchProc); virtual; abstract;
+    procedure UnregisterMouseActionSearchHandler(AHandlerProc: TSynEditMouseActionSearchProc); virtual; abstract;
+    procedure RegisterMouseActionExecHandler(AHandlerProc: TSynEditMouseActionExecProc); virtual; abstract;
+    procedure UnregisterMouseActionExecHandler(AHandlerProc: TSynEditMouseActionExecProc); virtual; abstract;
+
+    procedure RegisterKeyTranslationHandler(AHandlerProc: THookedKeyTranslationEvent); virtual; abstract;
+    procedure UnRegisterKeyTranslationHandler(AHandlerProc: THookedKeyTranslationEvent); virtual; abstract;
+
+    procedure RegisterUndoRedoItemHandler(AHandlerProc: TSynUndoRedoItemEvent); virtual; abstract;
+    procedure UnRegisterUndoRedoItemHandler(AHandlerProc: TSynUndoRedoItemEvent); virtual; abstract;
+
+    procedure RegisterStatusChangedHandler(AStatusChangeProc: TStatusChangeEvent; AChanges: TSynStatusChanges); virtual; abstract;
+    procedure UnRegisterStatusChangedHandler(AStatusChangeProc: TStatusChangeEvent); virtual; abstract;
+
+    procedure RegisterBeforeMouseDownHandler(AHandlerProc: TMouseEvent); virtual; abstract;
+    procedure UnregisterBeforeMouseDownHandler(AHandlerProc: TMouseEvent); virtual; abstract;
+
+    procedure RegisterQueryMouseCursorHandler(AHandlerProc: TSynQueryMouseCursorEvent); virtual; abstract;
+    procedure UnregisterQueryMouseCursorHandler(AHandlerProc: TSynQueryMouseCursorEvent); virtual; abstract;
+
+    procedure RegisterBeforeKeyDownHandler(AHandlerProc: TKeyEvent); virtual; abstract;
+    procedure UnregisterBeforeKeyDownHandler(AHandlerProc: TKeyEvent); virtual; abstract;
+    procedure RegisterBeforeKeyUpHandler(AHandlerProc: TKeyEvent); virtual; abstract;
+    procedure UnregisterBeforeKeyUpHandler(AHandlerProc: TKeyEvent); virtual; abstract;
+    procedure RegisterBeforeKeyPressHandler(AHandlerProc: TKeyPressEvent); virtual; abstract;
+    procedure UnregisterBeforeKeyPressHandler(AHandlerProc: TKeyPressEvent); virtual; abstract;
+    procedure RegisterBeforeUtf8KeyPressHandler(AHandlerProc: TUTF8KeyPressEvent); virtual; abstract;
+    procedure UnregisterBeforeUtf8KeyPressHandler(AHandlerProc: TUTF8KeyPressEvent); virtual; abstract;
+
+    procedure RegisterPaintEventHandler(APaintEventProc: TSynPaintEventProc; AnEvents: TSynPaintEvents); virtual; abstract;
+    procedure UnRegisterPaintEventHandler(APaintEventProc: TSynPaintEventProc); virtual; abstract;
+    procedure RegisterScrollEventHandler(AScrollEventProc: TSynScrollEventProc; AnEvents: TSynScrollEvents); virtual; abstract;
+    procedure UnRegisterScrollEventHandler(AScrollEventProc: TSynScrollEventProc); virtual; abstract;
+
+  public
+    function IsLinkable(Y, X1, X2: Integer): Boolean; virtual; abstract;
+    // invalidate lines
+    procedure InvalidateGutter; virtual; abstract;
+    procedure InvalidateLine(Line: integer); virtual; abstract;
+    procedure InvalidateGutterLines(FirstLine, LastLine: integer); virtual; abstract; // Currently invalidates full line => that may change
+    procedure InvalidateLines(FirstLine, LastLine: integer); virtual; abstract;
+
+    // text / lines
+    function GetLineState(ALine: Integer): TSynLineState; virtual; abstract;
+  public
+    // Byte to Char
+    function LogicalToPhysicalPos(const p: TPoint): TPoint; virtual; abstract;
+    function LogicalToPhysicalCol(const Line: String; Index, LogicalPos
+                              : integer): integer; virtual; abstract;
+    // Char to Byte
+    function PhysicalToLogicalPos(const p: TPoint): TPoint; virtual; abstract;
+    function PhysicalToLogicalCol(const Line: string;
+                                  Index, PhysicalPos: integer): integer; virtual; abstract;
+    function PhysicalLineLength(Line: String; Index: integer): integer; virtual; abstract;
+  public
+    property BookMarkOptions: TSynBookMarkOpt read fBookMarkOpt write fBookMarkOpt; // ToDo: check "write fBookMarkOpt"
+    property ExtraCharSpacing: integer read fExtraCharSpacing write SetExtraCharSpacing default 0;
+    property ExtraLineSpacing: integer read fExtraLineSpacing write SetExtraLineSpacing default 0;
     property Lines: TStrings read GetLines write SetLines;
+    // See SYNEDIT_UNIMPLEMENTED_OPTIONS for deprecated Values
+    property Options: TSynEditorOptions read FOptions write SetOptions default SYNEDIT_DEFAULT_OPTIONS;
+    property Options2: TSynEditorOptions2 read FOptions2 write SetOptions2 default SYNEDIT_DEFAULT_OPTIONS2;
+    property ReadOnly: Boolean read GetReadOnly write SetReadOnly default FALSE;
+    property Modified: Boolean read GetModified write SetModified;
+
+    property CaretX: Integer read GetCaretX write SetCaretX;
+    property CaretY: Integer read GetCaretY write SetCaretY;
+    property CaretXY: TPoint read GetCaretXY write SetCaretXY;// screen position
+    property LogicalCaretXY: TPoint read GetLogicalCaretXY write SetLogicalCaretXY;
+
+    property CharsInWindow: Integer read GetCharsInWindow;
+    property CharWidth: integer read GetCharWidth;
+    property LeftChar: Integer read GetLeftChar write SetLeftChar;
+    property LineHeight: integer read GetLineHeight;
+    property LinesInWindow: Integer read GetLinesInWindow;
+    property TopLine: Integer read GetTopLine write SetTopLine;
+
+    property BlockBegin: TPoint read GetBlockBegin write SetBlockBegin;         // Set Blockbegin. For none persistent also sets Blockend. Setting Caret may undo this and should be done before setting block
+    property BlockEnd: TPoint read GetBlockEnd write SetBlockEnd;
+    property SelStart: Integer read GetSelStart write SetSelStart;              // 1-based byte pos of first selected char
+    property SelEnd: Integer read GetSelEnd write SetSelEnd;                    // 1-based byte pos of first char after selction end
+    property IsBackwardSel: Boolean read GetIsBackwardSel;
+    property SelText: string read GetSelText write SetSelTextExternal;
+
+    property MouseActions: TSynEditMouseActions read GetMouseActions write SetMouseActions;
+    // Mouseactions, if mouse is over selection => fallback to normal
+    property MouseSelActions: TSynEditMouseActions read GetMouseSelActions write SetMouseSelActions;
+    property MouseTextActions: TSynEditMouseActions read GetMouseTextActions write SetMouseTextActions;
+    property MouseOptions: TSynEditorMouseOptions read FMouseOptions write SetMouseOptions
+      default SYNEDIT_DEFAULT_MOUSE_OPTIONS;
+
+    property TextViewsManager: TSynTextViewsManager read GetTextViewsManager; experimental; // Only use to Add/remove views
+
+    property SelectedColor: TSynSelectedColor read GetSelectedColor write SetSelectedColor;
+    property SelAvail: Boolean read GetSelAvail;
+    property HideSelection: boolean read fHideSelection write SetHideSelection default false;
+
+    property Highlighter: TObject read GetHighlighterObj;
+    property Marks: TObject read GetMarksObj;
   end;
 
   { TSynEditFriend }
@@ -135,12 +385,12 @@ type
     function GetScreenCaret: TSynEditScreenCaret;
     function GetSelectionObj: TSynEditSelection;
     function GetTextBuffer: TSynEditStrings;
-    function GetViewedTextBuffer: TSynEditStrings;
+    function GetViewedTextBuffer: TSynEditStringsLinked;
     function GetWordBreaker: TSynWordBreaker;
   protected
     property FriendEdit: TSynEditBase read FFriendEdit write FFriendEdit;
     property FoldedTextBuffer: TObject read GetFoldedTextBuffer;                // TSynEditFoldedView
-    property ViewedTextBuffer: TSynEditStrings read GetViewedTextBuffer;        // As viewed internally (with uncommited spaces / TODO: expanded tabs, folds). This may change, use with care
+    property ViewedTextBuffer: TSynEditStringsLinked read GetViewedTextBuffer;        // As viewed internally (with uncommited spaces / TODO: expanded tabs, folds). This may change, use with care
     property TextBuffer: TSynEditStrings read GetTextBuffer;                    // (TSynEditStringList)
     property CaretObj: TSynEditCaret read GetCaretObj;
     property ScreenCaret: TSynEditScreenCaret read GetScreenCaret; // TODO: should not be exposed
@@ -425,6 +675,7 @@ type
     FText: String;
     FTextP: PChar;
     FIsPlainText: Boolean;
+    FColumnModeFlag: Boolean;
 
     function GetMemory: Pointer;
     function GetSize: LongInt;
@@ -436,6 +687,8 @@ type
     constructor Create;
     destructor Destroy; override;
     class function ClipboardFormatId: TClipboardFormat;
+    class function ClipboardFormatMSDEVColumnSelect: TClipboardFormat;
+    class function ClipboardFormatBorlandIDEBlockType: TClipboardFormat;
 
     function CanReadFromClipboard(AClipboard: TClipboard): Boolean;
     function ReadFromClipboard(AClipboard: TClipboard): Boolean;
@@ -520,6 +773,8 @@ type
   { TSynSizedDifferentialAVLNode }
 
   TSynSizedDifferentialAVLNode = Class
+  private
+    procedure SetLeftSizeSum(AValue: Integer);
   protected
     (* AVL Tree structure *)
     FParent, FLeft, FRight : TSynSizedDifferentialAVLNode;    (* AVL Links *)
@@ -536,7 +791,7 @@ type
     FSize: Integer;
     FLeftSizeSum: Integer;
 
-    property LeftSizeSum: Integer read FLeftSizeSum;
+    property LeftSizeSum: Integer read FLeftSizeSum write SetLeftSizeSum;
     {$IFDEF SynDebug}
     function Debug: String; virtual;
     {$ENDIF}
@@ -560,6 +815,7 @@ type
 
     procedure AdjustLeftCount(AValue : Integer);
     procedure AdjustParentLeftCount(AValue : Integer);
+    procedure AdjustPosition(AValue : Integer); // Must not change order with prev/next node
 
     function Precessor: TSynSizedDifferentialAVLNode;
     function Successor: TSynSizedDifferentialAVLNode;
@@ -615,9 +871,84 @@ type
 
 implementation
 
+{ TSynEditBase }
+
+constructor TSynEditBase.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+
+  FMouseOptions := SYNEDIT_DEFAULT_MOUSE_OPTIONS;
+  fBookMarkOpt := TSynBookMarkOpt.Create(Self);
+  fBookMarkOpt.OnChange := @BookMarkOptionsChanged;
+end;
+
+procedure TSynEditBase.BookMarkOptionsChanged(Sender: TObject);
+begin
+  InvalidateGutter;
+end;
+
+destructor TSynEditBase.Destroy;
+begin
+  FreeAndNil(fBookMarkOpt);
+
+  inherited Destroy;
+end;
+
+function TSynEditBase.GetReadOnly: boolean;
+begin
+  Result := fReadOnly;
+end;
+
+function TSynEditBase.GetSelAvail: Boolean;
+begin
+  Result := FBlockSelection.SelAvail;
+end;
+
+function TSynEditBase.GetIsBackwardSel: Boolean;
+begin
+  Result := FBlockSelection.SelAvail and FBlockSelection.IsBackwardSel;
+end;
+
+function TSynEditBase.GetSelText: string;
+begin
+  Result := FBlockSelection.SelText;
+end;
+
+procedure TSynEditBase.SetExtraCharSpacing(const AValue: integer);
+begin
+  fExtraCharSpacing := AValue;
+end;
+
+procedure TSynEditBase.SetExtraLineSpacing(const AValue: integer);
+begin
+  fExtraLineSpacing := AValue;
+end;
+
+procedure TSynEditBase.SetHideSelection(Value: boolean);
+begin
+  if fHideSelection <> Value then begin
+    FHideSelection := Value;
+    Invalidate;
+  end;
+end;
+
+procedure TSynEditBase.SetMouseOptions(AValue: TSynEditorMouseOptions);
+begin
+  if FMouseOptions = AValue then Exit;
+  FMouseOptions := AValue;
+end;
+
+procedure TSynEditBase.SetReadOnly(Value: boolean);
+begin
+  if fReadOnly <> Value then begin
+    fReadOnly := Value;
+    StatusChanged([scReadOnly]);
+  end;
+end;
+
 { TSynEditFriend }
 
-function TSynEditFriend.GetViewedTextBuffer: TSynEditStrings;
+function TSynEditFriend.GetViewedTextBuffer: TSynEditStringsLinked;
 begin
   Result := FFriendEdit.ViewedTextBuffer;
 end;
@@ -1619,7 +1950,10 @@ var
 begin
   PasteMode := GetTagPointer(synClipTagMode);
   if PasteMode = nil then
-    Result := smNormal
+    if FColumnModeFlag then
+      Result := smColumn
+    else
+      Result := smNormal
   else
     Result := PasteMode^;
 end;
@@ -1627,6 +1961,7 @@ end;
 procedure TSynClipboardStream.SetSelectionMode(const AValue: TSynSelectionMode);
 begin
   AddTag(synClipTagMode, @AValue, SizeOf(TSynSelectionMode));
+  FColumnModeFlag := AValue = smColumn;
 end;
 
 procedure TSynClipboardStream.SetText(const AValue: String);
@@ -1660,6 +1995,26 @@ begin
   Result := Format;
 end;
 
+class function TSynClipboardStream.ClipboardFormatMSDEVColumnSelect: TClipboardFormat;
+const
+  MSDEV_CLIPBOARD_FORMAT_TAGGED = 'MSDEVColumnSelect';
+  Format: TClipboardFormat = 0;
+begin
+  if Format = 0 then
+    Format := ClipboardRegisterFormat(MSDEV_CLIPBOARD_FORMAT_TAGGED);
+  Result := Format;
+end;
+
+class function TSynClipboardStream.ClipboardFormatBorlandIDEBlockType: TClipboardFormat;
+const
+  BORLAND_CLIPBOARD_FORMAT_TAGGED = 'Borland IDE Block Type';
+  Format: TClipboardFormat = 0;
+begin
+  if Format = 0 then
+    Format := ClipboardRegisterFormat(BORLAND_CLIPBOARD_FORMAT_TAGGED);
+  Result := Format;
+end;
+
 function TSynClipboardStream.CanReadFromClipboard(AClipboard: TClipboard): Boolean;
 begin
   Result := AClipboard.HasFormat(ClipboardFormatId);
@@ -1669,6 +2024,7 @@ function TSynClipboardStream.ReadFromClipboard(AClipboard: TClipboard): Boolean;
 var
   ip: PInteger;
   len: LongInt;
+  buf: TMemoryStream;
 begin
   Result := false;
   Clear;
@@ -1695,10 +2051,26 @@ begin
       if (length(FText) = 0) or (ip = nil) or (length(FText) <> ip^) then
         FIsPlainText := True;
     end;
+    FColumnModeFlag := AClipboard.HasFormat(ClipboardFormatMSDEVColumnSelect);
+    if (not FColumnModeFlag) and AClipboard.HasFormat(ClipboardFormatBorlandIDEBlockType) then begin
+      buf := TMemoryStream.Create;
+      try
+      AClipboard.GetFormat(ClipboardFormatBorlandIDEBlockType, buf);
+      except
+        buf.Clear;
+      end;
+      if buf.Size = 1 then begin
+        buf.Position := 0;
+        FColumnModeFlag := buf.ReadByte = 2;
+      end;
+      buf.Free;
+    end;
   end;
 end;
 
 function TSynClipboardStream.WriteToClipboard(AClipboard: TClipboard): Boolean;
+const
+  FormatBuf: array [0..0] of byte = (2);
 begin
   AClipboard.Open;
   try
@@ -1706,6 +2078,10 @@ begin
       AClipboard.AsText:= FText;
     end;
     Result := AClipboard.AddFormat(ClipboardFormatId, FMemStream.Memory^, FMemStream.Size);
+    if FColumnModeFlag then begin
+      AClipboard.AddFormat(ClipboardFormatMSDEVColumnSelect, FormatBuf[0], 0);
+      AClipboard.AddFormat(ClipboardFormatBorlandIDEBlockType, FormatBuf[0], 1);
+    end;
   finally
     AClipboard.Close;
   end;
@@ -1719,6 +2095,7 @@ procedure TSynClipboardStream.Clear;
 begin
   FMemStream.Clear;
   FIsPlainText := False;
+  FColumnModeFlag := False;
 end;
 
 function TSynClipboardStream.HasTag(ATag: TSynClipboardStreamTag): Boolean;
@@ -2160,6 +2537,13 @@ end;
 
 { TSynSizedDifferentialAVLNode }
 
+procedure TSynSizedDifferentialAVLNode.SetLeftSizeSum(AValue: Integer);
+begin
+  if FLeftSizeSum = AValue then Exit;
+  FLeftSizeSum := AValue;
+  AdjustParentLeftCount(AValue - FLeftSizeSum);
+end;
+
 {$IFDEF SynDebug}
 function TSynSizedDifferentialAVLNode.Debug: String;
 begin
@@ -2260,6 +2644,15 @@ begin
     node := pnode;
     pnode := node.FParent;
   end;
+end;
+
+procedure TSynSizedDifferentialAVLNode.AdjustPosition(AValue: Integer);
+begin
+  FPositionOffset := FPositionOffset + AValue;
+  if FRight <> nil then
+    FRight.FPositionOffset := FRight.FPositionOffset - AValue;;
+  if FLeft <> nil then
+    FLeft.FPositionOffset := FLeft.FPositionOffset - AValue;;
 end;
 
 function TSynSizedDifferentialAVLNode.GetSizesBeforeSum: Integer;
@@ -2884,12 +3277,12 @@ function TSynSizedDifferentialAVLTree.First(out aStartPosition,
   aSizesBeforeSum: Integer): TSynSizedDifferentialAVLNode;
 begin
   Result := FRoot;
-  aStartPosition := 0;
+  aStartPosition := FRootOffset;
   aSizesBeforeSum := 0;
   if Result = nil then
     exit;
 
-  aStartPosition := Result.FPositionOffset;
+  aStartPosition := aStartPosition + Result.FPositionOffset;
   while Result.FLeft <> nil do begin
     Result := Result.FLeft;
     aStartPosition := aStartPosition + Result.FPositionOffset;
@@ -2900,16 +3293,18 @@ function TSynSizedDifferentialAVLTree.Last(out aStartPosition,
   aSizesBeforeSum: Integer): TSynSizedDifferentialAVLNode;
 begin
   Result := FRoot;
-  aStartPosition := 0;
+  aStartPosition := FRootOffset;
   aSizesBeforeSum := 0;
   if Result = nil then
     exit;
 
-  aStartPosition := Result.FPositionOffset;
+  aStartPosition := aStartPosition + Result.FPositionOffset;
+  aSizesBeforeSum := aSizesBeforeSum + Result.FLeftSizeSum;
   while Result.FRight <> nil do begin
-    aSizesBeforeSum := aSizesBeforeSum + Result.FLeftSizeSum + Result.FSize;
+    aSizesBeforeSum := aSizesBeforeSum + Result.FSize;
     Result := Result.FRight;
     aStartPosition := aStartPosition + Result.FPositionOffset;
+    aSizesBeforeSum := aSizesBeforeSum + Result.FLeftSizeSum;
   end;
 end;
 
@@ -2917,12 +3312,12 @@ function TSynSizedDifferentialAVLTree.FindNodeAtLeftSize(ALeftSum: INteger; out
   aStartPosition, aSizesBeforeSum: Integer): TSynSizedDifferentialAVLNode;
 begin
   Result := FRoot;
-  aStartPosition := 0;
+  aStartPosition := FRootOffset;
   aSizesBeforeSum := 0;
   if Result = nil then
     exit;
 
-  aStartPosition := Result.FPositionOffset;
+  aStartPosition := aStartPosition + Result.FPositionOffset;
   while Result <> nil do begin
     if ALeftSum < Result.FLeftSizeSum then begin
       Result := Result.FLeft;
@@ -2971,7 +3366,8 @@ var
   function CreateRoot: TSynSizedDifferentialAVLNode; inline;
   begin
     Result := CreateNode(APosition);
-    Result.FPositionOffset := APosition;
+    if Result <> nil then
+      Result.FPositionOffset := APosition;
     SetRoot(Result);
   end;
 
@@ -3004,7 +3400,8 @@ begin
   if (Result = nil) then begin
     if (AMode = afmCreate) then begin
       Result := CreateRoot;
-      aStartPosition := aStartPosition + Result.FPositionOffset;
+      if Result <> nil then
+        aStartPosition := aStartPosition + Result.FPositionOffset;
     end;
     exit;
   end;

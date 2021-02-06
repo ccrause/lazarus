@@ -4,12 +4,34 @@ msgstr ""
 "Project-Id-Version: \n"
 "POT-Creation-Date: \n"
 "PO-Revision-Date: \n"
-"Last-Translator: Marcelo B Paula <marcelo.bp@netsite.com.br>\n"
+"Last-Translator: Marcelo B Paula\n"
 "Language-Team: \n"
 "MIME-Version: 1.0\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Language: pt_BR\n"
 "X-Generator: Poedit 1.8.13\n"
+
+#: fppkg_const.lisfppkgbuildmethodboth
+msgid "Both"
+msgstr "Ambos"
+
+#: fppkg_const.lisfppkgbuildmethodfpmake
+msgctxt "fppkg_const.lisfppkgbuildmethodfpmake"
+msgid "FPMake"
+msgstr "FPMake"
+
+#: fppkg_const.lisfppkgbuildmethodlazarus
+msgid "Lazbuild"
+msgstr "Lazbuild"
+
+#: fppkg_const.lisfppkgpckoptsbuildmethod
+msgid "Supported build methods"
+msgstr "Métodos de construção suportados"
+
+#: fppkg_const.lisfppkgpckoptstitle
+msgctxt "fppkg_const.lisfppkgpckoptstitle"
+msgid "Fppkg"
+msgstr "Fppkg"
 
 #: fppkg_const.rsaboutform
 msgid "About form"
@@ -56,6 +78,7 @@ msgid "fpmake compiler config"
 msgstr "Configuração compilador \"fpmake\""
 
 #: fppkg_const.rsfppkgenvironmentoptions
+msgctxt "fppkg_const.rsfppkgenvironmentoptions"
 msgid "Fppkg"
 msgstr "Fppkg"
 
@@ -105,6 +128,7 @@ msgid "Options"
 msgstr "Opções"
 
 #: fppkg_const.rspackagefileoptionstitle
+msgctxt "fppkg_const.rspackagefileoptionstitle"
 msgid "FPMake"
 msgstr "FPMake"
 
@@ -119,4 +143,120 @@ msgstr "Repositório remoto"
 #: fppkg_const.rsshowfppkgpackagemanager
 msgid "Show Fppkg Package Manager"
 msgstr "Exibir gerenciador de pacotes Fppkg"
+
+#: fppkg_const.sactarchivepackages
+msgid "create archive(s) for package(s)"
+msgstr "criar arquivo(s) para pacote(s)"
+
+#: fppkg_const.sactbuildpackages
+msgid "build package(s)"
+msgstr "construir pacote(s)"
+
+#: fppkg_const.sactcleanpackages
+msgid "clean package(s)"
+msgstr "limpar pacote(s)"
+
+#: fppkg_const.sactcompilepackages
+msgid "compile packages"
+msgstr "compilar pacotes"
+
+#: fppkg_const.sactdownloadpackages
+msgid "download packages"
+msgstr "descarregar pacotes"
+
+#: fppkg_const.sactfixbroken
+msgid "fix broken packages"
+msgstr "corrigir pacotes quebrados"
+
+#: fppkg_const.sactinitializefppkg
+msgid "initialize fppkg"
+msgstr "inicializar fppkg"
+
+#: fppkg_const.sactinstallpackages
+msgid "install package(s)"
+msgstr "instalar pacote(s)"
+
+#: fppkg_const.sactuninstpackages
+msgid "uninstall package(s)"
+msgstr "desinstalar pacote(s)"
+
+#: fppkg_const.sactupdate
+msgid "update repository"
+msgstr "atualizar repositório"
+
+#: fppkg_const.sauthor
+msgid "Author"
+msgstr "Autor"
+
+#: fppkg_const.savailable
+msgid "Available"
+msgstr "Disponível"
+
+#: fppkg_const.scategory
+msgid "Category"
+msgstr "Categoria"
+
+#: fppkg_const.scpu
+msgid "CPU"
+msgstr "CPU"
+
+#: fppkg_const.sdownload
+msgid "Download"
+msgstr "Download"
+
+#: fppkg_const.semail
+msgid "Email"
+msgstr "Email"
+
+#: fppkg_const.serractionfailed
+#, object-pascal-format
+msgid ""
+"Failed to %s: \n"
+"\n"
+"%s"
+msgstr ""
+"Falha em %s: \n"
+"\n"
+"%s"
+
+#: fppkg_const.sfilename
+msgid "Filename"
+msgstr "Nome de arquivo"
+
+#: fppkg_const.shomepage
+msgid "Homepage"
+msgstr "Homepage"
+
+#: fppkg_const.sinstalled
+msgid "Installed"
+msgstr "Instalado"
+
+#: fppkg_const.skeywords
+msgid "Keywords"
+msgstr "Palavras-chave"
+
+#: fppkg_const.slicense
+msgid "License"
+msgstr "Licença"
+
+#: fppkg_const.smsgactionsucceeded
+#, object-pascal-format
+msgid "%s succeeded."
+msgstr "%s bem-sucedido."
+
+#: fppkg_const.smsgfppkgrunning
+msgid "A prior command is still in progress."
+msgstr "Um comando anterior ainda está em progresso."
+
+#: fppkg_const.sos
+msgid "OS"
+msgstr "SO"
+
+#: fppkg_const.ssupport
+msgid "Support"
+msgstr "Suporte"
+
+#: fppkg_const.sunknown
+msgid "Unknown"
+msgstr "Desconhecido"
 

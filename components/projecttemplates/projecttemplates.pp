@@ -7,7 +7,9 @@ interface
 uses
   Classes, SysUtils, IniFiles,
   // LazUtils
-  FileUtil, LazFileUtils, LazUTF8Classes;
+  FileUtil, LazFileUtils,
+  // ProjectTemplates
+  ptstrconst;
 
 type
 
@@ -90,22 +92,12 @@ Const
   varprefixstr   = '__';     	// subtitution pattern is "__varname__"
   varpostfixstr  = '__';     
 
-resourcestring
-  SbtnOK          = '&OK';
-  SbtnCancel      = 'Cancel';
-
 Function SubstituteString(Const S : String; Variables : TStrings): String;
 Function SimpleFileCopy(Const Source,Dest : String) : Boolean;
 
 implementation
 
-resourcestring
-  SErrNoSuchTemplate = '"%s": No such template.';
-  SErrCouldNotCreateDir = 'Could not create directory "%s"';
-  SErrFailedToCopyFile = 'Failed to copy file "%s" to "%s"';
-
 { Auxiliary function }
-
 
 Function SubstituteString(Const S : String; Variables : TStrings): String;
 
@@ -144,10 +136,8 @@ begin
 end;
 
 Function SimpleFileCopy(Const Source,Dest : String) : Boolean;
-
 Var
   F1,F2 : TFileStream;
-
 begin
   Result:=False;
   try
@@ -295,12 +285,12 @@ end;
 procedure TProjectTemplate.InitFromDir(const DirName: String);
 
 Var
-  L : TStringListUTF8;
+  L : TStringList;
   FN : String;
   
 begin
   FDirectory:=IncludeTrailingPathDelimiter(DirName);
-  L:=TStringListUTF8.Create;
+  L:=TStringList.Create;
   Try
     FN:=FDirectory+'project.ini';
     If FileExistsUTF8(FN) then
@@ -315,6 +305,11 @@ begin
           FExclude:=ReadString(SProject,KeyExclude,'');
           If (FExclude<>'') then
             FExclude:=FExclude+',';
+          // Don't change ico and res files
+          If pos('.ico,',FExclude)<=0 then
+            FExclude:=FExclude+'.ico,';
+          If pos('.res,',FExclude)<=0 then
+            FExclude:=FExclude+'.res,';
           ReadSectionValues(SVariables,FVariables);
         Finally
           Free;
@@ -402,7 +397,7 @@ end;
 procedure TProjectTemplate.CopyAndSubstituteFile(Const SrcFN,DestFN : String; Values : Tstrings);
 
 Var
-  L : TStringListUTF8;
+  L : TStringList;
   
 begin
   If pos(ExtractFileExt(SrcFN)+',',Exclude)<>0 then
@@ -412,7 +407,7 @@ begin
     end
   else
     begin
-    L:=TStringListUTF8.Create;
+    L:=TStringList.Create;
     try
       CreateFile(SrcFN,L,Values);
       L.SaveToFile(DestFN);
@@ -501,7 +496,5 @@ procedure TProjectTemplate.CreateProject(const ProjectDir: String;
 begin
   CopyAndSubstituteDir(Directory,ProjectDir,Values);
 end;
-
-
 
 end.

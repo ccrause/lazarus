@@ -32,12 +32,14 @@ type
      ehMatchTypeName,     // The typename is a regex
      ehNoTypeInfo,
 
+     ehNoCharQuoting,     // unprintable chars are already escaped/quoted
      ehCharFromIndex,     // Debugger is allowed Pchar: 'x' String 'y'
      ehNoFieldOrder,  // structure: fields can be in any order
      ehMissingFields, // structure: fields may have gaps
 
      ehExpectNotFound,
      ehExpectError,       // watch is invalid (less specific, than not found / maybe invalid expression ?)
+     ehExpectErrorText,   // watch is invalid // still test for Expected test
 
      ehNotImplemented,     // The debugger is known to fail this test // same as ehIgnAll
      ehNotImplementedKind, // skSimple...
@@ -170,6 +172,7 @@ type
     function IgnTypeName(ASymTypes: TSymbolTypes = []; ACond: Boolean = True): PWatchExpectation;
     function MatchTypeName(ASymTypes: TSymbolTypes = []; ACond: Boolean = True): PWatchExpectation;
 
+    function NoCharQuoting(ASymTypes: TSymbolTypes = []; ACond: Boolean = True): PWatchExpectation;
     function CharFromIndex(ASymTypes: TSymbolTypes = []; ACond: Boolean = True): PWatchExpectation;
 
     function ExpectNotFound(ASymTypes: TSymbolTypes = []; ACond: Boolean = True): PWatchExpectation;
@@ -209,7 +212,7 @@ type
     function ParseCommaList(AVal: String; out AFoundCount: Integer;
       AMaxLen: Integer = -1; AComma: char = ','): TStringArray;
   protected
-    function EvaluateWatch(AWatchExp: PWatchExpectation; AThreadId: Integer): Boolean; virtual;
+    function EvaluateWatch(AWatchExp: PWatchExpectation; AThreadId: Integer; constref CurLoc: TDBGLocationRec): Boolean; virtual;
     procedure WaitWhileEval; virtual;
 
     function TestMatches(Name: string; Expected, Got: string; AContext: TWatchExpTestCurrentData; AIgnoreReason: String): Boolean;
@@ -286,6 +289,7 @@ type
 
 
 function weMatch(AExpVal: String; ASymKind: TDBGSymbolKind; ATypeName: String=''): TWatchExpectationResult;
+function weMatchErr(AExpVal: String): TWatchExpectationResult;
 
 function weInteger(AExpVal: Int64; ATypeName: String=#1; ASize: Integer = 4): TWatchExpectationResult;
 function weCardinal(AExpVal: QWord; ATypeName: String=#1; ASize: Integer = 4): TWatchExpectationResult;
@@ -405,6 +409,15 @@ begin
   Result.ExpResultKind := rkMatch;
   Result.ExpSymKind := ASymKind;
   Result.ExpTextData := AExpVal;
+end;
+
+function weMatchErr(AExpVal: String): TWatchExpectationResult;
+begin
+  Result := Default(TWatchExpectationResult);
+  Result.ExpResultKind := rkMatch;
+  Result.ExpSymKind := skNone;
+  Result.ExpTextData := AExpVal;
+  Result.AddFlag(ehExpectErrorText);
 end;
 
 function weInteger(AExpVal: Int64; ATypeName: String; ASize: Integer
@@ -982,6 +995,13 @@ begin
   Result := Self^.AddFlag(ehMatchTypeName, ASymTypes);
 end;
 
+function TWatchExpectationHelper.NoCharQuoting(ASymTypes: TSymbolTypes;
+  ACond: Boolean): PWatchExpectation;
+begin
+  if not ACond then exit(Self);
+  Result := Self^.AddFlag(ehNoCharQuoting, ASymTypes);
+end;
+
 function TWatchExpectationHelper.CharFromIndex(ASymTypes: TSymbolTypes; ACond: Boolean): PWatchExpectation;
 begin
   if not ACond then exit(Self);
@@ -1124,11 +1144,11 @@ begin
 end;
 
 function TWatchExpectationList.EvaluateWatch(AWatchExp: PWatchExpectation;
-  AThreadId: Integer): Boolean;
+  AThreadId: Integer; constref CurLoc: TDBGLocationRec): Boolean;
 var
   i: Integer;
 begin
-  with LazDebugger.GetLocation do
+  with CurLoc do
     FTest.LogText('###### ' + AWatchExp^.TstTestName + ' // ' + AWatchExp^.TstWatch.Expression +
       ' (AT '+ SrcFile + ':' + IntToStr(SrcLine) +')' +
       '###### '+LineEnding);
@@ -1257,6 +1277,11 @@ begin
       if ehExpectError in ehf then begin
 //TODO
         Result := TestTrue('TstWatch.value is NOT valid', WatchVal.Validity in [ddsError, ddsInvalid], Context, AnIgnoreRsn);
+        exit;
+      end;
+      if ehExpectErrorText in ehf then begin
+        Result := TestTrue('TstWatch.value is NOT valid', WatchVal.Validity in [ddsError, ddsInvalid], Context, AnIgnoreRsn);
+        Result := CheckData(Context, AnIgnoreRsn);
         exit;
       end;
       if ehExpectNotFound in ehf then begin
@@ -1554,10 +1579,13 @@ begin
   with AContext.WatchExp do begin
     Result := True;
     Expect := AContext.Expectation;
-
-    e := QuoteText(Expect.ExpTextData);
-
     ehf := Expect.ExpErrorHandlingFlags[Compiler.SymbolType];
+
+    if ehNoCharQuoting in ehf then
+      e := Expect.ExpTextData
+    else
+      e := QuoteText(Expect.ExpTextData);
+
     if ehCharFromIndex in ehf then begin
       if AContext.WatchVal.Value <> e then begin
 //AnIgnoreRsn := AnIgnoreRsn + 'char from index not implemented';
@@ -1596,14 +1624,15 @@ begin
         tn := '.*';
       if (tn <> '') then begin
         if (Expect.ExpTextData = '') and
-           FTest.Matches('^'+tn+'\(nil\)', v)
+           FTest.Matches('^'+tn+'\(nil\)', v) or
+           FTest.Matches('^nil$', v)  // new format, no typename
         then
           v := ''''''
         else
         if FTest.Matches('^'+tn+'\(\$[0-9a-fA-F]+\) ', v) then
           delete(v, 1, pos(') ', v)+1)
         else
-        if FTest.Matches('^\$[0-9a-fA-F]+ ', v) then
+        if FTest.Matches('^\$[0-9a-fA-F]+(\^:)? ', v) then
           delete(v, 1, pos(' ', v));
       end
       else begin
@@ -1616,7 +1645,10 @@ begin
       end;
     end;
 
-    e := QuoteText(Expect.ExpTextData);
+    if ehNoCharQuoting in ehf then
+      e := Expect.ExpTextData
+    else
+      e := QuoteText(Expect.ExpTextData);
     Result := TestEquals('Data', e, v, AContext, AnIgnoreRsn);
   end;
 end;
@@ -1626,11 +1658,16 @@ function TWatchExpectationList.CheckResultShortStr(
 var
   Expect: TWatchExpectationResult;
   e: String;
+  ehf: TWatchExpErrorHandlingFlags;
 begin
   with AContext.WatchExp do begin
     Result := True;
     Expect := AContext.Expectation;
-    e := QuoteText(Expect.ExpTextData);
+    ehf := Expect.ExpErrorHandlingFlags[Compiler.SymbolType];
+    if ehNoCharQuoting in ehf then
+      e := Expect.ExpTextData
+    else
+      e := QuoteText(Expect.ExpTextData);
 
     Result := TestEquals('Data', e, AContext.WatchVal.Value, AContext, AnIgnoreRsn);
   end;
@@ -1654,6 +1691,13 @@ begin
       tn := '.*';
 
     e := '(\$[0-9a-fA-F]*|nil)';
+
+    if (tn <> '') and
+       (Length(Expect.ExpSubResults) = 1) and
+       (Expect.ExpSubResults[0].ExpResultKind in [rkChar, rkAnsiString, rkWideString, rkShortString]) and
+       (not FTest.Matches(tn+'\(', AContext.WatchVal.Value))
+    then
+      tn := ''; // char pointer to not (always?) include the type
     if tn <> '' then
       e := tn+'\('+e+'\)';
     e := '^'+e;
@@ -1668,7 +1712,7 @@ begin
     if i > 1 then
       delete(g, 1, i)
     else
-    if not (Expect.ExpSubResults[0].ExpResultKind in [rkChar, rkAnsiString, rkWideString, rkShortString]) then begin
+    if not((Length(Expect.ExpSubResults) = 1) and (Expect.ExpSubResults[0].ExpResultKind in [rkChar, rkAnsiString, rkWideString, rkShortString]) ) then begin
       TestTrue('nil pointer, but expecting data / internal test correctness', False, AContext, AnIgnoreRsn);
       exit;
     end
@@ -2068,10 +2112,12 @@ end;
 procedure TWatchExpectationList.EvaluateWatches;
 var
   i, t: Integer;
+  l: TDBGLocationRec;
 begin
   t := LazDebugger.Threads.CurrentThreads.CurrentThreadId;
+  l := LazDebugger.GetLocation;
   for i := 0 to Length(FList)-1 do begin
-    EvaluateWatch(@FList[i], t);
+    EvaluateWatch(@FList[i], t, l);
     if (i mod 16) = 0 then TestLogger.DbgOut('.');
   end;
   TestLogger.DebugLn('');

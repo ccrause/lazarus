@@ -20,51 +20,90 @@ Type
     FMouseTimer : TTimer;
     FUpDown : TCustomUpDown;
     FButtonType : TUDBtnType;
+  private
+    procedure ButtonCoordToUpDownCoord(var X,Y: Integer);
   protected
-    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer
-      ); override;
-    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
-      override;
+    procedure MouseEnter; override;
+    procedure MouseLeave; override;
+    procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
+    procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure DblClick; override;
   public
-    constructor CreateWithParams(UpDown : TCustomUpDown;
-      ButtonType : TUDBtnType);
-
+    constructor CreateWithParams(UpDown : TCustomUpDown; ButtonType : TUDBtnType);
     procedure Click; override;
     procedure Paint; override;
   end;
 
-procedure TUpDownButton.MouseDown(Button: TMouseButton; Shift: TShiftState; X,
-  Y: Integer);
+procedure TUpDownButton.ButtonCoordToUpDownCoord(var X, Y: Integer);
+begin
+  //Fix me: there must be a better way to do this?
+  //Result may be off by appr. 2 pixels
+  if FUpDown.Orientation = udVertical then
+  begin
+    if FButtonType = btPrev then //down arrow
+      Y := Y + Height; //assumes both buttons are equal height
+  end
+  else
+  begin
+    if FButtonType = btNext then //right arrow
+      X := X + Width;
+  end;
+end;
+
+procedure TUpDownButton.MouseEnter;
+begin
+  inherited MouseEnter; //does UpdateState o.a., so call this as well
+  FUpDown.MouseEnter;
+end;
+
+procedure TUpDownButton.MouseLeave;
+begin
+  inherited MouseLeave; //does UpdateState o.a., so call this as well
+  FUpDown.MouseLeave;
+end;
+
+procedure TUpDownButton.MouseDown(Button: TMouseButton; Shift: TShiftState;
+  X, Y: Integer);
 begin
   inherited MouseDown(Button, Shift, X, Y);
-  if Button = mbLeft then begin
-    With FUpDown do begin
-      FMouseTimerEvent := @Self.Click;
-      FMouseDownBounds := Bounds(Self.ClientOrigin.X, Self.ClientOrigin.Y,
-        Self.Width,Self.Height);
-      If Not Assigned(FMouseTimer) then
-        FMouseTimer := TTimer.Create(FUpDown);
-      With FMouseTimer do begin
-        Enabled := False;
-        Interval := 300;
-        OnTimer := @BTimerExec;
-        Enabled := True;
-      end;
+  ButtonCoordToUpDownCoord(X, Y);
+  FUpDown.MouseDown(Button, Shift, X, Y);
+  if Button = mbLeft then
+  begin
+    FUpDown.FMouseTimerEvent := @Self.Click;
+    FUpDown.FMouseDownBounds := Bounds(ClientOrigin.X, ClientOrigin.Y, Width, Height);
+    If Not Assigned(FMouseTimer) then
+      FMouseTimer := TTimer.Create(FUpDown);
+    With FMouseTimer do
+    begin
+      Enabled := False;
+      Interval := 300;
+      OnTimer := @FUpDown.BTimerExec;
+      Enabled := True;
     end;
   end;
 end;
 
-procedure TUpDownButton.MouseUp(Button: TMouseButton; Shift: TShiftState; X,
-  Y: Integer);
+procedure TUpDownButton.MouseUp(Button: TMouseButton; Shift: TShiftState;
+  X, Y: Integer);
 begin
   inherited MouseUp(Button, Shift, X, Y);
-  With FUpDown do
-    If Assigned(FMouseTimer) then begin
-      FreeAndNil(FMouseTimer);
-      FMouseDownBounds := Rect(0,0,0,0);
-      FMouseTimerEvent := nil;
-    end;
+  ButtonCoordToUpDownCoord(X, Y);
+  FUpDown.MouseUp(Button, Shift, X, Y);
+  If Assigned(FMouseTimer) then
+  begin
+    FreeAndNil(FMouseTimer);
+    FUpDown.FMouseDownBounds := Rect(0,0,0,0);
+    FUpDown.FMouseTimerEvent := nil;
+  end;
+end;
+
+procedure TUpDownButton.MouseMove(Shift: TShiftState; X, Y: Integer);
+begin
+  inherited MouseMove(Shift, X, Y);
+  ButtonCoordToUpDownCoord(X, Y);
+  FUpDown.MouseMove(Shift, X, Y);
 end;
 
 procedure TUpDownButton.DblClick;
@@ -74,43 +113,7 @@ end;
 
 procedure TUpDownButton.Click;
 begin
-  with FUpDown do
-  begin
-    FCanChangePos := Position;
-    FCanChangeDir := updNone;
-
-    case FButtonType of
-      btPrev :
-        begin
-          FCanChangeDir := updDown;
-
-          if FCanChangePos - Increment >= Min then
-            FCanChangePos := FCanChangePos - Increment
-          else
-            if Wrap then
-              FCanChangePos := Max + (FCanChangePos - Increment - Min) + 1
-          else
-            FCanChangePos := Min;
-        end;
-      btNext :
-        begin
-          FCanChangeDir := updUp;
-
-          if FCanChangePos + Increment <= Max then
-            FCanChangePos := FCanChangePos + Increment
-          else
-            If Wrap then
-              FCanChangePos := Min + (FCanChangePos + Increment - Max) - 1
-          else
-            FCanChangePos := Max;
-        end;
-        
-    end;
-    if not CanChange then Exit;
-    Position := FCanChangePos;
-
-    Click(FButtonType);
-  end;
+  FUpDown.Click(FButtonType);
 end;
 
 constructor TUpDownButton.CreateWithParams(UpDown : TCustomUpDown;
@@ -234,10 +237,10 @@ end;
 
 procedure TCustomUpDown.BTimerExec(Sender : TObject);
 var
-  AInterval:Integer;
+  AInterval: Integer;
 begin
-  If Assigned(FMouseTimerEvent)
-     and PtInRect(FMouseDownBounds,Mouse.CursorPos) then begin
+  If Assigned(FMouseTimerEvent) and PtInRect(FMouseDownBounds, Mouse.CursorPos) then
+  begin
     AInterval := TTimer(Sender).Interval;
     if AInterval > FMinRepeatInterval then begin
       AInterval := AInterval - 25;
@@ -339,7 +342,36 @@ end;
 
 procedure TCustomUpDown.Click(Button: TUDBtnType);
 begin
-  if Assigned(FOnClick) then FOnClick(Self, Button);
+  FCanChangePos := Position;
+  FCanChangeDir := updNone;
+  case Button of
+    btPrev :
+      begin
+        FCanChangeDir := updDown;
+        if FCanChangePos - Increment >= Min then
+          FCanChangePos := FCanChangePos - Increment
+        else
+          if Wrap then
+            FCanChangePos := Max + (FCanChangePos - Increment - Min) + 1
+        else
+          FCanChangePos := Min;
+      end;
+    btNext :
+      begin
+        FCanChangeDir := updUp;
+        if FCanChangePos + Increment <= Max then
+          FCanChangePos := FCanChangePos + Increment
+        else
+          If Wrap then
+            FCanChangePos := Min + (FCanChangePos + Increment - Max) - 1
+        else
+          FCanChangePos := Max;
+      end;
+  end;
+  if not CanChange then Exit;
+  Position := FCanChangePos;
+  if Assigned(FOnClick) then
+    FOnClick(Self, Button);
 end;
 
 procedure TCustomUpDown.SetAssociate(Value: TWinControl);
@@ -506,6 +538,24 @@ begin
       TCustomSpeedButton(FMaxBtn).Click;
 end;
 
+procedure TCustomUpDown.MouseEnter;
+begin
+  if CheckMouseEntering then
+  begin
+    inherited MouseEnter;
+    FMouseInsideComp := True;
+  end;
+end;
+
+procedure TCustomUpDown.MouseLeave;
+begin
+  if CheckMouseLeaving then
+  begin
+    inherited MouseLeave;
+    FMouseInsideComp := False;
+  end;
+end;
+
 procedure TCustomUpDown.DoSetBounds(ALeft, ATop, AWidth, AHeight: integer);
 begin
   inherited;
@@ -545,12 +595,29 @@ begin
   end;
 end;
 
-procedure TCustomUpDown.Notification(AComponent: TComponent;
-  Operation: TOperation);
+procedure TCustomUpDown.Notification(AComponent: TComponent; Operation: TOperation);
 begin
   inherited Notification(AComponent, Operation);
   if (Operation = opRemove) and (AComponent = FAssociate) then
     SetAssociate(nil);
+end;
+
+function TCustomUpDown.CheckMouseEntering: Boolean;
+// Mouse in entering this control.
+begin
+  //debugln(['TCustomUpDown.CheckMouseEntering: FMouseInsideComp=',FMouseInsideComp]);
+  Result := not FMouseInsideComp;
+end;
+
+function TCustomUpDown.CheckMouseLeaving: Boolean;
+// Mouse in leaving this control.
+var
+  P: TPoint;
+begin
+  GetCursorPos(P);
+  P:=ScreenToClient(P);
+  Result := not PtInRect(ClientRect, P);
+  //debugln(['TCustomUpDown.CheckMouseLeaving: PtInRect(ClientRect, P)=',PtInRect(ClientRect, P)]);
 end;
 
 function TCustomUpDown.GetPosition: SmallInt;
@@ -563,10 +630,7 @@ begin
     str := Trim(Associate.Caption);
     str := StringReplace(str, DefaultFormatSettings.ThousandSeparator, '', [rfReplaceAll]);
     if not TryStrToInt(str, AV) then
-    begin
-      Result := FPosition;
-      Exit;
-    end;
+      Exit(FPosition);
     //this will also correct for AV > High(SmallInt) or AV < Low(SMallInt)
     If AV > FMax then
       AV := FMax;

@@ -21,6 +21,8 @@ constructor TDBLookupComboBox.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   FLookup := TDBLookup.Create(Self);
+  EmptyValue := '';
+  DisplayEmpty := '';
   FDataLink.OnActiveChange := @ActiveChange;
 end;
 
@@ -29,7 +31,7 @@ var
   i: Integer;
 begin
   // combo that has edit control may have unreliable itemindex like bug 20950
-  if Style <> csDropDownList then
+  if Style.HasEditBox then
     ItemIndex := Items.IndexOf(Text);
   i := ItemIndex;
   if i <> -1 then
@@ -68,6 +70,16 @@ begin
     UpdateLookup;
 end;
 
+function TDBLookupComboBox.GetDisplayEmpty: String;
+begin
+  Result := FLookup.DisplayEmpty;
+end;
+
+function TDBLookupComboBox.GetEmptyValue: string;
+begin
+ Result := FLookup.EmptyValue;
+end;
+
 procedure TDBLookupComboBox.DataChange(Sender: TObject);
 begin
   UpdateItemIndex;
@@ -75,7 +87,7 @@ end;
 
 procedure TDBLookupComboBox.DoOnSelect;
 begin
-  if Style=csDropDownList then
+  if not Style.HasEditBox then
     UpdateRecord;
   inherited DoOnSelect;
 end;
@@ -151,6 +163,18 @@ end;
 function TDBLookupComboBox.GetNullValueKey: TShortCut;
 begin
   result := FLookup.NullValueKey;
+end;
+
+procedure TDBLookupComboBox.SetDisplayEmpty(AValue: String);
+begin
+  FLookup.DisplayEmpty:=AValue;
+  UpdateLookup;
+end;
+
+procedure TDBLookupComboBox.SetEmptyValue(AValue: string);
+begin
+  FLookup.EmptyValue:=AValue;
+  UpdateLookup;
 end;
 
 function TDBLookupComboBox.GetScrollListDataset: Boolean;

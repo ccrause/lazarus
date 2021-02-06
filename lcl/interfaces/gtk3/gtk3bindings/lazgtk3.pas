@@ -760,19 +760,18 @@ const
   GTK_INPUT_HINT_INHIBIT_OSK: TGtkInputHints = 128;
 
 type
-  TGtkInputPurpose = Integer;
-const
+  TGtkInputPurpose = (
   { GtkInputPurpose }
-  GTK_INPUT_PURPOSE_FREE_FORM: TGtkInputPurpose = 0;
-  GTK_INPUT_PURPOSE_ALPHA: TGtkInputPurpose = 1;
-  GTK_INPUT_PURPOSE_DIGITS: TGtkInputPurpose = 2;
-  GTK_INPUT_PURPOSE_NUMBER: TGtkInputPurpose = 3;
-  GTK_INPUT_PURPOSE_PHONE: TGtkInputPurpose = 4;
-  GTK_INPUT_PURPOSE_URL: TGtkInputPurpose = 5;
-  GTK_INPUT_PURPOSE_EMAIL: TGtkInputPurpose = 6;
-  GTK_INPUT_PURPOSE_NAME: TGtkInputPurpose = 7;
-  GTK_INPUT_PURPOSE_PASSWORD: TGtkInputPurpose = 8;
-  GTK_INPUT_PURPOSE_PIN: TGtkInputPurpose = 9;
+  GTK_INPUT_PURPOSE_FREE_FORM = 0,
+  GTK_INPUT_PURPOSE_ALPHA = 1,
+  GTK_INPUT_PURPOSE_DIGITS = 2,
+  GTK_INPUT_PURPOSE_NUMBER = 3,
+  GTK_INPUT_PURPOSE_PHONE = 4,
+  GTK_INPUT_PURPOSE_URL = 5,
+  GTK_INPUT_PURPOSE_EMAIL = 6,
+  GTK_INPUT_PURPOSE_NAME = 7,
+  GTK_INPUT_PURPOSE_PASSWORD = 8,
+  GTK_INPUT_PURPOSE_PIN = 9);
 
 type
   TGtkImageType = Integer;
@@ -1160,21 +1159,24 @@ const
   GTK_RECENT_MANAGER_ERROR_WRITE: TGtkRecentManagerError = 5;
   GTK_RECENT_MANAGER_ERROR_UNKNOWN: TGtkRecentManagerError = 6;
 
-type
-  TGtkResponseType = Integer;
+//type  ???
+//  TGtkResponseType = integer;
+//PPGtkResponseType = ^PGtkResponseType;
+//PGtkResponseType = ^TGtkResponseType;
+
 const
   { GtkResponseType }
-  GTK_RESPONSE_NONE: TGtkResponseType = -1;
-  GTK_RESPONSE_REJECT: TGtkResponseType = -2;
-  GTK_RESPONSE_ACCEPT: TGtkResponseType = -3;
-  GTK_RESPONSE_DELETE_EVENT: TGtkResponseType = -4;
-  GTK_RESPONSE_OK: TGtkResponseType = -5;
-  GTK_RESPONSE_CANCEL: TGtkResponseType = -6;
-  GTK_RESPONSE_CLOSE: TGtkResponseType = -7;
-  GTK_RESPONSE_YES: TGtkResponseType = -8;
-  GTK_RESPONSE_NO: TGtkResponseType = -9;
-  GTK_RESPONSE_APPLY: TGtkResponseType = -10;
-  GTK_RESPONSE_HELP: TGtkResponseType = -11;
+  GTK_RESPONSE_NONE = -1;
+  GTK_RESPONSE_REJECT = -2;
+  GTK_RESPONSE_ACCEPT = -3;
+  GTK_RESPONSE_DELETE_EVENT = -4;
+  GTK_RESPONSE_OK = -5;
+  GTK_RESPONSE_CANCEL = -6;
+  GTK_RESPONSE_CLOSE = -7;
+  GTK_RESPONSE_YES = -8;
+  GTK_RESPONSE_NO = -9;
+  GTK_RESPONSE_APPLY = -10;
+  GTK_RESPONSE_HELP = -11;
 
 type
   TGtkScrollStep = Integer;
@@ -4631,8 +4633,8 @@ type
   PGtkClipboardClearFunc = ^TGtkClipboardClearFunc;
   TGtkClipboardClearFunc = procedure(clipboard: PGtkClipboard; user_data_or_owner: gpointer); cdecl;
   TGtkClipboard = object(TGObject)
-    function get(selection: TGdkAtom): PGtkClipboard; cdecl; inline; static;
-    function get_for_display(display: PGdkDisplay; selection: TGdkAtom): PGtkClipboard; cdecl; inline; static;
+    function get(selection: GdkAtom): PGtkClipboard; cdecl; inline; static;
+    function get_for_display(display: PGdkDisplay; selection: GdkAtom): PGtkClipboard; cdecl; inline; static;
     procedure clear; cdecl; inline;
     function get_display: PGdkDisplay; cdecl; inline;
     function get_owner: PGObject; cdecl; inline;
@@ -8961,15 +8963,8 @@ type
     natural_size: gint;
   end;
 
-
-
-  PPGtkResponseType = ^PGtkResponseType;
-  PGtkResponseType = ^TGtkResponseType;
-
   TGtkScalePrivate = record
   end;
-
-
 
   PPGtkScaleButton = ^PGtkScaleButton;
   PGtkScaleButton = ^TGtkScaleButton;
@@ -11493,9 +11488,9 @@ function gtk_check_menu_item_new: PGtkCheckMenuItem; cdecl; external;
 function gtk_check_menu_item_new_with_label(label_: Pgchar): PGtkCheckMenuItem; cdecl; external;
 function gtk_check_menu_item_new_with_mnemonic(label_: Pgchar): PGtkCheckMenuItem; cdecl; external;
 function gtk_check_version(required_major: guint; required_minor: guint; required_micro: guint): Pgchar; cdecl; external;
-function gtk_clipboard_get(selection: TGdkAtom): PGtkClipboard; cdecl; external;
+function gtk_clipboard_get(selection: GdkAtom): PGtkClipboard; cdecl; external;
 function gtk_clipboard_get_display(clipboard: PGtkClipboard): PGdkDisplay; cdecl; external;
-function gtk_clipboard_get_for_display(display: PGdkDisplay; selection: TGdkAtom): PGtkClipboard; cdecl; external;
+function gtk_clipboard_get_for_display(display: PGdkDisplay; selection: GdkAtom): PGtkClipboard; cdecl; external;
 function gtk_clipboard_get_owner(clipboard: PGtkClipboard): PGObject; cdecl; external;
 function gtk_clipboard_get_type: TGType; cdecl; external;
 function gtk_clipboard_set_with_data(clipboard: PGtkClipboard; targets: PGtkTargetEntry; n_targets: guint; get_func: TGtkClipboardGetFunc; clear_func: TGtkClipboardClearFunc; user_data: gpointer): gboolean; cdecl; external;
@@ -20083,12 +20078,12 @@ begin
   LazGtk3.gtk_check_menu_item_toggled(@self);
 end;
 
-function TGtkClipboard.get(selection: TGdkAtom): PGtkClipboard; cdecl;
+function TGtkClipboard.get(selection: GdkAtom): PGtkClipboard; cdecl;
 begin
   Result := LazGtk3.gtk_clipboard_get(selection);
 end;
 
-function TGtkClipboard.get_for_display(display: PGdkDisplay; selection: TGdkAtom): PGtkClipboard; cdecl;
+function TGtkClipboard.get_for_display(display: PGdkDisplay; selection: GdkAtom): PGtkClipboard; cdecl;
 begin
   Result := LazGtk3.gtk_clipboard_get_for_display(display, selection);
 end;

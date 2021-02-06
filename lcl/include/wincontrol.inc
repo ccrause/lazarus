@@ -5948,6 +5948,7 @@ var
   ParentForm: TCustomForm;
 begin
   Result := False;
+  if WidgetSet.GetLCLCapability(lcAccelleratorKeys) = LCL_CAPABILITY_NO then Exit;
   ParentForm := GetParentForm(Self);
   if ParentForm <> nil then
   begin
@@ -6279,12 +6280,17 @@ begin
 end;
 
 class procedure TWinControl.WSRegisterClass;
+const
+  Registered : boolean = False;
 begin
+  if Registered then
+    Exit;
   inherited WSRegisterClass;
   RegisterWinControl;
   RegisterPropertyToSkip(TWinControl, 'ParentDoubleBuffered', 'VCL compatibility property', '');
   RegisterPropertyToSkip(TWinControl, 'ImeMode', 'VCL compatibility property', '');
   RegisterPropertyToSkip(TWinControl, 'ImeName', 'VCL compatibility property', '');
+  Registered := True;
 end;
 
 function TWinControl.IsClientHeightStored: boolean;
@@ -6464,17 +6470,11 @@ begin
   Result := Control = Self;
 end;
 
-{------------------------------------------------------------------------------
-  TWinControl GetBorderStyle
-------------------------------------------------------------------------------}
 function TWinControl.GetBorderStyle: TBorderStyle;
 begin
   Result := TBorderStyle(FBorderStyle);
 end;
 
-{------------------------------------------------------------------------------
-  TWinControl GetBrush
-------------------------------------------------------------------------------}
 function TWinControl.GetBrush: TBrush;
 begin
   if not BrushCreated then
@@ -6482,17 +6482,11 @@ begin
   Result := FBrush;
 end;
 
-{------------------------------------------------------------------------------
-  TWinControl GetControl
-------------------------------------------------------------------------------}
 function TWinControl.GetControl(const Index: Integer): TControl;
 begin
   Result := TControl(FControls[Index]);
 end;
 
-{------------------------------------------------------------------------------
-  TWinControl GetControlCount
-------------------------------------------------------------------------------}
 function TWinControl.GetControlCount: Integer;
 begin
   if FControls <> nil then
@@ -6517,9 +6511,6 @@ begin
     Result := nil;
 end;
 
-{------------------------------------------------------------------------------
-  TWinControl GetHandle
-------------------------------------------------------------------------------}
 function TWinControl.GetHandle: HWND;
 begin
   //if not HandleAllocated then DebugLn('TWinControl.GetHandle Creating handle on the fly: ',DbgSName(Self));
@@ -7274,7 +7265,7 @@ procedure TWinControl.CNChar(var Message: TLMKeyUp);
 var
   c: TUTF8Char;
 begin
-  //debugln('TWinControl.CNChar B ',DbgSName(Self),' ',dbgs(Message.CharCode),' ',dbgs(IntfSendsUTF8KeyPress));
+  //debugln('TWinControl.CNChar B ',DbgSName(Self),' ',dbgs(Message.CharCode));
   if Widgetset.GetLCLCapability(lcSendsUTF8KeyPress) = LCL_CAPABILITY_NO then
   begin
     // current interface does not (yet) send UTF8 key press notifications -> emulate
@@ -7299,7 +7290,7 @@ begin
   end;
 
   {$ifdef VerboseKeyboard}
-    debugln('TWinControl.CNChar A ',DbgSName(Self),' ',dbgs(Message.CharCode),' ',dbgs(IntfSendsUTF8KeyPress));
+    debugln('TWinControl.CNChar A ',DbgSName(Self),' ',dbgs(Message.CharCode));
   {$endif}
 
   if DoKeyPress(Message) then
@@ -7998,9 +7989,11 @@ begin
   Result:=BoundsLockCount>0;
 end;
 
-{------------------------------------------------------------------------------
-  function TWinControl.GetTabOrder: TTabOrder;
- ------------------------------------------------------------------------------}
+function TWinControl.GetIsSpecialSubControl: Boolean;
+begin
+  Result := wcfSpecialSubControl in FWinControlFlags;
+end;
+
 function TWinControl.GetTabOrder: TTabOrder;
 begin
   if FParent <> nil then
@@ -8009,9 +8002,6 @@ begin
     Result := FTabOrder;
 end;
 
-{------------------------------------------------------------------------------
-  function TWinControl.GetVisibleDockClientCount: Integer;
- ------------------------------------------------------------------------------}
 function TWinControl.GetVisibleDockClientCount: Integer;
 var
   i: integer;
@@ -8022,13 +8012,18 @@ begin
     if TControl(FDockClients[I]).Visible then inc(Result);
 end;
 
-{------------------------------------------------------------------------------
-  procedure TWinControl.SetChildSizing(const AValue: TControlChildSizing);
- ------------------------------------------------------------------------------}
 procedure TWinControl.SetChildSizing(const AValue: TControlChildSizing);
 begin
   if (FChildSizing=AValue) then exit;
   FChildSizing.Assign(AValue);
+end;
+
+procedure TWinControl.SetDesignerDeleting(AValue: Boolean);
+begin
+  if AValue then
+    Include(FWinControlFlags, wcfDesignerDeleting)
+  else
+    Exclude(FWinControlFlags, wcfDesignerDeleting);
 end;
 
 {------------------------------------------------------------------------------

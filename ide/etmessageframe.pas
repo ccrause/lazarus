@@ -35,9 +35,9 @@ uses
   Math, strutils, Classes, SysUtils, Laz_AVL_Tree,
   // LCL
   Forms, Buttons, ExtCtrls, Controls, LMessages, LCLType, LCLIntf,
-  Graphics, Themes, ImgList, GraphType, Menus, Clipbrd, Dialogs, StdCtrls,
+  Graphics, Themes, ImgList, Menus, Clipbrd, Dialogs, StdCtrls,
   // LazUtils
-  UTF8Process, FileProcs, LazFileCache, LazUTF8Classes, LazFileUtils, LazUTF8,
+  GraphType, UTF8Process, FileProcs, LazFileCache, LazFileUtils, LazUTF8,
   // SynEdit
   SynEdit, SynEditMarks,
   // IDEIntf
@@ -2752,7 +2752,7 @@ procedure TMessagesFrame.MsgCtrlPopupMenuPopup(Sender: TObject);
       if View.Tool=nil then continue;
       ToolData:=TIDEExternalToolData(View.Tool.Data);
       if not (ToolData is TIDEExternalToolData) then continue;
-      IDETool:=ExternalTools.GetIDEObject(ToolData);
+      IDETool:=ExternalToolList.GetIDEObject(ToolData);
       if IDETool=nil then continue;
       if IDETool is TLazProject then begin
         CompOpts:=TLazProject(IDETool).LazCompilerOptions as TBaseCompilerOptions;
@@ -3046,7 +3046,7 @@ begin
   Item:=TIDEMenuCommand(Sender);
   MsgId:=Item.Tag;
   ToolData:=TIDEExternalToolData(Item.UserTag);
-  IDETool:=ExternalTools.GetIDEObject(ToolData);
+  IDETool:=ExternalToolList.GetIDEObject(ToolData);
   if IDETool=nil then exit;
   if IDETool is TLazProject then begin
     CompOpts:=TLazProject(IDETool).LazCompilerOptions;
@@ -3416,7 +3416,7 @@ var
   Dlg: TSaveDialog;
   s: String;
   Filename: String;
-  fs: TFileStreamUTF8;
+  fs: TFileStream;
 begin
   Dlg:=IDESaveDialogClass.Create(nil);
   try
@@ -3431,7 +3431,7 @@ begin
     s:=AllMessagesAsString(OnlyShown);
 
     try
-      fs:=TFileStreamUTF8.Create(Filename,fmCreate);
+      fs:=TFileStream.Create(Filename,fmCreate);
       try
         if s<>'' then
           fs.Write(s[1],length(s));

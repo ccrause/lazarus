@@ -34,14 +34,15 @@ interface
 uses
   Classes, SysUtils, StrUtils, Zipper,
   // LCL
-  LCLType, Forms, Controls, StdCtrls, Dialogs, Buttons, ButtonPanel,
+  LCLType, Forms, StdCtrls, Dialogs, Buttons, ButtonPanel, LCLIntf,
   // LazUtils
-  FileUtil, LazFileUtils, LazLoggerBase,
+  FileUtil, LazFileUtils, LazLoggerBase, UITypes, LazUTF8,
+  // BuildIntf
+  ProjPackIntf, CompOptsIntf, PublishModuleIntf,
   // IdeIntf
-  IDEWindowIntf, IDEHelpIntf, IDEDialogs, IDEImagesIntf, ProjPackIntf, CompOptsIntf,
-  LazIDEIntf, LCLIntf,
+  IDEWindowIntf, IDEHelpIntf, IDEDialogs, IDEImagesIntf, LazIDEIntf,
   // IDE
-  ProjectDefs, Project, PackageDefs, PublishModule, IDEOptionDefs, InputHistory,
+  ProjectDefs, Project, PackageDefs, IDEOptionDefs, InputHistory,
   LazarusIDEStrConsts, IDEProcs, EnvironmentOpts, CompilerOptions;
 
 type
@@ -93,10 +94,10 @@ type
     //  Some of them may be above the main project/package directory.
     FTopDir: string;
     // Project/package member files already copied. Not copied again by filters.
-    FCopiedFiles: TStringList;
+    FCopiedFiles: TStringListUTF8Fast;
     // Copying by filters failed.
     FCopyFailedCount: Integer;
-    FProjDirs: TStringList;
+    FProjDirs: TStringListUTF8Fast;
     FBackupDir, FLibDir: String;
     procedure AdjustTopDir(const AFileName: string);
     function CopyAFile(const AFileName: string): TModalResult;
@@ -161,8 +162,8 @@ begin
                        + EnvironmentOptions.BackupInfoProjectFiles.SubDirectory);
   COpts := FProjPack.LazCompilerOptions as TBaseCompilerOptions;
   FLibDir := COpts.GetUnitOutPath(True,coptParsed);
-  FCopiedFiles := TStringList.Create;
-  FProjDirs := TStringList.Create;
+  FCopiedFiles := TStringListUTF8Fast.Create;
+  FProjDirs := TStringListUTF8Fast.Create;
 end;
 
 destructor TPublisher.Destroy;
@@ -232,7 +233,7 @@ begin
   if CopyFile(AFilename, FDestDir+RelPath, [cffCreateDestDirectory,cffPreserveTime]) then
   begin
     FCopiedFiles.Add(AFilename);
-    if FilenameIsPascalUnit(AFilename) then
+    if FilenameHasPascalExt(AFilename) then
     begin    // Copy .lfm or .dfm file even if it is not part of project/package.
       LfmFile := ChangeFileExt(AFilename, '.lfm');
       if not FileExistsUTF8(LfmFile) then
@@ -368,7 +369,7 @@ begin
     begin
       for I := 0 to FCopiedFiles.Count - 1 do
       begin
-        RelPath := ExtractRelativePath(FTopDir, FCopiedFiles.Strings[I]);
+        RelPath := ExtractRelativePath(FTopDir, FCopiedFiles[I]);
         Drive := ExtractFileDrive(RelPath);
         if Trim(Drive) <> '' then
           RelPath := StringReplace(RelPath, AppendPathDelim(Drive), '', [rfIgnoreCase]);
@@ -544,21 +545,21 @@ begin
   OptionsGroupbox.Caption:=lisOptions;
   CompressCheckbox.Caption:=lisCompress;
   CompressCheckbox.Hint:=lisCompressHint;
-  OpenInFileManCheckbox.Caption := lisOpenInFileMan;
-  OpenInFileManCheckbox.Hint := lisOpenInFileManHint;
+  OpenInFileManCheckbox.Caption:=lisOpenInFileMan;
+  OpenInFileManCheckbox.Hint:=lisOpenInFileManHint;
 
-  ButtonPanel1.OkButton.Caption := lisMenuOk;
-  ButtonPanel1.OKButton.OnClick := @OkButtonCLICK;
-  ButtonPanel1.CloseButton.Caption := lisSaveSettings;
-  ButtonPanel1.CloseButton.ModalResult := mrNone;
-  ButtonPanel1.CloseButton.Kind := bkCustom;
+  ButtonPanel1.OkButton.Caption:=lisMenuOk;
+  ButtonPanel1.OKButton.OnClick:=@OkButtonCLICK;
+  ButtonPanel1.CloseButton.Caption:=lisSaveSettings;
+  ButtonPanel1.CloseButton.ModalResult:=mrNone;
+  ButtonPanel1.CloseButton.Kind:=bkCustom;
   ButtonPanel1.CloseButton.LoadGlyphFromStock(idButtonSave);
   if ButtonPanel1.CloseButton.Glyph.Empty then
     IDEImages.AssignImage(ButtonPanel1.CloseButton, 'laz_save');
-  ButtonPanel1.CloseButton.OnClick := @SaveSettingsButtonCLICK;
-  ButtonPanel1.HelpButton.OnClick := @HelpButtonClick;
-  DestDirComboBox.DropDownCount := EnvironmentOptions.DropDownCount;
-  FilterCombobox.DropDownCount := EnvironmentOptions.DropDownCount;
+  ButtonPanel1.CloseButton.OnClick:=@SaveSettingsButtonCLICK;
+  ButtonPanel1.HelpButton.OnClick:=@HelpButtonClick;
+  DestDirComboBox.DropDownCount:=EnvironmentOptions.DropDownCount;
+  FilterCombobox.DropDownCount:=EnvironmentOptions.DropDownCount;
 end;
 
 procedure TPublishModuleDialog.BrowseDestDirBitBtnCLICK(Sender: TObject);

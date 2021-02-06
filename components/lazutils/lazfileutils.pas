@@ -28,14 +28,15 @@ uses
 
 function CompareFilenames(const Filename1, Filename2: string): integer; overload;
 function CompareFilenamesIgnoreCase(const Filename1, Filename2: string): integer;
-function CompareFileExt(const Filename, Ext: string;
-                        CaseSensitive: boolean = False): integer;
 function CompareFilenameStarts(const Filename1, Filename2: string): integer;
 function CompareFilenames(Filename1: PChar; Len1: integer;
   Filename2: PChar; Len2: integer): integer; overload;
 function CompareFilenamesP(Filename1, Filename2: PChar;
   IgnoreCase: boolean = false // false = use default
   ): integer;
+function CompareFileExt(const Filename: string; Ext: string; CaseSensitive: boolean): integer;
+function CompareFileExt(const Filename, Ext: string): integer;
+function CompareFileExtQuick(const Filename: string; LowerExt: string): integer;
 
 function DirPathExists(DirectoryName: string): boolean;
 function DirectoryIsWritable(const DirectoryName: string): boolean;
@@ -258,77 +259,167 @@ begin
   CFRelease(F1);
   CFRelease(F2);
   {$ELSE}
-  Result:=UTF8CompareText(Filename1, Filename2);
+  // AnsiCompareText uses UTF8CompareText on Windows, elsewhere system string manager.
+  Result:=AnsiCompareText(Filename1, Filename2);
   {$ENDIF}
 end;
 
-function CompareFileExt(const Filename, Ext: string; CaseSensitive: boolean): integer;
-// Ext can contain a point or not
+function CompareFilenameStarts(const Filename1, Filename2: string): integer;
 var
-  n, e : AnsiString;
-  FileLen, FilePos, ExtLen, ExtPos: integer;
+  len1: Integer;
+  len2: Integer;
 begin
-  FileLen := length(Filename);
-  ExtLen := length(Ext);
-  FilePos := FileLen;
-  while (FilePos>=1) and (Filename[FilePos]<>'.') do dec(FilePos);
-  if FilePos < 1 then begin
-    // no extension in filename
+  len1:=length(Filename1);
+  len2:=length(Filename2);
+  if len1=len2 then begin
+    Result:=CompareFilenames(Filename1,Filename2);
+    exit;
+  end else if len1>len2 then
+    Result:=CompareFilenames(copy(Filename1,1,len2),Filename2)
+  else
+    Result:=CompareFilenames(Filename1,copy(Filename2,1,len1));
+  if Result<>0 then exit;
+  if len1<len2 then
+    Result:=-1
+  else
     Result:=1;
+end;
+
+function CompareFilenames(Filename1: PChar; Len1: integer; Filename2: PChar;
+  Len2: integer): integer;
+var
+  {$IFDEF NotLiteralFilenames}
+  File1: string;
+  File2: string;
+  {$ELSE}
+  i: Integer;
+  {$ENDIF}
+begin
+  if (Len1=0) or (Len2=0) then begin
+    Result:=Len1-Len2;
     exit;
   end;
-  // skip point
-  inc(FilePos);
-  ExtPos := 1;
-  if (ExtPos <= ExtLen) and (Ext[1] = '.') then inc(ExtPos);
-
-  // compare extensions
-  n := Copy(Filename, FilePos, length(FileName));
-  e := Copy(Ext, ExtPos, length(Ext));
-  if CaseSensitive then
-    Result := CompareStr(n, e)
-  else
-    Result := UTF8CompareText(n, e);
-  if Result < 0
-    then Result := -1
-  else
-    if Result > 0 then Result := 1;
-end;
-
-function ExtractFileNameOnly(const AFilename: string): string;
-var
-  StartPos: Integer;
-  ExtPos: Integer;
-begin
-  StartPos:=length(AFilename)+1;
-  while (StartPos>1)
-  and not (AFilename[StartPos-1] in AllowDirectorySeparators)
-  {$IF defined(Windows) or defined(HASAMIGA)}and (AFilename[StartPos-1]<>':'){$ENDIF}
-  do
-    dec(StartPos);
-  ExtPos:=length(AFilename);
-  while (ExtPos>=StartPos) and (AFilename[ExtPos]<>'.') do
-    dec(ExtPos);
-  if (ExtPos<StartPos) then ExtPos:=length(AFilename)+1;
-  Result:=copy(AFilename,StartPos,ExtPos-StartPos);
-end;
-
-function ExtractFileNameWithoutExt(const AFilename: string): string;
-var
-  p: Integer;
-begin
-  Result:=AFilename;
-  p:=length(Result);
-  while (p>0) do begin
-    case Result[p] of
-      PathDelim: exit;
-      {$ifdef windows}
-      '/': if ('/' in AllowDirectorySeparators) then exit;
-      {$endif}
-      '.': exit(copy(Result,1, p-1));
-    end;
-    dec(p);
+  {$IFDEF NotLiteralFilenames}
+  SetLength(File1,Len1);
+  System.Move(Filename1^,File1[1],Len1);
+  SetLength(File2,Len2);
+  System.Move(Filename2^,File2[1],Len2);
+  Result:=CompareFilenames(File1,File2);
+  {$ELSE}
+  Result:=0;
+  i:=0;
+  while (Result=0) and ((i<Len1) and (i<Len2)) do begin
+    Result:=Ord(Filename1[i])
+           -Ord(Filename2[i]);
+    Inc(i);
   end;
+  if Result=0 Then
+    Result:=Len1-Len2;
+  {$ENDIF}
+end;
+
+function CompareFilenamesP(Filename1, Filename2: PChar;
+  IgnoreCase: boolean = false): integer;
+{$IFDEF darwin}
+var
+  F1: CFStringRef;
+  F2: CFStringRef;
+  Flags: CFStringCompareFlags;
+{$ENDIF}
+begin
+  if (Filename1=nil) or (Filename1^=#0) then begin
+    if (Filename2=nil) or (Filename2^=#0) then begin
+      // both empty
+      exit(0);
+    end else begin
+      // filename1 empty, filename2 not empty
+      exit(-1);
+    end;
+  end else if (Filename2=nil) or (Filename2^=#0) then begin
+    // filename1 not empty, filename2 empty
+    exit(1);
+  end;
+
+  {$IFDEF CaseInsensitiveFilenames}
+  // this platform is by default case insensitive
+  IgnoreCase:=true;
+  {$ENDIF}
+  {$IFDEF darwin}
+  F1:=CFStringCreateWithCString(nil,Pointer(Filename1),kCFStringEncodingUTF8);
+  F2:=CFStringCreateWithCString(nil,Pointer(Filename2),kCFStringEncodingUTF8);
+  Flags:=kCFCompareNonliteral;
+  if IgnoreCase then Flags+=kCFCompareCaseInsensitive;
+  Result:=CFStringCompare(F1,F2,Flags);
+  CFRelease(F1);
+  CFRelease(F2);
+  {$ELSE}
+  if IgnoreCase then      // compare case insensitive
+    Result:=UTF8CompareTextP(Filename1, Filename2)
+  else begin
+    // compare literally
+    while (Filename1^=Filename2^) and (Filename1^<>#0) do begin
+      Inc(Filename1);
+      Inc(Filename2);
+    end;
+    Result:=ord(Filename1^)-ord(Filename2^);
+  end;
+  {$ENDIF}
+end;
+
+function CompareFileExt(const Filename: string; Ext: string; CaseSensitive: boolean): integer;
+// Ext can contain a point or not
+var
+  FnExt: String;
+  FnPos: integer;
+begin
+  // Filename
+  FnPos := length(Filename);
+  while (FnPos>=1) and (Filename[FnPos]<>'.') do dec(FnPos);
+  if FnPos < 1 then
+    exit(1);          // no extension in filename
+  FnExt := Copy(Filename, FnPos+1, length(FileName)); // FnPos+1 skips point
+  // Ext
+  if (length(Ext) > 1) and (Ext[1] = '.') then
+    Delete(Ext, 1, 1);
+  // compare extensions
+  if CaseSensitive then
+    Result := CompareStr(FnExt, Ext)
+  else
+    Result := UTF8CompareLatinTextFast(FnExt, Ext);
+  if Result < 0 then
+    Result := -1
+  else if Result > 0 then
+    Result := 1;
+end;
+
+function CompareFileExt(const Filename, Ext: string): integer;
+begin
+  Result := CompareFileExt(Filename, Ext,
+                {$IFDEF CaseInsensitiveFilenames} False {$ELSE} True {$ENDIF} );
+end;
+
+function CompareFileExtQuick(const Filename: string; LowerExt: string): integer;
+// Compares case-insensitively but only with ASCII characters.
+// LowerExt must be lowercase. It can contain a point or not.
+var
+  FnExt: String;
+  FnPos: integer;
+begin
+  // Filename
+  FnPos := length(Filename);
+  while (FnPos>=1) and (Filename[FnPos]<>'.') do dec(FnPos);
+  if FnPos < 1 then
+    exit(1);          // no extension in filename
+  FnExt := LowerCase(Copy(Filename, FnPos+1, length(FileName))); // FnPos+1 skips point
+  // Ext
+  if (length(LowerExt) > 1) and (LowerExt[1] = '.') then
+    Delete(LowerExt, 1, 1);
+  // compare extensions
+  Result := CompareStr(FnExt, LowerExt);
+  if Result < 0 then
+    Result := -1
+  else if Result > 0 then
+    Result := 1;
 end;
 
 {$IFDEF darwin}
@@ -402,117 +493,40 @@ end;
 
 {$ENDIF}
 
-function CompareFilenameStarts(const Filename1, Filename2: string): integer;
+function ExtractFileNameOnly(const AFilename: string): string;
 var
-  len1: Integer;
-  len2: Integer;
+  StartPos: Integer;
+  ExtPos: Integer;
 begin
-  len1:=length(Filename1);
-  len2:=length(Filename2);
-  if len1=len2 then begin
-    Result:=CompareFilenames(Filename1,Filename2);
-    exit;
-  end else if len1>len2 then
-    Result:=CompareFilenames(copy(Filename1,1,len2),Filename2)
-  else
-    Result:=CompareFilenames(Filename1,copy(Filename2,1,len1));
-  if Result<>0 then exit;
-  if len1<len2 then
-    Result:=-1
-  else
-    Result:=1;
+  StartPos:=length(AFilename)+1;
+  while (StartPos>1)
+  and not (AFilename[StartPos-1] in AllowDirectorySeparators)
+  {$IF defined(Windows) or defined(HASAMIGA)}and (AFilename[StartPos-1]<>':'){$ENDIF}
+  do
+    dec(StartPos);
+  ExtPos:=length(AFilename);
+  while (ExtPos>=StartPos) and (AFilename[ExtPos]<>'.') do
+    dec(ExtPos);
+  if (ExtPos<StartPos) then ExtPos:=length(AFilename)+1;
+  Result:=copy(AFilename,StartPos,ExtPos-StartPos);
 end;
 
-function CompareFilenames(Filename1: PChar; Len1: integer; Filename2: PChar;
-  Len2: integer): integer;
+function ExtractFileNameWithoutExt(const AFilename: string): string;
 var
-  {$IFDEF NotLiteralFilenames}
-  File1: string;
-  File2: string;
-  {$ELSE}
-  i: Integer;
-  {$ENDIF}
+  p: Integer;
 begin
-  if (Len1=0) or (Len2=0) then begin
-    Result:=Len1-Len2;
-    exit;
-  end;
-  {$IFDEF NotLiteralFilenames}
-  SetLength(File1,Len1);
-  System.Move(Filename1^,File1[1],Len1);
-  SetLength(File2,Len2);
-  System.Move(Filename2^,File2[1],Len2);
-  Result:=CompareFilenames(File1,File2);
-  {$ELSE}
-  Result:=0;
-  i:=0;
-  while (Result=0) and ((i<Len1) and (i<Len2)) do begin
-    Result:=Ord(Filename1[i])
-           -Ord(Filename2[i]);
-    Inc(i);
-  end;
-  if Result=0 Then
-    Result:=Len1-Len2;
-  {$ENDIF}
-end;
-
-function CompareFilenamesP(Filename1, Filename2: PChar;
-  IgnoreCase: boolean = false): integer;
-var
-  {$IFDEF darwin}
-  F1: CFStringRef;
-  F2: CFStringRef;
-  Flags: CFStringCompareFlags;
-  {$ELSE}
-  File1, File2: string;
-  Len1: SizeInt;
-  Len2: SizeInt;
-  {$ENDIF}
-begin
-  if (Filename1=nil) or (Filename1^=#0) then begin
-    if (Filename2=nil) or (Filename2^=#0) then begin
-      // both empty
-      exit(0);
-    end else begin
-      // filename1 empty, filename2 not empty
-      exit(-1);
+  Result:=AFilename;
+  p:=length(Result);
+  while (p>0) do begin
+    case Result[p] of
+      PathDelim: exit;
+      {$ifdef windows}
+      '/': if ('/' in AllowDirectorySeparators) then exit;
+      {$endif}
+      '.': exit(copy(Result,1, p-1));
     end;
-  end else if (Filename2=nil) or (Filename2^=#0) then begin
-    // filename1 not empty, filename2 empty
-    exit(1);
+    dec(p);
   end;
-
-  {$IFDEF CaseInsensitiveFilenames}
-  // this platform is by default case insensitive
-  IgnoreCase:=true;
-  {$ENDIF}
-  {$IFDEF darwin}
-  F1:=CFStringCreateWithCString(nil,Pointer(Filename1),kCFStringEncodingUTF8);
-  F2:=CFStringCreateWithCString(nil,Pointer(Filename2),kCFStringEncodingUTF8);
-  Flags:=kCFCompareNonliteral;
-  if IgnoreCase then Flags+=kCFCompareCaseInsensitive;
-  Result:=CFStringCompare(F1,F2,Flags);
-  CFRelease(F1);
-  CFRelease(F2);
-  {$ELSE}
-  if IgnoreCase then begin
-    // compare case insensitive
-    Len1:=StrLen(Filename1);
-    SetLength(File1,Len1);
-    System.Move(Filename1^,File1[1],Len1);
-    Len2:=StrLen(Filename2);
-    SetLength(File2,Len2);
-    System.Move(Filename2^,File2[1],Len2);
-    Result:=UTF8CompareText(File1,File2);
-  end else begin
-    // compare literally
-    while (Filename1^=Filename2^) and (Filename1^<>#0) do begin
-      inc(Filename1);
-      Inc(Filename2);
-    end;
-    Result:=ord(Filename1^)-ord(Filename2^);
-  end;
-  {$ENDIF}
 end;
 
 function DirPathExists(DirectoryName: string): boolean;
@@ -541,15 +555,19 @@ begin
 end;
 
 function ForceDirectory(DirectoryName: string): boolean;
-var i: integer;
+var
+  i: integer;
   Dir: string;
 begin
   DirectoryName:=AppendPathDelim(DirectoryName);
   i:=1;
   while i<=length(DirectoryName) do begin
     if DirectoryName[i] in AllowDirectorySeparators then begin
+      // optimize paths like \foo\\bar\\foobar
+      while (i<length(DirectoryName)) and (DirectoryName[i+1] in AllowDirectorySeparators) do
+        Delete(DirectoryName,i+1,1);
       Dir:=copy(DirectoryName,1,i-1);
-      if not DirPathExists(Dir) then begin
+      if (Dir<>'') and not DirPathExists(Dir) then begin
         Result:=CreateDirUTF8(Dir);
         if not Result then exit;
       end;
@@ -558,7 +576,6 @@ begin
   end;
   Result:=true;
 end;
-
 
 function FileIsText(const AFilename: string): boolean;
 var
@@ -572,10 +589,11 @@ function FileIsText(const AFilename: string; out FileReadable: boolean): boolean
 var
   Buf: string;
   Len: integer;
-  NewLine: boolean;
   p: PChar;
   ZeroAllowed: Boolean;
   fHandle: THandle;
+const
+  BufSize = 2048;
 begin
   Result:=false;
   FileReadable:=true;
@@ -583,7 +601,7 @@ begin
   if (THandle(fHandle) <> feInvalidHandle)  then
   begin
     try
-      Len:=1024;
+      Len:=BufSize;
       SetLength(Buf,Len+1);
       Len := FileRead(fHandle,Buf[1],Len);
 
@@ -603,7 +621,6 @@ begin
           inc(p,2);
           ZeroAllowed:=true;
         end;
-        NewLine:=false;
         while true do begin
           case p^ of
           #0:
@@ -615,12 +632,10 @@ begin
           // #12: form feed
           // #26: end of file
           #1..#8,#11,#14..#25,#27..#31: exit;
-          #10,#13: NewLine:=true;
           end;
           inc(p);
         end;
-        if NewLine or (Len<1024) then
-          Result:=true;
+        Result:=true;
       end else
         Result:=true;
     finally

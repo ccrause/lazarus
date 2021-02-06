@@ -1067,6 +1067,16 @@ msgctxt "opkman_const.rsmainfrm_vsttext_downloadurl"
 msgid "External link (JSON)"
 msgstr "Naujinti saitą (JSON)"
 
+#: opkman_const.rsmainfrm_vsttext_externaldeps
+msgctxt "opkman_const.rsmainfrm_vsttext_externaldeps"
+msgid "External dependencies"
+msgstr ""
+
+#: opkman_const.rsmainfrm_vsttext_externalmetapackagedeps
+msgctxt "opkman_const.rsmainfrm_vsttext_externalmetapackagedeps"
+msgid "External dependencies for metapackage"
+msgstr ""
+
 #: opkman_const.rsmainfrm_vsttext_fpccompatibility
 msgctxt "opkman_const.rsmainfrm_vsttext_fpccompatibility"
 msgid "FPC compatibility"
@@ -1104,6 +1114,29 @@ msgstr "Paketo licencijos informacija"
 msgctxt "opkman_const.rsmainfrm_vsttext_license"
 msgid "License"
 msgstr "Licencija"
+
+#: opkman_const.rsmainfrm_vsttext_open
+msgctxt "opkman_const.rsmainfrm_vsttext_open"
+msgid "Open"
+msgstr ""
+
+#: opkman_const.rsmainfrm_vsttext_open_error
+#, fuzzy
+msgctxt "opkman_const.rsmainfrm_vsttext_open_error"
+msgid "Cannot open package file."
+msgstr "Nepavyko atverti paketo failo."
+
+#: opkman_const.rsmainfrm_vsttext_open_notfound
+msgid "Package file not found."
+msgstr ""
+
+#: opkman_const.rsmainfrm_vsttext_orphanedpackage1
+msgid "Orphaned package"
+msgstr ""
+
+#: opkman_const.rsmainfrm_vsttext_orphanedpackage2
+msgid "currently has no active maintainer"
+msgstr ""
 
 #: opkman_const.rsmainfrm_vsttext_packagecategory
 msgid "Package category"
@@ -1321,6 +1354,10 @@ msgstr "„SVN“"
 msgctxt "opkman_const.rsmainfrm_vsttext_version"
 msgid "Version"
 msgstr "Laida"
+
+#: opkman_const.rsmenulazaruspackagemanager
+msgid "Online Package Manager ..."
+msgstr ""
 
 #: opkman_const.rsopensslfrm_bp_cancelbutton_caption
 #, fuzzy
@@ -1818,6 +1855,7 @@ msgid "No valid download link found."
 msgstr "Nerasta tinkamų saitų atsisiuntimui."
 
 #: opkman_const.rsprogressfrm_error7
+msgctxt "opkman_const.rsprogressfrm_error7"
 msgid "Cannot open package file."
 msgstr "Nepavyko atverti paketo failo."
 

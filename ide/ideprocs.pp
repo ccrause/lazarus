@@ -33,7 +33,7 @@ uses
   // RTL
   Classes, SysUtils, Laz_AVL_Tree,
   // LazUtils
-  FileUtil, LazFileUtils, LazUtilities, LazFileCache, LazUTF8, LazUTF8Classes,
+  FileUtil, LazFileUtils, LazUtilities, LazFileCache, LazUTF8,
   Laz2_XMLCfg, AvgLvlTree, LazLoggerBase, LazTracer,
   // LCL
   StdCtrls, ExtCtrls,
@@ -148,8 +148,7 @@ function LoadXMLConfigViaCodeBuffer(Filename: string): TXMLConfig;
 
 // Point conversion
 function PointToCfgStr(const Point: TPoint): string;
-procedure CfgStrToPoint(const s: string; var Point: TPoint;
-                        const DefaultPoint: TPoint);
+procedure CfgStrToPoint(const s: string; var Point: TPoint; const DefaultPoint: TPoint);
 
 // environment
 type
@@ -161,7 +160,7 @@ type
   end;
 
 function GetCurrentUserName: string;
-function GetCurrentMailAddress: string;
+function GetCurrentChangeLog: string;
 function GetProgramSearchPath: string;
 
 // miscellaneous
@@ -714,7 +713,7 @@ begin
   NewLen:=length(Result);
   while (NewLen>0) and (Result[NewLen] in ['0'..'9']) do
     dec(NewLen);
-  Result:=copy(Result,1,NewLen);
+  SetLength(Result,NewLen);
 end;
 
 function FindFirstFileWithExt(const Directory, Ext: string): string;
@@ -759,7 +758,7 @@ end;
 function CompareRecentListItem(s1, s2: string; ListType: TRecentListType): boolean;
 begin
   case ListType of
-  rltCaseInsensitive: Result:=UTF8LowerCase(s1)=UTF8LowerCase(s2);
+  rltCaseInsensitive: Result:=UTF8CompareLatinTextFast(s1,s2)=0;
   rltFile: Result:=CompareFilenames(ChompPathDelim(s1),ChompPathDelim(s2))=0;
   else Result:=s1=s2;
   end;
@@ -1060,10 +1059,10 @@ end;
 procedure RemoveDoubles(List: TStrings);
 var
   i: Integer;
-  List2: TStringList;
+  List2: TStringListUTF8Fast;
 begin
   if List=nil then exit;
-  List2:=TStringList.Create;
+  List2:=TStringListUTF8Fast.Create;
   List2.AddStrings(List);
   List2.Sort;
   List.Assign(List2);
@@ -1297,8 +1296,7 @@ begin
   Result:=IntToStr(Point.X)+','+IntToStr(Point.Y);
 end;
 
-procedure CfgStrToPoint(const s: string; var Point: TPoint;
-  const DefaultPoint: TPoint);
+procedure CfgStrToPoint(const s: string; var Point: TPoint; const DefaultPoint: TPoint);
 var
   p: Integer;
 begin
@@ -1310,12 +1308,18 @@ end;
 
 function GetCurrentUserName: string;
 begin
-  Result:=GetEnvironmentVariableUTF8('USER');
+  Result:=GetEnvironmentVariableUTF8({$IFDEF MSWindows}'USERNAME'{$ELSE}'USER'{$ENDIF});
 end;
 
-function GetCurrentMailAddress: string;
+function GetCurrentChangeLog: string;
 begin
-  Result:='<'+GetCurrentUserName+'@'+GetEnvironmentVariableUTF8('HOSTNAME')+'>';
+  Result:='<'+GetCurrentUserName+'@'+
+  {$IF defined(MSWindows) or defined(HASAMIGA)}
+    GetEnvironmentVariableUTF8('COMPUTERNAME')
+  {$ELSE}
+    GetHostname
+  {$ENDIF}
+    + '>';
 end;
 
 function GetProgramSearchPath: string;
@@ -1325,12 +1329,12 @@ end;
 
 function CreateEmptyFile(const Filename: string): boolean;
 var
-  fs: TFileStreamUTF8;
+  fs: TFileStream;
 begin
   Result:=false;
   try
     InvalidateFileStateCache;
-    fs:=TFileStreamUTF8.Create(Filename,fmCreate);
+    fs:=TFileStream.Create(Filename,fmCreate);
     fs.Free;
     Result:=true;
   except

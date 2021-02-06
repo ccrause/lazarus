@@ -29,7 +29,7 @@ interface
 uses
   Classes, SysUtils,
   // LazUtils
-  FileUtil, LazLogger, LazFileUtils, LazConfigStorage, UTF8Process,
+  FileUtil, LazLogger, LazFileUtils, LazConfigStorage, UTF8Process, LazUTF8,
   // LCL
   Controls, Forms, Dialogs, LazHelpIntf, HelpIntfs, LCLPlatformDef, InterfaceBase,
   // IdeIntf
@@ -114,7 +114,12 @@ type
 
 procedure Register;
 
+function ChmViewerInstance(): TChmHelpViewer;
+
 implementation
+
+var
+  ChmHelpViewer: TChmHelpViewer;
 
 const
   // Part of help name. Stored/retrieved in Lazarus options CHMHelp/Name.
@@ -133,22 +138,28 @@ end;
 
 procedure Register;
 var
-  ChmHelp: TChmHelpViewer;
+  ChmViewer: TChmHelpViewer;
 begin
-  ChmHelp := TChmHelpViewer.Create(nil);
-  HelpViewers.RegisterViewer(ChmHelp);
+  ChmViewer := ChmViewerInstance();
+  HelpViewers.RegisterViewer(ChmViewer);
   RegisterLangRefHelpDatabase;
-  LangRefHelpDatabase.OnFindViewer := @ChmHelp.DBFindViewer;
+  LangRefHelpDatabase.OnFindViewer := @ChmViewer.DBFindViewer;
   RegisterLclHelpDatabase;
-  LCLHelpDatabase.OnFindViewer := @ChmHelp.DBFindViewer;
+  LCLHelpDatabase.OnFindViewer := @ChmViewer.DBFindViewer;
   RegisterFPCDirectivesHelpDatabase;
-  FPCDirectivesHelpDatabase.OnFindViewer := @ChmHelp.DBFindViewer;
+  FPCDirectivesHelpDatabase.OnFindViewer := @ChmViewer.DBFindViewer;
 
   // disable showing CodeBrowser on unknown identifiers. LHelp has its own
   // search function.
   LazarusHelp.ShowCodeBrowserOnUnknownIdentifier:=false;
 end;
 
+function ChmViewerInstance ( ): TChmHelpViewer;
+begin
+  if not Assigned (ChmHelpViewer) then
+     ChmHelpViewer:= TChmHelpViewer.Create(nil);
+  Result:= ChmHelpViewer;
+end;
 
 { TChmHelpViewer }
 
@@ -173,7 +184,7 @@ end;
 
 procedure TChmHelpViewer.OpenAllCHMsInSearchPath(const SearchPath: String);
 var
-  CHMFiles: TStringList;
+  CHMFiles: TStringListUTF8Fast;
   SearchPaths: TStringList; // SearchPath split to a StringList
   SearchFiles: TStringList; // Files found in SearchPath
   i: integer;
@@ -203,10 +214,8 @@ begin
    }
   // Just open all CHM files in all directories+subdirs in ;-delimited searchpath:
   SearchPaths:=TStringList.Create;
-  CHMFiles:=TStringList.Create;
+  CHMFiles:=TStringListUTF8Fast.Create;
   try
-    CHMFiles.Sorted:=true;
-    CHMFiles.Duplicates:=dupIgnore;
     SearchPaths.Delimiter:=';';
     SearchPaths.StrictDelimiter:=false;
     SearchPaths.DelimitedText:=SearchPath;
@@ -220,6 +229,8 @@ begin
       CHMFiles.AddStrings(SearchFiles);
       SearchFiles.Free;
     end;
+    CHMFiles.Sorted:=true;
+    CHMFiles.Duplicates:=dupIgnore;
     {$IFDEF CHMLOADTIMES}
     DebugLn(['CHMLOADTIMES: ',Format('Searching files in %s took %d ms',[SearchPath,DateTimeToTimeStamp(Now-StartTime).Time])]);
     StartTime := Now;
@@ -228,7 +239,7 @@ begin
     fHelpConnection.BeginUpdate;
     for i := 0 to CHMFiles.Count-1 do
     begin
-      if UpperCase(ExtractFileExt(CHMFiles[i]))='.CHM' then
+      if CompareFileExtQuick(CHMFiles[i], 'chm') = 0 then
       begin
         fHelpConnection.OpenURL(CHMFiles[i], '/index.html');
         // This is probably no longer necessary as we're now waiting for the viewer's
@@ -239,10 +250,7 @@ begin
     end;
     {$IFDEF CHMLOADTIMES}
     DebugLn(['CHMLOADTIMES: ',Format('Loading chm files took %d ms',[DateTimeToTimeStamp(Now-StartTime).Time])]);
-
     {$ENDIF}
-
-
   finally
     fHelpConnection.EndUpdate;
     CHMFiles.Free;
@@ -518,43 +526,42 @@ var
   SearchPath: String; //; delimited list of directories
   HelpExeFileName: String;
 begin
-  // Make sure the lhelp help viewer exists; build it if doesn't and it is lhelp
   HelpExeFileName:=GetHelpExe;
-  if (not FileExistsUTF8(HelpExeFileName)) and
-    ((ExtractFileNameOnly(HelpExeFileName) = 'lhelp') and
-    (CheckBuildLHelp <> mrOK)) then
-  begin
-    IDEMessageDialog(HELP_MissingLhelp,
-      Format(HELP_UnableToFindTheLhelpViewerPleaseCompileTheLhelpPro,
-             [LineEnding, HelpExeFileName, LineEnding+LineEnding, LineEnding,
-              GetForcedPathDelims('components/chmhelp/lhelp/lhelp.lpi')]),
-      mtError,[mbCancel]);
-    Debugln(Format('ChmHelpViewer: '+HELP_UnableToFindTheLhelpViewerPleaseCompileTheLhelpPro,
-      [LineEnding, HelpExeFileName, LineEnding+LineEnding, LineEnding,
-      GetForcedPathDelims('components/chmhelp/lhelp/lhelp.lpi')]));
-    exit;
-  end;
-
   SearchPath := GetHelpFilesPath;
-  // Start up help viewer if needed - and tell it to hide
+
   if not(fHelpConnection.ServerRunning) then
   begin
+    // Make sure the lhelp help viewer exists; build it if doesn't and it is lhelp
+    if (not FileExistsUTF8(HelpExeFileName)) and
+      ((ExtractFileNameOnly(HelpExeFileName) = 'lhelp') and
+      (CheckBuildLHelp <> mrOK)) then
+    begin
+      IDEMessageDialog(HELP_MissingLhelp,
+        Format(HELP_UnableToFindTheLhelpViewerPleaseCompileTheLhelpPro,
+               [LineEnding, HelpExeFileName, LineEnding+LineEnding, LineEnding,
+                GetForcedPathDelims('components/chmhelp/lhelp/lhelp.lpi')]),
+        mtError,[mbCancel]);
+      Debugln(Format('ChmHelpViewer: '+HELP_UnableToFindTheLhelpViewerPleaseCompileTheLhelpPro,
+        [LineEnding, HelpExeFileName, LineEnding+LineEnding, LineEnding,
+        GetForcedPathDelims('components/chmhelp/lhelp/lhelp.lpi')]));
+      exit;
+    end;
+    // Start up help viewer if needed - and tell it to hide
     fHelpConnection.StartHelpServer(HelpLabel, HelpExeFileName, true);
     Response := fHelpConnection.RunMiscCommand(mrVersion);
     if Response <> srSuccess then
     begin
-      debugln('TChmHelpViewer: Help viewer does not support our protocol version ('+PROTOCOL_VERSION +'). Response was: ord: '+inttostr(ord(Response)))
-    end
-    else
-    begin
-      // Open all chm files after it has started, while still hidden
-      OpenAllCHMsInSearchPath(SearchPath);
-      // Instruct viewer to show its GUI
-      Response := fHelpConnection.RunMiscCommand(mrShow);
-      if Response <> srSuccess then
-        debugln('TChmHelpViewer: Help viewer gave error response to mrShow command. Response was: ord: '+inttostr(ord(Response)));
+      debugln('TChmHelpViewer: Help viewer does not support our protocol version ('+
+              PROTOCOL_VERSION +'). Response was: ord: '+inttostr(ord(Response)));
+      Exit;
     end;
   end;
+  // Open all chm files always
+  OpenAllCHMsInSearchPath(SearchPath);
+  // Instruct viewer to show its GUI
+  Response := fHelpConnection.RunMiscCommand(mrShow);
+  if Response <> srSuccess then
+    debugln('TChmHelpViewer: Help viewer gave error response to mrShow command. Response was: ord: '+inttostr(ord(Response)));
 end;
 
 function TChmHelpViewer.ShowNode(Node: THelpNode; var ErrMsg: string
@@ -567,12 +574,14 @@ var
   Proc: TProcessUTF8;
   FoundFileName: String;
   LHelpPath: String;
-  WasRunning: boolean;
+  WasRunning: Boolean;
+  UpdateStarted: Boolean;
   {$IFDEF CHMLOADTIMES}
   TotalTime: TDateTime;
   StartTime: TDateTime;
   {$ENDIF}
 begin
+  UpdateStarted := False;
   if Pos('file://', Node.URL) = 1 then
   begin
     Result := PassTheBuck(Node, ErrMsg);
@@ -611,25 +620,26 @@ begin
   if ExtractFileNameOnly(GetHelpExe) = 'lhelp' then
   begin
     WasRunning := fHelpConnection.ServerRunning;
-    // Start server and tell it to hide
-    // No use setting cursor to hourglass as that may take as long as the
-    // waitforresponse timeout.
-    {$IFDEF CHMLOADTIMES}
-    TotalTime:=Now;
-    StartTime:=Now;
-    {$ENDIF}
-    fHelpConnection.StartHelpServer(HelpLabel, GetHelpExe, true);
-    {$IFDEF CHMLOADTIMES}
-    DebugLn(['CHMLOADTIMES: ',Format('Starting LHelp took %d ms',[DateTimeToTimeStamp(Now-StartTime).Time])]);
-    {$ENDIF}
-    // If the server is not already running, open all chm files after it has started
-    // This will allow cross-chm (LCL, FCL etc) searching and browsing in lhelp.
     if not(WasRunning) then
     begin
-      if fHelpConnection.BeginUpdate = srError then
+      // Start server and tell it to hide
+      // No use setting cursor to hourglass as that may take as long as the
+      // waitforresponse timeout.
+      {$IFDEF CHMLOADTIMES}
+      TotalTime:=Now;
+      StartTime:=Now;
+      {$ENDIF}
+      fHelpConnection.StartHelpServer(HelpLabel, GetHelpExe, true);
+      {$IFDEF CHMLOADTIMES}
+      DebugLn(['CHMLOADTIMES: ',Format('Starting LHelp took %d ms',[DateTimeToTimeStamp(Now-StartTime).Time])]);
+      {$ENDIF}
+      // If the server is not already running, open all chm files after it has started
+      // This will allow cross-chm (LCL, FCL etc) searching and browsing in lhelp.
+      UpdateStarted := (fHelpConnection.BeginUpdate = srSuccess);
+      if not UpdateStarted then
       begin
         // existing lhelp doesn't understand mrBeginUpdate and needs to be rebuilt
-        //close lhelp
+        // close lhelp
         if fHelpConnection.RunMiscCommand(LHelpControl.mrClose) <> srError then
         begin
           // force rebuild of lhelp
@@ -640,8 +650,14 @@ begin
             // start it again
             Debugln(['TChmHelpViewer.ShowNode restarting lhelp to use updated protocols']);
             fHelpConnection.StartHelpServer(HelpLabel, GetHelpExe, true);
-            // now run begin update
-            fHelpConnection.BeginUpdate; // it inc's a value so calling it more than once doesn't hurt
+            // check running again
+            WasRunning := fHelpConnection.ServerRunning;
+            if not WasRunning then
+            begin
+              Result := shrViewerError;
+              ErrMsg := 'Error starting LHelp IPC server';
+              exit;
+            end;
           end;
         end;
       end;
@@ -652,16 +668,18 @@ begin
       {$IFDEF CHMLOADTIMES}
       DebugLn(['CHMLOADTIMES: ',Format('Searching and Loading files took %d ms',[DateTimeToTimeStamp(Now-StartTime).Time])]);
       {$ENDIF}
-      // Instruct viewer to show its GUI
-      Response:=fHelpConnection.RunMiscCommand(mrShow);
-      if Response<>srSuccess then
-        debugln('Help viewer gave error response to mrShow command. Response was: ord: '+inttostr(ord(Response)));
     end;
-    fHelpConnection.BeginUpdate;
+    // When UpdateStarted = True then server use LHellp version 2 protocol
+    // it inc's a value so calling it more than once doesn't hurt
+    if not UpdateStarted then
+       UpdateStarted := (fHelpConnection.BeginUpdate = srSuccess);
     Response := fHelpConnection.OpenURL(FileName, Url);
-    fHelpConnection.EndUpdate;
-    if not WasRunning then
+    if UpdateStarted then
       fHelpConnection.EndUpdate;
+    // Instruct viewer to show its GUI always
+    Response:=fHelpConnection.RunMiscCommand(mrShow);
+    if Response<>srSuccess then
+      debugln('Help viewer gave error response to mrShow command. Response was: ord: '+inttostr(ord(Response)));
     {$IFDEF CHMLOADTIMES}
     DebugLn(['CHMLOADTIMES: ',Format('Total start time was %d ms',[DateTimeToTimeStamp(Now-TotalTime).Time])]);
     {$ENDIF}

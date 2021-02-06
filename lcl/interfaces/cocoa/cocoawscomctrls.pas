@@ -189,6 +189,7 @@ type
     //class function GetViewOrigin(const ALV: TCustomListView): TPoint; override;
     class function GetVisibleRowCount(const ALV: TCustomListView): Integer; override;
 
+    class procedure SelectAll(const ALV: TCustomListView; const AIsSet: Boolean); override;
     //carbon//class procedure SetAllocBy(const ALV: TCustomListView; const AValue: Integer); override;
     class procedure SetDefaultItemHeight(const ALV: TCustomListView; const AValue: Integer); override;
     //carbon//class procedure SetHotTrackStyles(const ALV: TCustomListView; const AValue: TListHotTrackStyles); override;
@@ -1546,6 +1547,19 @@ begin
   Result := lVisibleRows.length;
 end;
 
+class procedure TCocoaWSCustomListView.SelectAll(const ALV: TCustomListView;
+  const AIsSet: Boolean);
+var
+  lCocoaLV: TCocoaListView;
+  lTableLV: TCocoaTableListView;
+begin
+  if not CheckParams(lCocoaLV, lTableLV, ALV) then Exit;
+  if AIsSet then
+    lTableLV.selectAll(lTableLV)
+  else
+    lTableLV.deselectAll(lTableLV);
+end;
+
 class procedure TCocoaWSCustomListView.SetDefaultItemHeight(
   const ALV: TCustomListView; const AValue: Integer);
 var
@@ -2050,6 +2064,8 @@ begin
   lSlider.setMinValue(ATrackBar.Min);
   lSlider.setIntValue(ATrackBar.Position);
   lSlider.intval := ATrackBar.Position;
+  lSlider.setContinuous(true);
+  lSlider.setAltIncrementValue(1); // forcing the slider to switch by 1 by the keyboard
 
   // Ticks
   if ATrackBar.TickStyle = tsAuto then
@@ -2083,15 +2099,13 @@ begin
 
   lSlider.lclSetManTickDraw(ATrackBar.TickStyle = tsManual);
 
-  //for some reason Option(Alt)+Drag doesn't work at all
-  //lSlider.setAltIncrementValue(ATrackBar.PageSize);
   lSlider.setNumberOfTickMarks(lTickCount);
 
   if ATrackBar.TickMarks = tmTopLeft then
     lSlider.setTickMarkPosition(NSTickMarkAbove)
   else
     lSlider.setTickMarkPosition(NSTickMarkBelow);
-  lSlider.setNeedsDisplay;
+  lSlider.setNeedsDisplay_(true);
 end;
 
 {------------------------------------------------------------------------------

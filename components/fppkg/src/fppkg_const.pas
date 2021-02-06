@@ -67,6 +67,41 @@ resourcestring
   rsFppkgEnvironmentOptionsCaption = 'Compilation';
   rsPackageFileOptionsTitle = 'FPMake';
 
+  SInstalled = 'Installed';
+  SAvailable = 'Available';
+  SUnknown   = 'Unknown';
+  SAuthor    = 'Author';
+  SLicense   = 'License';
+  SHomepage  = 'Homepage';
+  SDownload  = 'Download';
+  SFilename  = 'Filename';
+  SEmail     = 'Email';
+  SOS        = 'OS';
+  SCPU       = 'CPU';
+  SSupport   = 'Support';
+  SKeywords  = 'Keywords';
+  SCategory  = 'Category';
+
+  lisFppkgPckOptsTitle = 'Fppkg';
+  lisFppkgPckOptsBuildMethod = 'Supported build methods';
+  lisFppkgBuildMethodFPMake = 'FPMake';
+  lisFppkgBuildMethodLazarus = 'Lazbuild';
+  lisFppkgBuildMethodBoth = 'Both';
+
+  SErrActionFailed    = 'Failed to %s: ' + sLineBreak + sLineBreak + '%s';
+  SMsgActionSucceeded = '%s succeeded.';
+  SMsgFppkgRunning    = 'A prior command is still in progress.';
+  SActFixBroken       = 'fix broken packages';
+  SActCleanPackages   = 'clean package(s)';
+  SActCompilePackages = 'compile packages';
+  SActDownloadPackages= 'download packages';
+  SActArchivePackages = 'create archive(s) for package(s)';
+  SActBuildPackages   = 'build package(s)';
+  SActInstallPackages = 'install package(s)';
+  SActUnInstPackages  = 'uninstall package(s)';
+  SActUpdate          = 'update repository';
+  SActInitializeFppkg = 'initialize fppkg';
+
 implementation
 
 end.

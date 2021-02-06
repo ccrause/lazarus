@@ -26,9 +26,9 @@ uses
   qt5,
   qtprivate, qtwidgets, qtproc, QtWsControls,
   // RTL
-  math,
+  Classes, Types, SysUtils, math,
   // LCL
-  Classes, Types, StdCtrls, Controls, Forms, SysUtils, InterfaceBase, LCLType,
+  StdCtrls, Controls, Forms, LCLType,
   // Widgetset
   WSProc, WSStdCtrls, WSLCLClasses;
 
@@ -90,6 +90,8 @@ type
     class procedure SetItemIndex(const ACustomComboBox: TCustomComboBox; NewIndex: integer); override;
     class procedure SetMaxLength(const ACustomComboBox: TCustomComboBox; NewLength: integer); override;
     class procedure SetStyle(const ACustomComboBox: TCustomComboBox; NewStyle: TComboBoxStyle); override;
+    class procedure SetReadOnly(const ACustomComboBox: TCustomComboBox; NewReadOnly: boolean); override;
+    class procedure SetTextHint(const ACustomComboBox: TCustomComboBox; const ATextHint: string); override;
 
     class procedure Sort(const ACustomComboBox: TCustomComboBox; AList: TStrings; IsSorted: boolean); override;
 
@@ -1583,14 +1585,32 @@ end;
 class procedure TQtWSCustomComboBox.SetStyle(
   const ACustomComboBox: TCustomComboBox; NewStyle: TComboBoxStyle);
 begin
-  TQtComboBox(ACustomComboBox.Handle).setEditable(NewStyle in [csDropDown, csSimple, csOwnerDrawEditableFixed, csOwnerDrawEditableVariable]);
-  TQtComboBox(ACustomComboBox.Handle).OwnerDrawn := NewStyle in
-                                                   [csOwnerDrawFixed,
-                                                    csOwnerDrawVariable,
-                                                    csOwnerDrawEditableFixed,
-                                                    csOwnerDrawEditableVariable];
+  TQtComboBox(ACustomComboBox.Handle).setEditable(NewStyle.HasEditBox);
+  TQtComboBox(ACustomComboBox.Handle).OwnerDrawn := NewStyle.IsOwnerDrawn;
   // TODO: implement styles: csSimple
   inherited SetStyle(ACustomComboBox, NewStyle);
+end;
+
+class procedure TQtWSCustomComboBox.SetReadOnly(const ACustomComboBox: TCustomComboBox; NewReadOnly: boolean);
+var
+  LineEdit : TQtLineEdit;
+begin
+  if not WSCheckHandleAllocated(ACustomComboBox, 'SetReadOnly') then
+    Exit;
+  LineEdit := TQtComboBox(ACustomComboBox.Handle).LineEdit;
+  if LineEdit <> nil then
+    LineEdit.setReadOnly(NewReadOnly);
+end;
+
+class procedure TQtWSCustomComboBox.SetTextHint(
+  const ACustomComboBox: TCustomComboBox; const ATextHint: string);
+var
+  Widget: TQtWidget;
+  QtEdit: IQtEdit;
+begin
+  Widget := TQtWidget(ACustomComboBox.Handle);
+  if Supports(Widget, IQtEdit, QtEdit) then
+    QtEdit.setTextHint(ATextHint);
 end;
 
 {------------------------------------------------------------------------------
@@ -1644,7 +1664,7 @@ begin
     ACombo := QComboBox_create(nil);
     try
       QWidget_setFont(ACombo, ComboBox.getFont);
-      QComboBox_setEditable(ACombo, not ACustomComboBox.ReadOnly);
+      QComboBox_setEditable(ACombo, ACustomComboBox.Style.HasEditBox);
       AText := 'Mtjx';
       AItems := QStringList_create(PWideString(@AText));
       QComboBox_addItems(ACombo, AItems);
@@ -1663,12 +1683,12 @@ var
 begin
   if not WSCheckHandleAllocated(ACustomComboBox, 'SetItemHeight') then
     Exit;
-  {only for csOwnerDrawFixed, csOwnerDrawVariable, csOwnerDrawEditableFixed, csOwnerDrawEditableVariable}
+  {only for OwnerDrawn}
   ComboBox := TQtComboBox(ACustomComboBox.Handle);
   if ComboBox.getDroppedDown then
   begin
     ComboBox.DropList.setUniformItemSizes(False);
-    ComboBox.DropList.setUniformItemSizes(ACustomComboBox.Style in [csOwnerDrawFixed, csOwnerDrawEditableFixed]);
+    ComboBox.DropList.setUniformItemSizes(ACustomComboBox.Style.IsOwnerDrawn);
   end else
     RecreateWnd(ACustomComboBox);
 end;

@@ -33,11 +33,10 @@ interface
 uses
   Types, Classes, SysUtils, Math,
   // LCL
-  LCLType, LCLProc, LCLIntf, LCLStrConsts,
-  GraphType, Graphics, ImgList, ActnList, Controls, StdCtrls, LMessages, Forms,
-  Themes, Menus, LResources, ImageListCache,
+  LCLType, LCLProc, LCLIntf, LCLStrConsts, LResources, Graphics, ImgList, ActnList,
+  Controls, StdCtrls, LMessages, Forms, Themes, Menus, ImageListCache,
   // LazUtils
-  LazUtilities;
+  GraphType, LazUtilities;
 
 type
   TButtonLayout =
@@ -174,6 +173,7 @@ type
     procedure SetNumGlyphs(AValue: Integer);
     procedure SetSpacing(AValue: Integer);
     procedure RealizeKind(ForceDefaults: Boolean);
+    procedure SetDefaultCaption(const AValue: Boolean);
     //Return the caption associated with the aKind value.
     function GetCaptionOfKind(AKind: TBitBtnKind): String;
     function GetImages: TCustomImageList;
@@ -205,7 +205,7 @@ type
     function CanShowGlyph(const AWithShowMode: Boolean = False): Boolean;
   public
     property Caption stored IsCaptionStored;
-    property DefaultCaption: Boolean read FDefaultCaption write FDefaultCaption default False;
+    property DefaultCaption: Boolean read FDefaultCaption write SetDefaultCaption default False;
     property Glyph: TBitmap read GetGlyph write SetGlyph stored IsGlyphStored;
     property NumGlyphs: Integer read GetNumGlyphs write SetNumGlyphs default 1;
     property Images: TCustomImageList read GetImages write SetImages;
@@ -289,9 +289,11 @@ type
     procedure AssignClient(AClient: TObject); override;
     procedure SetGroupIndex(Value: Integer); override;
     procedure SetChecked(Value: Boolean); override;
+    procedure SetImageIndex(Value: Integer); override;
   public
     function IsCheckedLinked: Boolean; override;
     function IsGroupIndexLinked: Boolean; override;
+    function IsImageIndexLinked: Boolean; override;
   end;
 
   { TCustomSpeedButton }

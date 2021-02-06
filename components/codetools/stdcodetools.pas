@@ -57,7 +57,7 @@ uses
   ExprEval, KeywordFuncLists, BasicCodeTools, LinkScanner,
   CodeCache, LFMTrees, SourceChanger, CustomCodeTool, CodeToolsStructs,
   // LazUtils
-  LazFileUtils, LazFileCache, AvgLvlTree;
+  LazFileUtils, LazFileCache, LazUTF8, AvgLvlTree;
 
 type
   TStandardCodeTool = class;
@@ -72,6 +72,11 @@ type
   end;
 
   TUsesSection = (usMain, usImplementation);
+  TAddUsesFlag = (
+    aufLast,
+    aufNotCheckSpecialUnit
+    );
+  TAddUsesFlags = set of TAddUsesFlag;
 
   TOnFindDefinePropertyForContext = procedure(Sender: TObject;
     const ClassContext, AncestorClassContext: TFindContext;
@@ -112,18 +117,14 @@ type
           SourceChangeCache: TSourceChangeCache): boolean;
     function AddUnitToUsesSection(UsesNode: TCodeTreeNode;
           const NewUnitName, NewUnitInFile: string;
-          SourceChangeCache: TSourceChangeCache;
-          AsLast: boolean = false; CheckSpecialUnits: boolean = true): boolean;
+          SourceChangeCache: TSourceChangeCache; const Flags: TAddUsesFlags = []): boolean;
     function AddUnitToSpecificUsesSection(UsesSection: TUsesSection;
           const NewUnitName, NewUnitInFile: string;
-          SourceChangeCache: TSourceChangeCache;
-          AsLast: boolean = false; CheckSpecialUnits: boolean = true): boolean;
+          SourceChangeCache: TSourceChangeCache; const Flags: TAddUsesFlags = []): boolean;
     function AddUnitToMainUsesSection(const NewUnitName, NewUnitInFile: string;
-          SourceChangeCache: TSourceChangeCache;
-          AsLast: boolean = false; CheckSpecialUnits: boolean = true): boolean;
+          SourceChangeCache: TSourceChangeCache; const Flags: TAddUsesFlags = []): boolean;
     function AddUnitToImplementationUsesSection(const NewUnitName, NewUnitInFile: string;
-          SourceChangeCache: TSourceChangeCache;
-          AsLast: boolean = false; CheckSpecialUnits: boolean = true): boolean;
+          SourceChangeCache: TSourceChangeCache; const Flags: TAddUsesFlags = []): boolean;
     function UnitExistsInUsesSection(UsesSection: TUsesSection;
           const AnUnitName: string): boolean;
     function UnitExistsInUsesSection(UsesNode: TCodeTreeNode;
@@ -359,7 +360,7 @@ type
           out StartInStringConst, EndInStringConst: boolean): boolean;
           
     // register procedure
-    function HasInterfaceRegisterProc(out HasRegisterProc: boolean): boolean;
+    function HasInterfaceRegisterProc: boolean;
     
     // Delphi to Lazarus conversion
     function ConvertDelphiToLazarusSource(AddLRSCode: boolean;
@@ -632,8 +633,7 @@ end;
 
 function TStandardCodeTool.AddUnitToUsesSection(UsesNode: TCodeTreeNode;
   const NewUnitName, NewUnitInFile: string;
-  SourceChangeCache: TSourceChangeCache; AsLast: boolean;
-  CheckSpecialUnits: boolean): boolean;
+  SourceChangeCache: TSourceChangeCache; const Flags: TAddUsesFlags): boolean;
 const
   SpecialUnits: array[1..5] of string = (
     'cmem',
@@ -732,7 +732,7 @@ var
   UsesInsertPolicy: TUsesInsertPolicy;
   Prio: LongInt;
   FirstNormalUsesNode: TCodeTreeNode;
-  InsertPosFound: Boolean;
+  InsertPosFound, CheckSpecialUnits: Boolean;
 begin
   Result:=false;
   if (UsesNode=nil) or (UsesNode.Desc<>ctnUsesSection)
@@ -746,9 +746,10 @@ begin
 
   Prio:=SpecialUnitPriority(PChar(NewUnitName));
   UsesInsertPolicy:=Beauty.UsesInsertPolicy;
-  if AsLast then
+  if aufLast in Flags then
     UsesInsertPolicy:=uipLast;
   InsertPosFound:=false;
+  CheckSpecialUnits:=not (aufNotCheckSpecialUnit in Flags);
   if CheckSpecialUnits and (Prio<=High(SpecialUnits)) then begin
     // this is a special unit, insert at the beginning
     InsertBehind:=false;
@@ -940,23 +941,23 @@ end;
 
 function TStandardCodeTool.AddUnitToMainUsesSection(const NewUnitName,
   NewUnitInFile: string; SourceChangeCache: TSourceChangeCache;
-  AsLast: boolean; CheckSpecialUnits: boolean): boolean;
+  const Flags: TAddUsesFlags): boolean;
 begin
-  Result:=AddUnitToSpecificUsesSection(usMain, NewUnitName, NewUnitInFile, SourceChangeCache,
-    AsLast, CheckSpecialUnits);
+  Result:=AddUnitToSpecificUsesSection(usMain, NewUnitName, NewUnitInFile,
+                                       SourceChangeCache, Flags);
 end;
 
-function TStandardCodeTool.AddUnitToImplementationUsesSection(const NewUnitName,
-  NewUnitInFile: string; SourceChangeCache: TSourceChangeCache;
-  AsLast: boolean; CheckSpecialUnits: boolean): boolean;
+function TStandardCodeTool.AddUnitToImplementationUsesSection(
+  const NewUnitName, NewUnitInFile: string;
+  SourceChangeCache: TSourceChangeCache; const Flags: TAddUsesFlags): boolean;
 begin
-  Result:=AddUnitToSpecificUsesSection(usImplementation, NewUnitName, NewUnitInFile, SourceChangeCache,
-    AsLast, CheckSpecialUnits);
+  Result:=AddUnitToSpecificUsesSection(usImplementation,
+                          NewUnitName, NewUnitInFile, SourceChangeCache, Flags);
 end;
 
-function TStandardCodeTool.AddUnitToSpecificUsesSection(UsesSection: TUsesSection;
-  const NewUnitName, NewUnitInFile: string; SourceChangeCache: TSourceChangeCache;
-  AsLast: boolean; CheckSpecialUnits: boolean): boolean;
+function TStandardCodeTool.AddUnitToSpecificUsesSection(
+  UsesSection: TUsesSection; const NewUnitName, NewUnitInFile: string;
+  SourceChangeCache: TSourceChangeCache; const Flags: TAddUsesFlags): boolean;
 var
   UsesNode, OtherUsesNode, SectionNode, Node: TCodeTreeNode;
   NewUsesTerm: string;
@@ -1001,7 +1002,7 @@ begin
       if not (FindUnitInUsesSection(UsesNode,NewUnitName,Junk,Junk))
       then begin
         if not AddUnitToUsesSection(UsesNode,NewUnitName,NewUnitInFile,
-                                    SourceChangeCache,AsLast,CheckSpecialUnits)
+                                    SourceChangeCache,Flags)
         then
           exit;
       end;
@@ -1423,12 +1424,12 @@ begin
   BuildTree(lsrMainUsesSectionEnd);
   UsesNode:=FindMainUsesNode(UseContainsSection);
   if UsesNode=nil then exit;
-  FoundInUnits:=TStringList.Create;
-  MissingInUnits:=TStringList.Create;
+  FoundInUnits:=TStringListUTF8Fast.Create;
+  MissingInUnits:=TStringListUTF8Fast.Create;
   if IgnoreNormalUnits then
     NormalUnits:=nil
   else
-    NormalUnits:=TStringList.Create;
+    NormalUnits:=TStringListUTF8Fast.Create;
   Node:=UsesNode.FirstChild;
   while Node<>nil do begin
     // read next unit name
@@ -3113,6 +3114,8 @@ begin
   ReadNextAtom;
   if AtomIsChar('(') then begin
     ReadNextAtom;
+    if UpAtomIs('SPECIALIZE') then
+      ReadNextAtom;
     if AtomIsIdentifier then
       AncestorClassName:=GetAtom;
   end;
@@ -3949,42 +3952,22 @@ begin
                        FormatParameters,StartInStringConst,EndInStringConst);
 end;
 
-function TStandardCodeTool.HasInterfaceRegisterProc(out HasRegisterProc: boolean
-  ): boolean;
-
-  function IsRegisterProc(ANode: TCodeTreeNode): boolean;
-  begin
-    Result:=false;
-    if ANode=nil then exit;
-    if ANode.Desc=ctnProcedureHead then
-      ANode:=Anode.Parent;
-    if (ANode.Desc<>ctnProcedure) then exit;
-    MoveCursorToNodeStart(ANode);
-    if not ReadNextUpAtomIs('PROCEDURE') then exit;
-    if not ReadNextUpAtomIs('REGISTER') then exit;
-    if CurPos.Flag<>cafSemicolon then exit;
-    HasRegisterProc:=true;
-    Result:=true;
-  end;
-
+function TStandardCodeTool.HasInterfaceRegisterProc: boolean;
 var
-  InterfaceNode: TCodeTreeNode;
   ANode: TCodeTreeNode;
 begin
   Result:=false;
-  HasRegisterProc:=false;
   ANode:=FindDeclarationNodeInInterface('Register',true);
   if ANode=nil then exit;
-  if IsRegisterProc(ANode) then
-    exit(true);
-  // there may be multiple register
-  InterfaceNode:=FindInterfaceNode;
-  ANode:=InterfaceNode.FirstChild;
-  while ANode<>nil do begin
-    if IsRegisterProc(ANode) then
-      exit(true);
-    ANode:=ANode.NextBrother;
-  end;
+  if ANode.Desc=ctnProcedureHead then
+    ANode:=Anode.Parent;
+  if (ANode.Desc<>ctnProcedure) then exit;
+  MoveCursorToNodeStart(ANode);
+  if not ReadNextUpAtomIs('PROCEDURE') then exit;
+  if not ReadNextUpAtomIs('REGISTER') then exit;
+  ReadNextAtom;
+  if CurPos.Flag<>cafSemicolon then exit;
+  Result:=true;
 end;
 
 function TStandardCodeTool.ConvertDelphiToLazarusSource(AddLRSCode: boolean;
@@ -6673,7 +6656,7 @@ var
   begin
     if Found then begin
       if FoundIncludeFiles=nil then
-        FoundIncludeFiles:=TStringList.Create;
+        FoundIncludeFiles:=TStringListUTF8Fast.Create;
       NewFilename:=TrimFilename(AFilename);
       if FoundIncludeFiles.IndexOf(NewFilename)<0 then
         FoundIncludeFiles.Add(NewFilename);

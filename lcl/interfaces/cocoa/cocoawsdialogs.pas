@@ -25,14 +25,15 @@ interface
 
 uses
   // RTL,FCL
-  MacOSAll, CocoaAll, Classes,
+  MacOSAll,
+  CocoaAll, Classes,
   // LCL
   Controls, StrUtils, SysUtils, Forms, Dialogs, Graphics, Masks,
-  LCLType, LMessages, LCLProc,
+  LCLType, LCLProc, LCLStrConsts,
   // Widgetset
-  WSForms, WSLCLClasses, WSProc, WSDialogs, LCLMessageGlue,
+  WSForms, WSLCLClasses, WSDialogs,
   // LCL Cocoa
-  CocoaPrivate, CocoaUtils, CocoaWSCommon, CocoaWSStdCtrls, CocoaGDIObjects
+  CocoaUtils, CocoaGDIObjects
   ,Cocoa_Extra, CocoaWSMenus;
 
 type
@@ -135,6 +136,14 @@ type
     function panel_shouldEnableURL(sender: id; url: NSURL): LCLObjCBoolean; message 'panel:shouldEnableURL:';
   end;
 
+var
+  // if set to "true", then OpenDialog would create UTI identifiers
+  // for filtering files. As a result a broaded set of files might be available
+  // than specified in the extensions filter.
+  // "false" is forces the dialog to use panel_shouldEnableURL. It's a slower
+  // check (due to security implications), but it's LCL compatible
+  CocoaUseUTIFilter : Boolean = false;
+
 implementation
 
 uses
@@ -146,6 +155,8 @@ uses
 procedure UpdateOptions(src: TOpenDialog; dst: NSSavePanel);
 begin
   dst.setShowsHiddenFiles( ofForceShowHidden in src.Options );
+  if (dst.respondsToSelector(objcselector('setShowsTagField:'))) then
+    dst.setShowsTagField(false);
 end;
 
 procedure UpdateOptions(src: TFileDialog; dst: NSSavePanel);
@@ -164,11 +175,16 @@ type
     selUrl: NSURL;
     filter: NSOpenSavePanelDelegateProtocol;
     procedure dealloc; override;
-    function panel_shouldEnableURL(sender: id; url: NSURL): LCLObjCBoolean;
     procedure panel_didChangeToDirectoryURL(sender: id; url: NSURL);
     function panel_userEnteredFilename_confirmed(sender: id; filename: NSString; okFlag: LCLObjCBoolean): NSString;
     procedure panel_willExpand(sender: id; expanding: LCLObjCBoolean);
     procedure panelSelectionDidChange(sender: id);
+  end;
+
+  // Having path_shouldEnableURL is causing a slowness on a file selection
+  // Just having the method declared already introduces a lag in the file selection
+  TOpenSaveDelegateWithFilter = objcclass(TOpenSaveDelegate, NSOpenSavePanelDelegateProtocol)
+    function panel_shouldEnableURL(sender: id; url: NSURL): LCLObjCBoolean;
   end;
 
 { TOpenSaveDelegate }
@@ -179,7 +195,7 @@ begin
   inherited dealloc;
 end;
 
-function TOpenSaveDelegate.panel_shouldEnableURL(sender: id; url: NSURL
+function TOpenSaveDelegateWithFilter.panel_shouldEnableURL(sender: id; url: NSURL
   ): LCLObjCBoolean;
 begin
   if Assigned(filter) then
@@ -267,6 +283,8 @@ var
   lFilter: TCocoaFilterComboBox;
   callback: TOpenSaveDelegate;
 
+  isMenuOn: Boolean;
+
   // setup panel and its accessory view
   procedure CreateAccessoryView(AOpenOwner: NSOpenPanel; ASaveOwner: NSSavePanel);
   const
@@ -289,7 +307,12 @@ var
     lDialogView := NSView(ASaveOwner.contentView);
     if lDialogView <> nil then
     begin
-      if lDialogView.frame.size.width > INT_MIN_ACCESSORYVIEW_WIDTH then
+      if (NSAppkitVersionNumber >= NSAppKitVersionNumber11_0) then
+        // starting with Big Sur, the dialog retains the last openned size
+        // causing the width to be increased on every openning of the dialog
+        // we'd simply force the lAccessoryWidth to start with the minimum width
+        lAccessoryWidth := INT_MIN_ACCESSORYVIEW_WIDTH
+      else if lDialogView.frame.size.width > INT_MIN_ACCESSORYVIEW_WIDTH then
         lAccessoryWidth := Round(lDialogView.frame.size.width);
     end;
     lRect := GetNSRect(0, 0, lAccessoryWidth, 30);
@@ -308,8 +331,9 @@ var
     lText.setEditable(False);
     lText.setSelectable(False);
     {$endif}
-    lTextStr := NSStringUTF8('Format:');
+    lTextStr := NSStringUTF8(rsMacOSFileFormat);
     lText.setStringValue(lTextStr);
+    lText.setFont(NSFont.systemFontOfSize(NSFont.systemFontSizeForControlSize(NSRegularControlSize)));
     lText.sizeToFit;
 
     // Combobox
@@ -419,18 +443,25 @@ begin
     openDlg := nil;
   end;
 
-  callback:=TOpenSaveDelegate.alloc;
+  saveDlg.retain; // this is for OSX 10.6 (and we don't use ARC either)
+
+  if not Assigned(lFilter) or (CocoaUseUTIFilter) then
+    callback:=TOpenSaveDelegate.alloc
+  else begin
+    callback:=TOpenSaveDelegateWithFilter.alloc;
+  end;
+  callback.filter := lFilter;
+  callback := callback.init;
   callback.autorelease;
   callback.FileDialog := FileDialog;
   if FileDialog is TOpenDialog then
     callback.OpenDialog := TOpenDialog(FileDialog);
-  callback.filter := lFilter;
   saveDlg.setDelegate(callback);
   saveDlg.setTitle(NSStringUtf8(FileDialog.Title));
   saveDlg.setDirectoryURL(NSURL.fileURLWithPath(NSStringUtf8(InitDir)));
   UpdateOptions(FileDialog, saveDlg);
 
-  ToggleAppMenu(false);
+  isMenuOn := ToggleAppMenu(false);
   try
     if saveDlg.runModal = NSOKButton then
     begin
@@ -438,7 +469,7 @@ begin
       FileDialog.Files.Clear;
 
       if Assigned(openDlg) then
-        for i := 0 to openDlg.filenames.Count - 1 do
+        for i := 0 to openDlg.URLs.Count - 1 do
           FileDialog.Files.Add(NSStringToString(
             NSURL(openDlg.URLs.objectAtIndex(i)).path));
 
@@ -450,9 +481,10 @@ begin
 
 
     // release everything
+    saveDlg.release;
     LocalPool.Release;
   finally
-    ToggleAppMenu(true);
+    ToggleAppMenu(isMenuOn);
   end;
 
 end;  {TCocoaWSFileDialog.ShowModal}
@@ -474,6 +506,8 @@ var
   accessoryView: NSView;
   lRect: NSRect;
   okButton, cancelButton: NSButton;
+
+  isMenuOn: Boolean;
 begin
   {$IFDEF VerboseWSClass}
   DebugLn('TCocoaWSColorDialog.ShowModal for ' + ACommonDialog.Name);
@@ -515,7 +549,7 @@ begin
 
   colorPanel.setDelegate(colorDelegate);
   colorPanel.setAccessoryView(accessoryView.autorelease);
-  colorPanel.setShowsAlpha(True);
+  colorPanel.setShowsAlpha(False);
   colorPanel.setDefaultButtonCell(okButton.cell);
 
   // load user settings
@@ -528,8 +562,13 @@ begin
 *)
 
   // show panel
-  colorPanel.makeKeyAndOrderFront(colorDelegate);
-  NSApp.runModalForWindow(colorPanel);
+  isMenuOn := ToggleAppMenu(false);
+  try
+    colorPanel.makeKeyAndOrderFront(colorDelegate);
+    NSApp.runModalForWindow(colorPanel);
+  finally
+    ToggleAppMenu(isMenuOn);
+  end;
 end;
 
 { TCocoaWSFontDialog }
@@ -551,6 +590,7 @@ var
   lRect: NSRect;
   okButton, cancelButton: NSButton;
   fn : NSFont;
+  isMenuOn: Boolean;
 begin
   {$IFDEF VerboseWSClass}
   DebugLn('TCocoaWSFontDialog.ShowModal for ' + ACommonDialog.Name);
@@ -613,8 +653,13 @@ begin
 *)
 
   // show panel
-  FontPanel.makeKeyAndOrderFront(FontDelegate);
-  NSApp.runModalForWindow(FontPanel);
+  isMenuOn := ToggleAppMenu(false);
+  try
+    FontPanel.makeKeyAndOrderFront(FontDelegate);
+    NSApp.runModalForWindow(FontPanel);
+  finally
+    ToggleAppMenu(isMenuOn);
+  end;
 end;
 
 { TColorPanelDelegate }
@@ -829,8 +874,49 @@ var
   ns: NSString;
   i, lOSVer: Integer;
   lStr: String;
+  uti : CFStringRef;
+  ext : string;
+  j   : integer;
 begin
   if Filters = nil then Exit;
+  if CocoaUseUTIFilter then
+  begin
+    lCurFilter := TStringList(Filters.Objects[ASelectedFilterIndex]);
+    NSFilters := NSMutableArray.alloc.init;
+    for i:=0 to lCurFilter.Count-1 do
+    begin
+      ext := lCurFilter[i];
+      if (ext='') then Continue;
+      if (ext='*.*') or (ext = '*') then begin
+        //uti:=CFSTR('public.content');
+        NSFilters.removeAllObjects;
+        break;
+      end else begin
+        // using the last part of the extension, as Cocoa doesn't suppot
+        // complex extensions, such as .tar.gz
+        j:=length(ext);
+        while (j>0) and (ext[j]<>'.') do dec(j);
+        if (j>0) then inc(j);
+        ext := System.Copy(ext, j, length(ext));
+        // todo: this API is deprecated in macOS 11. There's no UTType ObjC class
+        //       to be used
+        uti:=UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension,
+          CFStringRef(NSString.stringWithUTF8String(PChar(ext))), CFSTR('public.data'));
+      end;
+      if Assigned(uti) then
+        NSFilters.addObject(id(uti));
+    end;
+
+    if (NSFilters.count = 0) then
+    begin
+      // select any file
+      NSFilters.addObject(id(CFSTR('public.content')));
+      NSFilters.addObject(id(CFSTR('public.data')));
+    end;
+    DialogHandle.setAllowedFileTypes(NSFilters);
+    NSFilters.autorelease;
+    exit;
+  end;
 
   if NSFilters = nil then
   begin
@@ -876,7 +962,7 @@ begin
   begin
     setDialogFilter(indexOfSelectedItem);
     if Assigned(Owner) then
-      Owner.IntfFileTypeChanged(lastSelectedItemIndex);
+      Owner.IntfFileTypeChanged(indexOfSelectedItem+1);
   end;
   lastSelectedItemIndex := indexOfSelectedItem;
 end;

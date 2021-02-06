@@ -90,7 +90,8 @@ type
     procedure SetBrushColor(AColor: TChartColor);
     procedure SetBrushParams(AStyle: TFPBrushStyle; AColor: TChartColor);
     procedure SetPenColor(AColor: TChartColor);
-    procedure SetPenParams(AStyle: TFPPenStyle; AColor: TChartColor);
+    procedure SetPenParams(AStyle: TFPPenStyle; AColor: TChartColor; AWidth: Integer = 1);
+    procedure SetPenWidth(AWidth: Integer);
   end;
 
 
@@ -486,7 +487,7 @@ begin
   end;
 
   // Set the requested font attributes
-  FFont.SizeInPoints := IfThen(AFont.Size = 0, DEFAULT_FONT_SIZE, AFont.Size);
+  FFont.SizeInPoints := Math.IfThen(AFont.Size = 0, DEFAULT_FONT_SIZE, AFont.Size);
   FFont.UnderlineDecoration := AFont.Underline;
   FFont.StrikeoutDecoration := AFont.StrikeThrough;
   FFont.Hinted := true;
@@ -515,10 +516,17 @@ begin
   FPen.FPColor := FChartColorToFPColorFunc(ColorOrMono(AColor));
 end;
 
-procedure TSVGDrawer.SetPenParams(AStyle: TFPPenStyle; AColor: TChartColor);
+procedure TSVGDrawer.SetPenParams(AStyle: TFPPenStyle; AColor: TChartColor;
+  AWidth: Integer = 1);
 begin
   FPen.FPColor := FChartColorToFPColorFunc(ColorOrMono(AColor));
   FPen.Style := AStyle;
+  FPen.Width := AWidth;
+end;
+
+procedure TSVGDrawer.SetPenWidth(AWidth: Integer);
+begin
+  FPen.Width := AWidth;
 end;
 
 function TSVGDrawer.SimpleTextExtent(const AText: String): TPoint;

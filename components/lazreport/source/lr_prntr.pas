@@ -9,6 +9,7 @@
 {*****************************************}
 
 {.$define DbgPrinter}
+{.$define DbgPrinter_detail}
 
 unit LR_Prntr;
 
@@ -24,11 +25,14 @@ uses
 
 type
 
+  TlrPaperUnits = (puPoints, puTenthsMM);
+
   { TfrPrinter }
 
   TfrPrinter = class
   private
     FDevice: PChar;
+    FDocumentUnits: TlrPaperUnits;
     FDriver: PChar;
     FPort: PChar;
     //FDeviceMode: THandle;
@@ -43,6 +47,7 @@ type
     procedure SetPrinterIndex(Value: Integer);
     function  GetPaperNames: TStringList;
     function  MatchPrinterPaper(const aWidth, aHeight: Integer): integer;
+    function  GetPaperRect: TPaperRect;
   public
     Orientation: TPrinterOrientation;
     PaperSize: Integer;
@@ -61,23 +66,27 @@ type
     function DefaultPaperIndex: Integer;
     function DefaultPageSize: Integer;
     function UseVirtualPrinter: boolean;
+    function FillPapers(list: TStrings; addCustom:boolean=true): Integer;
     {$IFDEF DbgPrinter}
     procedure DumpPrinterInfo;
     {$ENDIF}
-    
+
+    property DocumentUnits: TlrPaperUnits read FDocumentUnits write FDocumentUnits;
     property PaperNames: TStringList read GetPaperNames;
     property Printer: TPrinter read FPrinter write SetPrinter;
     property Printers: TStringList read FPrinters;
     property PrinterIndex: Integer read FPrinterIndex write SetPrinterIndex;
   end;
   
-var
-  Prn: TfrPrinter;
+function  Prn : TfrPrinter;
 
 const
   MAX_TYP_KNOWN = 118;
 
 implementation
+
+var
+  GlobalPrn: TfrPrinter = nil;
 
 type
   TPaperInfo = record
@@ -362,6 +371,25 @@ const
 //      http://source.winehq.org/source/include/wingdi.h#L2927
 //
 {$ENDIF}
+
+
+
+function Prn: TfrPrinter;
+begin
+if Assigned( GlobalPrn ) then
+  Exit( GlobalPrn );
+
+  GlobalPrn := TfrPrinter.Create;
+  try
+    GlobalPrn.Printer:=Printer;
+  except
+    on E: Exception do begin
+      debugln('lazreport: unit lr_prntr: ',E.Message);
+    end;
+  end;
+  Exit( GlobalPrn );
+end;
+
 
 {----------------------------------------------------------------------------}
 constructor TfrPrinter.Create;
@@ -789,7 +817,7 @@ begin
     {$ENDIF}
     
     {$IFDEF DbgPrinter_detail}
-    DebugLn(['Dump printer List of papers:']);
+    DebugLn(['Dump printer List of papers for ''',fPrinter.PrinterName,''' :']);
 
     n := FPapernames.IndexOf(FPrinter.PaperSize.PaperName);
     if n<0 then
@@ -829,7 +857,7 @@ begin
     end;
   end;
   {$ifdef DbgPrinter}
-  DebugLnExit(['TfrPrinter.GetSettings DONE: PrinterChanged: ', PrinterChanged]);
+  DebugLnExit('TfrPrinter.GetSettings DONE: Paper w=%d h=%d or=%d', [PaperWidth, PaperHeight, ord(Orientation)]);
   {$endif}
 end;
 
@@ -859,34 +887,11 @@ begin
     //
     // based on the old information, find a suitable paper within our own
     // custom paper list.
-    FPaperNames.Clear;
-    for i:=0 to PAPERCOUNT-1 do begin
-      FPaperNames.Add(PaperInfo[i].Name);
-      if (WinPaperSize<>256)and(WinPaperSize=PaperInfo[i].Typ) then begin
-
-        PrinterIndex := i;
-
-        {$IFDEF MSWINDOWS}
-        PaperWidth := PaperInfo[i].X;
-        PaperHeight:= PaperInfo[i].Y;
-        {$ELSE}
-        PaperWidth := PPDPaperInfo[i].X;
-        PaperWidth := PPDPaperInfo[i].Y;
-        {$ENDIF}
-
-        if Orientation = poLandscape then
-        begin
-          n := PaperWidth;
-          PaperWidth := PaperHeight;
-          PaperHeight := n;
-        end;
-
-      end;
-    end;
     *)
     {$ifdef DbgPrinter}
     DebugLn('DefaultPrinter, setting up defaultSet of Papers');
     {$endif}
+    n := -1;
     FPaperNames.Clear;
     for i := 0 to PAPERCOUNT - 1 do
     begin
@@ -894,20 +899,30 @@ begin
       PaperSizes[i] := PaperInfo[i].Typ;
       if (PaperSize <> $100) and (PaperSize = PaperInfo[i].Typ) then
       begin
-      {$ifdef DbgPrinter}
-      DebugLn(['DefaultPrinter, PaperSize=',PaperSize,' Corresponds to ', PaperInfo[i].Name]);
-      {$endif}
-        PaperWidth := PaperInfo[i].X;
-        PaperHeight := PaperInfo[i].Y;
+        {$ifdef DbgPrinter}
+        DebugLn(['DefaultPrinter, PaperSize=',PaperSize,' Corresponds to ', PaperInfo[i].Name]);
+        {$endif}
+        n := i;
         if Orientation = poLandscape then
         begin
-          n := PaperWidth;
-          PaperWidth := PaperHeight;
-          PaperHeight := n;
+          PaperWidth := PaperInfo[i].Y;
+          PaperHeight := PaperInfo[i].X;
+        end else
+        begin
+          PaperWidth := PaperInfo[i].X;
+          PaperHeight := PaperInfo[i].Y;
         end;
+        break;
       end;
     end;
     PaperSizesNum := PAPERCOUNT;
+    if (n<0) and (FDocumentUnits=puPoints) then
+    begin
+      // Paper units are points and paperSize didn't match any predefined
+      // paper, yet SetFillInfo expects tenths of mm, convert them here.
+      PaperWidth  := round(PaperWidth*254/72);
+      PaperHeight := round(PaperHeight*254/72);
+    end;
     {$IFDEF DbgPrinter}
     DebugLnExit('TfrPrinter.SetSettings: EXIT (default printer)');
     {$ENDIF}
@@ -932,7 +947,10 @@ begin
     // todo: real USER custom sized papers are handled here
     //    requested custom paper size currently is not
     //    supported by printer4lazarus
-    DebugLn('SetCustomPaperSize REQUESTED, not yet supported...');
+    {$IFDEF DbgPrinter}
+    DebugLn('PaperSize Setting CustomPaper width=%d height=%d', [paperWidth, paperHeight]);
+    {$ENDIF}
+    FPrinter.PaperSize.PaperRect := GetPaperRect;
   end else begin
     // Standard paper sizes are handled here
     n := -1;
@@ -998,7 +1016,8 @@ var
   kx, ky: Double;
 begin
   {$ifdef DbgPrinter}
-  DebugLnEnter(['TfrPrinter.FillPrnInfo INIT IsDefaultPrinter=',UseVirtualPrinter]);
+  DebugLnEnter('TfrPrinter.FillPrnInfo INIT IsVirtualPrn=%s DocUnits=%d PWidth=%d PHeight=%d',
+    [dbgs(UseVirtualPrinter), ord(DocumentUnits), PaperWidth, PaperHeight]);
   {$endif}
 
   kx := 93 / 1.022;
@@ -1133,17 +1152,41 @@ begin
   result := FPrinterIndex = FDefaultPrinter;
 end;
 
+function TfrPrinter.FillPapers(list: TStrings; addCustom: boolean): Integer;
+var
+  i, customIndex: Integer;
+begin
+  list.BeginUpdate;
+  try
+    list.Clear;
+    result := FPaperNames.Count;
+    customIndex := -1;
+    for i:=0 to result-1 do
+    begin
+      if PaperSizes[i]=256 then
+        customIndex := i;
+      list.AddObject(FPaperNames[i], TObject(PtrInt(PaperSizes[i])));
+    end;
+    if addCustom and (customIndex<0) then
+      list.AddObject(sPaper256, TObject(PtrInt(256)));
+  finally
+    list.EndUpdate;
+  end;
+end;
+
 {$IFDEF DbgPrinter}
 procedure TfrPrinter.DumpPrinterInfo;
 begin
 
   DbgOut(['PrinterIndex=',FPrinterIndex]);
-  if (FPrinters<>nil)and(FPrinters.Count>0) then begin
+  if FPrinters.Count>0 then begin
     if FPrinterIndex>=0 then
       DbgOut([' (',FPrinters[FPrinterIndex],')'])
+    else
+      DbgOut(' (no printer selected???)');
   end else
-    DbgOut(' (no defined internal list of printers)');
-  DebugLn([' Is Default(Virtual) printer=',UseVirtualPrinter]);
+    DbgOut(' (internal list of printers is empty)');
+  DebugLn([' Is Virtual printer=',UseVirtualPrinter]);
   if FPrinter=nil then
     DebugLn('SysPrinter is nil')
   else
@@ -1201,11 +1244,23 @@ begin
     end;
 end;
 
+function TfrPrinter.GetPaperRect: TPaperRect;
+begin
+  result.PhysicalRect.Left := 0;
+  result.PhysicalRect.Top := 0;
+  result.PhysicalRect.Width := PaperWidth * FPrinter.XDPI div 72;
+  result.PhysicalRect.Height := PaperHeight * FPrinter.YDPI div 72;
+  result.WorkRect := result.PhysicalRect;
+end;
+
 procedure TfrPrinter.SetPrinter(Value: TPrinter);
 begin
   {$ifdef DbgPrinter}
   DebugLnEnter('TfrPrinter.SetPrinter: INIT',[]);
   DumpPrinterInfo;
+  DbgOut('New printer ');
+  if Value=nil then DebugLn('is nil')
+  else              DebugLn('Index=%d ''%s''',[Value.PrinterIndex, Value.PrinterName]);
   {$endif}
   FPrinters.Clear;
   FPrinterIndex := 0;
@@ -1245,16 +1300,9 @@ end;
 {----------------------------------------------------------------------------}
 
 initialization
-  Prn := TfrPrinter.Create;
-  try
-    Prn.Printer:=Printer;
-  except
-    on E: Exception do begin
-      debugln('lazreport: unit lr_prntr: ',E.Message);
-    end;
-  end;
 
 finalization
-  Prn.Free;
+  if Assigned( GlobalPrn ) then
+    GlobalPrn.Free;
 
 end.

@@ -37,8 +37,7 @@ uses
   // CodeTools
   DefineTemplates, CodeToolManager, FileProcs,
   // LazUtils
-  LazFileCache, LazUTF8, LazUTF8Classes, LazFileUtils, FileUtil,
-  LazLoggerBase, Laz2_XMLCfg,
+  LazFileCache, LazUTF8, LazFileUtils, FileUtil, LazLoggerBase, Laz2_XMLCfg,
   // IDE
   LazarusIDEStrConsts, LazConf, EnvironmentOpts, FppkgHelper;
 
@@ -48,7 +47,8 @@ type
     sddqWrongMinorVersion,
     sddqWrongVersion,
     sddqIncomplete,
-    sddqCompatible
+    sddqCompatible,
+    sddqMakeNotWithFpc  // Make not in the same directory as compiler
     );
 
   TSDFileInfo = class
@@ -146,7 +146,7 @@ function CheckLazarusDirectoryQuality(ADirectory: string;
   end;
 
 var
-  sl: TStringListUTF8;
+  sl: TStringList;
   VersionIncFile: String;
   Version: String;
 begin
@@ -165,7 +165,7 @@ begin
   if not SubFileExists('ide/lazarus.lpi',Result) then exit;
   VersionIncFile:=GetForcedPathDelims('ide/version.inc');
   if not SubFileExists(VersionIncFile,Result) then exit;
-  sl:=TStringListUTF8.Create;
+  sl:=TStringList.Create;
   try
     try
       sl.LoadFromFile(ADirectory+VersionIncFile);
@@ -327,7 +327,7 @@ var
   function CheckPPU(const AnUnitName: string): boolean;
   begin
     if (CfgCache.Units=nil)
-    or (CompareFileExt(CfgCache.Units[AnUnitName],'ppu',false)<>0) then
+    or (CompareFileExt(CfgCache.Units[AnUnitName],'ppu',true)<>0) then
     begin
       Note:=Format(lisPpuNotFoundCheckYourFpcCfg, [AnUnitName]);
       Result:=false;
@@ -684,7 +684,7 @@ function CheckFPCSrcDirQuality(ADirectory: string; out Note: string;
 
 var
   VersionFile: String;
-  sl: TStringListUTF8;
+  sl: TStringList;
   i: Integer;
   VersionNr: String;
   ReleaseNr: String;
@@ -711,7 +711,7 @@ begin
     VersionFile:=ADirectory+'compiler'+PathDelim+'version.pas';
     if FileExistsInternal(VersionFile) then
     begin
-      sl:=TStringListUTF8.Create;
+      sl:=TStringList.Create;
       try
         try
           sl.LoadFromFile(VersionFile);
@@ -902,7 +902,7 @@ begin
     if not FileExistsCached(ExtractFilePath(AFilename)+'fpc.exe') then begin
       Note:=Format(lisThereIsNoFpcExeInTheDirectoryOfUsuallyTheMakeExecu, [
         ExtractFilename(AFilename)]);
-      Result:=sddqIncomplete;
+      Result:=sddqMakeNotWithFpc;
       exit;
     end;
   end;
@@ -934,7 +934,7 @@ function SearchMakeExeCandidates(StopIfFits: boolean): TSDFileInfoList;
       List:=TSDFileInfoList.create(true);
     Item:=List.AddNewItem(RealFilename, AFilename);
     Item.Quality:=CheckMakeExeQuality(RealFilename, Item.Note);
-    Result:=(Item.Quality=sddqCompatible) and StopIfFits;
+    Result:=(Item.Quality=sddqCompatible) or ((Item.Quality=sddqMakeNotWithFpc) and StopIfFits);
   end;
 
 var

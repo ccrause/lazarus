@@ -19,9 +19,8 @@ unit Gtk3WSFactory;
 
 interface
 uses
-  Classes, Controls, ComCtrls, Calendar, StdCtrls, Arrow, Spin,
-  Dialogs, ExtCtrls, ExtDlgs, Buttons, CheckLst, Forms, Grids, Menus,
-  ImgList, PairSplitter, WSLCLClasses;
+  Classes, Controls, ComCtrls, Calendar, StdCtrls, Dialogs, ExtCtrls, ExtDlgs,
+  Buttons, Spin, CheckLst, Forms, Menus, ImgList, PairSplitter, WSLCLClasses;
 
 
 // imglist
@@ -285,8 +284,8 @@ end;
 
 function RegisterColorDialog: Boolean; alias : 'WSRegisterColorDialog';
 begin
-  // RegisterWSComponent(TColorDialog, TGtk3WSColorDialog);
-  Result := False;
+  RegisterWSComponent(TColorDialog, TGtk3WSColorDialog);
+  Result := True;
 end;
 
 function RegisterColorButton: Boolean; alias : 'WSRegisterColorButton';
@@ -297,8 +296,8 @@ end;
 
 function RegisterFontDialog: Boolean; alias : 'WSRegisterFontDialog';
 begin
-  // RegisterWSComponent(TFontDialog, TGtk3WSFontDialog);
-  Result := False;
+  RegisterWSComponent(TFontDialog, TGtk3WSFontDialog);
+  Result := True;
 end;
 
 // StdCtrls
@@ -467,7 +466,6 @@ end;
 //ExtDlgs
 function RegisterPreviewFileControl: Boolean; alias : 'WSRegisterPreviewFileControl';
 begin
-  // RegisterWSComponent(TPreviewFileControl, TGtk2WSPreviewFileControl); { GTK1 }
   RegisterWSComponent(TPreviewFileControl, TGtk3WSPreviewFileControl);
   Result := True;
 end;
@@ -569,7 +567,6 @@ end;
 
 function RegisterCustomGrid: Boolean; alias : 'WSRegisterCustomGrid';
 begin
-//  RegisterWSComponent(TCustomGrid, TGtk2WSCustomGrid); { GTK1 }
 //  RegisterWSComponent(TCustomGrid, TGtk2WSCustomGrid);
   Result := False;
 end;

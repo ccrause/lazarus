@@ -62,6 +62,7 @@ Type
     procedure Loaded; override;
     function IndexOfFile(const AFilename: string): integer;
     procedure KeyUp(var Key: Word; Shift: TShiftState); override;
+    procedure SetItemIndex(AIndex: Integer); override;
   public
     constructor Create(TheOwner: TComponent); override;
     destructor Destroy; override;
@@ -193,6 +194,7 @@ Type
     property ShowHint;
     property TabOrder;
     property TabStop;
+    property TextHint;
     property Visible;
     { events }
     property OnChange;
@@ -417,6 +419,12 @@ begin
   FDrive := AValue;
   // ToDo: change to current directory of drive
   UpdateFileList;
+end;
+
+procedure TCustomFileListbox.SetItemIndex(AIndex: Integer);
+begin
+  inherited;
+  UpdateSelectedFileName;
 end;
 
 procedure TCustomFileListBox.SetFileName(const AValue: String);

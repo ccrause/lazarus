@@ -11,7 +11,8 @@ uses
   // LazUtils
   LazMethodList,
   // SynEdit
-  SynEditMarks, SynEditMiscClasses, SynTextDrawer, SynEditMouseCmds, SynEditFoldedView;
+  SynEditMarks, SynEditMiscClasses, SynTextDrawer, SynEditMouseCmds,
+  LazSynTextArea;
 
 type
 
@@ -28,6 +29,7 @@ type
 
   TSynGutterBase = class(TPersistent)
   private
+    FGutterArea: TLazSynSurfaceWithText;
     FGutterPartList: TSynGutterPartListBase;
     FSide: TSynGutterSide;
     FSynEdit: TSynEditBase;
@@ -70,6 +72,7 @@ type
     function  CreateMouseActions: TSynEditMouseInternalActions; virtual;
     procedure Clear;
     function GetOwner: TPersistent; override;
+    property GutterArea: TLazSynSurfaceWithText read FGutterArea write FGutterArea;
   public
     constructor Create(AOwner : TSynEditBase; ASide: TSynGutterSide; ATextDrawer: TheTextDrawer);
     destructor Destroy; override;
@@ -119,7 +122,6 @@ type
     function GetSynEdit: TSynEditBase;
     procedure PutPart(Index: Integer; const AValue: TSynGutterPartBase);
   protected
-    function FindGutter: TSynGutterBase; virtual; abstract;
     procedure RegisterItem(AnItem: TSynObjectListItem); override;
     property Gutter: TSynGutterBase read FGutter;
     property SynEdit:TSynEditBase read GetSynEdit;
@@ -138,18 +140,12 @@ type
   { TSynGutterPartList
     GutterPartList for the left side Gutter. Historically the left Gutter is reffered to as Gutter without prefix }
 
-  TSynGutterPartList = class(TSynGutterPartListBase)
-  protected
-    function FindGutter: TSynGutterBase; override;
-  end;
+  TSynGutterPartList = class(TSynGutterPartListBase);
 
   { TSynRightGutterPartList
     GutterPartList for the right side Gutter. }
 
-  TSynRightGutterPartList = class(TSynGutterPartListBase)
-  protected
-    function FindGutter: TSynGutterBase; override;
-  end;
+  TSynRightGutterPartList = class(TSynGutterPartListBase);
 
   { TSynGutterPartBase }
 
@@ -165,7 +161,7 @@ type
     FOnChange: TNotifyEvent;
     FOnGutterClick: TGutterClickEvent;
     FMouseActions: TSynEditMouseInternalActions;
-    function GetFoldView: TSynEditFoldedView;
+    function GetGutterArea: TLazSynSurfaceWithText;
     function GetGutterParts: TSynGutterPartListBase;
     function GetMouseActions: TSynEditMouseActions;
     procedure SetMarkupInfo(const AValue: TSynSelectedColor);
@@ -188,7 +184,7 @@ type
     property GutterParts: TSynGutterPartListBase read GetGutterParts;
     property Gutter: TSynGutterBase read FGutter;
     property SynEdit:TSynEditBase read FSynEdit;
-    property FoldView: TSynEditFoldedView read GetFoldView;
+    property GutterArea: TLazSynSurfaceWithText read GetGutterArea;
   public
     constructor Create(AOwner: TComponent); override;
     destructor  Destroy; override;
@@ -225,8 +221,10 @@ type
   end;
 
 
+const
+  ScrollBarWidth=0;
+
 implementation
-uses SynEdit;
 
 { TSynGutterBase }
 
@@ -322,12 +320,12 @@ end;
 function TSynGutterBase.MaybeHandleMouseAction(var AnInfo: TSynEditMouseActionInfo;
   HandleActionProc: TSynEditMouseActionHandler): Boolean;
 begin
-  Result := HandleActionProc(FMouseActions.GetActionsForOptions(TCustomSynEdit(SynEdit).MouseOptions), AnInfo);
+  Result := HandleActionProc(FMouseActions.GetActionsForOptions(SynEdit.MouseOptions), AnInfo);
 end;
 
 procedure TSynGutterBase.ResetMouseActions;
 begin
-  FMouseActions.Options := TCustomSynEdit(SynEdit).MouseOptions;
+  FMouseActions.Options := SynEdit.MouseOptions;
   FMouseActions.ResetUserActions;
 end;
 
@@ -580,9 +578,9 @@ begin
   Result := FMouseActions.UserActions;
 end;
 
-function TSynGutterPartBase.GetFoldView: TSynEditFoldedView;
+function TSynGutterPartBase.GetGutterArea: TLazSynSurfaceWithText;
 begin
-  Result := TSynEditFoldedView(FoldedTextBuffer);
+  Result := Gutter.GutterArea;
 end;
 
 procedure TSynGutterPartBase.SetMarkupInfo(const AValue: TSynSelectedColor);
@@ -763,7 +761,7 @@ end;
 function TSynGutterPartBase.MaybeHandleMouseAction(var AnInfo: TSynEditMouseActionInfo;
   HandleActionProc: TSynEditMouseActionHandler): Boolean;
 begin
-  Result := HandleActionProc(FMouseActions.GetActionsForOptions(TCustomSynEdit(SynEdit).MouseOptions), AnInfo);
+  Result := HandleActionProc(FMouseActions.GetActionsForOptions(SynEdit.MouseOptions), AnInfo);
 end;
 
 function TSynGutterPartBase.DoHandleMouseAction(AnAction: TSynEditMouseAction;
@@ -774,7 +772,7 @@ end;
 
 procedure TSynGutterPartBase.ResetMouseActions;
 begin
-  FMouseActions.Options := TCustomSynEdit(SynEdit).MouseOptions;
+  FMouseActions.Options := SynEdit.MouseOptions;
   FMouseActions.ResetUserActions;
 end;
 
@@ -798,8 +796,8 @@ constructor TSynGutterPartListBase.Create(AOwner: TComponent);
 begin
   Inherited Create(AOwner);
   include(FComponentStyle, csTransient);
-  if FindGutter <> nil then
-    FGutter := FindGutter;
+  if (FGutter = nil) and (SynEdit.FindGutterFromGutterPartList(Self) <> nil) then
+    FGutter := SynEdit.FindGutterFromGutterPartList(Self) as TSynGutterBase;
   Gutter.RegisterNewGutterPartList(self);
 end;
 
@@ -859,20 +857,6 @@ begin
   for i := 0 to Count -1 do
     if Part[i] is AClass then
       inc(Result);
-end;
-
-{ TSynGutterPartList }
-
-function TSynGutterPartList.FindGutter: TSynGutterBase;
-begin
-  Result := TCustomSynEdit(SynEdit).Gutter;
-end;
-
-{ TSynRightGutterPartList }
-
-function TSynRightGutterPartList.FindGutter: TSynGutterBase;
-begin
-  Result := TCustomSynEdit(SynEdit).RightGutter;
 end;
 
 end.

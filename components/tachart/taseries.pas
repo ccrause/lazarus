@@ -241,6 +241,7 @@ type
   private
     FLinePen: TPen;
     FLineType: TLineType;
+    FOldLineType: TLineType;
     FOnDrawPointer: TSeriesPointerDrawEvent;
     FColorEach: TColorEachMode;
 
@@ -263,6 +264,8 @@ type
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure Draw(ADrawer: IChartDrawer); override;
+    function GetNearestPoint(const AParams: TNearestPointParams;
+      out AResults: TNearestPointResults): Boolean; override;
   published
     property AxisIndexX;
     property AxisIndexY;
@@ -436,6 +439,7 @@ begin
   FLinePen.OnChange := @StyleChanged;
   FPointer := TSeriesPointer.Create(FChart);
   SetPropDefaults(Self, ['LineType']);
+  FOldLineType := FLineType;
 end;
 
 destructor TLineSeries.Destroy;
@@ -763,12 +767,74 @@ begin
         if Assigned(p) then lb := p.Brush else lb := nil;
         for s in Styles.Styles do
           AItems.Add(TLegendItemLinePointer.CreateWithBrush(
-            IfThen((lp <> nil) and s.UsePen, s.Pen, lp) as TPen,
-            IfThen(s.UseBrush, s.Brush, lb) as TBrush,
+            TAChartUtils.IfThen((lp <> nil) and s.UsePen, s.Pen, lp) as TPen,
+            TAChartUtils.IfThen(s.UseBrush, s.Brush, lb) as TBrush,
             p,
             LegendTextStyle(s)
           ));
         end;
+  end;
+end;
+
+function TLineSeries.GetNearestPoint(const AParams: TNearestPointParams;
+  out AResults: TNearestPointResults): Boolean;
+var
+  pointIndex, levelIndex: Integer;
+  ip1, ip2, q: TPoint;
+  d, dmin: Integer;
+  isInside: Boolean;
+  ext: TDoubleRect;
+begin
+  Result := false;
+  AResults.FDist := sqr(AParams.FRadius) + 1;
+  AResults.FIndex := -1;
+  AResults.FXIndex := 0;
+  AResults.FYIndex := 0;
+
+  Result := inherited;
+
+  if Result or (LineType <> ltFromPrevious) or
+     not ((nptCustom in AParams.FTargets) and (nptCustom in ToolTargets))
+  then
+    exit;
+
+  with Extent do begin
+    ext.a := AxisToGraph(a);
+    ext.b := AxisToGraph(b);
+  end;
+  NormalizeRect(ext);
+  // Do not do anything if the series extent does not intersect CurrentExtent.
+  if not RectIntersectsRect(ext, ParentChart.CurrentExtent) then
+    exit;
+
+  // Iterate through all points of the series and - if nptYList is in Targets -
+  // at all stack levels.
+  PrepareGraphPoints(ext, true);
+  dmin := AResults.FDist;
+  for levelIndex := 0 to Source.YCount-1 do begin
+    if levelIndex > 0 then
+      UpdateGraphPoints(levelIndex, FStacked);
+    ip1 := ParentChart.GraphToImage(FGraphPoints[0]);
+    for pointIndex := 1 to FUpBound - FLoBound do begin
+      ip2 := ParentChart.GraphToImage(FGraphPoints[pointIndex]);
+      d := PointLineDist(AParams.FPoint, ip1, ip2, q, isInside);
+      if isInside and (d < dmin) then begin
+        dmin := d;
+        AResults.FIndex := -1; //pointIndex + FLoBound;
+        AResults.FYIndex := levelIndex;
+        AResults.FImg := q;
+        AResults.FValue := ParentChart.ImageToGraph(q);
+      end;
+      ip1 := ip2;
+    end;
+    if not ((nptYList in AParams.FTargets) and (nptYList in ToolTargets)) then
+      break;
+  end;
+
+  if dmin < AResults.FDist then
+  begin
+    AResults.FDist := d;
+    Result := true;
   end;
 end;
 
@@ -803,6 +869,7 @@ procedure TLineSeries.SetLineType(AValue: TLineType);
 begin
   if FLineType = AValue then exit;
   FLineType := AValue;
+  FOldLineType := FLineType;
   UpdateParentChart;
 end;
 
@@ -815,9 +882,11 @@ procedure TLineSeries.SetShowLines(Value: Boolean);
 begin
   if ShowLines = Value then exit;
   if Value then
-    FLineType := ltFromPrevious
-  else
+    FLineType := FOldLineType
+  else begin
+    FOldLineType := FLineType;
     FLineType := ltNone;
+  end;
   UpdateParentChart;
 end;
 
@@ -1198,7 +1267,7 @@ var
   ext2: TDoubleRect;
   w: Double;
   p: TDoublePoint;
-  heights: TDoubleDynArray;
+  heights: TDoubleDynArray = nil;
 
   procedure BuildBar(x, y1, y2: Double);
   var
@@ -1218,6 +1287,7 @@ var
       TopLeft := ParentChart.GraphToImage(graphBar.a);
       BottomRight := ParentChart.GraphToImage(graphBar.b);
       TAGeometry.NormalizeRect(imageBar);
+      if IsRotated then inc(imageBar.Right) else inc(imageBar.Bottom);
 
       // Draw a line instead of an empty rectangle.
       if (Bottom = Top) and IsRotated then Dec(Top);
@@ -1242,7 +1312,7 @@ begin
   if UseZeroLevel then
     zero := ZeroLevel
   else
-    zero := IfThen(IsRotated, ext2.a.X, ext2.a.Y);
+    zero := Math.IfThen(IsRotated, ext2.a.X, ext2.a.Y);
 
   PrepareGraphPoints(ext2, true);
   SetLength(heights, Source.YCount + 1);
@@ -1394,7 +1464,7 @@ var
   cx, cy: Integer;
   w, h: Integer;
   c: TColor;
-  pts: array of TPoint;
+  pts: array of TPoint = nil;
   i, j: Integer;
 begin
   if IsRotated then begin
@@ -1409,7 +1479,7 @@ begin
     cy := ARect.Top;
   end;
   a := w div 2;
-  b := IfThen(ADepth = 0, 0, ADepth div 2);
+  b := Math.IfThen(ADepth = 0, 0, ADepth div 2);
   if IsRotated then b := -b;
 
   c := ADrawer.BrushColor;
@@ -1449,7 +1519,7 @@ const
   PYRAMID_3D: array[0..3] of TPoint = ((X:0; Y:0), (X:1; Y:0), (X:1; Y:1), (X:0; Y:1));
 var
   c: TColor;
-  pts: TPointArray;
+  pts: TPointArray = nil;
   i: Integer;
   depth2: Integer;
   w, h: Integer;
@@ -1580,7 +1650,7 @@ end;
 
 procedure TBarSeries.GetLegendItems(AItems: TChartLegendItems);
 begin
-  GetLegendItemsRect(AItems, BarBrush);
+  GetLegendItemsRect(AItems, BarBrush, BarPen);
 end;
 
 function TBarSeries.GetNearestPoint(const AParams: TNearestPointParams;
@@ -1590,7 +1660,7 @@ var
   graphClickPt: TDoublePoint;
   sp: TDoublePoint;
   ofs, w: Double;
-  heights: TDoubleDynArray;
+  heights: TDoubleDynArray = nil;
   y: Double;
   stackindex: Integer;
 begin
@@ -1646,7 +1716,9 @@ begin
         AResults.FDist := 0;
         AResults.FIndex := pointindex;
         AResults.FYIndex := stackIndex;
-        AResults.FValue := DoublePoint(Source[pointindex]^.X, Source[pointindex]^.GetY(stackIndex));
+        AResults.FValue := DoublePoint(Source[pointIndex]^.X, Source[pointindex]^.GetY(stackIndex));
+        if FStacked and (stackIndex > 0) then
+          AResults.FValue.Y := AResults.FValue.Y + heights[stackIndex];
         AResults.FValue := AxisToGraph(AResults.FValue);
         AResults.FImg := ParentChart.GraphToImage(AResults.FValue);
         Result := true;
@@ -1662,7 +1734,7 @@ end;
 
 function TBarSeries.GetZeroLevel: Double;
 begin
-  Result := IfThen(UseZeroLevel, ZeroLevel, 0.0);
+  Result := Math.IfThen(UseZeroLevel, ZeroLevel, 0.0);
 end;
 
 function TBarSeries.IsZeroLevelStored: boolean;
@@ -1861,13 +1933,24 @@ end;
 
 procedure TAreaSeries.Draw(ADrawer: IChartDrawer);
 var
-  pts, basePts: TPointArray;
+  pts: TPointArray = nil;
+  basePts: TPointArray = nil;
   numPts, numBasePts: Integer;
   scaled_depth: Integer;
-  missing: array of Integer;
+  missing: array of Integer = nil;
   numMissing: Integer;
   zero: Double;
   ext, ext2: TDoubleRect;
+
+  { Replaces y=NaN at first level by zero if StackedNaN is ReplaceByZero }
+  procedure FixNaN;
+  var
+    i: Integer;
+  begin
+    if FStackedNaN = snReplaceByZero then
+      for i := 0 to High(FGraphPoints) do
+        if IsNaN(FGraphPoints[i].Y) then FGraphPoints[i].Y := 0.0;
+  end;
 
   procedure CollectMissingItem(AIndex: Integer);
   begin
@@ -1888,15 +1971,12 @@ var
       if IsNaN(item^.X) then
         CollectMissingItem(i)
       else
-      if FBanded and IsNaN(item^.Y) then
+      if IsNaN(item^.Y) and ((FStackedNaN = snDoNotDraw) or FBanded) then
         CollectMissingItem(i)
       else
       if FStacked and (FStackedNaN = snDoNotDraw) then
-        if IsNaN(item^.Y) then
-          CollectMissingItem(i)
-        else
-          for j := 0 to Source.YCount-2 do
-            if IsNaN(item^.YList[j]) then CollectMissingItem(i);
+        for j := 0 to Source.YCount - 2 do
+          if IsNaN(item^.YList[j]) then CollectMissingItem(i);
     end;
     SetLength(missing, numMissing);
   end;
@@ -1919,9 +1999,9 @@ var
   begin
     p := ParentChart.GraphToImage(AP);
     if IsRotated then
-      p.X := basePts[IfThen(FBanded, AIndex, 1)].X
+      p.X := basePts[Math.IfThen(FBanded, AIndex, 1)].X
     else
-      p.Y := basePts[IfThen(FBanded, AIndex, 1)].Y;
+      p.Y := basePts[Math.IfThen(FBanded, AIndex, 1)].Y;
     PushPoint(p);
   end;
 
@@ -2081,7 +2161,7 @@ var
     CopyPoints(basePts, pts, numBasePts);
 
     // Iterate through y values
-    j0 := IfThen(FBanded and (Source.YCount > 1), 0, -1);
+    j0 := Math.IfThen(FBanded and (Source.YCount > 1), 0, -1);
     for j := Source.YCount - 2 downto j0 do begin
       // Stack level points
       numPts := 0;
@@ -2149,11 +2229,12 @@ begin
   PrepareGraphPoints(ext, true);
   if Length(FGraphPoints) = 0 then
     exit;
+  FixNaN;
 
   if UseZeroLevel then
     zero := AxisToGraphY(ZeroLevel)
   else
-    zero := IfThen(IsRotated, ext2.a.X, ext2.a.Y);
+    zero := Math.IfThen(IsRotated, ext2.a.X, ext2.a.Y);
   scaled_depth := ADrawer.Scale(Depth);
   SetLength(pts, Length(FGraphPoints) * 4 + 4);
 
@@ -2193,7 +2274,7 @@ end;
 
 procedure TAreaSeries.GetLegendItems(AItems: TChartLegendItems);
 begin
-  GetLegendItemsRect(AItems, AreaBrush);
+  GetLegendItemsRect(AItems, AreaBrush, AreaContourPen);
 end;
 
 function TAreaSeries.GetSeriesColor: TColor;
@@ -2203,7 +2284,7 @@ end;
 
 function TAreaSeries.GetZeroLevel: Double;
 begin
-  Result := IfThen(UseZeroLevel, ZeroLevel, 0.0);
+  Result := Math.IfThen(UseZeroLevel, ZeroLevel, 0.0);
 end;
 
 function TAreaSeries.IsZeroLevelStored: boolean;

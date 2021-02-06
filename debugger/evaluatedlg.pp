@@ -378,10 +378,17 @@ var
   Watch: TCurrentWatch;
 begin
   S := cmbExpression.Text;
+  if s = '' then
+    exit;
   if DebugBoss.Watches.CurrentWatches.Find(S) = nil
   then begin
-    Watch := DebugBoss.Watches.CurrentWatches.Add(S);
-    Watch.Enabled := True;
+    DebugBoss.Watches.CurrentWatches.BeginUpdate;
+    try
+      Watch := DebugBoss.Watches.CurrentWatches.Add(S);
+      Watch.Enabled := True;
+    finally
+      DebugBoss.Watches.CurrentWatches.EndUpdate;
+    end;
   end;
   DebugBoss.ViewDebugDialog(ddtWatches);
 end;

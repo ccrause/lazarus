@@ -5,7 +5,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Project-Id-Version: \n"
 "POT-Creation-Date: \n"
-"PO-Revision-Date: 2019-02-12 19:27+0300\n"
+"PO-Revision-Date: 2020-06-13 01:07+0300\n"
 "Last-Translator: Maxim Ganetsky <maxkill@mail.ru>\n"
 "Language-Team: \n"
 "Language: ru\n"
@@ -298,15 +298,41 @@ msgstr "IfNDef"
 msgid "Set value"
 msgstr "Установить значение"
 
-#: objinspstrconsts.lisunabletofindparserfortool
-#, object-pascal-format
-msgid "Unable to find parser for tool \"%s\""
-msgstr "Невозможно найти анализатор для средства \"%s\""
+#: objinspstrconsts.lrsbufdsfilters
+msgid "XML data files|*.xml;Binary data files|*.dat"
+msgstr "Файлы данных XML|*.xml;Двоичные файлы данных|*.dat"
 
-#: objinspstrconsts.lisunabletofindparserwithname
-#, object-pascal-format
-msgid "Unable to find parser with name \"%s\""
-msgstr "Невозможно найти анализатор с именем \"%s\""
+#: objinspstrconsts.lrscopyfromdataset
+msgid "Copy data from other dataset"
+msgstr "Копировать данные из другого набора"
+
+#: objinspstrconsts.lrscreatedataset
+msgid "Create dataset"
+msgstr "Создать набор данных"
+
+#: objinspstrconsts.lrsdatasetactive
+msgid "Dataset is already active, close it first."
+msgstr "Сначала следует закрыть активный набор данных."
+
+#: objinspstrconsts.lrsloadfromfile
+msgid "Load data from file"
+msgstr "Загрузить данные из файла"
+
+#: objinspstrconsts.lrsnodatasetsavailableforcopy
+msgid "No dataset available to copy data from."
+msgstr "Отсутствуют наборы данных для копирования из них."
+
+#: objinspstrconsts.lrsprovidedatafilename
+msgid "Select a data file to save data to"
+msgstr "Выберите файл для сохранения данных"
+
+#: objinspstrconsts.lrssavetofile
+msgid "Save data to file"
+msgstr "Сохранить данные в файл"
+
+#: objinspstrconsts.lrsselectdatafilename
+msgid "Select a file with data to load into dataset"
+msgstr "Выберите файл с данными для загрузки в набор"
 
 #: objinspstrconsts.nbcesaddpage
 msgctxt "objinspstrconsts.nbcesaddpage"
@@ -482,10 +508,6 @@ msgstr "Подтвердить удаление"
 msgctxt "objinspstrconsts.oiscopycomponents"
 msgid "&Copy"
 msgstr "&Копировать"
-
-#: objinspstrconsts.oiscreateanewpascalunit
-msgid "Create a new pascal unit."
-msgstr "Создать новый модуль Паскаля."
 
 #: objinspstrconsts.oiscreatedefaultevent
 msgid "Create default event"
@@ -867,10 +889,6 @@ msgstr "Установить по умолчанию: %s"
 msgid "Set property value to Default"
 msgstr "Установить значение свойства по умолчанию"
 
-#: objinspstrconsts.oisshowalloutputlines
-msgid "Show all output lines"
-msgstr "Показать все строки вывода"
-
 #: objinspstrconsts.oisshowclasses
 msgid "Show classes"
 msgstr "Показывать классы"
@@ -1066,7 +1084,7 @@ msgstr "Вставить"
 
 #: objinspstrconsts.oistdacteditselectallheadline
 msgid "Select &All"
-msgstr "Вы&делить все..."
+msgstr "Вы&делить все"
 
 #: objinspstrconsts.oistdacteditselectallshortcut
 msgid "Ctrl+A"
@@ -1279,10 +1297,6 @@ msgstr "Редактор фильтра"
 #: objinspstrconsts.pefiltername
 msgid "Filter name"
 msgstr "Имя фильтра"
-
-#: objinspstrconsts.pirsunit
-msgid "Pascal unit"
-msgstr "Модуль Паскаля"
 
 #: objinspstrconsts.rscdalignment
 msgid "Alignment"

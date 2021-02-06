@@ -61,11 +61,12 @@ uses
   Menus,
   GraphType, ////TL Added for TFontStyles
   LCLType,   ////TL Added for vk_* key declarations
-  Classes, FileUtil, LazUTF8Classes,
+  Classes, FileUtil,
   SysUtils,
   SynEdit,
   SynEditHighlighter,
-  SynUniHighlighter;
+  SynUniHighlighter,
+  synunistrconst;
 
 type
   TNodeText = String;
@@ -960,23 +961,25 @@ begin
 end;
 
 procedure TSynUniDesigner.SortClick(Sender: TObject);
-var i:integer;
+var
+  i: integer;
+  s: String;
 begin
   With TStringList.Create do
     try
+      for i:=0 to Memo.Lines.Count-1 do
+      begin
+        s := Trim(Memo.Lines[i]);
+        if s<>'' then
+          Add(s);
+      end;
       Sorted:=true;
       Duplicates:=dupIgnore;
-      for i:=0 to Memo.Lines.Count-1 do if trim(Memo.lines[i])<>'' then add(trim(Memo.lines[i]));
-      sort;
-      Memo.text:=trim(text);
+      Memo.Text:=Trim(text);
     finally
       free;
     end;
 end;
-
-////TL FPC wanted this global... moved from just inside the procedure below
-resourcestring
-  sUniFileDescription = 'UniHighlighter Syntax';
 
 procedure TSynUniDesigner.LoadFromFileClick(Sender: TObject);
 ////TL resourcestring
@@ -998,7 +1001,7 @@ begin
     iDlg.Filter := sUniFileDescription + ' (*.hgl)|*.hgl';
     if not iDlg.Execute then
       Exit;
-    iFile := TFileStreamUTF8.Create( iDlg.FileName, fmOpenRead or fmShareDenyWrite );
+    iFile := TFileStream.Create( iDlg.FileName, fmOpenRead or fmShareDenyWrite );
     try
       if iRange = h.MainRules then
       begin

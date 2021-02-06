@@ -47,7 +47,8 @@ type
     function GetImages_24: TLCLGlyphs;
 
     class function CreateBitmapFromRes(const ImageName: string): TCustomBitmap;
-    class function CreateBestBitmapForScalingFromRes(const ImageName: string; const aDefScale: Integer; out aBitmap: TCustomBitmap): Integer;
+    class function CreateBestBitmapForScalingFromRes(const ImageName: string;
+      const aDefScale: Integer; out aBitmap: TCustomBitmap): Integer;
   public
     destructor Destroy; override;
 
@@ -71,6 +72,13 @@ type
     function GetImageIndex(ImageSize: Integer; ImageName: String): Integer; deprecated 'Use the other overload instead.';
     function GetImageIndex(ImageName: String; ImageSize: Integer = 16): Integer;
 
+    (* Images_nn
+       Each list contains images according to their default size at 96 PPI.
+       Any specific image is ONLY present in one of the Lists (and that list also has all the scaled versions of that image)
+       To use an image, either
+       - assign IdeImages.Images_nn to the ImageList property of a component
+       - IdeImages.Images_nn.ResolutionForControl[NN, Control].Draw(...)  // where NN is the same as nn
+    *)
     property Images_12: TLCLGlyphs read GetImages_12;
     property Images_16: TLCLGlyphs read GetImages_16;
     property Images_24: TLCLGlyphs read GetImages_24;
@@ -245,9 +253,8 @@ begin
     Result := CreateBitmapFromResourceName(HInstance, ImageName);
 end;
 
-class function TIDEImages.CreateBestBitmapForScalingFromRes(
-  const ImageName: string; const aDefScale: Integer; out aBitmap: TCustomBitmap
-  ): Integer;
+class function TIDEImages.CreateBestBitmapForScalingFromRes(const ImageName: string;
+  const aDefScale: Integer; out aBitmap: TCustomBitmap): Integer;
 begin
   aBitmap := nil;
   Result := aDefScale;
@@ -274,14 +281,12 @@ begin
   Result := CreateImage(ImageName, ImageSize);
 end;
 
-function TIDEImages.GetImageIndex(ImageSize: Integer; ImageName: String
-  ): Integer;
+function TIDEImages.GetImageIndex(ImageSize: Integer; ImageName: String): Integer;
 begin
   Result := GetImageIndex(ImageName, ImageSize);
 end;
 
-function TIDEImages.GetImageIndex(ImageName: String; ImageSize: Integer
-  ): Integer;
+function TIDEImages.GetImageIndex(ImageName: String; ImageSize: Integer): Integer;
 var
   List: TLCLGlyphs;
 begin
