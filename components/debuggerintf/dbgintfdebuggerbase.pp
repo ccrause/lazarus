@@ -5568,7 +5568,7 @@ begin
     exit;
   end;
 
-  Add(ARange.RangeStartAddr, ARange)
+  Add(ARange.RangeStartAddr, ARange);
 end;
 
 function TDBGDisassemblerEntryMap.GetRangeForAddr(AnAddr: TDbgPtr;
