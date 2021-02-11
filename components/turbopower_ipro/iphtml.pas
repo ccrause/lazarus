@@ -53,7 +53,7 @@ uses
   //MemCheck,
   Types, contnrs,
   LCLType, GraphType, LCLProc, LCLIntf, LResources, LMessages, LCLMemManager,
-  Translations, FileUtil, LConvEncoding, LazUTF8, AvgLvlTree,
+  Translations, FileUtil, LazStringUtils, LConvEncoding, LazUTF8, AvgLvlTree,
   IpHtmlTabList,
   Messages, SysUtils, Classes, Graphics,
   {$IFDEF UseGifImageUnit} //TODO all of this units not exists
@@ -4388,7 +4388,6 @@ begin
   PropPath := trim(PropPath);
   if PropPath = '' then
     Exit;
-  PropPath := UpperCase(PropPath);
   if C.ClassInfo <> nil then begin
     LCount := GetPropList(C.ClassInfo, tkProperties, nil);
     LSize := LCount * SizeOf(Pointer);
@@ -4401,14 +4400,14 @@ begin
             J := pos('.', PropPath);
             if J <> 0 then begin
               SubPropPath := copy(PropPath, 1, J - 1);
-              if SubPropPath = UpperCase(PList^[I]^.Name) then begin
+              if CompareText(SubPropPath, PList^[I]^.Name) = 0 then begin
                 O := TObject(GetOrdProp(C, PList^[I]));
                 SetPropertyValue(O, copy(PropPath, J + 1, MAXINT), NewValue);
                 Exit;
               end;
             end;
           end else begin
-            if PropPath = UpperCase(PList^[I]^.Name) then begin
+            if CompareText(PropPath, PList^[I]^.Name) = 0 then begin
               SetPropertyValueLow(PList^[I], C, NewValue);
               Exit;
             end;
@@ -5498,7 +5497,7 @@ begin
     Content := FindAttribute(htmlAttrCONTENT);
     if not FHasBOM then begin
       if SameText(HttpEquiv, 'content-type') then begin
-        j := pos('charset=', lowercase(Content));
+        j := PosI('charset=', Content);
         if j>0 then begin
           j := j+8;
           i := j;
@@ -5512,7 +5511,7 @@ begin
       end
       else
         fDocCharset := FindAttribute(htmlAttrCHARSET);
-      if pos('windows', Lowercase(fDocCharset)) = 1 then
+      if LazStartsText('windows', fDocCharset) then
         fDocCharset := NormalizeEncoding(StringReplace(fDocCharset, 'windows', 'cp', [rfIgnoreCase]));
     end;
     Scheme := FindAttribute(htmlAttrSCHEME);
@@ -11330,7 +11329,7 @@ var
   begin
     FormData := TIpFormDataEntity.Create(nil);
     for i := 0 to Pred(FList.Count) do
-      if copy(VList[i], 1, 7) = 'file://' then
+      if StartsStr('file://', VList[i]) then
         FormData.AddFile(copy(VList[i], 8, length(VList[i])),
           Accept, 'plain', embinary)
       else
@@ -14429,9 +14428,8 @@ begin
     raise EIpHtmlException.Create(SHtmlNoDataProvider);
   if not FDataProvider.DoCheckURL(St, ResourceType) then
     raise EIpHtmlException.Create(SHtmlResUnavail + St);
-  ResourceType := LowerCase(ResourceType);
 
-  if ( Pos('text/', ResourceType) <> 1) and (pos('image/', ResourceType) <> 1) then begin
+  if ( PosI('text/', ResourceType) <> 1) and (PosI('image/', ResourceType) <> 1) then begin
     FViewer.FHotURL := St;
     FViewer.DoHotClick;
     Result := True;
@@ -14610,13 +14608,12 @@ begin
       raise EIpHtmlException.Create(SHtmlResUnavail + St);
     IsImage := False;
     S := nil;
-    ResourceType := Lowercase(ResourceType);
-    if pos('image/', ResourceType) = 1 then begin
+    if PosI('image/', ResourceType) = 1 then begin
       IsImage := True;
       S := BuildImagePage(St);
     end else
 
-    if Pos('text/', ResourceType) <> 1 then begin
+    if PosI('text/', ResourceType) <> 1 then begin
       FViewer.FHotURL := St;
       FViewer.DoHotClick;
       Exit;

@@ -34,7 +34,8 @@ For use when the JCL string functions are not avaialable
 interface
 
 uses
-  SysUtils, Classes, StrUtils;
+  SysUtils, Classes, StrUtils,
+  LazStringUtils;
 
 const
   NativeNull           = Char(#0);
@@ -112,7 +113,6 @@ function StrAfter(const SubStr, S: string): string;
 function StrBefore(const SubStr, S: string): string;
 function StrChopRight(const S: string; N: Integer): string;
 function StrLastPos(const SubStr, S: string): Integer;
-function StrIPos(const SubStr, S: string): integer;
 
 function StrLeft(const S: string; Count: Integer): string;
 function StrRestOf(const S: string; N: Integer ): string;
@@ -126,11 +126,10 @@ function StrStrCount(const S, SubS: string): Integer;
 function StrRepeat(const S: string; Count: Integer): string;
 procedure StrReplace(var S: string; const Search, Replace: string; Flags: TReplaceFlags = []);
 function StrSearch(const Substr, S: string; const Index: Integer = 1): Integer;
+function StrFind(const Substr, S: string; const Index: Integer = 1): Integer;
 
 function BooleanToStr(B: Boolean): string;
 function StrToBoolean(const S: string): Boolean;
-
-function StrFind(const Substr, S: string; const Index: Integer = 1): Integer;
 function StrIsOneOf(const S: string; const List: array of string): Boolean;
 
 procedure TrimStrings(const List: TStrings; DeleteIfEmpty: Boolean = True);
@@ -327,13 +326,6 @@ begin
   end;
 end;
 
-{ case-insensitive "pos" }
-function StrIPos(const SubStr, S: string): integer;
-begin
-  // simple and inneficient implmentation
-  Result := Pos(UpperCase(SubStr), UpperCase(s));
-end;
-
 function StrLeft(const S: string; Count: Integer): string;
 begin
   Result := Copy(S, 1, Count);
@@ -413,9 +405,15 @@ end;
 
 function StrSearch(const Substr, S: string; const Index: Integer = 1): Integer;
 begin
-  // Paul: I expect original code was more efficient :)
   Result := Pos(SubStr, Copy(S, Index, Length(S)));
+  if Result > 0 then
+    Result := Result + Index - 1;
+end;
 
+function StrFind(const Substr, S: string; const Index: Integer = 1): Integer;
+// Case-insensitive version of StrSearch.
+begin
+  Result := PosI(SubStr, Copy(S, Index, Length(S)));
   if Result > 0 then
     Result := Result + Index - 1;
 end;
@@ -443,13 +441,6 @@ begin
     Result := True
   else
     raise EJcfConversionError.Create('Cannot convert string [' + S + '] to boolean');
-end;
-
-
-function StrFind(const Substr, S: string; const Index: Integer = 1): Integer;
-begin
-  // Paul: original code used comparision by char case table
-  Result := StrSearch(LowerCase(SubStr), LowerCase(S), Index);
 end;
 
 function StrIsOneOf(const S: string; const List: array of string): Boolean;

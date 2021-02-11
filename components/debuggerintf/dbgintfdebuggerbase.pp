@@ -3449,14 +3449,11 @@ end;
 function TWatches.Find(const AExpression: String): TWatch;
 var
   n: Integer;
-  S: String;
 begin
-  S := UpperCase(AExpression);
   for n := 0 to Count - 1 do
   begin
     Result := TWatch(GetItem(n));
-    if UpperCase(Result.Expression) = S
-    then Exit;
+    if CompareText(Result.Expression, AExpression) = 0 then Exit;
   end;
   Result := nil;
 end;
@@ -5020,14 +5017,11 @@ end;
 function TBaseSignals.Find(const AName: String): TBaseSignal;
 var
   n: Integer;
-  S: String;
 begin
-  S := UpperCase(AName);
   for n := 0 to Count - 1 do
   begin
     Result := TBaseSignal(GetItem(n));
-    if UpperCase(Result.Name) = S
-    then Exit;
+    if CompareText(Result.Name, AName) = 0 then Exit;
   end;
   Result := nil;
 end;
@@ -5130,14 +5124,11 @@ end;
 function TBaseExceptions.Find(const AName: String): TBaseException;
 var
   n: Integer;
-  S: String;
 begin
-  S := UpperCase(AName);
   for n := 0 to Count - 1 do
   begin
     Result := TBaseException(GetItem(n));
-    if UpperCase(Result.Name) = S
-    then Exit;
+    if CompareText(Result.Name, AName) = 0 then Exit;
   end;
   Result := nil;
 end;
@@ -6604,8 +6595,9 @@ var
 begin
   i := MDebuggerClasses.Count - 1;
   while i >= 0 do begin
-    if LowerCase(TDebuggerClass(MDebuggerClasses.Objects[i]).ClassName) = LowerCase(AIndex) then
-      exit(TDebuggerClass(MDebuggerClasses.Objects[i]));
+    Result := TDebuggerClass(MDebuggerClasses.Objects[i]);
+    if CompareText(Result.ClassName, AIndex) = 0 then
+      exit;
     dec(i);
   end;
   Result := nil;

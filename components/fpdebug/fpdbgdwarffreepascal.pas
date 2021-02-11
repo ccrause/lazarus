@@ -6,9 +6,11 @@ unit FpDbgDwarfFreePascal;
 interface
 
 uses
-  Classes, SysUtils, Types, math, FpDbgDwarfDataClasses, FpDbgDwarf, FpDbgInfo,
-  FpDbgUtil, FpDbgDwarfConst, FpErrorMessages, FpdMemoryTools, DbgIntfBaseTypes,
-  LazLoggerBase;
+  Classes, SysUtils, Types, math,
+  FpDbgDwarfDataClasses, FpDbgDwarf, FpDbgInfo,
+  FpDbgUtil, FpDbgDwarfConst, FpErrorMessages, FpdMemoryTools,
+  DbgIntfBaseTypes,
+  LazLoggerBase, LazStringUtils;
 
 type
 
@@ -258,8 +260,8 @@ var
   i, j, AVersion: Integer;
 begin
   AVersion := 0;
-  s := LowerCase(ACU.Producer)+' ';
-  i := pos('free pascal', s) + 11;
+  s := ACU.Producer+' ';
+  i := PosI('free pascal', s) + 11;
 
   if i > 11 then begin
     while (i < Length(s)) and (s[i] in [' ', #9]) do
@@ -299,11 +301,8 @@ begin
 end;
 
 class function TFpDwarfFreePascalSymbolClassMap.ClassCanHandleCompUnit(ACU: TDwarfCompilationUnit): Boolean;
-var
-  s: String;
 begin
-  s := LowerCase(ACU.Producer);
-  Result := pos('free pascal', s) > 0;
+  Result := PosI('free pascal', ACU.Producer) > 0;
 end;
 
 var
@@ -1059,7 +1058,8 @@ begin
     then begin
       if (n <> '') and (n[1] = '$') then // dwarf3 // TODO: make required in dwarf3
         delete(n, 1, 1);
-      if (copy(n,1,4) = 'high') and (UpperCase(copy(n, 5, length(n))) = UpperCase(DbgSymbol.Name)) then begin
+      if (copy(n,1,4) = 'high')
+      and (CompareText(copy(n, 5, length(n)), DbgSymbol.Name) = 0) then begin
         UpperBoundSym := TFpSymbolDwarf.CreateSubClass('', Info);
         if UpperBoundSym <> nil then begin
           val := UpperBoundSym.Value;

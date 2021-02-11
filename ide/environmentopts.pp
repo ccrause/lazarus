@@ -1695,24 +1695,25 @@ var
   lChldNode, lChCh: TDOMNode;
   lsNodeName: DOMString;
   lParentNode: TDOMNode;
+  PathM1, PreD, LastD: String;
 begin
   if Assigned(FRetainXMLData)  then
   begin
+    PathM1 := copy(Path, 1, length(Path) - 1);
+    PreD := ExtractFilePath(PathM1);
+    LastD := ExtractFileNameOnly(PathM1);
     lParentNode:= FXMLCfg.FindNode(path, False);
     lChldNode := FRetainXMLData.FirstChild.CloneNode(True, FXMLCfg.Document);
     lsNodeName := lChldNode.NodeName;
-    if ExtractFileNameOnly(copy(path, 1, length(path) - 1)) = lsNodeName then
-      FXMLCfg.FindNode(ExtractFilePath(copy(path, 1, length(path) - 1)), False)
-        .ReplaceChild(lChldNode, FXMLCfg.FindNode(path, False))
+    if LastD = lsNodeName then
+      FXMLCfg.FindNode(PreD,False).ReplaceChild(lChldNode,FXMLCfg.FindNode(Path,False))
     else
     begin
       try
         if not assigned(lParentNode) then
         begin
-          lParentNode:=FXMLCfg.Document.CreateElement(
-            ExtractFileNameOnly(copy(path, 1, length(path) - 1)));
-          FXMLCfg.FindNode(ExtractFilePath(copy(path, 1, length(path) - 1)), False).
-            AppendChild(lParentNode);
+          lParentNode:=FXMLCfg.Document.CreateElement(LastD);
+          FXMLCfg.FindNode(PreD, False).AppendChild(lParentNode);
         end;
         while lChldNode.HasChildNodes do
         begin
@@ -3571,9 +3572,9 @@ begin
 
   for i := 0 to TBaseDebugManagerIntf.DebuggerCount  -1 do begin
     DbgClassType := TBaseDebugManagerIntf.Debuggers[i];
-    ActiveClassSeen := ActiveClassSeen or (LowerCase(DbgClassType.ClassName) = LowerCase(ActiveClassName));
+    ActiveClassSeen := ActiveClassSeen or (CompareText(DbgClassType.ClassName, ActiveClassName)=0);
     Entry := TDebuggerPropertiesConfig.CreateFromOldXmlConf(FXMLCfg, XML_PATH_DEBUGGER_CONF_OLD,
-      DbgClassType, LowerCase(DbgClassType.ClassName) = LowerCase(ActiveClassName));
+      DbgClassType, CompareText(DbgClassType.ClassName, ActiveClassName)=0);
     if not Entry.IsLoaded then begin
       Entry.Free;
       Continue;

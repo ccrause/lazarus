@@ -10,7 +10,7 @@ uses
   LazFileUtils, LazUTF8,
   TestOutputLogger;
 
-{$R sources.rc}
+{$R sources.rc} // change to .res if you do not have windres (or fpcres). Ensure you have the latest .res pre-compiled resource
 
 type
 
@@ -53,7 +53,7 @@ function GetCommonSourceFor(AName: String): TCommonSource;
 var
   i: Integer;
 begin
-  if UpperCase(AName) = UpperCase(BlockRecurseName) then
+  if CompareText(AName, BlockRecurseName) = 0 then
     raise Exception.Create('BlockRecurseName');
   i := CommonSources.IndexOf(AName);
   if i >= 0 then

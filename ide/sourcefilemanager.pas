@@ -32,13 +32,13 @@ unit SourceFileManager;
 interface
 
 uses
-  Classes, SysUtils, typinfo, math, fpjson, Laz_AVL_Tree,
+  Classes, SysUtils, StrUtils, typinfo, math, fpjson, Laz_AVL_Tree,
   // LCL
   Controls, Forms, Dialogs, LCLIntf, LCLType, LclStrConsts,
   LResources, LCLMemManager,
   // LazUtils
   LConvEncoding, LazFileCache, FileUtil, LazFileUtils, LazLoggerBase, LazUtilities,
-  LazUTF8, LazTracer, AvgLvlTree,
+  LazStringUtils, LazUTF8, LazTracer, AvgLvlTree,
   // Codetools
   {$IFDEF IDE_MEM_CHECK}
   MemCheck,
@@ -860,8 +860,8 @@ procedure TFileOpener.CheckInternalFile;
 var
   NewBuf: TCodeBuffer;
 begin
-  if (copy(FFileName, 1, length(EditorMacroVirtualDrive)) = EditorMacroVirtualDrive)
-  then begin
+  if StartsStr(EditorMacroVirtualDrive, FFileName) then
+  begin
     FUnitIndex:=Project1.IndexOfFilename(FFilename);
     if (FUnitIndex < 0) then begin
       NewBuf := CodeToolBoss.SourceCache.CreateFile(FFileName);
@@ -1018,15 +1018,13 @@ end;
 
 function TFileOpener.OpenUnknownFile: TModalResult;
 var
-  Ext, NewProgramName, LPIFilename, ACaption, AText: string;
+  NewProgramName, LPIFilename, ACaption, AText: string;
   PreReadBuf: TCodeBuffer;
   LoadFlags: TLoadBufferFlags;
   SourceType: String;
 begin
-  Ext:=lowercase(ExtractFileExt(FFilename));
-
   if ([ofProjectLoading,ofRegularFile]*FFlags=[]) and (MainIDE.ToolStatus=itNone)
-  and (Ext='.lpi') then begin
+  and (CompareFileExtQuick(FFilename,'lpi')=0) then begin
     // this is a project info file -> load whole project
     Result:=MainIDE.DoOpenProjectFile(FFilename,[ofAddToRecent]);
     if Result = mrOK then
@@ -2403,8 +2401,8 @@ begin
 
   if (uifInternalFile in AnUnitInfo.Flags) then
   begin
-    if (copy(AnUnitInfo.Filename, 1, length(EditorMacroVirtualDrive)) = EditorMacroVirtualDrive)
-    then begin
+    if StartsStr(EditorMacroVirtualDrive, AnUnitInfo.Filename) then
+    begin
       // save to macros
       EMacro := MacroListViewer.MacroByFullName(AnUnitInfo.Filename);
       if EMacro <> nil then begin
@@ -7635,7 +7633,7 @@ begin
         AFilename:=Trim(Project1.GetTitle);
       if AFilename='' then
         AFilename:='project1';
-      Ext := LowerCase(ExtractFileExt(AFilename));
+      Ext := ExtractFileExt(AFilename);
       if UseMainSourceFile then
       begin
         if (Ext = '') or (not FilenameIsPascalSource(AFilename)) then
