@@ -5577,10 +5577,7 @@ begin
     exit;
   end;
 
-  if not HasId(ARange.RangeStartAddr) then
-    Add(ARange.RangeStartAddr, ARange)
-  else
-    ARange.Free;
+  Add(ARange.RangeStartAddr, ARange)
 end;
 
 function TDBGDisassemblerEntryMap.GetRangeForAddr(AnAddr: TDbgPtr;
