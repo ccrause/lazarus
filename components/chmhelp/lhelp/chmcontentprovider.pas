@@ -1,9 +1,9 @@
-unit chmcontentprovider;
-
 {
   Graphical CHM help content provider.
   Responsible for loading TOC, providing search etc.
 }
+
+unit ChmContentProvider;
 
 {$mode objfpc}{$H+}
 
@@ -13,12 +13,10 @@ unit chmcontentprovider;
 {$IF FPC_FULLVERSION>=20400}
 {$Note Compiling lhelp *with* binary index and toc support}
 // CHMs can have both binary and text Table of Contents and index
-{$DEFINE CHM_BINARY_INDEX_TOC}
+{$DEFINE CHM_BINARY_INDEX_TOC}    // internal chm index else external file`s indexes
 {$endif}
 
-
 {off $DEFINE CHM_DEBUG_TIME}
-
 
 interface
 
@@ -27,27 +25,42 @@ uses
   // LCL
   LCLIntf, Forms, StdCtrls, ExtCtrls, ComCtrls, Controls, Menus,
   // LazUtils
-  LazFileUtils, LazUTF8, Laz2_XMLCfg,
+  LazFileUtils, LazStringUtils, LazUTF8, Laz2_XMLCfg, LazLoggerBase,
+  // Turbopower IPro
+  IpHtml,
   // ChmHelp
-  IpHtml, BaseContentProvider, FileContentProvider, ChmDataProvider, lhelpstrconsts;
+  BaseContentProvider, FileContentProvider, ChmDataProvider, lhelpstrconsts;
 
 const
   DefaultCHMContentTitle = '[unknown]';
 
 type
 
+  TAsyncIndexData = record
+    CHMReader: TChmReader;
+    isUpdate: Boolean;
+  end;
+  PTAsyncIndexData = ^TAsyncIndexData;
+
+  TAsyncUri = record
+    CHMReader: TChmReader;
+    Uri: String;
+  end;
+  PTAsyncUri = ^TAsyncUri;
+
   { TChmContentProvider }
 
   TChmContentProvider = class(TFileContentProvider)
   private
-    fUpdateURI: String;
+    fUpdateURI: String; // last request
+    fLastURI: String;   // last showed
     fTabsControl: TPageControl;
       fContentsTab: TTabSheet;
        fContentsPanel: TPanel;
          fContentsTree: TTreeView;
       fIndexTab: TTabSheet;
         fIndexEdit: TLabeledEdit;
-        fIndexView: TTreeView;//TListView;
+        fIndexView: TTreeView;
       fSearchTab: TTabSheet;
         fKeywordLabel: TLabel;
         fKeywordCombo: TComboBox;
@@ -58,45 +71,52 @@ type
     fHtml: TIpHtmlPanel;
     fPopUp: TPopUpMenu;
     fStatusBar: TStatusBar;
-    fContext: THelpContext;
+    fFillTOCStack: TFPList;
     function GetShowStatusbar: Boolean;
     procedure SetShowStatusbar(AValue: Boolean);
+    procedure CompareIndexNodes(Sender: TObject; Node1, Node2: TTreeNode;
+                              var Compare: Integer);
+    procedure ProcTreeKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure ProcKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+    procedure ProcTreeKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
   protected
     fIsUsingHistory: Boolean;
     fChms: TChmFileList;
+    fChmDataProvider: TIpChmDataProvider;
     fHistory: TStringList;
     fHistoryIndex: Integer;
     fStopTimer: Boolean;
-    fFillingToc: Boolean;
-    fFillingIndex: Boolean;
     fActiveChmTitle: String;
     FLoadingSearchURL: Boolean; // use this to try to highlight search terms
 
     function  MakeURI(Const AUrl: String; AChm: TChmReader): String;
 
-    procedure BeginUpdate; override;
-    procedure EndUpdate; override;
     procedure AddHistory(Const URL: String);
     procedure DoOpenChm(Const AFile: String; ACloseCurrent: Boolean = True);
-    procedure DoCloseChm;
     procedure DoLoadContext(Context: THelpContext);
     procedure DoLoadUri(Uri: String; AChm: TChmReader = nil);
     procedure DoError({%H-}Error: Integer);
+    function  GetChmReader(Const AFile: String): TChmReader;
     procedure NewChmOpened(ChmFileList: TChmFileList; Index: Integer);
-    procedure LoadingHTMLStream(var AStream: TStream);
-
-    // Queue TOC fill action for later processing
+    // Set to queue LoadUri processing
+    procedure QueueLoadUriAsync(Uri: String; AChm: TChmReader = nil);
+    // Set to queue a filling TOC Index for later processing
     procedure QueueFillToc(AChm: TChmReader);
-    // Fills table of contents (and index for main file)
-    procedure FillTOC(Data: PtrInt);
+    // Filling TOC and index for the chm file through Async process
+    procedure ProcFillTOC(AData: PtrInt);
+    // LoadURI through Async process
+    procedure ProcLoadUri(UriData: PtrInt);
+    procedure LoadingHTMLStream(var AStream: TStream);
     procedure IpHtmlPanelDocumentOpen(Sender: TObject);
     procedure IpHtmlPanelHotChange(Sender: TObject);
+    // text and image resource types
     procedure IpHtmlPanelHotClick(Sender: TObject);
     procedure PopupCopyClick(Sender: TObject);
     procedure PopupCopySourceClick(Sender: TObject);
+
     procedure ContentsTreeSelectionChanged(Sender: TObject);
-    procedure IndexViewDblClick(Sender: TObject);
     procedure TreeViewStopCollapse(Sender: TObject; {%H-}Node: TTreeNode; var AllowCollapse: Boolean);
+    procedure TreeViewShowHint(Sender: TObject; HintInfo: PHintInfo);
     procedure ViewMenuContentsClick(Sender: TObject);
     procedure UpdateTitle;
     procedure SetTitle(const AValue: String); override;
@@ -104,29 +124,38 @@ type
     procedure TOCExpand(Sender: TObject; Node: TTreeNode);
     procedure TOCCollapse(Sender: TObject; Node: TTreeNode);
     procedure SelectTreeItemFromURL(Const AUrl: String);
+    procedure GetTreeNodeClass(Sender: TCustomTreeView; var NodeClass: TTreeNodeClass);
     {$IFDEF CHM_SEARCH}
     procedure SearchButtonClick(Sender: TObject);
-    procedure SearchResultsDblClick(Sender: TObject);
     procedure SearchComboKeyDown(Sender: TObject; var Key: Word; {%H-}Shift: TShiftState);
-    procedure GetTreeNodeClass(Sender: TCustomTreeView; var NodeClass: TTreeNodeClass);
     {$ENDIF}
   public
+    procedure ProcGlobalKeyUp(var {%H-}Key: Word; {%H-}Shift: TShiftState);overload;
     procedure LoadPreferences(ACfg: TXMLConfig); override;
     procedure SavePreferences(ACfg: TXMLConfig); override;
-  public
+    procedure BeginUpdate; override;
+    procedure EndUpdate; override;
+
     function CanGoBack: Boolean; override;
     function CanGoForward: Boolean; override;
     function GetHistory: TStrings; override;
     function LoadURL(const AURL: String; const AContext: THelpContext=-1): Boolean; override;
+    function HasLoadedData(const AUrl: String): Boolean; override;
     procedure GoHome; override;
     procedure GoBack; override;
     procedure GoForward; override;
+    procedure ActivateProvider; override;
+    procedure ActivateTOCControl; override;
+    procedure ActivateIndexControl; override;
+    procedure ActivateSearchControl; override;
+    // property
     property TabsControl: TPageControl read fTabsControl;
     property Splitter: TSplitter read fSplitter;
     property ShowStatusbar: Boolean read GetShowStatusbar write SetShowStatusbar;
+
     class function GetProperContentProvider(const {%H-}AURL: String): TBaseContentProviderClass; override;
 
-    constructor Create(AParent: TWinControl; AImageList: TImageList); override;
+    constructor Create(AParent: TWinControl; AImageList: TImageList; AUpdateCount: Integer); override;
     destructor Destroy; override;
   end;
 
@@ -175,32 +204,32 @@ end;
 
 procedure THTMLWordHighlighter.CheckTextNode(var ATextNode: TDomNode);
 var
-  i: Integer;
-  fPos: Integer;
-  WordStart,
-  After: TDOMText;
+  i, xPos: Integer;
+  WordStart, After: TDOMText;
   Span: TDomElement;
-  aWord: String;
+  aWord: DOMString;
   Parent: TDomNode;
 begin
    Parent := AtextNode.ParentNode;
    for i := 0 to Words.Count-1 do
    begin
-     aWord := Words[i];
-     fPos := Pos(aWord, LowerCase(ATextNode.TextContent));
-     while fpos > 0 do
+     aWord := LowerCase(DOMString(Words[i]));
+     xPos := Pos(aWord, LowerCase(ATextNode.TextContent));
+     while xpos > 0 do
      begin
-       WordStart:= TDOMText(ATextNode).SplitText(fPos-1);
-       After := WordStart.SplitText(Length(aword));
+       WordStart:= TDOMText(ATextNode).SplitText(xPos-1);
+       After := WordStart.SplitText(Length(aWord));
        Span := doc.CreateElement('span');
-       Span.SetAttribute('style', 'color:'+Color+';background-color:lightgray');
+       // TODO: lHtml don`t perceive background color :(
+       Span.SetAttribute('style', DOMString('color:' + Color +
+                        ';font-weight:bold;background:lightgray;padding:3px;'));
        Parent.InsertBefore(Span, After);
        Span.AppendChild(WordStart);
 
        // or we'll keep finding our new node again and again
        ATextNode := After;
 
-       fPos := Pos(aWord, ATextNode.TextContent);
+       xPos := Pos(aWord, LowerCase(ATextNode.TextContent));
      end;
    end;
 end;
@@ -222,25 +251,6 @@ begin
 
 end;
 
-function GetURIFileName(Const AURI: String): String;
-var
-  FileStart,
-  FileEnd: Integer;
-begin
-  FileStart := Pos(':', AURI)+1;
-  FileEnd := Pos('::', AURI);
-
-  Result := Copy(AURI, FileStart, FileEnd-FileStart);
-end;
-
-function GetURIURL(Const AURI: String): String;
-var
-  URLStart: Integer;
-begin
-  URLStart := Pos('::', AURI) + 2;
-  Result := Copy(AURI, URLStart, Length(AURI));
-end;
-
 function ChmURI(Const AUrl: String; Const AFileName: String): String;
 var
   FileNameNoPath: String;
@@ -249,7 +259,6 @@ begin
   if Pos('ms-its:', Result) > 0 then
     Exit;
   FileNameNoPath := ExtractFileName(AFileName);
-
   Result := 'ms-its:'+FileNameNoPath+'::'+AUrl;
 end;
 
@@ -265,38 +274,102 @@ begin
   fStatusbar.Visible := AValue;
 end;
 
-function TChmContentProvider.MakeURI (Const  AUrl: String; AChm: TChmReader ) : String;
+procedure TChmContentProvider.CompareIndexNodes(Sender: TObject; Node1,
+  Node2: TTreeNode; var Compare: Integer);
+begin
+  Compare:= UTF8CompareLatinTextFast(Node1.Text, Node2.Text);
+end;
+
+procedure TChmContentProvider.ProcTreeKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  if  Sender is TTreeView then
+  begin
+    if (Key = VK_RETURN) and (Shift = []) then
+    begin
+      ContentsTreeSelectionChanged(Sender);
+      key:= 0;
+    end
+  end;
+  if ((Sender is TTreeView) or (Sender is TIpHtmlPanel)) and (Shift = [ssAlt]) then
+  case Key of
+    VK_Left: begin
+      GoBack; key:= 0;
+    end;
+    VK_RIGHT: begin
+      GoForward; key:= 0;
+    end;
+    VK_Home: begin
+      GoHome; key:= 0;
+    end;
+  end;
+end;
+
+procedure TChmContentProvider.ProcKeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  if (Shift <> []) then Exit;
+  if (Sender is TLabeledEdit) and (Sender = fIndexEdit) then
+  begin
+    if ((Key = VK_DOWN) and ( fIndexView.Items.Count >0 )) then
+    begin
+      fIndexView.SetFocus();
+      if (fIndexView.Selected = nil) then
+      begin
+        fIndexView.Items.GetFirstNode().MakeVisible;
+        fIndexView.Items.GetFirstNode().Selected:=True;
+      end;
+      Key:= 0;
+    end;
+  end;
+end;
+
+procedure TChmContentProvider.ProcTreeKeyUp(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  if Sender is TTreeView then
+  begin
+    if ((Key = VK_DOWN) or (Key = VK_UP)) and (Shift = []) then
+    begin
+      ContentsTreeSelectionChanged(Sender);
+      Key:= 0;
+    end;
+  end;
+end;
+
+function TChmContentProvider.MakeURI ( const AUrl: String; AChm: TChmReader
+  ) : String;
 var
   ChmIndex: Integer;
 begin
   ChmIndex := fChms.IndexOfObject(AChm);
-
   Result := ChmURI(AUrl, fChms.FileName[ChmIndex]);
 end;
 
 procedure TChmContentProvider.BeginUpdate;
 begin
+  if not isUpdate then
+  begin
+    fContentsTree.BeginUpdate;
+    fIndexView.BeginUpdate;
+  end;
   inherited BeginUpdate;
-  fContentsTree.BeginUpdate;
-  fIndexView.BeginUpdate;
 end;
 
 procedure TChmContentProvider.EndUpdate;
 begin
   inherited EndUpdate;
-  fContentsTree.EndUpdate;
-  fIndexView.EndUpdate;
-  if not IsUpdating then
+  if not isUpdate then
   begin
-    if fUpdateURI <> '' then
-      DoLoadUri(fUpdateURI);
-    fUpdateURI:='';
-    if Title=DefaultCHMContentTitle then
-      UpdateTitle;
+    fContentsTree.EndUpdate;
+    fIndexView.EndUpdate;
+    fContentsPanel.Caption := '';
+    fContentsTree.Visible := True;
+    UpdateTitle;
   end;
 end;
 
-procedure TChmContentProvider.AddHistory(Const URL: String);
+procedure TChmContentProvider.AddHistory ( const URL: String ) ;
 begin
   if fHistoryIndex < fHistory.Count then
   begin
@@ -308,63 +381,15 @@ begin
   Inc(fHistoryIndex);
 end;
 
-type
-  TCHMHack = class(TChmFileList)
-  end;
-
-procedure TChmContentProvider.DoOpenChm(Const AFile: String; ACloseCurrent: Boolean = True);
+procedure TChmContentProvider.DoOpenChm ( const AFile: String;
+  ACloseCurrent: Boolean ) ;
 begin
-  if (fChms <> nil) and fChms.IsAnOpenFile(AFile) then Exit;
-  if ACloseCurrent then DoCloseChm;
-  if not FileExistsUTF8(AFile) or DirectoryExistsUTF8(AFile) then
-  begin
-    Exit;
-  end;
-  if fChms = nil then
-  begin
-    try
-      fChms := TChmFileList.Create(Utf8ToSys(AFile));
-      if Not(fChms.Chm[0].IsValidFile) then
-      begin
-        FreeAndNil(fChms);
-        //DoError(INVALID_FILE_TYPE);
-        Exit;
-      end;
-      TIpChmDataProvider(fHtml.DataProvider).Chm := fChms;
-    except
-      FreeAndNil(fChms);
-      //DoError(INVALID_FILE_TYPE);
-      Exit;
-    end;
-  end
-  else
-  begin
-    TCHMHack(fChms).OpenNewFile(AFile);
-    //WriteLn('Loading new chm: ', AFile);
-  end;
-
-  if fChms = nil then Exit;
-
+  fChmDataProvider.DoOpenChm(AFile, ACloseCurrent);
+ //DebugLn('CHP DoOpenChm() Chm file: ', AFile);
   fHistoryIndex := -1;
   fHistory.Clear;
 
   // Code here has been moved to the OpenFile handler
-
-  UpdateTitle;
-end;
-
-procedure TChmContentProvider.DoCloseChm;
-var
-  i : integer;
-begin
-  fStopTimer := True;
-  if assigned(fChms) then
-  begin
-    for i := 0 to fChms.Count -1 do
-      fChms.Chm[i].Free;
-  end;
-  FreeAndNil(fChms);
-  UpdateTitle;
 end;
 
 procedure TChmContentProvider.DoLoadContext(Context: THelpContext);
@@ -376,30 +401,51 @@ begin
   if Str <> '' then DoLoadUri(Str, fChms.Chm[0]);
 end;
 
+procedure TChmContentProvider.QueueLoadUriAsync(Uri: String; AChm: TChmReader = nil);
+var
+  AUriData:PTAsyncUri;
+begin
+  // https://www.freepascal.org/docs-html/rtl/system/initialize.html
+  {$IFDEF DEBUGASYNC}
+  DebugLn('CHP QueueLoadUriAsync() URI: ', Uri);
+  {$ENDIF}
+  GetMem(AUriData,SizeOf(TAsyncUri));
+  Initialize(AUriData^);
+  AUriData^.CHMReader:= AChm;
+  AUriData^.Uri:= Uri;
+  Application.ProcessMessages;
+  Application.QueueAsyncCall(@ProcLoadUri, PtrInt(AUriData));
+end;
+
 procedure TChmContentProvider.DoLoadUri(Uri: String; AChm: TChmReader = nil);
 var
   ChmIndex: Integer;
   NewUrl: String;
   FilteredURL: String;
-  fPos: Integer;
+  xPos: Integer;
   StartTime: TDateTime;
   EndTime: TDateTime;
   Time: String;
 begin
   if (fChms = nil) and (AChm = nil) then exit;
   fStatusBar.SimpleText := Format(slhelp_Loading, [Uri]);
-  Application.ProcessMessages;
+
   StartTime := Now;
 
-  fPos := Pos('#', Uri);
-  if fPos > 0 then
-    FilteredURL := Copy(Uri, 1, fPos -1)
+  xPos := Pos('#', Uri);
+  if xPos > 0 then
+    FilteredURL := Copy(Uri, 1, xPos -1)
   else
     FilteredURL := Uri;
-
+  {$IFDEF LDEBUG}
+  DebugLn('CHP DoLoadUri() LastURI: '+ fLastURI);
+  {$ENDIF}
   if fChms.ObjectExists(FilteredURL, AChm) = 0 then
   begin
     fStatusBar.SimpleText := Format(slhelp_NotFound, [URI]);
+    {$IFDEF LDEBUG}
+    DebugLn('CHP ERR Chm object is not found - URI: '+ Uri);
+    {$ENDIF}
     Exit;
   end;
   if (Pos('ms-its', Uri) = 0) and (AChm <> nil) then
@@ -409,13 +455,26 @@ begin
     NewUrl := 'ms-its:'+NewUrl+'::/'+Uri;
     Uri := NewUrl;
   end;
+  Application.ProcessMessages;
+  // Already showed
 
-  if not IsUpdating then
+  if fLastURI = Uri then Exit;
+
+  if not isUpdate then
   begin
 
     fIsUsingHistory := True;
+    fChmDataProvider.CurrentPath := ExtractFileDir(URI)+'/';
+    {$IFDEF LDEBUG}
+    DebugLn('CHP OpenURL URI: '+ Uri);
+    {$ENDIF}
+    fHtml.BeginUpdateBounds;
+    fLastURI:= ''; // TODO: for check it
     fHtml.OpenURL(Uri);
-    TIpChmDataProvider(fHtml.DataProvider).CurrentPath := ExtractFileDir(URI)+'/';
+    fUpdateURI:= '';
+    fHtml.EndUpdateBounds;
+    if Assigned(OnContentComplete) then
+      OnContentComplete(Self);
 
     AddHistory(Uri);
     EndTime := Now;
@@ -424,11 +483,32 @@ begin
     fStatusBar.SimpleText := Format(slhelp_LoadedInMs, [Uri, Time]);
 
   end
-  else
+  else if isUpdateLast then
   begin
-    // We are updating. Save this to load at end of update. or if there is already a request overwrite it so only the last is loaded
+    // Do nothing, save URI and use Show for execute request
     fUpdateURI:= Uri;
+    // Used to async load URL before enable of Updating
+    // QueueLoadUriAsync(Uri, AChm);
+    {$IFDEF UPDATE_CNT}
+    DebugLn('Lastupdate URI: '+ Uri);
+    {$ENDIF}
   end;
+
+end;
+
+procedure TChmContentProvider.ProcLoadUri(UriData: PtrInt);
+var
+  AUriData: PTAsyncUri;
+begin
+  AUriData:= PTAsyncUri(UriData);
+  {$IFDEF DEBUGASYNC}
+  DebugLn('CHP ProcLoadUri() URI: ', AUriData^.Uri);
+  {$ENDIF}
+  fHtml.BeginUpdateBounds;
+  fHtml.OpenURL(AUriData^.Uri);
+  fHtml.EndUpdateBounds;
+  Finalize(AUriData^);
+  FreeMem(AUriData);
 end;
 
 
@@ -438,27 +518,25 @@ begin
   //INVALID_FILE_TYPE;
 end;
 
+function TChmContentProvider.GetChmReader ( const AFile: String ) : TChmReader;
+var
+  FileIndex : Integer;
+begin
+  Result := nil;
+  if fChms = nil then Exit;
+  FileIndex := fChms.IndexOf(AFile);
+  if (fChms <> nil) and (FileIndex >= 0) then
+    Result := fChms.Chm[fChms.IndexOf(AFile)];
+end;
+
 procedure TChmContentProvider.NewChmOpened(ChmFileList: TChmFileList;
   Index: Integer);
 begin
-  if Index = 0 then
-  begin
-    if fContext > -1 then
-    begin
-      DoLoadContext(fContext);
-      fContext := -1;
-    end
-    else if ChmFileList.Chm[Index].DefaultPage <> '' then
-    begin
-      DoLoadUri(MakeURI(ChmFileList.Chm[Index].DefaultPage, ChmFileList.Chm[Index]));
-    end;
-  end;
   if ChmFileList.Chm[Index].Title = '' then
     ChmFileList.Chm[Index].Title := ExtractFileName(ChmFileList.FileName[Index]);
 
   // Fill the table of contents.
-  if Index <> 0 then
-    QueueFillToc(ChmFileList.Chm[Index]);
+  QueueFillToc(ChmFileList.Chm[Index]);
 end;
 
 procedure TChmContentProvider.LoadingHTMLStream(var AStream: TStream);
@@ -510,87 +588,94 @@ begin
 end;
 
 procedure TChmContentProvider.QueueFillToc(AChm: TChmReader);
+var
+  AData:PTAsyncIndexData;
 begin
   fContentsTree.Visible := False;
   fContentsPanel.Caption := slhelp_TableOfContentsLoadingPleaseWait;
   fStatusBar.SimpleText := slhelp_TableOfContentsLoading;
+
+  AData:= New(PTAsyncIndexData);
+  AData^.CHMReader:= AChm;
+  AData^.isUpdate:= self.isUpdate; // save state for Async process
+
   Application.ProcessMessages;
-  Application.QueueAsyncCall(@FillToc, PtrInt(AChm));
+  Application.QueueAsyncCall(@ProcFillTOC, PtrInt(AData));
 end;
 
-procedure TChmContentProvider.FillTOC(Data: PtrInt);
+procedure TChmContentProvider.ProcFillTOC(AData: PtrInt);
 var
   CHMReader: TChmReader;
   ParentNode: TTreeNode;
   i: Integer;
+  StackIdx: Integer;
   SM: TChmSiteMap;
   HasSearchIndex: Boolean = False;
   {$IFNDEF CHM_BINARY_INDEX_TOC}
   Stream: TMemoryStream;
   {$ENDIF}
 begin
-  if fFillingToc or fFillingIndex then
-  begin
-    Application.QueueAsyncCall(@FillToc, Data);
-    exit;
-  end;
-  fFillingToc := True;
-  fContentsTree.BeginUpdate;
+  SM := nil;
+  CHMReader := PTAsyncIndexData(AData)^.CHMReader;
+  try
+    BeginUpdate;
+    StackIdx := fFillTOCStack.IndexOf(CHMReader);
+    if StackIdx > 0 then Exit;
 
-  CHMReader := TChmReader(Data);
-  {$IFDEF CHM_DEBUG_TIME}
-  writeln('Start: ',FormatDateTime('hh:nn:ss.zzz', Now));
-  {$ENDIF}
-  if CHMReader <> nil then
-  begin
-    ParentNode := fContentsTree.Items.AddChildObject(nil, CHMReader.Title, CHMReader);
-    ParentNode.ImageIndex := 0;
-    ParentNode.SelectedIndex := 0;
-    {$IFDEF CHM_BINARY_INDEX_TOC}
-    // GetTOCSitemap first tries binary TOC but falls back to text if needed
-    SM := CHMReader.GetTOCSitemap;
-    {$ELSE}
-    SM := nil;
-    fFillingIndex := True;
-    Stream := TMemoryStream(fchm.GetObject(fChm.TOCFile));
-    if Stream <> nil then
-    begin
-      SM := TChmSiteMap.Create(stTOC);
-      SM.LoadFromStream(Stream);
-      Stream.Free;
-    end;
+    fFillTOCStack.Add(CHMReader);
+    {$IFDEF CHM_DEBUG_TIME}
+    DebugLn('CHT CHM Title: '+CHMReader.Title);
+    DebugLn('CHT Start of load: ',FormatDateTime('hh:nn:ss.zzz', Now));
     {$ENDIF}
-    if SM <> nil then
+    if CHMReader <> nil then
     begin
-      {$IFDEF CHM_DEBUG_TIME}
-      writeln('Stream read: ',FormatDateTime('hh:nn:ss.zzz', Now));
+      ParentNode := fContentsTree.Items.AddChildObject(nil, CHMReader.Title, CHMReader);
+      ParentNode.ImageIndex := 0;
+      ParentNode.SelectedIndex := 0;
+      {$IFDEF CHM_BINARY_INDEX_TOC}
+      // GetTOCSitemap first tries binary TOC but falls back to text if needed
+      {$IFDEF CHM_DEBUG_INDEX}
+      DebugLn('CHP GetTOCSitemap: ',FormatDateTime('hh:nn:ss.zzz', Now));
       {$ENDIF}
-      with TContentsFiller.Create(fContentsTree, SM, @fStopTimer, CHMReader) do
+      {$IFDEF CHM_DEBUG_TIME}
+      DebugLn('CHT Load of TOC start: ',FormatDateTime('hh:nn:ss.zzz', Now));
+      {$ENDIF}
+      SM := CHMReader.GetTOCSitemap;
+      {$ELSE}
+      SM := nil;
+      fFillingIndex := True;
+      Stream := TMemoryStream(fChms.GetObject(fChms.TOCFile));
+      if Stream <> nil then
       begin
-        DoFill(ParentNode);
-        Free;
+        SM := TChmSiteMap.Create(stTOC);
+        SM.LoadFromStream(Stream);
+        Stream.Free;
       end;
-      SM.Free;
-      if (fContentsTree.Selected = nil) and (fHistory.Count > 0) then
-        SelectTreeItemFromURL(fHistory.Strings[fHistoryIndex]);
-    end;
-    if ParentNode.Index = 0 then ParentNode.Expanded := True;
-    fFillingToc := False;
-    fContentsTree.EndUpdate;
-    fContentsTree.Visible := True;
-    fContentsPanel.Caption := '';
-    fContentsTab.TabVisible := fContentsTree.Items.Count > 1;
-    Application.ProcessMessages;
-    fFillingIndex := True;
+      {$ENDIF}
+      if SM <> nil then
+      begin
+        with TContentsFiller.Create(fContentsTree, SM, @fStopTimer, CHMReader) do
+        try
+          DoFill(ParentNode, false);
+        finally
+          Free;
+        end;
+        FreeAndNil(SM);
+      end;
+      if Assigned(ParentNode) and (ParentNode.Index = 0) then ParentNode.Expanded := True;
+      {$IFDEF CHM_DEBUG_TIME}
+      DebugLn('CHT Load of TOC end: ',FormatDateTime('hh:nn:ss.zzz', Now));
+      {$ENDIF}
 
-    // we fill the index here too but only for the main file
-    if fChms.IndexOfObject(CHMReader) < 1 then
-    begin
+      // Now we fill the index for all files
+      {$IFDEF CHM_DEBUG_TIME}
+      DebugLn('CHT oad of INDEX start: ',FormatDateTime('hh:nn:ss.zzz', Now));
+      {$ENDIF}
       {$IFDEF CHM_BINARY_INDEX_TOC}
       SM := CHMReader.GetIndexSitemap;
       {$ELSE}
       SM := nil;
-      Stream := TMemoryStream(fchm.GetObject(fChm.IndexFile));
+      Stream := TMemoryStream(fChms.GetObject(fChms.IndexFile));
       if Stream <> nil then
       begin
         SM := TChmSiteMap.Create(stTOC);
@@ -601,46 +686,66 @@ begin
       if SM <> nil then
       begin
         fStatusBar.SimpleText := slhelp_IndexLoading;
-        Application.ProcessMessages;
+        {$IFDEF CHM_DEBUG_TIME}
+        DebugLn('CHT Load of INDEX start: ',FormatDateTime('hh:nn:ss.zzz', Now));
+        {$ENDIF}
         with TContentsFiller.Create(fIndexView, SM, @fStopTimer, CHMReader) do
-        begin
-          DoFill(nil);
+        try
+          DoFill(nil, false);
+          if fChms.Count > 1 then // FpDoc have to sort an INDEX
+            fIndexView.Items.SortTopLevelNodes(@fIndexView.DefaultTreeViewSort);
+        finally
           Free;
         end;
-        SM.Free;
+        FreeAndNil(SM);
+        {$IFDEF CHM_DEBUG_TIME}
+        DebugLn('CHT Load of INDEX end: ',FormatDateTime('hh:nn:ss.zzz', Now));
+        {$ENDIF}
         fIndexView.FullExpand;
       end;
+      {$IFDEF CHM_DEBUG_TIME}
+      DebugLn('CHT end of load: ',FormatDateTime('hh:nn:ss.zzz', Now));
+      {$ENDIF}
     end;
+
+    {$IFDEF CHM_DEBUG_TIME}
+    DebugLn('CHT CHM Title: '+CHMReader.Title);
+    DebugLn('CHT End: ',FormatDateTime('hh:nn:ss.zzz', Now));
+    {$ENDIF}
+
+    fContentsTab.TabVisible := fContentsTree.Items.Count > 0;
+    fIndexTab.TabVisible := fIndexTab.TabVisible or (fIndexView.Items.Count > 0);
+    fStatusBar.SimpleText:= '';
+
+    {$IFDEF CHM_SEARCH}
+    i := 0;
+    while (HasSearchIndex = False) and (i < fChms.Count) do
+    begin
+      // Look for binary full text search index in CHM file
+      HasSearchIndex := fChms.Chm[i].ObjectExists('/$FIftiMain') > 0;
+      inc(i);
+    end;
+    fSearchTab.TabVisible := fSearchTab.TabVisible or HasSearchIndex;
+    {$ENDIF}
+
+    if Title=DefaultCHMContentTitle then
+      UpdateTitle;
+    fFillTOCStack.Remove(CHMReader);
+  finally
+    Dispose(PTAsyncIndexData(AData));
+    EndUpdate;
   end;
-  fFillingIndex := False;
-  fIndexTab.TabVisible := fIndexView.Items.Count > 0;
-
-  fStatusBar.SimpleText:= '';
-
-  {$IFDEF CHM_DEBUG_TIME}
-  writeln('End: ',FormatDateTime('hh:nn:ss.zzz', Now));
-  {$ENDIF}
-
-  {$IFDEF CHM_SEARCH}
-  i := 0;
-  while (HasSearchIndex = False) and (i < fChms.Count) do
-  begin
-    // Look for binary full text search index in CHM file
-    HasSearchIndex := fChms.Chm[i].ObjectExists('/$FIftiMain') > 0;
-    inc(i);
-  end;
-
-  fSearchTab.TabVisible := HasSearchIndex;
-  {$ENDIF}
 end;
 
 procedure TChmContentProvider.IpHtmlPanelDocumentOpen(Sender: TObject);
 begin
-   // StatusBar1.Panels.Items[1] := fHtml.DataProvider.;
- if fIsUsingHistory = False then
-   AddHistory(TIpChmDataProvider(fHtml.DataProvider).CurrentPage)
- else fIsUsingHistory := False;
- SelectTreeItemFromURL(TIpChmDataProvider(fHtml.DataProvider).CurrentPage);
+  if fIsUsingHistory = False then
+    AddHistory(fChmDataProvider.CurrentPage)
+  else
+    fIsUsingHistory := False;
+  fLastURI:= fChmDataProvider.CurrentPage;
+  SelectTreeItemFromURL(fLastURI);
+  // Debugln('CHP Ev IpHtmlPanelDocumentOpen() URL: '+fLastURI);
 end;
 
 procedure TChmContentProvider.IpHtmlPanelHotChange(Sender: TObject);
@@ -652,12 +757,10 @@ procedure TChmContentProvider.IpHtmlPanelHotClick(Sender: TObject);
 var
   HelpFile: String;
   aPos: integer;
-  lcURL: String;
 begin
   // chm-links look like: mk:@MSITStore:D:\LazPortable\docs\chm\iPro.chm::/html/lh3zs3.htm
-  lcURL := Lowercase(fHtml.HotURL);
-  if (Pos('javascript:helppopup(''', lcURL) = 1) or
-     (Pos('javascript:popuplink(''', lcURL) = 1)
+  if LazStartsText('javascript:helppopup(''', fHtml.HotURL) or
+     LazStartsText('javascript:popuplink(''', fHtml.HotURL)
   then begin
     HelpFile := Copy(fHtml.HotURL, 23, Length(fHtml.HotURL) - (23-1));
     HelpFile := Copy(HelpFile, 1, Pos('''', HelpFile)-1);
@@ -672,8 +775,8 @@ begin
      if aPos>0 then HelpFile := Copy(fHtml.CurURL,1,aPos) + HelpFile;
    end;
    DoLoadUri(HelpFile); //open it in current iphtmlpanel.
- end
- else
+  end
+  else
    OpenURL(fHtml.HotURL);
 end;
 
@@ -687,7 +790,7 @@ var
   rbs: rawbytestring;
   s: String;
 begin
-  rbs := TIpChmDataProvider(fHtml.DataProvider).GetHtmlText(fHtml.CurUrl);
+  rbs := fChmDataProvider.GetHtmlText(fHtml.CurUrl);
   s := ConvertEncoding(rbs, fHtml.MasterFrame.Html.DocCharset, encodingUTF8);
   Clipboard.SetAsHtml(rbs, s);
 end;
@@ -697,60 +800,76 @@ var
   ATreeNode: TContentTreeNode;
   ARootNode: TTreeNode;
   fChm: TChmReader = nil;
+  ActiveTreeView: TTreeView;
   Uri: String;
 begin
-  if (fContentsTree.Selected = nil) then Exit;
-  if fContentsTree.Selected.Parent = nil then
+  // Check Active TreeView
+  ActiveTreeView:= nil;
+  if fTabsControl.ActivePage = fContentsTab then ActiveTreeView:= fContentsTree;
+  if fTabsControl.ActivePage = fIndexTab then ActiveTreeView:= fIndexView;
+  if fTabsControl.ActivePage = fSearchTab then ActiveTreeView:= fSearchResults;
+
+  if not (Assigned(ActiveTreeView) and Assigned(ActiveTreeView.Selected)) then Exit;
+  // Load root pagefor TOC treeView
+  if (ActiveTreeView = fContentsTree) and (ActiveTreeView.Selected.Parent = nil) then
   begin
-    fChm := TChmReader(fContentsTree.Selected.Data);
+    fChm := TChmReader(ActiveTreeView.Selected.Data);
     fActiveChmTitle:= fChm.Title;
-    UpdateTitle;
+    //UpdateTitle;
     if fChm.DefaultPage <> '' then
     begin
       Uri := MakeURI(fChm.DefaultPage, fChm);
+{$IFDEF TREE_DEBUG}
+      WriteLn('CHTR ContentTree changed1 URI: ', URI);
+{$ENDIF}
       if ((fHtml.MasterFrame <> nil) and (MakeURI(fHtml.CurURL, fChm)  = Uri)) = False then
+      begin
+        ActiveTreeView.Tag:=1; // status of request from treeview
         DoLoadUri(Uri);
+        ActiveTreeView.Tag:=0;
+      end;
     end;
     Exit;
-
   end;
 
-  ATreeNode := TContentTreeNode(fContentsTree.Selected);
+  ATreeNode := TContentTreeNode(ActiveTreeView.Selected);
 
-  //find the chm associated with this branch
-  ARootNode := ATreeNode.Parent;
-  while ARootNode.Parent <> nil do
-    ARootNode := ARootNode.Parent;
-
+  ArootNode:= ATreeNode;
   fChm := TChmReader(ARootNode.Data);
-  try
-    fContentsTree.OnSelectionChanged := nil;
     if ATreeNode.Url <> '' then
     begin
       Uri := MakeURI(ATreeNode.Url, fChm);
+{$IFDEF TREE_DEBUG}
+      WriteLn('CHTR ContentTree changed1 URI: ', URI);
+{$ENDIF}
       if ((fHtml.MasterFrame <> nil) and (MakeURI(fHtml.CurURL, fChm)  = Uri)) = False then
+      begin
+        if ActiveTreeView = fSearchResults then  FLoadingSearchURL:= True;
+        ActiveTreeView.Tag:=1; // status of request from treeview
         DoLoadUri(MakeURI(ATreeNode.Url, fChm));
+        ActiveTreeView.Tag:=0;
+        if ActiveTreeView = fSearchResults then  FLoadingSearchURL:= False;
+      end;
     end;
-  finally
-    fContentsTree.OnSelectionChanged := @ContentsTreeSelectionChanged;
-  end;
-end;
-
-procedure TChmContentProvider.IndexViewDblClick(Sender: TObject);
-var
-  ATreeNode: TContentTreeNode;
-begin
-  if fIndexView.Selected = nil then Exit;
-  ATreeNode := TContentTreeNode(fIndexView.Selected);
-
-  // Find the chm associated with this branch
-  DoLoadUri(MakeURI(ATreeNode.Url, TChmReader(ATreeNode.Data)));
 end;
 
 procedure TChmContentProvider.TreeViewStopCollapse(Sender: TObject;
   Node: TTreeNode; var AllowCollapse: Boolean);
 begin
   AllowCollapse:=False;
+end;
+
+procedure TChmContentProvider.TreeViewShowHint ( Sender: TObject;
+  HintInfo: PHintInfo ) ;
+var
+  Node: TContentTreeNode;
+begin
+  if HintInfo^.HintControl is TTreeView then
+  begin
+    Node:= TContentTreeNode(TTreeView(HintInfo^.HintControl).Selected);
+    if Assigned(Node) and PtInRect(Node.DisplayRect(True), HintInfo^.CursorPos) then
+        HintInfo^.HintStr:= MakeURI(Node.Url, TChmReader(Node.Data));
+  end;
 end;
 
 procedure TChmContentProvider.ViewMenuContentsClick(Sender: TObject);
@@ -765,9 +884,11 @@ var
   Item: TTreeNode;
   NewTitle: String;
 begin
-  Item := fContentsTree.Items.GetFirstNode;
+  Item:=nil;
+  if fContentsTree.Items.Count > 0 then
+    Item := fContentsTree.Items.GetFirstNode;
   NewTitle := '';
-  while Item <> nil do
+  while (Item <> nil) do
   begin
     if Item.Text <> fActiveChmTitle then
     begin
@@ -789,34 +910,32 @@ end;
 
 procedure TChmContentProvider.SetTitle(const AValue: String);
 begin
-  if fHtml.Parent = nil then exit;
+  if (fHtml = nil) or (fHtml.Parent = nil) then exit;
   TTabSheet(fHtml.Parent).Caption := AValue;
   inherited SetTitle(AValue);
 end;
 
 procedure TChmContentProvider.SearchEditChange(Sender: TObject);
 var
-  ItemName: String;
   SearchText: String;
   Node: TTreeNode;
 begin
   if fIndexEdit <> Sender then
     Exit;
-  SearchText := LowerCase(fIndexEdit.Text);
+  SearchText := fIndexEdit.Text;
   Node := fIndexView.Items.GetFirstNode;
   while Node<>nil do
   begin
-    ItemName := LowerCase(Copy(Node.Text, 1, Length(SearchText)));
-    if ItemName = SearchText then
+    if LazStartsText(SearchText, Node.Text) then
     begin
       fIndexView.Items.GetLastNode.MakeVisible;
       Node.MakeVisible;
       Node.Selected:=True;
+      //DebugLn('Search edit exit: %s', [SearchText]);
       Exit;
     end;
     Node := Node.GetNextSibling;
   end;
-  fIndexView.Selected:=nil;
 end;
 
 procedure TChmContentProvider.TOCExpand(Sender: TObject; Node: TTreeNode);
@@ -837,7 +956,7 @@ begin
   end;
 end;
 
-procedure TChmContentProvider.SelectTreeItemFromURL(Const AUrl: String);
+procedure TChmContentProvider.SelectTreeItemFromURL ( const AUrl: String ) ;
 var
   FileName: String;
   URL: String;
@@ -847,10 +966,18 @@ var
   TmpHolder: TNotifyEvent;
   i: integer;
 begin
-  if fContentsTree.OnSelectionChanged = nil then
+  RootNode:= nil;
+  if fContentsTree.Tag = 1 then
     Exit; // the change was a response to a click and should be ignored
+  {$IFDEF LDEBUG}
+  WriteLn('CHP >> SelectTreeItemFromURL()');
+  DebugLn('Input AUrl: '+Aurl);
+  {$ENDIF}
   FileName := GetURIFileName(AUrl);
   URL      := GetURIURL(AUrl);
+  {$IFDEF LDEBUG}
+  DebugLn('CHP Get Url: '+Url + ' Into filename: '+FileName);
+  {$ENDIF}
   FoundNode := nil;
   Node := nil;
   for i := 0 to fChms.Count-1 do
@@ -858,18 +985,25 @@ begin
     if FileName = ExtractFileName(fChms.FileName[i]) then
     begin
       fActiveChmTitle:= fChms.Chm[i].Title;
-      UpdateTitle;
+      //UpdateTitle;
 
       RootNode := fContentsTree.Items.FindNodeWithData(fChms.Chm[i]);
       if URL = fChms.Chm[i].DefaultPage then
       begin
         FoundNode := RootNode;
+        {$IFDEF LDEBUG}
+        DebugLn('CHP RootNode: '+ RootNode.text);
+        {$ENDIF}
         Break;
       end;
 
       if RootNode <> nil then
+      begin
         Node := RootNode.GetFirstChild;
-
+        {$IFDEF LDEBUG}
+        DebugLn('CHP RootNode Url : '+ TContentTreeNode(Node).Url);
+        {$ENDIF}
+      end;
       Break;
     end;
 
@@ -878,17 +1012,25 @@ begin
   if RootNode = nil then
     Exit;
 
-  TmpHolder := fContentsTree.OnSelectionChanged;
-  fContentsTree.OnSelectionChanged := nil;
-
-  while (Node<>nil) and (TContentTreeNode(Node).Url<>Url) do
+  TmpHolder := fContentsTree.OnClick;
+  fContentsTree.OnClick := nil;
+  // Todo: clear WoContext compare FIRST
+  while (Node<>nil) and (GetUrlWoContext(TContentTreeNode(Node).Url)<>GetUrlWoContext(Url)) do
+  begin
     Node:=Node.GetNext;
-
-  if (Node <> nil) and (TContentTreeNode(Node).Url = Url) then
+  end;
+  // Todo: clear WoContext compare SECOND
+  if (Node <> nil) and (GetUrlWoContext(TContentTreeNode(Node).Url) = GetUrlWoContext(Url)) then
+  begin
     FoundNode := Node;
+  end;
 
   if FoundNode <> nil then
   begin
+    {$IFDEF LDEBUG}
+    DebugLn('CHP Found node: '+ FoundNode.Text);
+    DebugLn('CHP Found URL: '+ TContentTreeNode(FoundNode).Url);
+    {$ENDIF}
     fContentsTree.Selected := FoundNode;
     if not FoundNode.IsVisible then
       FoundNode.MakeVisible;
@@ -896,17 +1038,10 @@ begin
   else
     fContentsTree.Selected := nil;
 
-  fContentsTree.OnSelectionChanged := TmpHolder;
-end;
-
-{$IFDEF CHM_SEARCH}
-
-procedure TChmContentProvider.SearchComboKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-begin
-  case key of
-    VK_RETURN: SearchButtonClick(nil);
-
-  end;
+  fContentsTree.OnClick := TmpHolder;
+  {$IFDEF LDEBUG}
+  DebugLn('CHP << SelectTreeItemFromURL()');
+  {$ENDIF}
 end;
 
 procedure TChmContentProvider.GetTreeNodeClass(Sender: TCustomTreeView;
@@ -927,6 +1062,37 @@ begin
   ACfg.SetValue(ClassName+'/TabControlWidth/Value', fTabsControl.Width);
 end;
 
+{$IFDEF CHM_SEARCH}
+
+procedure TChmContentProvider.SearchComboKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+begin
+  if (Shift <> []) then Exit;
+  case key of
+    VK_RETURN: begin
+        SearchButtonClick(Sender);
+        Key:=0;
+      end;
+    VK_DOWN:
+      if fSearchResults.Items.Count > 0 then
+      begin
+        fSearchResults.SetFocus();
+        if (fSearchResults.Selected = nil) then
+        begin
+          fSearchResults.Items.GetFirstNode().MakeVisible;
+          fSearchResults.Items.GetFirstNode().Selected:=True;
+        end;
+        Key:= 0;
+      end;
+    else // hide warning
+  end;
+end;
+
+procedure TChmContentProvider.ProcGlobalKeyUp(var Key: Word; Shift: TShiftState
+  );
+begin
+
+end;
+
 procedure TChmContentProvider.SearchButtonClick ( Sender: TObject ) ;
 type
   TTopicEntry = record
@@ -943,7 +1109,7 @@ var
   var
     MoveSize: DWord;
   begin
-    //WriteLn('Deleting Topic');
+    //DebugLn('Deleting Topic');
     if ATopicIndex < High(FoundTopics) then
     begin
       MoveSize := SizeOf(TTopicEntry) * (High(FoundTopics) - (ATopicIndex+1));
@@ -968,7 +1134,7 @@ var
   var
     TopicIndex: Integer;
   begin
-    //WriteLn('Updating topic');
+    //DebugLn('Updating topic');
     TopicIndex := GetTopicIndex(TopicID);
     if TopicIndex = -1 then
     begin
@@ -1008,7 +1174,7 @@ begin
       fKeywordCombo.Items.Add(fKeywordCombo.Text);
     fSearchResults.BeginUpdate;
     fSearchResults.Items.Clear;
-    //WriteLn('Search words: ', SearchWords.Text);
+    //DebugLn('Search words: ', SearchWords.Text);
     for i := 0 to fChms.Count-1 do
     begin
       for j := 0 to SearchWords.Count-1 do
@@ -1061,11 +1227,12 @@ begin
           Item.Data:= fChms.Chm[i];
           Item.Url:= DocURL;
         except
-          //WriteLn('Exception');
+          //DebugLn('Exception');
           // :)
         end;
       end;
-
+      // Sort the result
+      fSearchResults.Items.SortTopLevelNodes(@fIndexView.DefaultTreeViewSort);
       SetLength(FoundTopics, 0);
     end;
     SetLength(FoundTopics, 0);
@@ -1080,19 +1247,7 @@ begin
   fSearchResults.EndUpdate;
 end;
 
-procedure TChmContentProvider.SearchResultsDblClick ( Sender: TObject ) ;
-var
-  Item: TContentTreeNode;
-begin
-  Item := TContentTreeNode(fSearchResults.Selected);
-  if (Item = nil) or (Item.Data = nil) then
-    Exit;
-  FLoadingSearchURL:= True;
-  DoLoadUri(MakeURI(Item.Url, TChmReader(Item.Data)));
-  FLoadingSearchURL:= False;
-end;
 {$ENDIF}
-
 
 function TChmContentProvider.CanGoBack: Boolean;
 begin
@@ -1111,38 +1266,24 @@ end;
 
 function TChmContentProvider.LoadURL(const AURL: String; const AContext: THelpContext=-1): Boolean;
 var
-  fFile: String;
-  fURL: String = '';
-  fPos: Integer;
-  FileIndex: Integer;
-  LoadTOC: Boolean;
+  XFile: String;
+  xURL: String = '';
   CurCHM: TChmReader;
   ContextURL: String;
 begin
   Result := False;
-  fFile := Copy(AUrl,8, Length(AURL));
-  fPos := Pos('://', fFile);
-  if fPos > 0 then
-  begin
-    fURL := Copy(fFile, fPos+3, Length(fFIle));
-    fFile := Copy(fFIle, 1, fPos-1);
-  end;
+  XFile := GetUrlFilePath(AUrl);
+  xURL := GetUrlFile(AUrl);
 
-  LoadTOC := (fChms = nil) or (fChms.IndexOf(fFile) < 0);
-  DoOpenChm(fFile, False);
+  fChmDataProvider.DoOpenChm(XFile, False);
 
-  // in case of exception fChms can be still = nil
-  if fChms <> nil then
-    FileIndex := fChms.IndexOf(fFile)
-  else
-    Exit;
+  fHistoryIndex := -1;
+  fHistory.Clear;
 
-  CurCHM := fChms.Chm[FileIndex];
+  CurCHM := GetChmReader(XFile);
+  if CurCHM = nil then Exit;
 
-  if LoadTOC and (FileIndex = 0) then
-  begin
-    QueueFillToc(CurCHM);
-  end;
+  // Load TOC is executed by TChmContentProvider.NewChmOpened() now
 
   // AContext will override the URL if it is found
   if AContext <> -1 then
@@ -1151,22 +1292,27 @@ begin
     if (Length(ContextURL) > 0) and not (ContextURL[1] in ['/', '\']) then
       Insert('/', ContextURL , 1);
     if Length(ContextURL) > 0 then
-      fURL := ContextURL;
+      xURL := ContextURL;
   end;
 
-  if fURL <> '' then
-    DoLoadUri(MakeURI(fURL, CurCHM))
+  if xURL <> '' then
+    DoLoadUri(MakeURI(xURL, CurCHM))
   else
     DoLoadUri(MakeURI(CurCHM.DefaultPage, CurCHM));
   Result := True;
 
-  fChms.OnOpenNewFile := @NewChmOpened;
+end;
+
+function TChmContentProvider.HasLoadedData ( const AUrl: String ) : Boolean;
+begin
+  Result:= (fChms <> nil) and fChms.IsAnOpenFile(GetUrlFilePath(AUrl));
 end;
 
 procedure TChmContentProvider.GoHome;
 begin
   if (fChms <> nil) and (fChms.Chm[0].DefaultPage <> '') then
   begin
+    DebugLn('CHP GoHome() DefaultPage: ', fChms.Chm[0].DefaultPage);
     DoLoadUri(MakeURI(fChms.Chm[0].DefaultPage, fChms.Chm[0]));
   end;
 end;
@@ -1195,19 +1341,59 @@ begin
   end;
 end;
 
+procedure TChmContentProvider.ActivateProvider;
+begin
+  //DebugLn('CHP ActivateProvider() FLastUri: '+fLastURI);
+  // For show Home after load of all chms from Lazarus
+  if (fChms.Count >0) and (fLastURI = '') then
+    GoHome;
+end;
+
+procedure TChmContentProvider.ActivateTOCControl;
+begin
+  if fContentsTab.TabVisible then
+  begin
+    fTabsControl.ActivePage:= fContentsTab;
+    if fContentsTree.Visible then
+      fContentsTree.SetFocus
+    else
+      fContentsTab.SetFocus;
+  end;
+end;
+
+procedure TChmContentProvider.ActivateIndexControl;
+begin
+  if fIndexTab.TabVisible then
+  begin
+    fTabsControl.ActivePage:= fIndexTab;
+    fIndexEdit.SetFocus;
+  end;
+end;
+
+procedure TChmContentProvider.ActivateSearchControl;
+begin
+  if fSearchTab.TabVisible then
+  begin
+    fTabsControl.ActivePage:= fSearchTab;
+    fKeywordCombo.SetFocus;
+  end;
+end;
+
 class function TChmContentProvider.GetProperContentProvider(const AURL: String
   ): TBaseContentProviderClass;
 begin
   Result:=TChmContentProvider;
 end;
 
-constructor TChmContentProvider.Create(AParent: TWinControl; AImageList: TImageList);
+constructor TChmContentProvider.Create(AParent: TWinControl; AImageList: TImageList;
+                                 AUpdateCount: Integer);
 const
   TAB_WIDTH = 215;
 begin
-  inherited Create(AParent, AImageList);
+  inherited Create(AParent, AImageList, AUpdateCount);
 
   fHistory := TStringList.Create;
+  fFillTOCStack := TFPList.Create;
 
   fTabsControl := TPageControl.Create(AParent);
   with fTabsControl do
@@ -1223,7 +1409,6 @@ begin
   begin
     Caption := slhelp_Contents;
     Parent := fTabsControl;
-    //BorderSpacing.Around := 6;
   end;
   fContentsPanel := TPanel.Create(fContentsTab);
   with fContentsPanel do
@@ -1242,10 +1427,14 @@ begin
     BorderSpacing.Around := 6;
     ReadOnly := True;
     Visible := True;
-    OnSelectionChanged := @ContentsTreeSelectionChanged;
+    ShowHint:=True;
+    OnShowHint:=@TreeViewShowHint;
     OnExpanded := @TOCExpand;
     OnCollapsed := @TOCCollapse;
-    OnCreateNodeClass:=@GetTreeNodeClass;
+    OnCreateNodeClass:= @GetTreeNodeClass;
+    OnClick:= @ContentsTreeSelectionChanged;
+    //OnKeyUp:= @ProcTreeKeyUp;
+    OnKeyDown:= @ProcTreeKeyDown;
     Images := fImageList;
     //StateImages := fImageList;
   end;
@@ -1255,7 +1444,7 @@ begin
   begin
     Caption := slhelp_Index;
     Parent := fTabsControl;
-    //BorderSpacing.Around := 6;
+    TabVisible:= False;
   end;
 
   fIndexEdit := TLabeledEdit.Create(fIndexTab);
@@ -1272,6 +1461,7 @@ begin
     EditLabel.AutoSize := True;
     LabelPosition := lpAbove;
     OnChange := @SearchEditChange;
+    OnKeyDown:= @ProcKeyDown;
     Visible := True;
   end;
 
@@ -1294,18 +1484,23 @@ begin
     ShowButtons:=False;
     ShowLines:=False;
     ShowRoot:=False;
+    ShowHint:=True;
+    OnShowHint:=@TreeViewShowHint;
     OnCollapsing:=@TreeViewStopCollapse;
-    OnDblClick := @IndexViewDblClick;
+    OnClick:= @ContentsTreeSelectionChanged;
+    //OnKeyUp:= @ProcTreeKeyUp;
+    OnKeyDown:= @ProcTreeKeyDown;
     OnCreateNodeClass:=@GetTreeNodeClass;
+    OnCompare:=@CompareIndexNodes;
   end;
 
-
- // {$IFDEF CHM_SEARCH}
+ {$IFDEF CHM_SEARCH}
   fSearchTab := TTabSheet.Create(fTabsControl);
   with fSearchTab do
   begin
     Caption := slhelp_Search;
     Parent := fTabsControl;
+    TabVisible:= False;
   end;
   fKeywordLabel := TLabel.Create(fSearchTab);
   with fKeywordLabel do
@@ -1373,26 +1568,34 @@ begin
     ShowButtons := False;
     ShowLines := False;
     ShowRoot:=False;
-    OnDblClick := @SearchResultsDblClick;
+    ShowHint:=True;
+    OnShowHint:=@TreeViewShowHint;
+    OnClick:= @ContentsTreeSelectionChanged;
+    OnKeyDown:= @ProcTreeKeyDown;
     OnCollapsing:=@TreeViewStopCollapse;
     OnCreateNodeClass:=@GetTreeNodeClass;
+    OnCompare:=@CompareIndexNodes;
   end;
- // {$ENDIF}
+ {$ENDIF}
 
-
-  fHtml := TIpHtmlPanel.Create(Parent);
+  fHtml := TIpHtmlPanel.Create(AParent);
   with fHtml do
   begin
-    DataProvider := TIpChmDataProvider.Create(fHtml, fChms);
-    TIpChmDataProvider(DataProvider).OnGetHtmlPage:=@LoadingHTMLStream;
     OnDocumentOpen := @IpHtmlPanelDocumentOpen;
     OnHotChange := @IpHtmlPanelHotChange;
     OnHotClick := @IpHtmlPanelHotClick;
+    //OnKeyDown:= @ProcTreeKeyDown;
+    DataProvider := TIpChmDataProvider.Create(fHtml);
     Parent := AParent;
     Align := alClient;
   end;
 
-  fSplitter := TSplitter.Create(Parent);
+  fChms:= TIpChmDataProvider(fHtml.DataProvider).Chms; // save only pointer for convenience
+  fChms.OnOpenNewFile:= @NewChmOpened;
+  fChmDataProvider:= TIpChmDataProvider(fHtml.DataProvider); // save only pointer for convenience
+  fChmDataProvider.OnGetHtmlPage:=@LoadingHTMLStream;
+
+  fSplitter := TSplitter.Create(AParent);
   with fSplitter do
   begin
     //Align  := alLeft;
@@ -1404,7 +1607,6 @@ begin
     Parent := AParent;
   end;
 
-
   fPopUp := TPopupMenu.Create(fHtml);
   fPopUp.Items.Add(TMenuItem.Create(fPopup));
   with fPopUp.Items.Items[0] do
@@ -1415,7 +1617,7 @@ begin
   fPopup.Items.Add(TMenuItem.Create(fPopup));
   with fPopup.Items.Items[1] do
   begin
-    Caption := 'Copy source';
+    Caption := slhelp_CopyHtmlSource;
     OnClick := @PopupCopySourceClick;
   end;
   fHtml.PopupMenu := fPopUp;
@@ -1427,12 +1629,25 @@ begin
     Align := alBottom;
     SimplePanel := True;
   end;
+
+  if isUpdate then
+  begin
+    fContentsTree.BeginUpdate;
+    fIndexView.BeginUpdate;
+  end;
+
 end;
 
 destructor TChmContentProvider.Destroy;
 begin
-  DoCloseChm;
+  fChmDataProvider.DoCloseChms;
   fHistory.Free;
+  if fFillTOCStack.Count > 0 then
+  begin
+    Application.ProcessMessages;
+    Sleep(200); // waiting a stop of async TOC creating
+  end;
+  fFillTOCStack.Free;
   inherited Destroy;
 end;
 

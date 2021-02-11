@@ -6414,8 +6414,8 @@ var
   end;
 
 var
-  Ext,AText,ACaption: string;
-  DiskFilename: String;
+  AText,ACaption: string;
+  DiskFilename, LpiFile: String;
   FileReadable: Boolean;
 begin
   Result:=mrCancel;
@@ -6459,13 +6459,11 @@ begin
     AFilename:=DiskFilename;
   end;
 
-  Ext:=lowercase(ExtractFileExt(AFilename));
   // if there is a project info file, load that instead
-  if (Ext<>'.lpi') and (FileExistsUTF8(ChangeFileExt(AFileName,'.lpi'))) then
-  begin
-    // load instead of program file the project info file
-    AFileName:=ChangeFileExt(AFileName,'.lpi');
-    Ext:='.lpi';
+  if CompareFileExtQuick(AFileName, 'lpi') <> 0 then begin
+    LpiFile := ChangeFileExt(AFileName,'.lpi');
+    if FileExistsUTF8(LpiFile) then
+      AFileName:=LpiFile;   // load instead of program file the project info file
   end;
 
   if (not FileIsText(AFilename,FileReadable)) and FileReadable then
@@ -9942,7 +9940,7 @@ function TMainIDE.DoJumpToCodePosition(ActiveSrcEdit: TSourceEditorInterface;
 var
   SrcEdit, NewSrcEdit: TSourceEditor;
   AnEditorInfo: TUnitEditorInfo;
-  s: String;
+  STB, FNStart: String;
 begin
   Result:=mrCancel;
   if NewSource=nil then begin
@@ -9976,10 +9974,12 @@ begin
       ActiveUnitInfo := Project1.UnitInfoWithFilename(NewSource.Filename);
       if (ActiveUnitInfo = nil) and (Project1.IsVirtual) and (jfSearchVirtualFullPath in Flags)
       then begin
-        s := AppendPathDelim(GetTestBuildDirectory);
-        if UTF8LowerCase(copy(NewSource.Filename, 1, length(s))) = UTF8LowerCase(s)
-        then ActiveUnitInfo := Project1.UnitInfoWithFilename(copy(NewSource.Filename,
-                1+length(s), length(NewSource.Filename)), [pfsfOnlyVirtualFiles]);
+        STB := AppendPathDelim(GetTestBuildDirectory);
+        FNStart := copy(NewSource.Filename, 1, length(STB));
+        if UTF8CompareLatinTextFast(FNStart, STB) = 0 then
+          ActiveUnitInfo := Project1.UnitInfoWithFilename(
+                                  copy(NewSource.Filename, 1+length(STB), MaxInt),
+                                  [pfsfOnlyVirtualFiles]);
       end;
 
       AnEditorInfo := nil;
@@ -11247,7 +11247,7 @@ begin
   FExpression := FExpression + ' = ' + FDebugResText;
   if FSmartHintStr<>'' then
   begin
-    p:=System.Pos('<body>',lowercase(FSmartHintStr));
+    p:=PosI('<body>',FSmartHintStr);
     if p>0 then
       Insert('<div class="debuggerhint">'+CodeHelpBoss.TextToHTML(FExpression)+'</div><br>',
              FSmartHintStr, p+length('<body>'))
@@ -11288,8 +11288,9 @@ begin
     end
     else begin
       // deference a pointer - maybe it is a class
-      if ASuccess and Assigned(ResultDBGType) and (ResultDBGType.Kind in [skPointer]) and
-         not( StringCase(Lowercase(ResultDBGType.TypeName), ['char', 'character', 'ansistring']) in [0..2] )
+      if ASuccess and Assigned(ResultDBGType) and (ResultDBGType.Kind in [skPointer])
+      and not ( StringCase(ResultDBGType.TypeName,
+                    ['char', 'character', 'ansistring'], True, False) in [0..2] )
       then
       begin
         if ResultDBGType.Value.AsPointer <> nil then
@@ -11325,7 +11326,8 @@ procedure TSrcNotebookHintCallback.AddDebuggerResultDeref(Sender: TObject;
 begin
   if ASuccess and Assigned(ResultDBGType) and
     ( (ResultDBGType.Kind <> skPointer) or
-      (StringCase(Lowercase(ResultDBGType.TypeName), ['char', 'character', 'ansistring']) in [0..2])
+      (StringCase(ResultDBGType.TypeName,
+                  ['char', 'character', 'ansistring'], True, False) in [0..2])
     )
   then
     FDebugResText := FDebugResText + LineEnding + LineEnding + '(' + FExpression + ')^ = ' + DebugBoss.FormatValue(ResultDBGType, ResultText);

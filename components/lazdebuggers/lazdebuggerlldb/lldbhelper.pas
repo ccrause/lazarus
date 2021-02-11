@@ -19,6 +19,8 @@ interface
 
 uses
   Classes, SysUtils, strutils, math,
+  // LazUtils
+  LazStringUtils,
   // DebuggerIntf
   DbgIntfBaseTypes;
 
@@ -60,10 +62,9 @@ begin
   end;
 end;
 
-function StrStartsWith(AString, AStart: string; ACheckStartNotEmpty: Boolean
-  ): Boolean;
+function StrStartsWith(AString, AStart: string; ACheckStartNotEmpty: Boolean): Boolean;
 begin
-  Result := ( (not ACheckStartNotEmpty) or (AStart <> '') ) and (LeftStr(AString, Length(AStart)) = AStart);
+  Result := (not ACheckStartNotEmpty or (AStart <> '')) and StartsStr(AStart, AString);
 end;
 
 function StrContains(AString, AFind: string): Boolean;
@@ -92,7 +93,7 @@ begin
   end;
 
   SetLength(AGapsContent, FindLen - 1);
-  Result := StrStartsWith(AString, AFind[0]);
+  Result := StartsStr(AFind[0], AString);
   if not Result then
     exit;
   Delete(AString, 1, Length(AFind[0]));

@@ -26,11 +26,11 @@ unit SynEditMarkupHighAll;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes, SysUtils, StrUtils,
   // LCL
   LCLProc, Controls, ExtCtrls,
   // LazUtils
-  LazClasses, LazUTF8, LazMethodList,
+  LazClasses, LazUTF8, LazMethodList, LazStringUtils,
   // SynEdit
   SynEditMarkup, SynEditTypes, SynEditSearch, SynEditMiscClasses,
   SynEditHighlighter, SynEditPointClasses, SynEditMiscProcs,
@@ -645,17 +645,16 @@ var
 begin
   if FDict.Count > 0 then
     exit;
-
   SetLength(FNextTermWIthSameWord, FTerms.Count);
 
   for i := 0 to FTerms.Count - 1 do begin
     FNextTermWIthSameWord[i] := -1;
     if not FTerms[i].Enabled then
       Continue;
-    s := LowerCase(FTerms[i].SearchTerm);
+    s := FTerms[i].SearchTerm;
     FDict.Add(FTerms[i].SearchTerm, i);
     for j := i + 1 to FTerms.Count - 1 do
-      if LowerCase(FTerms[j].SearchTerm) = s then begin
+      if CompareText(FTerms[j].SearchTerm, s) = 0 then begin
         FNextTermWIthSameWord[i] := j;
         break;
       end;
@@ -1341,8 +1340,7 @@ begin
       inc(Result);
   end
   else begin
-    ATerm := LowerCase(ATerm);
-    while (Result < c) and (LowerCase(Items[Result].SearchTerm) <> ATerm) do
+    while (Result < c) and (CompareText(Items[Result].SearchTerm, ATerm) <> 0) do
       inc(Result);
   end;
   if Result >= c then
@@ -1386,7 +1384,7 @@ begin
     Len := length(o.SearchTerm);
     MatchBegin := MatchEnd - Len - FFindLineTextLower + FFindLineText;
 
-    if o.MatchCase and not(copy(MatchBegin, 1, Len) = o.SearchTerm) then begin
+    if o.MatchCase and not StartsStr(o.SearchTerm, MatchBegin) then begin
       MatchIdx := FTermDict.GetIndexForNextWordOccurrence(MatchIdx);
       continue;
     end;
@@ -2715,7 +2713,7 @@ function TSynEditMarkupHighlightAllCaret.GetCurrentText: String;
     Result := copy(s, i, MaxInt);
     i := length(Result);
     while (i > 0) and (Result[i] in [#1..#32]) do dec(i);
-    Result := copy(Result, 1, i);
+    SetLength(Result, i);
   end;
 var
   LowBnd, UpBnd: TPoint;
