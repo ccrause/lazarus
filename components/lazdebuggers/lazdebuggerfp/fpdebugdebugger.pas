@@ -1743,7 +1743,11 @@ begin
      begin
        FillByte(CodeBin[0], sz, 0);
        // offset into buffer where active memory should start
-       bufOffset := sz - AnAddr;
+       // But instruction size could be less than max
+       if  sz > AnAddr then
+         bufOffset := sz - AnAddr
+       else
+         bufOffset := 0;
        // size of active memory to read
        sz := integer(AnAddr);
      end
@@ -1807,7 +1811,7 @@ begin
          inc(StatIndex);
        end;
 
-     if AReversedRange.Count>0 then
+     if AReversedRange.Count > 0 then
      begin
        // Update start of range
        ARange.RangeStartAddr := tmpAddr;
