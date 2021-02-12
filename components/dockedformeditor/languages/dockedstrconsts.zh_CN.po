@@ -1,16 +1,16 @@
-# Valdas Jankunas <zmuogs@gmail.com>, 2017.
 msgid ""
 msgstr ""
-"Last-Translator: Valdas Jankunas <zmuogs@gmail.com>\n"
-"PO-Revision-Date: 2017-07-05 20:56+0200\n"
-"Project-Id-Version: \n"
-"Language-Team: Lithuanian <kde-i18n-lt@kde.org>\n"
-"Language: lt\n"
 "Content-Type: text/plain; charset=UTF-8\n"
-"Content-Transfer-Encoding: 8bit\n"
+"Project-Id-Version: X-1.9\n"
+"POT-Creation-Date: \n"
+"PO-Revision-Date: \n"
+"Last-Translator: 郑建平@夏宗萍 aka  robsean <robsean@126.com>\n"
+"Language-Team: \n"
 "MIME-Version: 1.0\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
-"X-Generator: Lokalize 2.0\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_CN\n"
+"X-Generator: Poedit 1.8.7.1\n"
+"X-Poedit-SourceCharset: UTF-8\n"
 
 #: dockedstrconsts.sanchorbottomcolorcaption
 msgid "Bottom Anchor"
@@ -57,11 +57,11 @@ msgid "Anchors"
 msgstr ""
 
 #: dockedstrconsts.sanchortabvisiblecaption
-msgid "Show Tab Anchors"
+msgid "Show Anchors Tab"
 msgstr ""
 
 #: dockedstrconsts.sanchortabvisiblehint
-msgid "Show Anchor Designer"
+msgid "Show Anchor Editor"
 msgstr ""
 
 #: dockedstrconsts.sanchortargetcolorcaption
@@ -83,7 +83,19 @@ msgstr ""
 
 #: dockedstrconsts.sargumentoutofrange
 msgctxt "dockedstrconsts.sargumentoutofrange"
-msgid "Argument out of range"
+msgid "Argument out of range."
+msgstr ""
+
+#: dockedstrconsts.sattachcontrol
+msgid "Attach Control"
+msgstr ""
+
+#: dockedstrconsts.sattachpoint
+msgid "Attach Control Sides"
+msgstr ""
+
+#: dockedstrconsts.sattachside
+msgid "Attach Control Side"
 msgstr ""
 
 #: dockedstrconsts.scaptiondockedformeditor
@@ -99,14 +111,14 @@ msgid "Minimal distance to capture a control with mouse"
 msgstr ""
 
 #: dockedstrconsts.scirculardependency
-msgid "This will create a circular dependency"
+msgid "This will create a circular dependency."
 msgstr ""
 
 #: dockedstrconsts.scode
 #, fuzzy
 msgctxt "dockedstrconsts.scode"
 msgid "Code"
-msgstr "Kodas"
+msgstr "代码"
 
 #: dockedstrconsts.scolorscaption
 msgid "Colors"
@@ -116,7 +128,19 @@ msgstr ""
 #, fuzzy
 msgctxt "dockedstrconsts.sdesigner"
 msgid "Designer"
-msgstr "Komponuotojas"
+msgstr "设计"
+
+#: dockedstrconsts.sdetachcontrol
+msgid "Detach Control"
+msgstr ""
+
+#: dockedstrconsts.sdetachpoint
+msgid "Detach Control Sides"
+msgstr ""
+
+#: dockedstrconsts.sdetachside
+msgid "Detach Control Side"
+msgstr ""
 
 #: dockedstrconsts.sforcerefreshingcaption
 msgid "Force Refreshing At Sizing"
@@ -167,19 +191,19 @@ msgid "Top"
 msgstr ""
 
 #: dockedstrconsts.streataligncaption
-msgid "Automatic Treat Aligns"
+msgid "Automatically treat Aligns"
 msgstr ""
 
 #: dockedstrconsts.streatalignhint
-msgid "Automatically replacing Aligns with appropriate Anchors"
+msgid "Automatically replace Aligns with appropriate Anchors"
 msgstr ""
 
 #: dockedstrconsts.streatbordercaption
-msgid "Automatic Treat Around Border"
+msgid "Automatically treat Around Border"
 msgstr ""
 
 #: dockedstrconsts.streatborderhint
-msgid "Automatically replacing Bordering Around and adapt side Borderings if needed"
+msgid "Automatically replace BorderSpace around the control and adapt side BorderSpaces if needed"
 msgstr ""
 
 #: dockedstrconsts.swarningcaption

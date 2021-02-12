@@ -348,6 +348,8 @@ type
   { TFpDbgBreakpoint }
 
   TFpDbgBreakpoint = class(TObject)
+  private
+    FFreeByDbgProcess: Boolean;
   public
     function Hit(const AThreadID: Integer; ABreakpointAddress: TDBGPtr): Boolean; virtual; abstract;
     function HasLocation(const ALocation: TDBGPtr): Boolean; virtual; abstract;
@@ -358,6 +360,9 @@ type
 
     procedure SetBreak; virtual; abstract;
     procedure ResetBreak; virtual; abstract;
+
+    // FreeByDbgProcess: The breakpoint will be freed by TDbgProcess.Destroy
+    property FreeByDbgProcess: Boolean read FFreeByDbgProcess write FFreeByDbgProcess;
   end;
 
   { TFpInternalBreakBase }
@@ -995,6 +1000,7 @@ var
   Len, i: Integer;
   BList: TFpInternalBreakpointArray;
 begin
+  {$IFDEF FPDEBUG_THREAD_CHECK}AssertFpDebugThreadIdNotMain('TBreakLocationMap.AddLocotion');{$ENDIF}
   LocData := GetDataPtr(ALocation);
 
   if LocData <> nil then begin
@@ -1041,6 +1047,7 @@ var
   LocData: PInternalBreakLocationEntry;
   Len, i: Integer;
 begin
+  {$IFDEF FPDEBUG_THREAD_CHECK}AssertFpDebugThreadIdNotMain('TBreakLocationMap.RemoveLocotion');{$ENDIF}
   LocData := GetDataPtr(ALocation);
   if LocData = nil then begin
     DebugLn(DBG_WARNINGS or DBG_BREAKPOINTS, ['Missing breakpoint for loc ', FormatAddress(ALocation)]);
@@ -1121,6 +1128,7 @@ end;
 
 function TBreakLocationMap.GetEnumerator: TBreakLocationMapEnumerator;
 begin
+  {$IFDEF FPDEBUG_THREAD_CHECK}AssertFpDebugThreadId('TBreakLocationMap.GetEnumerator');{$ENDIF}
   Result := TBreakLocationMapEnumerator.Create(Self);
 end;
 
@@ -1754,10 +1762,16 @@ begin
   FProcessID:=0;
   SetLastLibraryUnloaded(nil);
 
-  for i := 0 to FBreakpointList.Count - 1 do
+  for i := 0 to FBreakpointList.Count - 1 do begin
     FBreakpointList[i].FProcess := nil;
-  for i := 0 to FWatchPointList.Count - 1 do
+    if FBreakpointList[i].FreeByDbgProcess then
+      FBreakpointList[i].Free;
+  end;
+  for i := 0 to FWatchPointList.Count - 1 do begin
     FWatchPointList[i].FProcess := nil;
+    if FWatchPointList[i].FreeByDbgProcess then
+      FWatchPointList[i].Free;
+  end;
   FreeAndNil(FBreakpointList);
   FreeAndNil(FWatchPointList);
   //Assert(FBreakMap.Count=0, 'No breakpoints left');
@@ -3112,6 +3126,7 @@ procedure TFpInternalBreakpoint.ResetBreak;
 var
   i: Integer;
 begin
+  {$IFDEF FPDEBUG_THREAD_CHECK}AssertFpDebugThreadId('TFpInternalBreakpoint.ResetBreak');{$ENDIF}
   if FProcess = nil then
     exit;
   for i := 0 to High(FLocation) do
@@ -3122,6 +3137,7 @@ procedure TFpInternalBreakpoint.SetBreak;
 var
   i: Integer;
 begin
+  {$IFDEF FPDEBUG_THREAD_CHECK}AssertFpDebugThreadId('TFpInternalBreakpoint.SetBreak');{$ENDIF}
   if FProcess = nil then
     exit;
   for i := 0 to High(FLocation) do
@@ -3217,6 +3233,7 @@ var
   R: Boolean;
   i: Integer;
 begin
+  {$IFDEF FPDEBUG_THREAD_CHECK}AssertFpDebugThreadId('TFpInternalWatchpoint.SetBreak');{$ENDIF}
   if FProcess = nil then
     exit;
   //TODO: read current mem content. So in case of overlap it can be checked
@@ -3248,6 +3265,7 @@ end;
 
 procedure TFpInternalWatchpoint.ResetBreak;
 begin
+  {$IFDEF FPDEBUG_THREAD_CHECK}AssertFpDebugThreadId('TFpInternalWatchpoint.ResetBreak');{$ENDIF}
   if FProcess = nil then
     exit;
 
