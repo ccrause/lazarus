@@ -156,12 +156,6 @@ type
     property Count: integer read FCount;
   end;
 
-var
-  // Difficult to see how this can be encapsulated except if
-  // added methods are introduced that needs to be called after .Create
-  HostName: string = 'localhost';
-  Port: integer = 12345;
-
 implementation
 
 uses
@@ -556,7 +550,7 @@ begin
 
   dbg := TDbgAvrProcess.Create(AFileName, 0, 0, AnOsClasses, AMemManager);
   try
-    dbg.FConnection := TRspConnection.Create(HostName, Port);
+    dbg.FConnection := TRspConnection.Create();
     dbg.FConnection.RegisterCacheSize := RegArrayLength;
     result := dbg;
     dbg.FStatus := dbg.FConnection.Init;

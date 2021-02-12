@@ -312,6 +312,27 @@ type
     property MaxStackNullStringSearchLen: QWord read FMaxStackNullStringSearchLen write SetMaxStackNullStringSearchLen stored MaxStackNullStringSearchLenIsStored default DEF_MaxStackNullStringSearchLen;
   end;
 
+  { TFpDebugDebuggerPropertiesGdbServer }
+
+  TFpDebugDebuggerPropertiesGdbServer = class(TPersistent)
+  private
+  const
+    DEF_host = 'localhost';
+    DEF_port = 2345;
+  private
+    FHost: string;
+    FPort: integer;
+    function portIsStored: Boolean;
+    function hostIsStored: Boolean;
+  public
+    constructor Create;
+    procedure Assign(Source: TPersistent); override;
+  published
+    property Host: string read FHost write FHost stored hostIsStored;
+    property Port: integer read FPort write FPort stored portIsStored default DEF_port;
+  end;
+
+
   TFpInt3DebugBreakOption = (
     dboIgnoreAll //, dboIgnoreDLL, dboIgnoreNtdllNoneDebug, dboIgnoreNtdllDebug
   );
@@ -328,7 +349,9 @@ type
     FHandleDebugBreakInstruction: TFpInt3DebugBreakOptions;
     FMemLimits: TFpDebugDebuggerPropertiesMemLimits;
     FNextOnlyStopOnStartLine: boolean;
+    FGdbServerProperties: TFpDebugDebuggerPropertiesGdbServer;
     procedure SetMemLimits(AValue: TFpDebugDebuggerPropertiesMemLimits);
+    procedure SetGdbServerProperties(AValue: TFpDebugDebuggerPropertiesGdbServer);
   public
     constructor Create; override;
     destructor Destroy; override;
@@ -345,6 +368,7 @@ type
 
     property MemLimits: TFpDebugDebuggerPropertiesMemLimits read FMemLimits write SetMemLimits;
     property HandleDebugBreakInstruction: TFpInt3DebugBreakOptions read FHandleDebugBreakInstruction write FHandleDebugBreakInstruction default [dboIgnoreAll];
+    property GdbServerProperties: TFpDebugDebuggerPropertiesGdbServer read FGdbServerProperties write SetGdbServerProperties;
   end;
 
   { TDbgControllerStepOverOrFinallyCmd
@@ -740,7 +764,7 @@ procedure Register;
 implementation
 
 uses
-  FpDbgDisasX86;
+  FpDbgDisasX86, FpDbgRsp;
 
 var
   DBG_VERBOSE, DBG_WARNINGS, DBG_BREAKPOINTS, FPDBG_COMMANDS: PLazLoggerLogGroup;
@@ -787,6 +811,35 @@ type
 procedure Register;
 begin
   RegisterDebugger(TFpDebugDebugger);
+end;
+
+{ TFpDebugDebuggerPropertiesGdbServer }
+
+function TFpDebugDebuggerPropertiesGdbServer.portIsStored: Boolean;
+begin
+  Result := DEF_port <> FPort;
+end;
+
+function TFpDebugDebuggerPropertiesGdbServer.hostIsStored: Boolean;
+begin
+  Result := FHost <> DEF_host;
+end;
+
+constructor TFpDebugDebuggerPropertiesGdbServer.Create;
+begin
+  inherited Create;
+  FHost := DEF_host;
+  FPort := DEF_port;
+end;
+
+procedure TFpDebugDebuggerPropertiesGdbServer.Assign(Source: TPersistent);
+begin
+  if Source is TFpDebugDebuggerPropertiesGdbServer then begin
+    FHost := TFpDebugDebuggerPropertiesGdbServer(Source).FHost;
+    FPort := TFpDebugDebuggerPropertiesGdbServer(Source).FPort;
+    FpDbgRsp.AHost := FHost;
+    FpDbgRsp.APort := FPort;
+  end;
 end;
 
 { TFpDbgDebggerThreadWorkerLinkedList }
@@ -2066,6 +2119,12 @@ begin
   FMemLimits.Assign(AValue);
 end;
 
+procedure TFpDebugDebuggerProperties.SetGdbServerProperties(
+  AValue: TFpDebugDebuggerPropertiesGdbServer);
+begin
+  FGdbServerProperties.Assign(AValue);
+end;
+
 constructor TFpDebugDebuggerProperties.Create;
 begin
   inherited Create;
@@ -2075,12 +2134,14 @@ begin
   {$endif windows}
   FMemLimits := TFpDebugDebuggerPropertiesMemLimits.Create;
   FHandleDebugBreakInstruction := [dboIgnoreAll];
+  FGdbServerProperties := TFpDebugDebuggerPropertiesGdbServer.Create;
 end;
 
 destructor TFpDebugDebuggerProperties.Destroy;
 begin
   inherited Destroy;
   FMemLimits.Free;
+  FGdbServerProperties.Free;
 end;
 
 procedure TFpDebugDebuggerProperties.Assign(Source: TPersistent);
@@ -2094,6 +2155,7 @@ begin
     {$endif windows}
     FMemLimits.Assign(TFpDebugDebuggerProperties(Source).MemLimits);
     FHandleDebugBreakInstruction:=TFpDebugDebuggerProperties(Source).FHandleDebugBreakInstruction;
+    FGdbServerProperties.Assign(TFpDebugDebuggerProperties(source).GdbServerProperties);
   end;
 end;
 
