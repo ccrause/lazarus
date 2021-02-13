@@ -46,7 +46,7 @@ interface
 uses
   Classes, sysutils, math, contnrs,
   // LCL
-  LCLProc,
+  LCLProc, PropEdits,
   // LazUtils
   LazClasses, LazLoggerBase, LazFileUtils, LazStringUtils, Maps, LazMethodList, LazUTF8,
   // DebuggerIntf
@@ -1797,6 +1797,22 @@ type
     procedure Assign({%H-}Source: TPersistent); override;
   end;
 
+  { TXmlConfStringList }
+
+  TXmlConfStringList = class(TStringList)
+  private
+    function TextStored: boolean;
+  published
+    property Text stored TextStored;
+  end;
+
+  { TXmlConfStringsPropertyEditor }
+
+  TXmlConfStringsPropertyEditor = class(TStringsPropertyEditor)
+  public
+    function GetValue: ansistring; override;
+  end;
+
   {$INTERFACES CORBA} // no ref counting needed
 
   { TDebuggerEventLogInterface
@@ -2220,6 +2236,28 @@ const
 begin
   Result := Format('[[ Value=%u, Guessed=%u, Offset=%d, Validity=%s ]]',
                    [AnAddr.Value, AnAddr.GuessedValue, AnAddr.Offset, ValidityName[AnAddr.Validity]]);
+end;
+
+{ TXmlConfStringsPropertyEditor }
+
+function TXmlConfStringsPropertyEditor.GetValue: ansistring;
+var
+  s: TStrings;
+  i: Integer;
+begin
+  Result := '';
+  s := TStrings(GetObjectValue);
+  for i := 0 to s.Count - 1 do begin
+    if i > 0 then Result := Result + ' / ';
+    Result := Result + s[i];
+  end;
+end;
+
+{ TXmlConfStringList }
+
+function TXmlConfStringList.TextStored: boolean;
+begin
+  Result := Text <> '';
 end;
 
 { TCommonDebuggerProperties }
@@ -6632,6 +6670,8 @@ initialization
   MDebuggerClasses := TStringListUTF8Fast.Create;
   MDebuggerClasses.Sorted := True;
   MDebuggerClasses.Duplicates := dupError;
+
+  RegisterPropertyEditor(TypeInfo(TXmlConfStringList), nil, '', TXmlConfStringsPropertyEditor);
 
 finalization
   DoFinalization;
