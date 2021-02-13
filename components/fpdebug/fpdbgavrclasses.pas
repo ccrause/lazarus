@@ -550,7 +550,7 @@ begin
 
   dbg := TDbgAvrProcess.Create(AFileName, 0, 0, AnOsClasses, AMemManager);
   try
-    dbg.FConnection := TRspConnection.Create();
+    dbg.FConnection := TRspConnection.Create(AFileName);
     dbg.FConnection.RegisterCacheSize := RegArrayLength;
     result := dbg;
     dbg.FStatus := dbg.FConnection.Init;
