@@ -69,6 +69,7 @@ type
     FStatusEvent: TStatusEvent;
     fCS: TRTLCriticalSection;
     FFileName: string;
+    FOwner: TDbgProcess;
     procedure FSetRegisterCacheSize(sz: cardinal);
     procedure FResetStatusEvent;
     // Blocking
@@ -91,8 +92,9 @@ type
     procedure uploadSection(ASectionName: string);
 
     function FHexEncodeStr(s: string): string;
+    function FHexDecodeStr(hexcode: string): string;
   public
-    constructor Create(AFileName: string); Overload;
+    constructor Create(AFileName: string; AOwner: TDbgProcess); Overload;
     destructor Destroy; override;
     // Wait for async signal - blocking
     function WaitForSignal(out msg: string; out registers: TInitializedRegisters): integer;
@@ -129,9 +131,9 @@ type
 var
   AHost: string = 'localhost';
   APort: integer = 2345;
-  AUploadExe: boolean = false;
-  AUploadEEPROM: boolean = false;
+  AUploadBinary: boolean = False;
   AAfterConnectMonitorCmds: TStringList;
+  ASkipSectionsList: TStringList;
 
 implementation
 
@@ -417,6 +419,19 @@ begin
   end;
 end;
 
+function TRspConnection.FHexDecodeStr(hexcode: string): string;
+var
+  i: integer;
+  s: string;
+begin
+  SetLength(Result, length(hexCode) div 2);
+  for i := 1 to length(Result) do
+  begin
+    s := '$' + hexCode[2*i-1] + hexCode[2*i];
+    result[i] := char(StrToInt(s));
+  end;
+end;
+
 procedure TRspConnection.Break();
 begin
   EnterCriticalSection(fCS);
@@ -460,12 +475,13 @@ begin
   result := pos('OK', reply) = 1;
 end;
 
-constructor TRspConnection.Create(AFileName: string);
+constructor TRspConnection.Create(AFileName: string; AOwner: TDbgProcess);
 begin
   inherited Create(AHost, APort);
   //self.IOTimeout := 1000;  // socket read timeout = 1000 ms
   InitCriticalSection(fCS);
   FFileName := AFileName;
+  FOwner := AOwner;
 end;
 
 destructor TRspConnection.Destroy;
@@ -838,6 +854,11 @@ var
 begin
   cmdstr := 'qRcmd,' + FHexEncodeStr(s);
   result := FSendCmdWaitForReply(cmdstr, reply);
+  if Result then
+  begin
+    reply := FHexDecodeStr(reply);
+    DebugLn(DBG_RSP, ['[Monitor '+s+'] reply: ', reply]);
+  end;
 end;
 
 function TRspConnection.Init: integer;
@@ -848,7 +869,8 @@ var
   source: TDbgFileLoader;
   imgReader: TDbgImageReader;
   pSection: PDbgImageSection;
-  dataStart: qword;
+  dataStart: int64;
+  reloadData: boolean = false;
   i: integer;
 begin
   result := 0;
@@ -868,39 +890,51 @@ begin
         SendMonitorCmd(AAfterConnectMonitorCmds[i]);
     end;
 
-    if (AUploadExe or AUploadEEPROM) and (FFileName <> '') then
+    // Start with AVR logic
+    // If more targets are supported, move this to target specific debugger class
+    if AUploadBinary and (FFileName <> '') then
     begin
-      try
-        source := TDbgFileLoader.Create(FFileName);
-        imgReader := GetImageReader(source, nil, false);
-        if AUploadExe then
+      // Ensure loader is initialized
+      FOwner.InitializeLoaders;
+      datastart := -1;
+      i := -1;
+      repeat
+        inc(i);
+        pSection := FOwner.LoaderList[0].SectionByID[i];
+        if (pSection <> nil) and (pSection^.Size > 0) and (pSection^.IsLoadable) then
         begin
-          // First grab.text section
-          pSection := imgReader.Section['.text'];
-          if (pSection <> nil) and (pSection^.Size > 0) then
+          if Assigned(ASkipSectionsList) and
+             (ASkipSectionsList.IndexOf(pSection^.Name) < 0) then
           begin
-            WriteData(0, pSection^.Size, pSection^.RawData^);
-            // Remember end of data section address, .data is copied just behind .text
-            dataStart := pSection^.Size;
+            // .data section should be programmed straight after .text for AVR
+            // Require tracking because sections are sorted alphabetically,
+            // so .data is encountered before .text
+            if (pSection^.Name = '.data') then
+            begin
+              // Data can only be loaded after text, since the end address of text+1 is the start of data in flash
+              if (dataStart < 0) then
+              begin
+                reloadData := true;
+                system.Continue;
+              end
+              else
+                WriteData(dataStart, pSection^.Size, pSection^.RawData^);
+            end
+            else
+            begin
+              WriteData(pSection^.VirtualAddress, pSection^.Size, pSection^.RawData^);
+              if pSection^.Name = '.text' then
+                dataStart := pSection^.Size;
+            end;
           end;
-          // Then .data section - but don't write to VMA, startup code does this
-          pSection := imgReader.Section['.data'];
-          if (pSection <> nil) and (pSection^.Size > 0) then
-            WriteData(dataStart, pSection^.Size, pSection^.RawData^);
         end;
+      until (pSection = nil);
 
-        if AUploadEEPROM then
-        begin
-          // Then .eeprom section
-          pSection := imgReader.Section['.eeprom'];
-          if (pSection <> nil) and (pSection^.Size > 0) then
-            WriteData(pSection^.VirtualAddress, pSection^.Size, pSection^.RawData^);
-        end;
-
-        // Other sections (Fuses, User row...)?
-      finally
-        imgReader.Free;
-        source.Free;
+      // reloadData will only be set if it is not in the skipped sections list
+      if reloadData and (dataStart >= 0) then
+      begin
+        pSection := FOwner.LoaderList[0].Section['.data'];
+        WriteData(dataStart, pSection^.Size, pSection^.RawData^);
       end;
     end;
 
@@ -915,6 +949,7 @@ begin
     // Already wrapped in critical section
     result := WaitForSignal(reply, intRegs);
   end;
+
 end;
 
 initialization
@@ -925,5 +960,7 @@ initialization
 finalization
   if Assigned(AAfterConnectMonitorCmds) then
     FreeAndNil(AAfterConnectMonitorCmds);
+  if Assigned(ASkipSectionsList) then
+    FreeAndNil(ASkipSectionsList);
 end.
 

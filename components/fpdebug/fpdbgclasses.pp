@@ -442,7 +442,6 @@ type
     FDbgInfo: TDbgInfo;
     procedure InitializeLoaders; virtual;
     procedure SetFileName(const AValue: String);
-    property LoaderList: TDbgImageLoaderList read FLoaderList write FLoaderList;
   public
     constructor Create(const AProcess: TDbgProcess); virtual;
     destructor Destroy; override;
@@ -461,6 +460,7 @@ type
     property Mode: TFPDMode read FMode;
     property PointerSize: Integer read GetPointerSize;
     property MemManager: TFpDbgMemManager read FMemManager;
+    property LoaderList: TDbgImageLoaderList read FLoaderList write FLoaderList;
   end;
 
   { TDbgLibrary }
@@ -641,6 +641,7 @@ public
     procedure ThreadsBeforeContinue;
     procedure ThreadsClearCallStack;
     procedure LoadInfo; override;
+    procedure InitializeLoaders; override;
 
     function WriteData(const AAdress: TDbgPtr; const ASize: Cardinal; const AData): Boolean; virtual;
     // Modify the debugee's code.
@@ -2191,6 +2192,11 @@ begin
 
   if DbgInfo.HasInfo then
     FSymInstances.Add(Self);
+end;
+
+procedure TDbgProcess.InitializeLoaders;
+begin
+  inherited InitializeLoaders;
 end;
 
 function TDbgProcess.GetLastEventProcessIdentifier: THandle;
