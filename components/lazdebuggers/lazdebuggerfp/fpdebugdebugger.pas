@@ -8,7 +8,7 @@ interface
 
 uses
   Classes, SysUtils, fgl, math, contnrs, process,
-  Forms, Dialogs,
+  Forms, Dialogs, PropEdits,
   Maps, LazLogger, LazUTF8,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
   FpDebugDebuggerUtils,
@@ -312,6 +312,22 @@ type
     property MaxStackNullStringSearchLen: QWord read FMaxStackNullStringSearchLen write SetMaxStackNullStringSearchLen stored MaxStackNullStringSearchLenIsStored default DEF_MaxStackNullStringSearchLen;
   end;
 
+    { TXmlConfStringList2 }
+
+    TXmlConfStringList2 = class(TStringList)
+    private
+      function TextStored: boolean;
+    published
+      property Text stored TextStored;
+    end;
+
+    { TXmlConfStringsPropertyEditor2 }
+
+    TXmlConfStringsPropertyEditor2 = class(TStringsPropertyEditor)
+    public
+      function GetValue: ansistring; override;
+    end;
+
   { TFpDebugDebuggerPropertiesGdbServer }
 
   TFpDebugDebuggerPropertiesGdbServer = class(TPersistent)
@@ -324,15 +340,15 @@ type
     FHost: string;
     FPort: integer;
     FUploadBinary: boolean;
-    FAfterConnectMonitorCmds: TXmlConfStringList;
-    FSkipUploadOfSectionList: TXmlConfStringList;
+    FAfterConnectMonitorCmds: TXmlConfStringList2;
+    FSkipUploadOfSectionList: TXmlConfStringList2;
 
     function portIsStored: Boolean;
     function hostIsStored: Boolean;
     function uploadBinaryIsStored: Boolean;
     function afterConnectMonitorIsStored: Boolean;
-    procedure SetAfterConnectMonitorCmds(AValue: TXmlConfStringList);
-    procedure SetSkipUploadOfSectionList(AValue: TXmlConfStringList);
+    procedure SetAfterConnectMonitorCmds(AValue: TXmlConfStringList2);
+    procedure SetSkipUploadOfSectionList(AValue: TXmlConfStringList2);
   public
     constructor Create;
     destructor Destroy; override;
@@ -341,8 +357,8 @@ type
     property Host: string read FHost write FHost stored hostIsStored;
     property Port: integer read FPort write FPort stored portIsStored default DEF_port;
     property UploadBinary: Boolean read FUploadBinary write FUploadBinary stored uploadBinaryIsStored default DEF_uploadBinary;
-    property AfterConnectMonitorCmds: TXmlConfStringList read FAfterConnectMonitorCmds write SetAfterConnectMonitorCmds;
-    property SkipUploadOfSectionList: TXmlConfStringList read FSkipUploadOfSectionList write SetSkipUploadOfSectionList;
+    property AfterConnectMonitorCmds: TXmlConfStringList2 read FAfterConnectMonitorCmds write SetAfterConnectMonitorCmds;
+    property SkipUploadOfSectionList: TXmlConfStringList2 read FSkipUploadOfSectionList write SetSkipUploadOfSectionList;
   end;
 
 
@@ -826,6 +842,28 @@ begin
   RegisterDebugger(TFpDebugDebugger);
 end;
 
+{ TXmlConfStringsPropertyEditor2 }
+
+function TXmlConfStringsPropertyEditor2.GetValue: ansistring;
+var
+  s: TStrings;
+  i: Integer;
+begin
+  Result := '';
+  s := TStrings(GetObjectValue);
+  for i := 0 to s.Count - 1 do begin
+    if i > 0 then Result := Result + ' / ';
+    Result := Result + s[i];
+  end;
+end;
+
+{ TXmlConfStringList2 }
+
+function TXmlConfStringList2.TextStored: boolean;
+begin
+  Result := Text <> '';
+end;
+
 { TFpDebugDebuggerPropertiesGdbServer }
 
 function TFpDebugDebuggerPropertiesGdbServer.portIsStored: Boolean;
@@ -844,13 +882,13 @@ begin
 end;
 
 procedure TFpDebugDebuggerPropertiesGdbServer.SetAfterConnectMonitorCmds(
-  AValue: TXmlConfStringList);
+  AValue: TXmlConfStringList2);
 begin
   FAfterConnectMonitorCmds.Assign(AValue);
 end;
 
 procedure TFpDebugDebuggerPropertiesGdbServer.SetSkipUploadOfSectionList(
-  AValue: TXmlConfStringList);
+  AValue: TXmlConfStringList2);
 begin
   FSkipUploadOfSectionList.Assign(AValue);
 end;
@@ -866,8 +904,8 @@ begin
   FHost := DEF_host;
   FPort := DEF_port;
   FUploadBinary := DEF_uploadBinary;
-  FAfterConnectMonitorCmds := TXmlConfStringList.Create;
-  FSkipUploadOfSectionList := TXmlConfStringList.Create;
+  FAfterConnectMonitorCmds := TXmlConfStringList2.Create;
+  FSkipUploadOfSectionList := TXmlConfStringList2.Create;
 end;
 
 destructor TFpDebugDebuggerPropertiesGdbServer.Destroy;
@@ -4892,6 +4930,8 @@ initialization
   DBG_WARNINGS    := DebugLogger.FindOrRegisterLogGroup('DBG_WARNINGS' {$IFDEF DBG_WARNINGS} , True {$ENDIF} );
   DBG_BREAKPOINTS := DebugLogger.FindOrRegisterLogGroup('DBG_BREAKPOINTS' {$IFDEF DBG_BREAKPOINTS} , True {$ENDIF} );
   FPDBG_COMMANDS  := DebugLogger.FindOrRegisterLogGroup('FPDBG_COMMANDS' {$IFDEF FPDBG_COMMANDS} , True {$ENDIF} );
+
+  RegisterPropertyEditor(TypeInfo(TXmlConfStringList2), nil, '', TXmlConfStringsPropertyEditor2);
 
 end.
 

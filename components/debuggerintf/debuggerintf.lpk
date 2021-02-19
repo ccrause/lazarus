@@ -59,9 +59,6 @@ Provides an interface to add debuggers to the IDE"/>
     </i18n>
     <RequiredPkgs>
       <Item>
-        <PackageName Value="IDEIntf"/>
-      </Item>
-      <Item>
         <PackageName Value="LCLBase"/>
       </Item>
     </RequiredPkgs>
