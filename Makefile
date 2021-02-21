@@ -3669,6 +3669,7 @@ basecomponents:
 	$(MAKE) -C components/lazcontrols
 	$(MAKE) -C components/ideintf
 	$(MAKE) -C components/synedit
+	$(MAKE) -C components/lazdebuggers/cmdlinedebuggerbase
 	$(MAKE) -C components/lazdebuggergdbmi
 	$(MAKE) -C components/lazcontrols/design
 bigidecomponents:
@@ -3708,6 +3709,7 @@ lazbuild: registration lazutils codetools
 	$(MAKE) -C components/synedit LCL_PLATFORM=nogui
 	$(MAKE) -C components/buildintf
 	$(MAKE) -C components/ideintf LCL_PLATFORM=nogui
+	$(MAKE) -C components/lazdebuggers/cmdlinedebuggerbase LCL_PLATFORM=nogui
 	$(MAKE) -C components/lazdebuggergdbmi LCL_PLATFORM=nogui
 	$(MAKE) -C ide lazbuilder LCL_PLATFORM=nogui
 lhelp:
