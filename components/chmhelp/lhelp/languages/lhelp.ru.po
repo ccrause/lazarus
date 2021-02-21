@@ -142,8 +142,8 @@ msgstr "LHelp - %s"
 
 #: lhelpstrconsts.slhelp_lhelpchmfileviewerversioncopyrightcandrewhaineslaz
 #, object-pascal-format
-msgid "LHelp (CHM file viewer)%sVersion %s%sCopyright (C) Andrew Haines, %sLazarus contributors"
-msgstr "LHelp (программа просмотра файлов CHM)%sВерсия %s%s(C) Andrew Haines, %sучастники проекта Lazarus"
+msgid "CHM file viewer%sVersion %s%sCopyright (C) Andrew Haines, %sLazarus contributors"
+msgstr "Программа просмотра файлов CHM%sВерсия %s%s(C) Andrew Haines, %sучастники проекта Lazarus"
 
 #: lhelpstrconsts.slhelp_lhelpoptions
 msgid "  LHelp options:"
@@ -169,7 +169,7 @@ msgid "%s not found!"
 msgstr "%s не найден!"
 
 #: lhelpstrconsts.slhelp_ok
-msgid "Ok"
+msgid "OK"
 msgstr "ОК"
 
 #: lhelpstrconsts.slhelp_open

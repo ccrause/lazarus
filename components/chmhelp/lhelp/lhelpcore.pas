@@ -37,13 +37,13 @@ interface
 uses
   Classes, SysUtils, SimpleIPC, Laz2_XMLCfg,
   // LCL
-  Forms, Controls, Dialogs, Buttons, ComCtrls, ExtCtrls, Menus, StdCtrls,
+  Forms, Controls, Graphics, Dialogs, Buttons, ComCtrls, ExtCtrls, Menus, StdCtrls, Types,
   LCLProc, LCLType, LCLIntf, DefaultTranslator,
   // LazUtils
   LazFileUtils, LazUTF8, LazLoggerBase,
   // ChmHelp
   {$IFDEF USE_LNET}HTTPContentProvider,{$ENDIF}
-  BaseContentProvider, filecontentprovider, ChmContentProvider, lhelpstrconsts;
+  BaseContentProvider, FileContentProvider, ChmContentProvider, LHelpStrConsts;
 
 type
 
@@ -100,12 +100,10 @@ type
     procedure FileMenuOpenURLItemClick(Sender: TObject);
     procedure FormClose(Sender: TObject; var {%H-}CloseAction: TCloseAction);
     procedure FormCreate(Sender: TObject);
-    procedure FormKeyDown ( Sender: TObject; var Key: Word; Shift: TShiftState
-      ) ;
+    procedure FormKeyDown ( Sender: TObject; var {%H-}Key: Word; {%H-}Shift: TShiftState) ;
     procedure FormShow(Sender: TObject);
     procedure FormWindowStateChange(Sender: TObject);
     procedure MiActionsGoForwardClick ( Sender: TObject ) ;
-    procedure HelpMenuItemClick ( Sender: TObject ) ;
     procedure MiHideClick ( Sender: TObject ) ;
     procedure MiActionsGoBackClick ( Sender: TObject ) ;
     procedure MiActionsGoHomeClick ( Sender: TObject ) ;
@@ -120,7 +118,6 @@ type
     procedure ViewShowSepTabsClick(Sender: TObject);
     procedure ViewShowStatusClick(Sender: TObject);
   private
-    { private declarations }
     // SimpleIPC server name (including unique part as per help protocol)
     fServerName: String;
     // Receives commands from IDE
@@ -183,9 +180,9 @@ type
     // Bring App on Top and show
     procedure ShowApp();
     // Event process
-    procedure DoShowContent(Sender:Tobject);
+    //procedure DoShowContent(Sender:Tobject);
   public
-    { public declarations }
+
   end;
 
 var
@@ -197,7 +194,7 @@ var
 
 const
   INVALID_FILE_TYPE = 1;
-  VERSION_STAMP = '2020-12-10'; //used in displaying version in about form etc
+  VERSION_STAMP = '2021-02-12'; //used in displaying version in about form etc
 
 implementation
 
@@ -220,35 +217,94 @@ type
 procedure THelpForm.AboutItemClick(Sender: TObject);
 var
   f: TForm;
-  l: TLabel;
+  l1, l2: TLabel;
   b: TButton;
+  i: TImage;
+  bv: TBevel;
+  d6: Integer;
 begin
+  d6 := Scale96ToForm(6);
   f := TForm.Create(Application);
   try
     f.Caption := slhelp_About;
     f.BorderStyle := bsDialog;
     f.Position := poMainFormCenter;
-    f.Constraints.MinWidth := 150;
-    f.Constraints.MaxWidth := 350;
-    l := TLabel.Create(f);
-    l.Parent := f;;
-    l.Align := alTop;
-    l.Alignment:=taCenter;
-    l.BorderSpacing.Around := 6;
-    l.Caption := Format(slhelp_LHelpCHMFileViewerVersionCopyrightCAndrewHainesLaz, [LineEnding, VERSION_STAMP, LineEnding +
+
+    i := TImage.Create(f);
+    i.Parent := f;
+    i.Width := Scale96ToForm(128);
+    i.Height := Scale96ToForm(128);
+    i.Proportional := true;
+    i.Picture.Icon.Assign(Application.Icon);
+    i.Picture.Icon.Current := i.Picture.Icon.GetBestIndexForSize(Types.Size(256, 256));
+    i.BorderSpacing.Around := d6;
+    i.Anchors := [akLeft, akTop];
+    i.AnchorSideTop.Control := f;
+    i.AnchorSideTop.Side := asrTop;
+    i.AnchorSideLeft.Control := f;
+    i.AnchorSideLeft.Side := asrTop;
+
+    l1 := TLabel.Create(f);
+    l1.Parent := f;;
+    l1.Alignment:=taCenter;
+    l1.BorderSpacing.Around := d6;
+    l1.Caption := 'LHelp';
+    l1.Font.Size := 20;
+    l1.Font.Style := [fsBold];
+    l1.Anchors := [akLeft,akTop, akRight];
+    l1.AnchorSideTop.Control := f;
+    l1.AnchorSideTop.Side := asrTop;
+    l1.AnchorSideLeft.Control := i;
+    l1.AnchorSideLeft.Side := asrBottom;
+    l1.AnchorSideRight.Control := f;
+    l1.AnchorSideRight.Side := asrBottom;
+    l1.AutoSize := True;
+
+    l2 := TLabel.Create(f);
+    l2.Parent := f;
+    l2.Alignment := taCenter;
+    l2.BorderSpacing.Around := d6;
+    l2.Caption := Format(slhelp_LHelpCHMFileViewerVersionCopyrightCAndrewHainesLaz, [LineEnding, VERSION_STAMP, LineEnding +
       LineEnding, LineEnding]);
-    l.AutoSize := True;
+    l2.Anchors := [akLeft,akTop, akRight];
+    l2.AnchorSideTop.Control := l1;
+    l2.AnchorSideTop.Side := asrBottom;
+    l2.AnchorSideLeft.Control := i;
+    l2.AnchorSideLeft.Side := asrBottom;
+    l2.AnchorSideRight.Control := f;
+    l2.AnchorSideRight.Side := asrBottom;
+    l2.AutoSize := True;
     //l.WordWrap := True; {don't wrap author's name}
+
+    bv := TBevel.Create(f);
+    bv.Parent := f;
+    bv.Height := 2;
+    bv.Shape := bsTopLine;
+    bv.BorderSpacing.Around := d6;
+    bv.Anchors := [akLeft, akRight, akTop];
+    bv.AnchorSideLeft.Control := f;
+    bv.AnchorSideLeft.Side := asrTop;
+    bv.AnchorSideRight.Control := f;
+    bv.AnchorSideRight.Side := asrBottom;
+    if i.Top + i.Height > l2.Top + l2.Height then
+      bv.AnchorSideTop.Control := i
+    else
+      bv.AnchorSideTop.Control := l2;
+    bv.AnchorSideTop.Side := asrBottom;
+
     b := TButton.Create(f);
     b.Parent := f;
-    b.BorderSpacing.Around := 6;
+    b.BorderSpacing.Around := d6;
     b.Anchors := [akTop, akLeft];
-    b.AnchorSide[akTop].Control := l;
-    b.AnchorSide[akTop].Side := asrBottom;
-    b.AnchorSide[akLeft].Control := f;
-    b.AnchorSide[akLeft].Side := asrCenter;
+    b.AnchorSideTop.Control := bv;
+    b.AnchorSideTop.Side := asrBottom;
+    b.AnchorSideLeft.Control := f;
+    b.AnchorSideLeft.Side := asrCenter;
     b.Caption := slhelp_Ok;
     b.ModalResult := mrOk;
+    b.Constraints.MinWidth := Scale96ToFont(70);
+    b.AutoSize := true;
+
     f.AutoSize := False;
     f.AutoSize := True;
     f.ShowModal;
@@ -354,7 +410,7 @@ begin
   //close all tabs to avoid AV with many tabs
   BeginUpdate;
   PageControl.ShowTabs:= False;
-  while TContentTab(ActivePage) <>nil do
+  while ActivePage <> nil do
     ActivePage.Free;
   EndUpdate;
   //Visible := false;
@@ -443,11 +499,6 @@ end;
 procedure THelpForm.MiActionsGoForwardClick ( Sender: TObject ) ;
 begin
   if Assigned(ActivePage) then ActivePage.ContentProvider.GoForward;
-end;
-
-procedure THelpForm.HelpMenuItemClick ( Sender: TObject ) ;
-begin
-
 end;
 
 procedure THelpForm.MiHideClick ( Sender: TObject ) ;
@@ -1000,8 +1051,7 @@ function THelpForm.OpenURL(const AURL: String; AContext: THelpContext): DWord;
 
 var
   fURLPrefix: String;
-  fContentProvider: TBaseContentProviderClass;
-  fRealContentProvider: TBaseContentProviderClass;
+  ContentProviderClass: TBaseContentProviderClass;
   fPage: TContentTab = nil;
   fFirstSameTypePage: TContentTab = nil;
   I: Integer;
@@ -1009,17 +1059,17 @@ var
 begin
   Result := Ord(srInvalidURL);
   fURLPrefix := GetUriPrefix(AURL);
-  fContentProvider := GetContentProvider(fURLPrefix);
+  ContentProviderClass := GetContentProvider(fURLPrefix);
 
-  if fContentProvider = nil then
+  if ContentProviderClass = nil then
   begin
     ShowError(Format(slhelp_CannotHandleThisTypeOfContentForUrl, [fURLPrefix, LineEnding, AURL]));
     Result := Ord(srInvalidURL);
     Exit;
   end;
 
-  fRealContentProvider := fContentProvider.GetProperContentProvider(AURL);
-  if fRealContentProvider = nil then
+  ContentProviderClass := ContentProviderClass.GetProperContentProvider(AURL);
+  if ContentProviderClass = nil then
   begin
     ShowError(Format(slhelp_CannotHandleThisTypeOfSubcontentForUrl, [fURLPrefix, LineEnding, AURL]));
     Result := Ord(srInvalidURL);
@@ -1038,7 +1088,7 @@ begin
   for I := 0 to PageControl.PageCount-1 do
   begin
     fPage := TContentTab(PageControl.Pages[I]);
-    if fRealContentProvider.ClassName = fPage.ContentProvider.ClassName then
+    if ContentProviderClass.ClassName = fPage.ContentProvider.ClassName then
     begin
       if fFirstSameTypePage = nil then fFirstSameTypePage:= fPage;
       if fPage.ContentProvider.HasLoadedData(AURL) then // need to update data
@@ -1071,7 +1121,7 @@ begin
     // none existing page that can handle this content, so create one
     fIsNewPage := true;
     fPage := TContentTab.Create(PageControl);
-    fPage.ContentProvider := fRealContentProvider.Create(fPage, ImageList1, fUpdateCount);
+    fPage.ContentProvider := ContentProviderClass.Create(fPage, ImageList1, fUpdateCount);
     fPage.ContentProvider.OnTitleChange := @ContentTitleChange;
     //fPage.ContentProvider.OnContentComplete := @DoShowContent;
     fPage.Parent := PageControl;
@@ -1134,7 +1184,7 @@ begin
       end;
     end;
   end
-    else
+  else
   begin
     en := Assigned(ActivePage);
     // Show content page
@@ -1187,7 +1237,6 @@ begin
       Tab.ContentProvider.BeginUpdate;
     end;
   end;
-
 end;
 
 procedure THelpForm.EndUpdate;
@@ -1215,20 +1264,15 @@ begin
     fMustClose:= false;
     Application.Restore;
     Application.BringToFront;
-{$IFDEF WINDOWS}
-    // Go to TOC TreeView and to get focus on foreground window
-    KeyInput.Apply([ssCtrl]);
-    KeyInput.Press(VK_T);
-    KeyInput.UnApply([ssCtrl]);
-{$ENDIF}
+    MiActionsTOCClick(Nil);   // Go to TOC TreeView.
   end;
 end;
-
+{
 procedure THelpForm.DoShowContent(Sender: Tobject);
 begin
   ShowApp();
 end;
-
+}
 
 { TContentTab }
 

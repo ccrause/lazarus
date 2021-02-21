@@ -60,6 +60,9 @@ unit registersqldb;
 {$IF FPC_FULLVERSION >= 20701}
   {$DEFINE HASMYSQL57CONNECTION}
 {$ENDIF}
+{$IF FPC_FULLVERSION >= 30301}
+  {$DEFINE HASMYSQL80CONNECTION}
+{$ENDIF}
 
 interface
 
@@ -97,6 +100,9 @@ uses
   {$IFDEF HASMYSQL57CONNECTION}
     mysql57conn,
   {$ENDIF}
+  {$IFDEF HASMYSQL80CONNECTION}
+    mysql80conn,
+  {$ENDIF}
   {$IFDEF HASSQLITE3CONNECTION}
     sqlite3conn,
   {$ENDIF}
@@ -108,8 +114,8 @@ uses
   {$ENDIF}
   propedits,
   sqlstringspropertyeditordlg,
-  controls,
-  forms,
+  controls, forms,
+  LazFileUtils,
   {$IFDEF HASLIBLOADER}
     sqldblib,
   {$ENDIF}
@@ -267,6 +273,9 @@ begin
 {$ENDIF}
 {$IFDEF HASMYSQL57CONNECTION}
     ,TMySQL57Connection
+{$ENDIF}
+{$IFDEF HASMYSQL80CONNECTION}
+    ,TMySQL80Connection
 {$ENDIF}
 {$IFDEF HASSQLITE3CONNECTION}
     ,TSQLite3Connection
@@ -665,7 +674,6 @@ function TSQLSyntaxChecker.CheckSource(Sender: TObject; var Handled: boolean
 
 Var
   AE : TSourceEditorInterface;
-  E : String;
   S : TStringStream;
 
 begin
@@ -675,9 +683,8 @@ begin
   AE:=SourceEditorManagerIntf.ActiveEditor;
   If (AE<>Nil) then
     begin
-    E:=ExtractFileExt(AE.FileName);
     FSFN:=ExtractFileName(AE.FileName);
-    Handled:=CompareText(E,'.sql')=0;
+    Handled:=FilenameExtIs(AE.FileName,'sql');
     If Handled then
       begin
       S:=TStringStream.Create(AE.SourceText);

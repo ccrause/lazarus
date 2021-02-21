@@ -44,9 +44,13 @@ type
     FDesignForm: TDesignForm;
     procedure FormResized(Sender: TObject);
     function GetFormContainer: TWinControl;
+    procedure ScrollBarHorzMouseWheel(Sender: TObject; {%H-}Shift: TShiftState;
+      WheelDelta: Integer; {%H-}MousePos: TPoint; var {%H-}Handled: Boolean);
+    procedure ScrollBarVertMouseWheel(Sender: TObject; {%H-}Shift: TShiftState;
+      WheelDelta: Integer; {%H-}MousePos: TPoint; var {%H-}Handled: Boolean);
     procedure SetDesignForm(AValue: TDesignForm);
     procedure SetDesignScroll(AIndex: Integer; AValue: Boolean);
-    procedure ScrollBarScroll(Sender: TObject; {%H-}ScrollCode: TScrollCode; var ScrollPos: Integer);
+    procedure ScrollBarScroll(Sender: TObject; ScrollCode: TScrollCode; var ScrollPos: Integer);
   public
     ResizeFrame: TResizeFrame;
     ScrollBarVert: TScrollBar;
@@ -79,8 +83,34 @@ begin
   Result := ResizeFrame.PanelFormContainer;
 end;
 
+procedure TResizer.ScrollBarHorzMouseWheel(Sender: TObject; Shift: TShiftState;
+  WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+var
+  LScrollPos: Integer;
+begin
+  LScrollPos := ResizeFrame.HorzScrollPos - WheelDelta;
+  ScrollBarHorz.Position := LScrollPos;
+  ScrollBarScroll(ScrollBarHorz, scEndScroll, LScrollPos);
+  Handled := True;
+end;
+
+procedure TResizer.ScrollBarVertMouseWheel(Sender: TObject; Shift: TShiftState;
+  WheelDelta: Integer; MousePos: TPoint; var Handled: Boolean);
+var
+  LScrollPos: Integer;
+begin
+  LScrollPos := ResizeFrame.VertScrollPos - WheelDelta;
+  ScrollBarVert.Position := LScrollPos;
+  ScrollBarScroll(ScrollBarVert, scEndScroll, LScrollPos);
+  Handled := True;
+end;
+
 procedure TResizer.SetDesignForm(AValue: TDesignForm);
 begin
+  {$IFDEF DEBUGDOCKEDFORMEDITOR}
+  if Assigned(AValue) then DebugLn('TResizer.SetDesignForm: New Designform: ', DbgSName(AValue.Form))
+                      else DebugLn('TResizer.SetDesignForm: New Designform: nil');
+  {$ENDIF}
   if FDesignForm <> nil then
     FDesignForm.OnChangeHackedBounds := nil;
   FDesignForm := AValue;
@@ -90,6 +120,8 @@ begin
     FDesignForm.Form.Parent := ResizeFrame.PanelFormContainer;
     FDesignForm.EndUpdate;
     FDesignForm.OnChangeHackedBounds := @AdjustResizer;
+    if Assigned(FDesignForm.AnchorDesigner) then
+      FDesignForm.AnchorDesigner.Parent := ResizeFrame.PanelAnchorContainer;
   end;
   ResizeFrame.DesignForm := AValue;
 end;
@@ -117,11 +149,27 @@ procedure TResizer.ScrollBarScroll(Sender: TObject; ScrollCode: TScrollCode; var
 var
   LScrollPos: Integer;
 begin
+  case ScrollCode of
+    scLineDown: ScrollPos := ScrollPos + 50;
+    scLineUp:   ScrollPos := ScrollPos - 50;
+    scPageDown:
+      begin
+        if Sender = ScrollBarHorz then ScrollPos := ScrollPos + ResizeFrame.Width;
+        if Sender = ScrollBarVert then ScrollPos := ScrollPos + ResizeFrame.Height;
+      end;
+    scPageUp:
+      begin
+        if Sender = ScrollBarHorz then ScrollPos := ScrollPos - ResizeFrame.Width;
+        if Sender = ScrollBarVert then ScrollPos := ScrollPos - ResizeFrame.Height;
+      end;
+  end;
+
   DesignForm.BeginUpdate;
   if Sender = ScrollBarVert then
   begin
     // Warning - don't overflow the range! (go to description for FRealMaxV)
     ScrollPos := Min(ScrollPos, FRealMaxV);
+    ScrollPos := Max(ScrollPos, 0);
     ResizeFrame.VertScrollPos := ScrollPos;
     // scroll for form
     LScrollPos := Max(ScrollPos - ResizeFrame.SizerGripSize, 0);
@@ -130,6 +178,7 @@ begin
   if Sender = ScrollBarHorz then
   begin
     ScrollPos := Min(ScrollPos, FRealMaxH);
+    ScrollPos := Max(ScrollPos, 0);
     ResizeFrame.HorzScrollPos := ScrollPos;
     // scroll for form
     LScrollPos := Max(ScrollPos - ResizeFrame.SizerGripSize, 0);
@@ -161,6 +210,7 @@ begin
   ScrollBarVert.Anchors := [akTop, akRight, akBottom];
   ScrollBarVert.Visible := False;
   ScrollBarVert.OnScroll := @ScrollBarScroll;
+  ScrollBarVert.AddHandlerOnMouseWheel(@ScrollBarVertMouseWheel);
 
   ScrollBarHorz := TScrollBar.Create(nil);
   ScrollBarHorz.Parent := Self;
@@ -171,6 +221,7 @@ begin
   ScrollBarHorz.Anchors := [akLeft, akRight, akBottom];
   ScrollBarHorz.Visible := False;
   ScrollBarHorz.OnScroll := @ScrollBarScroll;
+  ScrollBarHorz.AddHandlerOnMouseWheel(@ScrollBarHorzMouseWheel);
 
   ResizeFrame := TResizeFrame.Create(nil);
   ResizeFrame.Name := '';
@@ -255,6 +306,8 @@ end;
 procedure TResizer.DesignerSetFocus;
 begin
   ResizeFrame.DesignerSetFocus;
+  if Assigned(FDesignForm) and Assigned(FDesignForm.AnchorDesigner) then
+    FDesignForm.AnchorDesigner.OnMouseWheel := @ScrollBarVertMouseWheel;
 end;
 
 end.

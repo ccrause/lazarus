@@ -30,28 +30,30 @@ type
 
   TBasicAnchorDesigner = class
   private
-    FIsFocusedFunc: TBoolFunc;
     FOnDesignerSetFocus: TProcedureOfObject;
+    FOnMouseWheel: TMouseWheelEvent;
+    FParent: TWinControl;
   public
-    constructor Create;
-    function IsFocused: Boolean; virtual; abstract;
     procedure Abort; virtual; abstract;
     procedure BeginUpdate; virtual; abstract;
     procedure EndUpdate; virtual; abstract;
     procedure Invalidate; virtual; abstract;
     procedure Refresh; virtual; abstract;
+    procedure SetParent(AValue: TWinControl); virtual;
   public
-    property IsFocusedFunc: TBoolFunc read FIsFocusedFunc write FIsFocusedFunc;
     property OnDesignerSetFocus: TProcedureOfObject read FOnDesignerSetFocus write FOnDesignerSetFocus;
+    property OnMouseWheel: TMouseWheelEvent read FOnMouseWheel write FOnMouseWheel;
+    property Parent: TWinControl read FParent write SetParent;
   end;
 
 implementation
 
 { TBasicAnchorDesigner }
 
-constructor TBasicAnchorDesigner.Create;
+procedure TBasicAnchorDesigner.SetParent(AValue: TWinControl);
 begin
-  FIsFocusedFunc := nil;
+  if FParent = AValue then Exit;
+  FParent := AValue;
 end;
 
 end.

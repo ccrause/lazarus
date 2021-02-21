@@ -32,13 +32,19 @@ unit SourceFileManager;
 interface
 
 uses
-  Classes, SysUtils, StrUtils, typinfo, math, fpjson, Laz_AVL_Tree,
+  Classes, SysUtils, typinfo, math, fpjson, Laz_AVL_Tree,
+  {$IF FPC_FULLVERSION>30004}
+  StrUtils, // StartsStr
+  {$ENDIF}
   // LCL
   Controls, Forms, Dialogs, LCLIntf, LCLType, LclStrConsts,
   LResources, LCLMemManager,
   // LazUtils
   LConvEncoding, LazFileCache, FileUtil, LazFileUtils, LazLoggerBase, LazUtilities,
-  LazStringUtils, LazUTF8, LazTracer, AvgLvlTree,
+  {$IF FPC_FULLVERSION=30004}
+  LazStringUtils, // StartsStr
+  {$ENDIF}
+  LazUTF8, LazTracer, AvgLvlTree,
   // Codetools
   {$IFDEF IDE_MEM_CHECK}
   MemCheck,
@@ -1024,7 +1030,7 @@ var
   SourceType: String;
 begin
   if ([ofProjectLoading,ofRegularFile]*FFlags=[]) and (MainIDE.ToolStatus=itNone)
-  and (CompareFileExtQuick(FFilename,'lpi')=0) then begin
+  and FilenameExtIs(FFilename,'lpi',true) then begin
     // this is a project info file -> load whole project
     Result:=MainIDE.DoOpenProjectFile(FFilename,[ofAddToRecent]);
     if Result = mrOK then
@@ -1249,7 +1255,7 @@ begin
   if ([ofRegularFile,ofRevert,ofProjectLoading]*FFlags=[])
   and FilenameIsAbsolute(FFilename) and FileExistsCached(FFilename) then begin
     // check if file is a lazarus project (.lpi)
-    if (CompareFileExt(FFilename,'lpi',true)=0) then
+    if FilenameExtIs(FFilename,'lpi',true) then
     begin
       case
         IDEQuestionDialog(lisOpenProject, Format(lisOpenTheProject, [FFilename]),
@@ -1267,7 +1273,7 @@ begin
     end;
 
     // check if file is a lazarus package (.lpk)
-    if (CompareFileExt(FFilename,'lpk',true)=0) then
+    if FilenameExtIs(FFilename,'lpk',true) then
     begin
       case
         IDEQuestionDialog(lisOpenPackage,
@@ -1845,7 +1851,7 @@ begin
     OkToAdd:=True;
     if IsPascal then
       OkToAdd:=CheckDirIsInSearchPath(ActiveUnitInfo,False)
-    else if CompareFileExtQuick(ActiveUnitInfo.Filename,'inc')=0 then
+    else if FilenameExtIs(ActiveUnitInfo.Filename,'inc') then
       OkToAdd:=CheckDirIsInSearchPath(ActiveUnitInfo,True);
     if OkToAdd then begin
       ActiveUnitInfo.IsPartOfProject:=true;
@@ -4134,7 +4140,7 @@ begin
                           +dlgFilterAll+'|'+GetAllFilesMask;
       if OpenDialog.Execute then begin
         AFilename:=GetPhysicalFilenameCached(ExpandFileNameUTF8(OpenDialog.Filename),false);
-        if CompareFileExt(AFilename,'lpi',true)<>0 then begin
+        if not FilenameExtIs(AFilename,'lpi',true) then begin
           // not a lpi file
           // check if it is a program source
 
@@ -5773,9 +5779,9 @@ begin
   end;
 
   // check, if a .lfm file is opened in the source editor
-  if (LFMUnitInfo=nil) or
-    ((CompareFileExt(LFMUnitInfo.Filename,'lfm',true)<>0) and
-     (CompareFileExtQuick(LFMUnitInfo.Filename,'dfm')<>0)) then
+  if (LFMUnitInfo=nil)
+  or not ( FilenameExtIs(LFMUnitInfo.Filename,'lfm',true) or
+           FilenameExtIs(LFMUnitInfo.Filename,'dfm') ) then
   begin
     if not Quiet then
     begin
@@ -6375,7 +6381,7 @@ begin
     end;
   end;
   try
-    if (CompareFileExt(LFMFilename,'lfm',true)<>0) then
+    if not FilenameExtIs(LFMFilename,'lfm',true) then
     begin
       // no lfm format -> keep old info
       exit(true);
@@ -7397,7 +7403,7 @@ begin
           // Do not care if this fails. A user may have removed the line from source.
           Project1.RemoveCreateFormFromProjectFile(AnUnitInfo.ComponentName);
       end;
-      if CompareFileExtQuick(AnUnitInfo.Filename,'inc')=0 then
+      if FilenameExtIs(AnUnitInfo.Filename,'inc') then
         // include file
         if FilenameIsAbsolute(AnUnitInfo.Filename) then
           ObsoleteIncPaths:=MergeSearchPaths(ObsoleteIncPaths,UnitPath);
@@ -7411,7 +7417,7 @@ begin
         UnitPath:=ChompPathDelim(ExtractFilePath(AnUnitInfo.Filename));
         if FilenameIsPascalUnit(AnUnitInfo.Filename) then
           ObsoleteUnitPaths:=RemoveSearchPaths(ObsoleteUnitPaths,UnitPath);
-        if CompareFileExtQuick(AnUnitInfo.Filename,'inc')=0 then
+        if FilenameExtIs(AnUnitInfo.Filename,'inc') then
           ObsoleteIncPaths:=RemoveSearchPaths(ObsoleteIncPaths,UnitPath);
       end;
       AnUnitInfo:=AnUnitInfo.NextPartOfProject;
