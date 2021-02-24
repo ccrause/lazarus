@@ -1911,6 +1911,7 @@ var
   ARegisterValue: TRegisterValue;
   thr: TDbgThread;
   frm: TDbgCallstackEntry;
+  tmp: string;
 begin
   if not TFpDebugDebugger(Debugger).IsPausedAndValid then begin
     ARegisters.DataValidity:=ddsInvalid;
@@ -1940,9 +1941,14 @@ begin
   for i := 0 to ARegisterList.Count-1 do
     begin
     ARegisterValue := ARegisters.EntriesByName[ARegisterList[i].Name];
+    tmp := ARegisterValue.Value;
     ARegisterValue.ValueObj.SetAsNum(ARegisterList[i].NumValue, ARegisterList[i].Size);
     ARegisterValue.ValueObj.SetAsText(ARegisterList[i].StrValue);
     ARegisterValue.DataValidity:=ddsValid;
+    if tmp = ARegisterValue.Value then
+      ARegisterValue.Modified := False
+    else
+      ARegisterValue.Modified := True;
     end;
   ARegisters.DataValidity:=ddsValid;
 end;
