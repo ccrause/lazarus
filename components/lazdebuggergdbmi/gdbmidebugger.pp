@@ -2070,11 +2070,15 @@ begin
 
       if ChangedRegList <> nil then begin
         for i := 0 to FRegisters.Count - 1 do
-          FRegisters[i].Modified := False;
+        begin
+          FRegisters[i].Modified := false;
+          FRegisters[i].DataValidity := ddsValid;
+        end;
         for i := 0 to ChangedRegList.Count - 1 do begin
           idx := StrToIntDef(Unquote(ChangedRegList.GetString(i)), -1);
           if (idx < 0) or (idx > High(FGDBMIRegSupplier.FRegNamesCache)) then Continue;
-          FRegisters.EntriesByName[FGDBMIRegSupplier.FRegNamesCache[idx]].Modified := True;
+          FRegisters.EntriesByName[FGDBMIRegSupplier.FRegNamesCache[idx]].Modified := true;
+          FRegisters.EntriesByName[FGDBMIRegSupplier.FRegNamesCache[idx]].DataValidity := ddsInvalid;
         end;
         FreeAndNil(ChangedRegList);
       end;
@@ -2082,7 +2086,7 @@ begin
 
     // check for individual updates / displayformat
     for i := 0 to FRegisters.Count - 1 do begin
-      if not FRegisters[i].HasValue then
+      if not FRegisters[i].HasValue or (FRegisters[i].DataValidity <> ddsValid) then
         UpdateFormat(FRegisters[i].DisplayFormat);
     end;
   finally
