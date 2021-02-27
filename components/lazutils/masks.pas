@@ -13,7 +13,7 @@ unit Masks;
 interface
 
 uses
-  Classes, SysUtils, Contnrs, LazUtilsStrConsts, LazUtf8;
+  Classes, SysUtils, Contnrs, LazUtilsStrConsts, LazUTF8;
 
 type
   TMaskCharType = (mcChar, mcCharSet, mcAnyChar, mcAnyText);
@@ -24,6 +24,8 @@ type
   PCharSet = ^TCharSet;
 
   TUtf8Char = String[7];
+
+  EMaskError=class(EConvertError);
 
   TMaskChar = record
     case CharType: TMaskCharType of
@@ -229,7 +231,7 @@ var
 
   procedure CharSetError;
   begin
-    raise EConvertError.CreateFmt(lrsInvalidCharSet, [AValue]);
+    raise EMaskError.CreateFmt(lrsInvalidCharSet, [AValue]);
   end;
 
   procedure AddAnyText;

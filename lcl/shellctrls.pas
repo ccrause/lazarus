@@ -31,7 +31,7 @@ uses
 {$if defined(Windows) or defined(darwin) or defined(HASAMIGA))}
 {$define CaseInsensitiveFilenames}
 {$endif}
-{$IF defined(CaseInsensitiveFilenames) or defined(darwin)}
+{$IF defined(CaseInsensitiveFilenames)}
 {$DEFINE NotLiteralFilenames}
 {$ENDIF}
 
@@ -101,9 +101,6 @@ type
     { Methods specific to Lazarus - useful for other classes }
     class function  GetBasePath: string;
     function  GetRootPath: string;
-    class procedure GetFilesInDir(const ABaseDir: string;
-      AMask: string; AObjectTypes: TObjectTypes; AResult: TStrings; AFileSortType: TFileSortType = fstNone;
-      ACaseSensitivity: TMaskCaseSensitivity = mcsPlatformDefault);
     { Other methods specific to Lazarus }
     function  GetPathFromNode(ANode: TTreeNode): string;
     procedure PopulateWithBaseFiles;
@@ -144,6 +141,7 @@ type
     property HotTrack;
     property Images;
     property Indent;
+    property MultiSelectStyle;
     //property ParentBiDiMode;
     property ParentColor default False;
     property ParentFont;
@@ -639,7 +637,6 @@ begin
   inherited Destroy;
 end;
 
-
 function FilesSortAlphabet(p1, p2: Pointer): Integer;
 var
   f1, f2: TFileItem;
@@ -672,13 +669,14 @@ end;
 
   AMask may contain multiple file masks separated by ;
 }
-class procedure TCustomShellTreeView.GetFilesInDir(const ABaseDir: string;
-  AMask: string; AObjectTypes: TObjectTypes; AResult: TStrings; AFileSortType: TFileSortType; ACaseSensitivity: TMaskCaseSensitivity);
+procedure GetFilesInDir(const ABaseDir: string; AMask: string;
+  AObjectTypes: TObjectTypes; AResult: TStrings; AFileSortType: TFileSortType;
+  ACaseSensitivity: TMaskCaseSensitivity = mcsPlatformDefault);
 var
   DirInfo: TSearchRec;
   FindResult, i: Integer;
   IsDirectory, IsValidDirectory, IsHidden, AddFile, UseMaskList: Boolean;
-  SearchStr, MaskStr, ShortFilename: string;
+  SearchStr, ShortFilename: string;
   MaskList: TMaskList;
   Files: TList;
   FileItem: TFileItem;
@@ -694,14 +692,12 @@ begin
   ErrMode:=SetErrorMode(SEM_FAILCRITICALERRORS or SEM_NOALIGNMENTFAULTEXCEPT or SEM_NOGPFAULTERRORBOX or SEM_NOOPENFILEERRORBOX);
   try
   {$endif}
-
-    MaskStr := Trim(AMask);
-    while (Length(MaskStr) > 0) and (MaskStr[Length(MaskStr)] = ';') do
-      System.Delete(MaskStr, Length(MaskStr), 1);
-    if Trim(MaskStr) = '' then
-      MaskStr := AllFilesMask;
+    while (Length(AMask) > 0) and (AMask[Length(AMask)] = ';') do
+      Delete(AMask, Length(AMask), 1);
+    if Trim(AMask) = '' then
+      AMask := AllFilesMask;
     //Use a TMaksList if more than 1 mask is specified or if MaskCaseSensitivity differs from the platform default behaviour
-    UseMaskList := (Pos(';', MaskStr) > 0) or
+    UseMaskList := (Pos(';', AMask) > 0) or
                    {$ifdef NotLiteralFilenames}
                    (ACaseSensitivity = mcsCaseSensitive)
                    {$else}
@@ -722,7 +718,7 @@ begin
       if (ACaseSensitivity <> mcsCaseInsensitive) then
         MaskOptions := [moDisableSets, moCaseSensitive];
       {$endif}
-      MaskList := TMaskList.Create(MaskStr, ';', MaskOptions);  //False by default
+      MaskList := TMaskList.Create(AMask, ';', MaskOptions);  //False by default
     end;
 
     try
@@ -735,7 +731,7 @@ begin
       if UseMaskList then
         SearchStr := IncludeTrailingPathDelimiter(ABaseDir) + AllFilesMask
       else
-        SearchStr := IncludeTrailingPathDelimiter(ABaseDir) + MaskStr; //single mask, let FindFirst/FindNext handle matching
+        SearchStr := IncludeTrailingPathDelimiter(ABaseDir) + AMask; //single mask, let FindFirst/FindNext handle matching
 
       FindResult := FindFirstUTF8(SearchStr, faAnyFile, DirInfo);
       while (FindResult = 0) do
@@ -769,11 +765,10 @@ begin
           // AddFile identifies if the file is valid or not
           if AddFile then
           begin
-            if not Assigned(Files) then
-            begin
+            if Assigned(Files) then
+              Files.Add(TFileItem.Create(DirInfo, ABaseDir))
+            else
               AResult.AddObject(ShortFilename, TFileItem.Create(DirInfo, ABaseDir));
-            end else
-              Files.Add(TFileItem.Create(DirInfo, ABaseDir));
           end;
         end;// Filename matches the mask
         FindResult := FindNextUTF8(DirInfo);
@@ -781,8 +776,7 @@ begin
 
       FindCloseUTF8(DirInfo);
     finally
-      if UseMaskList then
-        MaskList.Free;
+      MaskList.Free;
     end;
 
     if Assigned(Files) then
@@ -1545,7 +1539,7 @@ begin
   Files := TStringList.Create;
   try
     Files.OwnsObjects := True;
-    TCustomShellTreeView.GetFilesInDir(FRoot, FMask, FObjectTypes, Files, fstNone, FMaskCaseSensitivity);
+    GetFilesInDir(FRoot, Trim(FMask), FObjectTypes, Files, fstNone, FMaskCaseSensitivity);
 
     for i := 0 to Files.Count - 1 do
     begin
