@@ -901,7 +901,7 @@ begin
   finally
     SearchDirectories.Free;
     FSearching := False;
-    if MaskList <> nil then MaskList.Free;
+    MaskList.Free;
   end;
 end;
 

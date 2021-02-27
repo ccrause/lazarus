@@ -2066,7 +2066,6 @@ begin
       // Need all registers
       FRegisters.DataValidity := ddsEvaluating;
       UpdateFormat(rdDefault);
-      FRegisters.DataValidity := ddsValid;
 
       if ChangedRegList <> nil then begin
         for i := 0 to FRegisters.Count - 1 do
@@ -2082,6 +2081,8 @@ begin
         end;
         FreeAndNil(ChangedRegList);
       end;
+
+      FRegisters.DataValidity := ddsValid;
     end;
 
     // check for individual updates / displayformat
