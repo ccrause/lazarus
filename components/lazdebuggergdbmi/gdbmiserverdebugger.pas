@@ -133,6 +133,10 @@ type
     property WarnOnInternalError;
     property EncodeCurrentDirPath;
     property EncodeExeFileName;
+    property EncodingForEnvironment;
+    property EncodingForExeArgs;
+    property EncodingForExeFileName;
+    property EncodingForCurrentDirPath;
     property InternalStartBreak;
     property UseNoneMiRunCommands;
     property DisableLoadSymbolsForLibraries;
@@ -427,7 +431,7 @@ begin
   if (ALine[1] = '&') and  (ALine[2] = '"') then
     i := 3;
   if (not AnInLogWarning)
-  and (StrLIComp(LogDisconnect, @ALine[i], Length(LogDisconnect)) = 0) then begin
+  and (LowerCase(Copy(ALine, i, Length(LogDisconnect))) = LogDisconnect) then begin
     AHandled := True;
     AForceStop := True;
     AStoppedParams := '';

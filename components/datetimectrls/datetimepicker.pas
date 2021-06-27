@@ -45,7 +45,7 @@ uses
   {$ifdef unix}
   clocale, // needed to initialize default locale settings on Linux.
   {$endif}
-  Classes, SysUtils, Controls, LCLType, Graphics, Math, StdCtrls, Buttons,
+  Classes, SysUtils, Controls, LCLType, Graphics, Math, Buttons,
   ExtCtrls, Forms, ComCtrls, Types, LMessages, LazUTF8, LCLIntf,
   LCLProc, Themes, CalControlWrapper;
 
@@ -86,7 +86,7 @@ type
   { Used by DateDisplayOrder property to determine the order to display date
     parts -- d-m-y, m-d-y or y-m-d.
     When ddoTryDefault is set, the actual order is determined from
-    ShortDateFormat global variable -- see coments above
+    ShortDateFormat global variable -- see comments above
     AdjustEffectiveDateDisplayOrder procedure }
   TDateDisplayOrder = (ddoDMY, ddoMDY, ddoYMD, ddoTryDefault);
 
@@ -273,8 +273,8 @@ type
     procedure UpdateShowArrowButton;
     procedure DestroyUpDown;
     procedure DestroyArrowBtn;
-    procedure ArrowMouseDown(Sender: TObject; Button: TMouseButton;
-                                            Shift: TShiftState; X, Y: Integer);
+    procedure ArrowMouseDown(Sender: TObject; {%H-}Button: TMouseButton;
+                                            {%H-}Shift: TShiftState; {%H-}X, {%H-}Y: Integer);
     procedure UpDownClick(Sender: TObject; Button: TUDBtnType);
     procedure SetFocusIfPossible;
     procedure AutoResizeButton;
@@ -304,7 +304,7 @@ type
     procedure MouseLeave; override;
     procedure MouseMove(Shift: TShiftState; X, Y: Integer); override;
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
-    function DoMouseWheel(Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
+    function DoMouseWheel({%H-}Shift: TShiftState; WheelDelta: Integer; MousePos: TPoint): Boolean; override;
     procedure UpdateDate(const CallChangeFromSetDateTime: Boolean = False); virtual;
     procedure DoEnter; override;
     procedure DoExit; override;
@@ -314,7 +314,7 @@ type
     procedure KeyUp(var Key: Word; Shift: TShiftState); override;
     procedure UTF8KeyPress(var UTF8Key: TUTF8Char); override;
     procedure CalculatePreferredSize(var PreferredWidth,
-                  PreferredHeight: integer; WithThemeSpace: Boolean); override;
+                  PreferredHeight: integer; {%H-}WithThemeSpace: Boolean); override;
     procedure SetBiDiMode(AValue: TBiDiMode); override;
 
     procedure IncreaseCurrentTextPart;
@@ -821,7 +821,7 @@ begin
   inherited WMActivate(Message);
 
   PP := LCLIntf.GetParent(Handle);
-  if (PP <> 0) then
+  if PP <> 0 then
     SendMessage(PP, LM_NCACTIVATE, Ord(Message.Active <> WA_INACTIVE), 0);
 end;
 
@@ -944,7 +944,7 @@ begin
   FreeAndNil(Shape);
 
   if Assigned(DTPicker) then begin
-    if (Screen.ActiveControl = DTPicker) then
+    if Screen.ActiveControl = DTPicker then
       DTPicker.Invalidate;
 
     if DTPicker.FCalendarForm = nil then
@@ -1314,9 +1314,13 @@ begin
 
             N := Canvas.GetTextWidth(NullMonthChar);
             if N > 0 then begin
-              N := FMonthWidth div N - 1;
-              if N > 1 then
+              N := (FMonthWidth - 1) div N + 1;
+              if N > 1 then begin
                 FNullMonthText := StringOfChar(NullMonthChar, N);
+                N := Canvas.TextFitInfo(FNullMonthText, FMonthWidth);
+                if N > 1 then
+                  SetLength(FNullMonthText, N);
+              end;
             end;
             if N <= 1 then
               FNullMonthText := NullMonthChar;
@@ -1389,12 +1393,7 @@ begin
     if NowIfNull then
       DecodeTime(SysUtils.Time, Result.Hour, Result.Minute, Result.Second, Result.MiliSec)
     else
-      with Result do begin
-        Hour := 0;
-        Minute := 0;
-        Second := 0;
-        MiliSec := 0;
-      end;
+      Result := Default(THMSMs);
   end else
     DecodeTime(FDateTime, Result.Hour, Result.Minute, Result.Second, Result.MiliSec);
 end;
@@ -1406,14 +1405,10 @@ begin
     if TodayIfNull then
       DecodeDate(SysUtils.Date, Result.Year, Result.Month, Result.Day)
     else
-      with Result do begin
-        Day := 0;
-        Month := 0;
-        Year := 0;
-      end;
+      Result := Default(TYMD);
   end else begin
     DecodeDate(FDateTime, Result.Year, Result.Month, Result.Day);
-    if WithCorrection then begin
+    if WithCorrection and (FCorrectedValue > 0) then begin
       case FCorrectedDTP of
         dtpDay:
           Result.Day := FCorrectedValue;
@@ -1421,6 +1416,7 @@ begin
           Result.Month := FCorrectedValue;
         dtpYear:
           Result.Year := FCorrectedValue;
+      otherwise
       end;
     end;
   end;
@@ -1583,8 +1579,8 @@ begin
         end;
         SetHour(W);
         FSelectedTextPart := 8;
-      end else begin
 
+      end else begin
         W := StrToInt(S);
         case GetSelectedDateTimePart of
           dtpYear:
@@ -1612,7 +1608,7 @@ begin
 
           dtpHour:
             begin
-              if (FTimeFormat = tf12) then begin
+              if FTimeFormat = tf12 then begin
                 if GetHMSMs().Hour < 12 then begin
                   if W = 12 then
                     SetHour(0)
@@ -1627,18 +1623,23 @@ begin
               end else
                 SetHour(W);
             end;
+
           dtpMinute:
             SetMinute(W);
+
           dtpSecond:
             SetSecond(W);
+
           dtpMiliSec:
             SetMiliSec(W);
 
+        otherwise
         end;
 
       end;
+
     finally
-      FCorrectedDTP := dtpAMPM;
+      FCorrectedValue := 0;
       Dec(FUserChanging);
     end;
   end;
@@ -1791,12 +1792,10 @@ begin
         FMonthPos := 1;
         FYearPos := 3;
       end;
-    ddoYMD:
-      begin
-        FDayPos := 3;
-        FMonthPos := 2;
-        FYearPos := 1;
-      end;
+  otherwise
+    FDayPos := 3;
+    FMonthPos := 2;
+    FYearPos := 1;
   end;
 
 end;
@@ -1828,6 +1827,7 @@ begin
       tdHMS:
         FEffectiveHideDateTimeParts := FEffectiveHideDateTimeParts +
                                         [dtpMiliSec];
+    otherwise
     end;
 
     if (FTimeFormat = tf24) or (dtpHour in FEffectiveHideDateTimeParts) then
@@ -1919,6 +1919,7 @@ begin
         Result := dtpYear
       else if Result = dtpYear then
         Result := dtpDay;
+  otherwise
   end;
 end;
 
@@ -1948,12 +1949,10 @@ begin
   CSize.cx := ScaleScreenToFont(CSize.cx);
   CSize.cy := ScaleScreenToFont(CSize.cy);
 
-  if IsRightToLeft and not IgnoreRightToLeft then
-  begin
+  if IsRightToLeft and not IgnoreRightToLeft then begin
     Result.Right := ClientWidth - (BorderSpacing.InnerBorder + BorderWidth);
     Result.Left := Result.Right - CSize.cx;
-  end else
-  begin
+  end else begin
     Result.Left := BorderSpacing.InnerBorder + BorderWidth;
     Result.Right := Result.Left + CSize.cx;
   end;
@@ -1987,6 +1986,7 @@ begin
           AuxAlignment := taLeftJustify;
         taLeftJustify:
           AuxAlignment := taRightJustify;
+      otherwise
       end;
     end;
   end;
@@ -2017,8 +2017,8 @@ begin
       Result.x := XR - FTextWidth;
     taCenter:
       Result.x := (XL + XR - FTextWidth) div 2;
-  else
-    Result.x := XL;
+    taLeftJustify:
+      Result.x := XL;
   end;
 
 end;
@@ -2048,8 +2048,7 @@ begin
         Inc(I);
     end;
 
-    if not (GetDateTimePartFromTextPart(I)
-                in FEffectiveHideDateTimeParts) then
+    if not (GetDateTimePartFromTextPart(I) in FEffectiveHideDateTimeParts) then
       FSelectedTextPart := I;
 
     { Is it possible that all parts are hidden? Yes it is!
@@ -2313,22 +2312,21 @@ var
   N: Word;
 begin
   SelectMonth;
-  if Cascade then
-    SetDateTime(IncMonth(DateTime))
-  else begin
-    YMD := GetYYYYMMDD(True);
 
-    if YMD.Month >= 12 then
-      YMD.Month := 1
-    else
-      Inc(YMD.Month);
+  YMD := GetYYYYMMDD(True);
 
-    N := NumberOfDaysInMonth(YMD.Month, YMD.Year);
-    if YMD.Day > N then
-      YMD.Day := N;
+  if YMD.Month >= 12 then begin
+    YMD.Month := 1;
+    if Cascade then
+      Inc(YMD.Year);
+  end else
+    Inc(YMD.Month);
 
-    SetYYYYMMDD(YMD);
-  end;
+  N := NumberOfDaysInMonth(YMD.Month, YMD.Year);
+  if YMD.Day > N then
+    YMD.Day := N;
+
+  SetYYYYMMDD(YMD);
 end;
 
 procedure TCustomDateTimePicker.IncreaseYear;
@@ -2350,9 +2348,12 @@ var
   YMD: TYMD;
 begin
   SelectDay;
-  if Cascade then
-    SetDateTime(IncDay(DateTime))
-  else begin
+  if Cascade then begin
+    if DateIsNull then
+      SetDate(IncDay(SysUtils.Date))
+    else
+      SetDateTime(IncDay(FDateTime));
+  end else begin
     YMD := GetYYYYMMDD(True);
 
     if YMD.Day >= NumberOfDaysInMonth(YMD.Month, YMD.Year) then
@@ -2370,22 +2371,21 @@ var
   N: Word;
 begin
   SelectMonth;
-  if Cascade then
-    SetDateTime(IncMonth(DateTime, -1))
-  else begin
-    YMD := GetYYYYMMDD(True);
 
-    if YMD.Month <= 1 then
-      YMD.Month := 12
-    else
-      Dec(YMD.Month);
+  YMD := GetYYYYMMDD(True);
 
-    N := NumberOfDaysInMonth(YMD.Month, YMD.Year);
-    if YMD.Day > N then
-      YMD.Day := N;
+  if YMD.Month <= 1 then begin
+    YMD.Month := 12;
+    if Cascade then
+      Dec(YMD.Year);
+  end else
+    Dec(YMD.Month);
 
-    SetYYYYMMDD(YMD);
-  end;
+  N := NumberOfDaysInMonth(YMD.Month, YMD.Year);
+  if YMD.Day > N then
+    YMD.Day := N;
+
+  SetYYYYMMDD(YMD);
 end;
 
 procedure TCustomDateTimePicker.DecreaseYear;
@@ -2405,9 +2405,12 @@ var
   YMD: TYMD;
 begin
   SelectDay;
-  if Cascade then
-    SetDateTime(IncDay(DateTime, -1))
-  else begin
+  if Cascade then begin
+    if DateIsNull then
+      SetDate(IncDay(SysUtils.Date, -1))
+    else
+      SetDateTime(IncDay(FDateTime, -1));
+  end else begin
     YMD := GetYYYYMMDD(True);
 
     if YMD.Day <= 1 then
@@ -2424,9 +2427,12 @@ var
   HMSMs: THMSMs;
 begin
   SelectHour;
-  if Cascade then
-    SetDateTime(IncHour(DateTime))
-  else begin
+  if Cascade then begin
+    if DateIsNull then
+      SetDateTime(IncHour(SysUtils.Now))
+    else
+      SetDateTime(IncHour(FDateTime));
+  end else begin
     HMSMs := GetHMSMs(True);
 
     if HMSMs.Hour >= 23 then
@@ -2443,9 +2449,12 @@ var
   HMSMs: THMSMs;
 begin
   SelectMinute;
-  if Cascade then
-    SetDateTime(IncMinute(DateTime))
-  else begin
+  if Cascade then begin
+    if DateIsNull then
+      SetDateTime(IncMinute(SysUtils.Now))
+    else
+      SetDateTime(IncMinute(FDateTime));
+  end else begin
     HMSMs := GetHMSMs(True);
 
     if HMSMs.Minute >= 59 then
@@ -2462,9 +2471,12 @@ var
   HMSMs: THMSMs;
 begin
   SelectSecond;
-  if Cascade then
-    SetDateTime(IncSecond(DateTime))
-  else begin
+  if Cascade then begin
+    if DateIsNull then
+      SetDateTime(IncSecond(SysUtils.Now))
+    else
+      SetDateTime(IncSecond(FDateTime));
+  end else begin
     HMSMs := GetHMSMs(True);
 
     if HMSMs.Second >= 59 then
@@ -2481,9 +2493,12 @@ var
   HMSMs: THMSMs;
 begin
   SelectMiliSec;
-  if Cascade then
-    SetDateTime(IncMilliSecond(DateTime))
-  else begin
+  if Cascade then begin
+    if DateIsNull then
+      SetDateTime(IncMilliSecond(SysUtils.Now))
+    else
+      SetDateTime(IncMilliSecond(FDateTime));
+  end else begin
     HMSMs := GetHMSMs(True);
 
     if HMSMs.MiliSec >= 999 then
@@ -2500,9 +2515,12 @@ var
   HMSMs: THMSMs;
 begin
   SelectHour;
-  if Cascade then
-    SetDateTime(IncHour(DateTime, -1))
-  else begin
+  if Cascade then begin
+    if DateIsNull then
+      SetDateTime(IncHour(SysUtils.Now, -1))
+    else
+      SetDateTime(IncHour(FDateTime, -1));
+  end else begin
     HMSMs := GetHMSMs(True);
 
     if HMSMs.Hour <= 0 then
@@ -2519,9 +2537,12 @@ var
   HMSMs: THMSMs;
 begin
   SelectMinute;
-  if Cascade then
-    SetDateTime(IncMinute(DateTime, -1))
-  else begin
+  if Cascade then begin
+    if DateIsNull then
+      SetDateTime(IncMinute(SysUtils.Now, -1))
+    else
+      SetDateTime(IncMinute(FDateTime, -1));
+  end else begin
     HMSMs := GetHMSMs(True);
 
     if HMSMs.Minute <= 0 then
@@ -2538,9 +2559,12 @@ var
   HMSMs: THMSMs;
 begin
   SelectSecond;
-  if Cascade then
-    SetDateTime(IncSecond(DateTime, -1))
-  else begin
+  if Cascade then begin
+    if DateIsNull then
+      SetDateTime(IncSecond(SysUtils.Now, -1))
+    else
+      SetDateTime(IncSecond(FDateTime, -1));
+  end else begin
     HMSMs := GetHMSMs(True);
 
     if HMSMs.Second <= 0 then
@@ -2557,9 +2581,12 @@ var
   HMSMs: THMSMs;
 begin
   SelectMiliSec;
-  if Cascade then
-    SetDateTime(IncMilliSecond(DateTime, -1))
-  else begin
+  if Cascade then begin
+    if DateIsNull then
+      SetDateTime(IncMilliSecond(SysUtils.Now, -1))
+    else
+      SetDateTime(IncMilliSecond(FDateTime, -1));
+  end else begin
     HMSMs := GetHMSMs(True);
 
     if HMSMs.MiliSec <= 0 then
@@ -2592,7 +2619,7 @@ var
   WT: Array[dtpHour..dtpAMPM] of Word;
   DTP: TDateTimePart;
 begin
-  FCorrectedDTP := dtpAMPM;
+  FCorrectedValue := 0;
 
   FUserChangedText := False;
 
@@ -3070,8 +3097,8 @@ begin
         L := FDayPos;
     end;
 
-    N := 3;
-    K := 3;
+    N := L;
+    K := 0;
     for DTP := dtpHour to dtpAMPM do begin
       I := Ord(DTP) + 1;
       if DTP in FEffectiveHideDateTimeParts then
@@ -3085,14 +3112,12 @@ begin
         else
           DD[I] := 2 * FDigitWidth;
 
-        if K < I then
-          K := I;
+        K := I;
       end;
-
-      if N < K then
-        N := K;
-
     end;
+
+    if N < K then
+      N := K;
 
     for I := M to N do begin
       if DD[I] <> 0 then begin
@@ -3217,7 +3242,7 @@ end;
 
 function TCustomDateTimePicker.GetChecked: Boolean;
 begin
-  Result := not FShowCheckBox or FChecked;
+  Result := (not FShowCheckBox) or FChecked;
 end;
 
 function TCustomDateTimePicker.AreSeparatorsStored: Boolean;
@@ -3354,7 +3379,8 @@ var
   Finished, ForceChange: Boolean;
 
 begin
-  if (not FReadOnly) then begin
+  FCorrectedValue := 0;
+  if not FReadOnly then begin
     Finished := False;
     ForceChange := False;
 
@@ -3384,61 +3410,65 @@ begin
       else
         S := Key;
 
-      if (Length(S) >= N) then begin
-
-        FCorrectedDTP := dtpAMPM;
+      if Length(S) >= N then begin
 
         L := StrToInt(S);
         if DTP < dtpHour then begin
           YMD := GetYYYYMMDD(True);
           case DTP of
-            dtpDay: YMD.Day := L;
-            dtpMonth: YMD.Month := L;
-            dtpYear: YMD.Year := L;
+            dtpDay:
+              YMD.Day := L;
+            dtpMonth:
+              YMD.Month := L;
+          otherwise
+            YMD.Year := L;
           end;
 
           if AutoAdvance and (YMD.Day <= 31) and
               (YMD.Day > NumberOfDaysInMonth(YMD.Month, YMD.Year)) then begin
+            FCorrectedDTP := dtpAMPM;
             case DTP of
               dtpDay:
                 case FEffectiveDateDisplayOrder of
-                  ddoDMY: begin
-                    FCorrectedValue := YMD.Month + 1;
+                  ddoDMY:
                     FCorrectedDTP := dtpMonth;
-                  end;
                   ddoMDY:
                     FCorrectedDTP := dtpYear;
+                otherwise
                 end;
+
               dtpMonth:
                 case FEffectiveDateDisplayOrder of
-                  ddoMDY, ddoYMD: begin
-                      FCorrectedValue := NumberOfDaysInMonth(YMD.Month, YMD.Year);
-                      FCorrectedDTP := dtpDay;
-                    end;
                   ddoDMY:
                     FCorrectedDTP := dtpYear;
+                otherwise
+                  FCorrectedDTP := dtpDay;
+                  FCorrectedValue := NumberOfDaysInMonth(YMD.Month, YMD.Year);
+                  YMD.Day := FCorrectedValue;
                 end;
-              dtpYear:
-                if (FEffectiveDateDisplayOrder = ddoYMD) and (YMD.Month = 2)
-                      and (YMD.Day = 29) and not IsLeapYear(YMD.Year) then begin
-                  FCorrectedValue := YMD.Month + 1;
-                  FCorrectedDTP := dtpMonth;
-                end;
+
+            otherwise
+              if (FEffectiveDateDisplayOrder = ddoYMD) and (YMD.Month = 2)
+                    and (YMD.Day = 29) and not IsLeapYear(YMD.Year) then
+                FCorrectedDTP := dtpMonth;
             end;
 
             case FCorrectedDTP of
-              dtpDay:
-                YMD.Day := FCorrectedValue;
               dtpMonth:
-                YMD.Month := FCorrectedValue;
+                begin
+                  FCorrectedValue := YMD.Month + 1;
+                  YMD.Month := FCorrectedValue;
+                end;
               dtpYear:
                 if (YMD.Day = 29) and (YMD.Month = 2) then begin
-                  while not IsLeapYear(YMD.Year) do
-                    Inc(YMD.Year);
-                  FCorrectedValue := YMD.Year;
+                  FCorrectedValue := ((YMD.Year + 3) div 4) * 4;
+                  if (FCorrectedValue mod 100 = 0) and (FCorrectedValue mod 400 <> 0) then
+                    FCorrectedValue := FCorrectedValue + 4;
+                  YMD.Year := FCorrectedValue;
                 end;
-
+            otherwise
             end;
+
           end;
 
           if TryEncodeDate(YMD.Year, YMD.Month, YMD.Day, D)
@@ -3465,7 +3495,9 @@ begin
               dtpMinute: HMSMs.Minute := L;
               dtpSecond: HMSMs.Second := L;
               dtpMiliSec: HMSMs.MiliSec := L;
+            otherwise
             end;
+
             if not TryEncodeTime(HMSMs.Hour, HMSMs.Minute, HMSMs.Second,
                                          HMSMs.MiliSec, T) then
               S := Key
@@ -3515,7 +3547,7 @@ begin
       DoAutoCheck;
     end;
 
-    FCorrectedDTP := dtpAMPM;
+    FCorrectedValue := 0;
   end;
 
 end;
@@ -3673,7 +3705,7 @@ end;
 
 { TDTSpeedButton }
 
-{ See the coment above TDTUpDown.CalculatePreferredSize }
+{ See the comment above TDTUpDown.CalculatePreferredSize }
 procedure TDTSpeedButton.CalculatePreferredSize(var PreferredWidth,
   PreferredHeight: integer; WithThemeSpace: Boolean);
 begin
@@ -3737,7 +3769,7 @@ begin
     X := (Width - 9) div 2;
     Y := (Height - 6) div 2;
 
-  { Let's draw shape of the arrow on the button: }
+    { Let's draw shape of the arrow on the button: }
     case DTPicker.FArrowShape of
       asClassicLarger:
         { triangle: }
@@ -3755,10 +3787,10 @@ begin
         { modern -- smaller variant:    }
         Canvas.Polygon([Point(X + 1, Y + 2), Point(X + 2, Y + 1),
                           Point(X + 4, Y + 3), Point(X + 6, Y + 1), Point(X + 7, Y + 2), Point(X + 4, Y + 5)]);
-      asYetAnotherShape:
-        { something in between, not very pretty:  }
-        Canvas.Polygon([Point(X + 0, Y + 1), Point(X + 1, Y + 0),
-              Point(X + 2, Y + 1), Point(X + 6, Y + 1),Point(X + 7, Y + 0), Point(X + 8, Y + 1), Point(X + 4, Y + 5)]);
+    otherwise // asYetAnotherShape:
+      { something in between, not very pretty:  }
+      Canvas.Polygon([Point(X + 0, Y + 1), Point(X + 1, Y + 0),
+            Point(X + 2, Y + 1), Point(X + 6, Y + 1),Point(X + 7, Y + 0), Point(X + 8, Y + 1), Point(X + 4, Y + 5)]);
     end;
 
   end;

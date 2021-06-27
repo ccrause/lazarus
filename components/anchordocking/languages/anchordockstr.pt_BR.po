@@ -119,6 +119,14 @@ msgstr "Achatar cabeçalhos"
 msgid "Flatten headers of docked controls"
 msgstr "Achatar cabeçalhos dos controles aportados"
 
+#: anchordockstr.adrsfloatingwindowsontop
+msgid "Floating windows on top"
+msgstr ""
+
+#: anchordockstr.adrsfloatingwindowsontophint
+msgid "Show floating windows on top of main form"
+msgstr ""
+
 #: anchordockstr.adrsgeneraldockingoptions
 msgid "General docking options"
 msgstr "Opções gerais de ancoragem"
@@ -198,6 +206,14 @@ msgstr "Mover página à direita"
 #: anchordockstr.adrsmovepagerightmost
 msgid "Move page rightmost"
 msgstr "Mover página à direita máxima"
+
+#: anchordockstr.adrsmultilinepages
+msgid "Multiline Tabs"
+msgstr ""
+
+#: anchordockstr.adrsmultilinepageshint
+msgid "Tabs of pages can be shown in multiple lines"
+msgstr ""
 
 #: anchordockstr.adrsnocaptionsforfloatingsites
 msgid "No captions for floating sites"

@@ -31,9 +31,11 @@ interface
 
 uses
   Classes, sysutils, math, DbgIntfBaseTypes, FpDbgInfo, FpdMemoryTools,
-  FpErrorMessages, FpDbgDwarf, LazLoggerBase, LazClasses;
+  FpErrorMessages, FpDbgDwarf, {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif}, LazClasses;
 
 type
+
+  TFpPascalExpressionPartList= class;
 
   TFpPascalExpressionPart = class;
   TFpPascalExpressionPartContainer = class;
@@ -46,6 +48,10 @@ type
 
   TSeparatorType = (ppstComma);
 
+  TFpPascalParserCallFunctionProc = function (AnExpressionPart: TFpPascalExpressionPart;
+    AFunctionValue: TFpValue; ASelfValue: TFpValue; AParams: TFpPascalExpressionPartList;
+    out AResult: TFpValue; var AnError: TFpError): boolean of object;
+
   { TFpPascalExpression }
 
   TFpPascalExpression = class
@@ -54,6 +60,7 @@ type
     FContext: TFpDbgSymbolScope;
     FFixPCharIndexAccess: Boolean;
     FHasPCharIndexAccess: Boolean;
+    FOnFunctionCall: TFpPascalParserCallFunctionProc;
     FTextExpression: String;
     FExpressionPart: TFpPascalExpressionPart;
     FValid: Boolean;
@@ -62,6 +69,7 @@ type
     procedure Parse;
     procedure SetError(AMsg: String);  // deprecated;
     procedure SetError(AnErrorCode: TFpErrorCode; AData: array of const);
+    procedure SetError(const AnErr: TFpError);
     function PosFromPChar(APChar: PChar): Integer;
   protected
     function GetDbgSymbolForIdentifier({%H-}AnIdent: String): TFpValue;
@@ -83,8 +91,20 @@ type
     // - May be a type, if expression is a type
     // - Only valid, as long as the expression is not destroyed
     property ResultValue: TFpValue read GetResultValue;
+    property OnFunctionCall: TFpPascalParserCallFunctionProc read FOnFunctionCall write FOnFunctionCall;
   end;
 
+
+  { TFpPascalExpressionPartList }
+
+  TFpPascalExpressionPartList = class
+  protected
+    function GetItems(AIndex: Integer): TFpPascalExpressionPart; virtual; abstract;
+    function GetCount: Integer; virtual; abstract;
+  public
+    property Count: Integer read GetCount;
+    property Items[AIndex: Integer]: TFpPascalExpressionPart read GetItems;
+  end;
 
   { TFpPascalExpressionPart }
 
@@ -127,7 +147,6 @@ type
                                              TFpPascalExpressionPart; virtual;
     function CanHaveOperatorAsNext: Boolean; virtual; // True
     function HandleSeparator(ASeparatorType: TSeparatorType): Boolean; virtual; // False
-    property Expression: TFpPascalExpression read FExpression;
   public
     constructor Create(AExpression: TFpPascalExpression; AStartChar: PChar; AnEndChar: PChar = nil);
     destructor Destroy; override;
@@ -141,6 +160,7 @@ type
     property TopParent: TFpPascalExpressionPart read GetTopParent; // or self
     property SurroundingBracket: TFpPascalExpressionPartBracket read GetSurroundingOpenBracket; // incl self
     property ResultValue: TFpValue read GetResultValue;
+    property Expression: TFpPascalExpression read FExpression;
   end;
 
   { TFpPascalExpressionPartContainer }
@@ -455,6 +475,19 @@ const
 
 type
 
+  { TFpPascalExpressionPartListForwarder }
+
+  TFpPascalExpressionPartListForwarder = class(TFpPascalExpressionPartList)
+  private
+    FExpressionPart: TFpPascalExpressionPartContainer;
+    FListOffset, FCount: Integer;
+  protected
+    function GetCount: Integer; override;
+    function GetItems(AIndex: Integer): TFpPascalExpressionPart; override;
+  public
+    constructor Create(AnExpressionPart: TFpPascalExpressionPartContainer; AListOffset, ACount: Integer);
+  end;
+
   {%region  DebugSymbol }
 
   { TPasParserSymbolPointer
@@ -612,6 +645,28 @@ end;
 function DbgsSymbol(AVal: TFpSymbol; {%H-}AIndent: String): String;
 begin
   Result := DbgSName(AVal);
+end;
+
+{ TFpPascalExpressionPartListForwarder }
+
+function TFpPascalExpressionPartListForwarder.GetCount: Integer;
+begin
+  Result := FCount;
+end;
+
+function TFpPascalExpressionPartListForwarder.GetItems(AIndex: Integer
+  ): TFpPascalExpressionPart;
+begin
+  Result := FExpressionPart.Items[AIndex + FListOffset];
+end;
+
+constructor TFpPascalExpressionPartListForwarder.Create(
+  AnExpressionPart: TFpPascalExpressionPartContainer; AListOffset,
+  ACount: Integer);
+begin
+  FExpressionPart := AnExpressionPart;
+  FListOffset := AListOffset;
+  FCount := ACount;
 end;
 
 function TFpPasParserValue.DebugText(AIndent: String): String;
@@ -1060,6 +1115,10 @@ procedure TPasParserSymbolPointer.TypeInfoNeeded;
 var
   t: TPasParserSymbolPointer;
 begin
+  if FPointerLevels = 0 then begin
+    SetTypeInfo(FPointedTo);
+    exit;
+  end;
   assert(FPointerLevels > 1, 'TPasParserSymbolPointer.TypeInfoNeeded: FPointerLevels > 1');
   t := TPasParserSymbolPointer.Create(FPointedTo, FContext, FPointerLevels-1);
   SetTypeInfo(t);
@@ -1379,7 +1438,11 @@ end;
 
 function TFpPascalExpressionPartBracketArgumentList.DoGetResultValue: TFpValue;
 var
-  tmp, tmp2: TFpValue;
+  tmp, tmp2, tmpSelf: TFpValue;
+  err: TFpError;
+  Itm0: TFpPascalExpressionPart;
+  ItmMO: TFpPascalExpressionPartOperatorMemberOf absolute Itm0;
+  Params: TFpPascalExpressionPartListForwarder;
 begin
   Result := nil;
 
@@ -1388,9 +1451,44 @@ begin
     exit;
   end;
 
-  tmp := Items[0].ResultValue;
+  Itm0 := Items[0];
+  tmp := Itm0.ResultValue;
   if (tmp = nil) or (not Expression.Valid) then
     exit;
+
+  if (tmp.DbgSymbol <> nil) and (tmp.DbgSymbol.Kind = skFunction) then begin
+    if not Assigned(Expression.OnFunctionCall) then begin
+      SetError('calling functions not allowed');
+      exit;
+    end;
+
+    tmpSelf := nil;
+    if (Itm0 is TFpPascalExpressionPartOperatorMemberOf) then begin
+      if ItmMO.Count = 2 then
+        tmpSelf := ItmMO.Items[0].ResultValue;
+      if tmpSelf = nil then begin
+        SetError('internal error evaluating method call');
+        exit;
+      end;
+    end;
+
+    err := NoError;
+    Params := TFpPascalExpressionPartListForwarder.Create(Self, 1, Count - 1);
+    try
+      if not Expression.OnFunctionCall(Self, tmp, tmpSelf, Params, Result, err) then begin
+        if not IsError(err) then
+          SetError('unknown error calling function')
+        else
+          Expression.SetError(err);
+        Result := nil;
+      end;
+    finally
+      Params.Free;
+    end;
+    {$IFDEF WITH_REFCOUNT_DEBUG}if Result <> nil then Result.DbgRenameReference(nil, 'DoGetResultValue'){$ENDIF};
+
+    exit;
+  end;
 
   if (Count = 2) then begin
     //TODO if tmp is TFpPascalExpressionPartOperatorMakeRef then
@@ -1411,8 +1509,8 @@ begin
     end;
   end;
 
-  // Must be function call
-  SetError('No support for calling functions');
+  // Must be function call // skProcedure is not handled
+  SetError('unknown type or function');
 end;
 
 function TFpPascalExpressionPartBracketArgumentList.DoGetIsTypeCast: Boolean;
@@ -1985,6 +2083,13 @@ procedure TFpPascalExpression.SetError(AnErrorCode: TFpErrorCode; AData: array o
 begin
   FValid := False;
   FError := ErrorHandler.CreateError(AnErrorCode, AData);
+  DebugLn(['Setting error ', ErrorHandler.ErrorAsString(FError)]);
+end;
+
+procedure TFpPascalExpression.SetError(const AnErr: TFpError);
+begin
+  FValid := False;
+  FError := AnErr;
   DebugLn(['Setting error ', ErrorHandler.ErrorAsString(FError)]);
 end;
 
@@ -2711,7 +2816,7 @@ begin
       skCardinal: Result := tmp1;
       skFloat:    Result := tmp1;
     end;
-    Result.AddReference{$IFDEF WITH_REFCOUNT_DEBUG}(@FValue, 'DoGetResultValue'){$ENDIF};
+    Result.AddReference{$IFDEF WITH_REFCOUNT_DEBUG}(nil, 'DoGetResultValue'){$ENDIF};
   end
   else begin
     case tmp1.Kind of
@@ -2738,12 +2843,53 @@ function TFpPascalExpressionPartOperatorPlusMinus.DoGetResultValue: TFpValue;
 {$PUSH}{$R-}{$Q-}
   function AddSubValueToPointer(APointerVal, AOtherVal: TFpValue; ADoSubtract: Boolean = False): TFpValue;
   var
-    Idx: Int64;
+    Idx, m: Int64;
     TmpVal: TFpValue;
+    s1, s2: TFpDbgValueSize;
   begin
     Result := nil;
     case AOtherVal.Kind of
-    //  skPointer:  Result := nil;
+      skPointer: if ADoSubtract then begin
+          if ( (APointerVal.TypeInfo = nil) or (APointerVal.TypeInfo.TypeInfo = nil) ) and
+             ( (AOtherVal.TypeInfo = nil)   or (AOtherVal.TypeInfo.TypeInfo = nil) )
+          then begin
+            Idx := APointerVal.AsCardinal - AOtherVal.AsCardinal;
+            Result := TFpValueConstNumber.Create(Idx, True);
+            exit;
+          end
+          else
+          if (APointerVal.TypeInfo <> nil) and (APointerVal.TypeInfo.TypeInfo <> nil) and
+             (AOtherVal.TypeInfo <> nil)   and (AOtherVal.TypeInfo.TypeInfo <> nil) and
+             (APointerVal.TypeInfo.TypeInfo.Kind = AOtherVal.TypeInfo.TypeInfo.Kind) and
+             (APointerVal.TypeInfo.TypeInfo.ReadSize(nil, s1)) and
+             (AOtherVal.TypeInfo.TypeInfo.ReadSize(nil, s2)) and
+             (s1 = s2)
+          then begin
+            TmpVal := APointerVal.Member[1];
+            if s1 <> (TmpVal.DataAddress.Address - APointerVal.DataAddress.Address) then begin
+              TmpVal.ReleaseReference;
+              debugln('Size mismatch for pointer math');
+              exit;
+            end;
+            TmpVal.ReleaseReference;
+            Idx := APointerVal.AsCardinal - AOtherVal.AsCardinal;
+            if SizeToFullBytes(s1) > 0 then begin
+              m := Idx mod SizeToFullBytes(s1);
+              Idx := Idx div SizeToFullBytes(s1);
+              if m <> 0 then begin
+                debugln('Size mismatch for pointer math');
+                exit;
+              end;
+            end;
+
+            Result := TFpValueConstNumber.Create(Idx, True);
+            exit;
+          end
+          else
+            exit;
+        end
+        else
+          exit;
       skInteger:  Idx := AOtherVal.AsInteger;
       skCardinal: begin
           Idx := AOtherVal.AsInteger;
@@ -3404,7 +3550,8 @@ begin
   if Count <> 2 then exit;
 
   tmp := Items[0].ResultValue;
-  if (tmp = nil) then exit;
+  if (tmp = nil) then
+    exit;
 
   MemberName := Items[1].GetText;
 
@@ -3459,14 +3606,28 @@ begin
         end;
       end;
     end;
-    SetError(fpErrNoMemberWithName, [Items[1].GetText]);
+    SetError(fpErrNoMemberWithName, [MemberName]);
     exit
   end;
 
-  // Todo unit
+  if (tmp.Kind = skUnit) or
+     ( (tmp.DbgSymbol <> nil) and (tmp.DbgSymbol.Kind = skUnit) )
+  then begin
+    (* If a class/record/object matches the typename, but did not have the member,
+       then this could still be a unit.
+       If the class/record/object is in the same unit as the current contexct (selected function)
+       then it would hide the unitname, but otherwise a unit in the uses clause would
+       hide the structure.
+    *)
+    Result := Expression.FContext.FindSymbol(MemberName, Items[0].GetText);
+    if Result <> nil then begin
+      {$IFDEF WITH_REFCOUNT_DEBUG}Result.DbgRenameReference(nil, 'DoGetResultValue'){$ENDIF};
+      exit;
+    end;
+  end;
 
-  SetError(fpErrorNotAStructure, [Items[1].GetText, Items[0].GetText]);
 
+  SetError(fpErrorNotAStructure, [MemberName, Items[0].GetText]);
 end;
 
 end.

@@ -1729,6 +1729,10 @@ msgstr "Fitxers"
 msgid "Grid"
 msgstr "Graella"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1783,6 +1787,10 @@ msgstr "Espaiat extra entre línies"
 
 #: lazarusidestrconsts.dlgextsymb
 msgid "Use external debug symbols file"
+msgstr ""
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
 msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
@@ -2511,6 +2519,10 @@ msgstr "Últim (p.ex. al final del codi font)"
 msgid "Lazarus directory (default for all projects)"
 msgstr "Directori Lazarus (predeterminat per a tots els projectes)"
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 #, fuzzy
 #| msgid "Guid lines Left,Top"
@@ -3137,10 +3149,6 @@ msgstr ""
 msgid "Enable multi-caret for column selection"
 msgstr ""
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr ""
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr ""
@@ -3193,6 +3201,10 @@ msgstr "Anomenat"
 msgid "New desktop ..."
 msgstr ""
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 #, fuzzy
 #| msgid "no automatic renaming"
@@ -3205,6 +3217,10 @@ msgstr ""
 
 #: lazarusidestrconsts.dlgnobrackethighlight
 msgid "No Highlight"
+msgstr ""
+
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
 msgstr ""
 
 #: lazarusidestrconsts.dlgnotebooktabpos
@@ -3222,6 +3238,10 @@ msgstr "No separis la línia després de:"
 #| msgid "Do not split line In front of:"
 msgid "Do not split line in front of"
 msgstr "No separis la línia abans de:"
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
+msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
 #, fuzzy
@@ -3512,6 +3532,10 @@ msgstr "Opcions del projecte"
 #: lazarusidestrconsts.dlgprojectoptionsfor
 #, object-pascal-format
 msgid "Options for Project: %s"
+msgstr ""
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
 msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
@@ -5126,7 +5150,7 @@ msgstr ""
 msgid "Anchor top side to top side of sibling. Use BorderSpacing to set a distance. BorderSpacing of sibling is ignored."
 msgstr ""
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format, fuzzy, badformat
 #| msgid "An error occured at last startup while loading %s!%s%sLoad this project again?"
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
@@ -6025,7 +6049,7 @@ msgstr ""
 msgid "Wrong indentation"
 msgstr ""
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr ""
@@ -8604,8 +8628,16 @@ msgstr ""
 msgid "Additional search path"
 msgstr "Trajectòria de cerca addicional"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
 msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
@@ -8639,6 +8671,14 @@ msgstr "Opcions específiques del depurador (Depen del tipus de depurador)"
 
 #: lazarusidestrconsts.lisdebugoptionsfrmduplicateexceptionname
 msgid "Duplicate Exception name"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
 msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
@@ -10127,16 +10167,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr ""
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-msgid "Reduce designer painting"
-msgstr "Redueix la pintura del disseny"
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-#, fuzzy
-msgctxt "lazarusidestrconsts.lisfepaintdesigneritemsonidlehint"
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr "Pinta els elements dissenyats només a l'ide (redueix sobrecàrrega a ordinadors lents)"
-
 #: lazarusidestrconsts.lisfile
 msgctxt "lazarusidestrconsts.lisfile"
 msgid "File"
@@ -11435,6 +11465,11 @@ msgstr ""
 msgid "&Inspect"
 msgstr ""
 
+#: lazarusidestrconsts.lisinspectaddwatch
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr ""
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format
 msgid "%s: class %s inherits from %s"
@@ -11766,6 +11801,7 @@ msgid "Add Data/WatchPoint"
 msgstr ""
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr ""
 
@@ -16682,10 +16718,6 @@ msgstr "El nom del paquet no és vàlid"
 #| msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%s%sSave old package %s?"
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
 msgstr "Carrega el paquet %s reemplaçarà el paquet %s%sdel fitxer %s.%sEl paquet antic està modificat.%s%sVoleu desar el paquet antic %s?"
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
-msgstr "Nou paquet"
 
 #: lazarusidestrconsts.lispkgmangpackage
 #, object-pascal-format

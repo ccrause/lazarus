@@ -1633,6 +1633,7 @@ function TPascalParserTool.ReadParamType(ExceptionOnError, Extract: boolean;
 //   array of const
 //   file
 //   file of integer
+//   a<b>.c (only mode delphi)
 //   LongInt location 'd0'  (only m68k, powerpc)
 //   univ longint  (only macpas)
 var
@@ -1711,28 +1712,7 @@ begin
           AtomIsIdentifierSaveE(20180411194035);
         exit;
       end;
-      if (phpCreateNodes in Attr) then begin
-        CreateChildNode;
-        CurNode.Desc:=ctnIdentifier;
-        CurNode.EndPos:=CurPos.EndPos;
-      end;
-      Next;
-      while CurPos.Flag=cafPoint do begin
-        Next;
-        if not AtomIsIdentifier then begin
-          if ExceptionOnError then
-            AtomIsIdentifierSaveE(20180411194038);
-          exit;
-        end;
-        if (phpCreateNodes in Attr) then
-          CurNode.EndPos:=CurPos.EndPos;
-        Next;
-      end;
-      if (phpCreateNodes in Attr) then begin
-        EndChildNode;
-      end;
-      if (Scanner.CompilerMode in [cmDELPHI,cmDELPHIUNICODE]) and AtomIsChar('<') then
-        ReadSpecialize(phpCreateNodes in Attr,Extract,Copying,Attr);
+      ReadTypeReference(phpCreateNodes in Attr,Extract,Copying,Attr);
     end;
     if (phpCreateNodes in Attr) then begin
       if IsFileType then begin
@@ -3541,7 +3521,10 @@ begin
     if CurPos.Flag=cafEqual then
       if ParentNode.Parent.Desc in AllCodeSections+[ctnProcedure] then begin
         ReadConstExpr; // read constant
-    end;
+        // optional: hint modifier (fpc allows both places: var w:word platform = 1 platform;)
+        if CurPos.Flag=cafWord then
+          ReadHintModifiers(false);
+      end;
   end;
 
   HasSemicolon:=false;
@@ -4425,6 +4408,7 @@ begin
   if CreateNodes then begin
     CreateChildNode;
     CurNode.Desc:=ctnIdentifier;
+    CurNode.EndPos:=CurPos.EndPos;
   end;
   Next;
   Cnt:=1;
@@ -5215,9 +5199,8 @@ begin
   if not UpAtomIs('CASE') then
     SaveRaiseException(20170421195151,'[TPascalParserTool.KeyWordFuncTypeRecordCase] '
       +'internal error');
-  if (CurNode.Desc=ctnRecordVariant)
-  or ((CurNode.Desc in AllClassSections)
-      and (CurNode.Parent.Desc=ctnRecordType))
+  if (CurNode.Desc in [ctnRecordVariant,ctnVarSection,ctnClassClassVar])
+  or ((CurNode.Desc in AllClassSections) and (CurNode.Parent.Desc=ctnRecordType))
   then begin
     // ok
   end else begin
@@ -5498,7 +5481,7 @@ end;
 
 function TPascalParserTool.GetExtraction(InUpperCase: boolean): string;
 begin
-  SetLength(Result,ExtractMemStream.Position);
+  SetLength(Result{%H-},ExtractMemStream.Position);
   ExtractMemStream.Position:=0;
   if Result<>'' then
     ExtractMemStream.Read(Result[1],length(Result));

@@ -1683,6 +1683,10 @@ msgstr "Arquivos"
 msgid "Grid"
 msgstr "Grade"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1734,6 +1738,10 @@ msgstr "Espaços extra linhas"
 #: lazarusidestrconsts.dlgextsymb
 msgid "Use external debug symbols file"
 msgstr "Usar arquivo de símbolos de depuração externo"
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
+msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
 msgid "File extensions"
@@ -2448,6 +2456,10 @@ msgstr "Por último (ex. no final do fonte)"
 msgid "Lazarus directory (default for all projects)"
 msgstr "Diretório Lazarus (padrão para todos os projetos)"
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 msgid "Guide lines Left,Top"
 msgstr "Linhas guia esquerda, superior"
@@ -3059,10 +3071,6 @@ msgstr "Teclas de navegação movimentam todos os cursores texto"
 msgid "Enable multi-caret for column selection"
 msgstr "Habilitar múltiplos cursores texto para seleção coluna"
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr "Múltiplas instâncias Lazarus"
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr "sempre iniciar uma nova instância"
@@ -3115,6 +3123,10 @@ msgstr "Nomeação"
 msgid "New desktop ..."
 msgstr "Nova área de trabalho ..."
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 msgid "No automatic renaming"
 msgstr "Sem renomeação automática"
@@ -3127,6 +3139,10 @@ msgstr "Nenhuma unidade disponível à adicionar."
 msgid "No Highlight"
 msgstr "Sem realce"
 
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnotebooktabpos
 msgid "Source notebook tabs position"
 msgstr "Posição abas \"notebook\" fonte"
@@ -3138,6 +3154,10 @@ msgstr "Não dividir a linha após"
 #: lazarusidestrconsts.dlgnotsplitlinefront
 msgid "Do not split line in front of"
 msgstr "Não dividir linha na frente de"
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
+msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
 msgctxt "lazarusidestrconsts.dlgobjinsp"
@@ -3422,6 +3442,10 @@ msgstr "Opções de projeto"
 #, object-pascal-format
 msgid "Options for Project: %s"
 msgstr "Opções do Projeto: %s"
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
+msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
 msgid "Project Files"
@@ -4960,7 +4984,7 @@ msgstr ""
 "Usar \"espaço da borda\" para definir a distância.\n"
 "Espaçamento da borda do irmão é ignorado."
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
 msgstr "Ocorreu um erro na última inicialização carregando %s!%sCarregar este projeto novamente?"
@@ -5857,7 +5881,7 @@ msgstr "Variáveis"
 msgid "Wrong indentation"
 msgstr "Identação incorreta"
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr "Uma exceção ocorreu durante exclusão de %s\"%s%s\"%s%s"
@@ -8398,9 +8422,17 @@ msgstr "Adicionar Exceção"
 msgid "Additional search path"
 msgstr "Caminho de busca adicional"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
 msgstr "Fechar a janela assembler automaticamente, após código não encontrado"
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
 msgid "Debugger backend"
@@ -8434,6 +8466,14 @@ msgstr "Opções específicas do Depurador (dependem do tipo de depurador)"
 #: lazarusidestrconsts.lisdebugoptionsfrmduplicateexceptionname
 msgid "Duplicate Exception name"
 msgstr "Duplicar nome da Exceção"
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
 msgid "Enter the name of the exception"
@@ -9907,15 +9947,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr "Fatal"
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-msgid "Reduce designer painting"
-msgstr "Reduzir atualização de janela"
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-msgctxt "lazarusidestrconsts.lisfepaintdesigneritemsonidlehint"
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr "Pintar itens da janela do editor quando ocioso.(Reduz pico processamento para computadores lentos)"
-
 #: lazarusidestrconsts.lisfile
 msgctxt "lazarusidestrconsts.lisfile"
 msgid "File"
@@ -11238,6 +11269,12 @@ msgstr "Na sessão"
 msgid "&Inspect"
 msgstr "&Inspecionar"
 
+#: lazarusidestrconsts.lisinspectaddwatch
+#, fuzzy
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr "Adicionar observador"
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format
 msgid "%s: class %s inherits from %s"
@@ -11568,6 +11605,7 @@ msgid "Add Data/WatchPoint"
 msgstr "Adicionar dado/ponto de observação"
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr "Adicionar observador"
 
@@ -16277,10 +16315,6 @@ msgstr "Nome de Pacote Inválido"
 #, object-pascal-format
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
 msgstr "Carregar o pacote %s substituirá o pacote %s%sdo arquivo %s.%sO pacote antigo pacote será alterado.%sSalvar pacote antigo %s?"
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
-msgstr "NovoPacote"
 
 #: lazarusidestrconsts.lispkgmangpackage
 #, object-pascal-format

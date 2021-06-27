@@ -115,23 +115,18 @@ var
         else
           txt := '';
       end;
-      if txt <> '' then
+      if DataInfo^.hdr.code = UInt(LVN_GETDISPINFOA) then
       begin
-        if DataInfo^.hdr.code = UInt(LVN_GETDISPINFOA) then
-        begin
-          LVInfo^.DispInfoTextA[LVInfo^.DispInfoIndex]:=Utf8ToAnsi(txt);
-          DataInfo^.item.pszText := @(LVInfo^.DispInfoTextA[LVInfo^.DispInfoIndex][1]);
-        end
-        else
-        begin
-          LVInfo^.DispInfoTextW[LVInfo^.DispInfoIndex]:=UTF8Decode(txt);
-          DataInfo^.item.pszText := @(LVInfo^.DispInfoTextW[LVInfo^.DispInfoIndex][1]);
-        end;
-        inc(LVInfo^.DispInfoIndex);
-        if LVInfo^.DispInfoIndex=LV_DISP_INFO_COUNT then LVInfo^.DispInfoIndex:=0;
+        LVInfo^.DispInfoTextA[LVInfo^.DispInfoIndex]:=Utf8ToAnsi(txt+#0);
+        DataInfo^.item.pszText := @(LVInfo^.DispInfoTextA[LVInfo^.DispInfoIndex][1]);
       end
       else
-        DataInfo^.item.pszText := nil;
+      begin
+        LVInfo^.DispInfoTextW[LVInfo^.DispInfoIndex]:=UTF8Decode(txt+#0);
+        DataInfo^.item.pszText := PChar(LVInfo^.DispInfoTextW[LVInfo^.DispInfoIndex]);
+      end;
+      inc(LVInfo^.DispInfoIndex);
+      if LVInfo^.DispInfoIndex=LV_DISP_INFO_COUNT then LVInfo^.DispInfoIndex:=0;
     end;
     if (DataInfo^.item.mask and LVIF_IMAGE) <> 0 then
     begin
@@ -647,6 +642,31 @@ begin
   then Exit;
 
   AIsSet := 0 <> ListView_GetItemState(ALV.Handle, AIndex, FLAGS[AState]);
+  Result := True;
+end;
+
+class function TWin32WSCustomListView.ItemGetStates(const ALV: TCustomListView; const AIndex: Integer; out AStates: TListItemStates): Boolean;
+const
+  MASK = LVIS_CUT or LVIS_DROPHILITED or LVIS_FOCUSED or LVIS_SELECTED;
+var
+  Flags: Integer;
+begin
+  Result := False;
+
+  if not WSCheckHandleAllocated(ALV, 'ItemGetStates')
+  then Exit;
+
+  AStates := [];
+  Flags := ListView_GetItemState(ALV.Handle, AIndex, MASK);
+  if (Flags and LVIS_CUT) <> 0 then
+    Include(AStates, lisCut);
+  if (Flags and LVIS_DROPHILITED) <> 0 then
+    Include(AStates, lisDropTarget);
+  if (Flags and LVIS_FOCUSED) <> 0 then
+    Include(AStates, lisFocused);
+  if (Flags and LVIS_SELECTED) <> 0 then
+    Include(AStates, lisSelected);
+
   Result := True;
 end;
 
@@ -1435,4 +1455,32 @@ begin
   Windows.InvalidateRect(AHandle, nil, true);
 end;
 
+class function TWin32WSCustomListView.GetNextItem(const ALV: TCustomListView; const StartItem: TListItem;
+  const Direction: TSearchDirection; const States: TListItemStates): TListItem;
+var
+  Flags, Index: Integer;
+begin
+  Result := nil;
 
+  if not WSCheckHandleAllocated(ALV, 'GetNextItem')
+  then Exit;
+
+  Flags := 0;
+  case Direction of
+    sdAbove: Flags := LVNI_ABOVE;
+    sdBelow: Flags := LVNI_BELOW;
+    sdLeft: Flags := LVNI_TOLEFT;
+    sdRight: Flags := LVNI_TORIGHT;
+    sdAll: Flags := LVNI_ALL;
+  end;
+
+  if StartItem <> nil then Index := StartItem.Index else Index := -1;
+
+  if lisCut in States then Flags := Flags or LVNI_CUT;
+  if lisDropTarget in States then Flags := Flags or LVNI_DROPHILITED;
+  if lisFocused in States then Flags := Flags or LVNI_FOCUSED;
+  if lisSelected in States then Flags := Flags or LVNI_SELECTED;
+
+  Index := ListView_GetNextItem(ALV.Handle, Index, Flags);
+  if Index <> -1 then Result := ALV.Items[Index];
+end;

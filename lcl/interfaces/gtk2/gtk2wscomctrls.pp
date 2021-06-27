@@ -24,7 +24,7 @@ uses
   // RTL, FCL, libs
   Math, Sysutils, Classes, GLib2, Gtk2, Gdk2, Gdk2pixbuf,
   // LazUtils
-  LazTracer, LazUTF8,
+  LazTracer,
   // LCL
   LCLType, LCLIntf, LMessages, Controls, Graphics, ComCtrls, StdCtrls, Forms,
   ImgList, InterfaceBase,
@@ -154,7 +154,7 @@ type
     class procedure ColumnSetWidth(const ALV: TCustomListView; const AIndex: Integer; const {%H-}AColumn: TListColumn; const AWidth: Integer); override;
     class procedure ColumnSetVisible(const ALV: TCustomListView; const AIndex: Integer; const {%H-}AColumn: TListColumn; const AVisible: Boolean); override;
     class procedure ColumnSetSortIndicator(const ALV: TCustomListView; const AIndex: Integer;
-      const AColumn: TListColumn; const ASortIndicator: TSortIndicator);
+      const {%H-}AColumn: TListColumn; const ASortIndicator: TSortIndicator);
       override;
 
     // items

@@ -160,6 +160,7 @@ type
     FIsUpdating: Boolean;
     procedure SetHorzScrollBar(Value: TControlScrollBar);
     procedure SetVertScrollBar(Value: TControlScrollBar);
+    procedure HideScrollbars;
   protected
     class procedure WSRegisterClass; override;
     procedure AlignControls(AControl: TControl; var ARect: TRect); override;
@@ -301,14 +302,20 @@ type
     class procedure WSRegisterClass; override;
     procedure Notification(AComponent: TComponent;
       Operation: TOperation); override;
+    procedure SetColor(Value: TColor); override;
     procedure SetParent(AParent: TWinControl); override;
+    procedure SetParentBackground(const AParentBackground: Boolean); override;
+    procedure CMParentColorChanged(var Message: TLMessage); message CM_PARENTCOLORCHANGED;
     procedure DefineProperties(Filer: TFiler); override;
     procedure CalculatePreferredSize(var PreferredWidth,
            PreferredHeight: integer; WithThemeSpace: Boolean); override;
+    procedure UpdateOpaque;
   public
     constructor Create(AOwner: TComponent); override;
     procedure GetChildren(Proc: TGetChildProc; Root: TComponent); override;
     class function GetControlClassDefaultSize: TSize; override;
+
+    property ParentBackground default True;
   end;
 
   TCustomFrameClass = class of TCustomFrame;
@@ -370,6 +377,7 @@ type
     property OnStartDock;
     property OnStartDrag;
     property OnUnDock;
+    property ParentBackground;
     property ParentBiDiMode;
     property ParentColor;
     property ParentFont;
@@ -493,7 +501,6 @@ type
     FDelayedEventCtr: Integer;
     FDelayedOnChangeBounds, FDelayedOnResize: Boolean;
     FIsFirstOnShow, FIsFirstOnActivate: Boolean;
-    FIsFirstRestore, FWindowStateChanged: Boolean;
     function GetClientHandle: HWND;
     function GetEffectiveShowInTaskBar: TShowInTaskBar;
     function GetMonitor: TMonitor;
@@ -2246,6 +2253,7 @@ begin
   end;
   Application.Free;
   Application:=nil;
+  CustomApplication:=nil;
   FreeAllClipBoards;
   CallInterfaceFinalizationHandlers;
   WidgetSet.Free;
@@ -2298,14 +2306,18 @@ end;
 initialization
   LCLProc.OwnerFormDesignerModifiedProc:=@IfOwnerIsFormThenDesignerModified;
   ThemesImageDrawEvent:=@ImageDrawEvent;
-  IsFormDesign := @IsFormDesignFunction;
+  IsFormDesign:=@IsFormDesignFunction;
   Screen:=TScreen.Create(nil);
   Application:=TApplication.Create(nil);
+  Assert(CustomApplication=Nil, 'CustomApplication is assigned in Forms initialization.');
+  CustomApplication:=Application;
+
 finalization
   //DebugLn('forms.pp - finalization section');
   LCLProc.OwnerFormDesignerModifiedProc:=nil;
   HintWindowClass:=nil;
   FreeThenNil(Application);
+  CustomApplication:=nil;
   FreeThenNil(Screen);
 
 end.

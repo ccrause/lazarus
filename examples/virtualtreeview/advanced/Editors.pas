@@ -215,10 +215,17 @@ begin
   FTree.EndEditNode;
 end;
 
-procedure TPropertyEditLink.EditKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+type
+  TVirtualStringTreeAccess = class(TVirtualStringTree);
 
+procedure TPropertyEditLink.EditKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
 var
   CanAdvance: Boolean;
+  node: PVirtualNode;
+  col: TColumnIndex;
+  GetStartColumn: function(ConsiderAllowFocus: Boolean = False): TColumnIndex of object;
+  GetNextColumn: function(Column: TColumnIndex; ConsiderAllowFocus: Boolean = False): TColumnIndex of object;
+  GetNextNode: TGetNextNodeProc;
 
 begin
   CanAdvance := true;
@@ -230,11 +237,23 @@ begin
         FTree.CancelEditNode;
         Key := 0;
       end;
+
     VK_RETURN:
       if CanAdvance then
       begin
+        FTree.InvalidateNode(FNode);
+        if (ssShift in Shift) then
+          node := FTree.GetPreviousVisible(FNode, True)
+        else
+          node := FTree.GetNextVisible(FNode, True);
         FTree.EndEditNode;
+        if node <> nil then FTree.FocusedNode := node;
         Key := 0;
+        if FTree.CanEdit(FTree.FocusedNode, FTree.FocusedColumn) then
+          {$PUSH}
+          {$OBJECTCHECKS OFF}
+          TVirtualStringTreeAccess(FTree).DoEdit;
+          {$POP}
       end;
 
     VK_UP,
@@ -255,6 +274,70 @@ begin
           Key := 0;
         end;
       end;
+
+    VK_TAB:
+      if CanAdvance then
+      begin
+        FTree.InvalidateNode(FNode);
+        if ssShift in Shift then
+        begin
+          GetStartColumn := FTree.Header.Columns.GetLastVisibleColumn;
+          GetNextColumn := FTree.Header.Columns.GetPreviousVisibleColumn;
+          GetNextNode := FTree.GetPreviousVisible;
+        end
+        else
+        begin
+          GetStartColumn := FTree.Header.Columns.GetFirstVisibleColumn;
+          GetNextColumn := FTree.Header.Columns.GetNextVisibleColumn;
+          GetNextNode := FTree.GetNextVisible;
+        end;
+
+        // Advance to next/previous visible column/node.
+        node := FNode;
+        col := GetNextColumn(FColumn, True);
+        repeat
+          // Find a column for the current node which can be focused.
+          while (col > NoColumn) and
+          {$PUSH}
+          {$OBJECTCHECKS OFF}
+            not TVirtualStringTreeAccess(FTree).DoFocusChanging(FNode, node, FColumn, col)
+          {$POP}
+          do
+            col := GetNextColumn(col, True);
+
+          if col > NoColumn then
+          begin
+            // Set new node and column in one go.
+            {$PUSH}
+            {$OBJECTCHECKS OFF}
+            TVirtualStringTreeAccess(FTree).SetFocusedNodeAndColumn(node, col);
+            {$POP}
+            Break;
+          end;
+
+          // No next column was accepted for the current node. So advance to next node and try again.
+          node := GetNextNode(node);
+          col := GetStartColumn();
+        until node = nil;
+
+        FTree.EndEditNode;
+        Key := 0;
+        if node <> nil then
+        begin
+          FTree.FocusedNode := node;
+          FTree.FocusedColumn := col;
+        end;
+        if FTree.CanEdit(FTree.FocusedNode, FTree.FocusedColumn) then
+          {$PUSH}
+          {$OBJECTCHECKS OFF}
+          with TVirtualStringTreeAccess(FTree) do
+          begin
+            EditColumn := FocusedColumn;
+            DoEdit;
+          end;
+        {$POP}
+      end;
+
   end;
 end;
 
@@ -449,6 +532,7 @@ var
   //S: WideString;
   S: String;
   I: Integer;
+  D: TDateTime;
   
 begin
   Result := True;
@@ -463,27 +547,37 @@ begin
     end;
   end
   else
-    if FEdit is TMaskEdit then
+  if FEdit is TMaskEdit then
+  begin
+    I := StrToInt(Trim(TMaskEdit(FEdit).EditText));
+    if I <> Data.Value[FColumn - 1] then
     begin
-      I := StrToInt(Trim(TMaskEdit(FEdit).EditText));
-      if I <> Data.Value[FColumn - 1] then
-      begin
-        Data.Value[FColumn - 1] := I;
-        Data.Changed := True;
-      end;
-    end
-    else
-      if FEdit is TCustomEdit then
-      begin
-        S := TCustomEdit(FEdit).Text;
-        if S <> Data.Value[FColumn - 1] then
-        begin
-          Data.Value[FColumn - 1] := S;
-          Data.Changed := True;
-        end;
-      end
-      else
-        raise Exception.Create('Unknow Edit Control');
+      Data.Value[FColumn - 1] := I;
+      Data.Changed := True;
+    end;
+  end
+  else
+  if FEdit is TCustomEdit then
+  begin
+    S := TCustomEdit(FEdit).Text;
+    if S <> Data.Value[FColumn - 1] then
+    begin
+      Data.Value[FColumn - 1] := S;
+      Data.Changed := True;
+    end;
+  end
+  else
+  if FEdit is TDateEdit then
+  begin
+    D := TDateEdit(FEdit).Date;
+    if D <> Data.Value[FColumn - 1] then
+    begin
+      Data.Value[FColumn - 1] := D;
+      Data.Changed := True;
+    end;
+  end
+  else
+    raise Exception.Create('Unknow Edit Control');
 
   if Data.Changed then
     FTree.InvalidateNode(FNode);

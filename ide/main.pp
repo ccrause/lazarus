@@ -90,7 +90,7 @@ uses
   ApplicationBundle, ExtTools, ExtToolsIDE,
   // projects
   ProjectResources, Project, ProjectDefs, NewProjectDlg,
-  PublishModuleDlg, ProjectInspector, PackageDefs, ProjectDescriptors,
+  PublishModuleDlg, ProjectInspector, PackageDefs, ProjectDescriptorTypes,
   // help manager
   IDEContextHelpEdit, IDEHelpIntf, IDEHelpManager, CodeHelp, HelpOptions,
   // designer
@@ -114,7 +114,7 @@ uses
   ChgEncodingDlg, ConvertDelphi, MissingPropertiesDlg, LazXMLForms,
   // environment option frames
   editor_general_options, componentpalette_options, formed_options, OI_options,
-  MsgWnd_Options, files_options, desktop_options, window_options,
+  MsgWnd_Options, Files_Options, Desktop_Options, window_options, IdeStartup_Options,
   Backup_Options, naming_options, fpdoc_options, idecoolbar_options, editortoolbar_options,
   editor_display_options, editor_keymapping_options, editor_mouseaction_options,
   editor_mouseaction_options_advanced, editor_color_options, editor_markup_options,
@@ -553,7 +553,7 @@ type
     procedure DesignerShowOptions(Sender: TObject);
     procedure DesignerPasteComponents(Sender: TObject; LookupRoot: TComponent;
                             TxtCompStream: TStream; ParentControl: TWinControl;
-                            var NewComponents: TFPList);
+                            NewComponents: TFPList);
     procedure DesignerPastedComponents(Sender: TObject; LookupRoot: TComponent);
     procedure DesignerPropertiesChanged(Sender: TObject);
     procedure DesignerPersistentDeleted(Sender: TObject; APersistent: TPersistent);
@@ -2288,7 +2288,7 @@ procedure TMainIDE.SetupStartProject;
   begin
     debugln(['Hint: (lazarus) AskIfLoadLastFailingProject START']);
     Result:=IDEQuestionDialog(lisOpenProject2,
-        Format(lisAnErrorOccuredAtLastStartupWhileLoadingLoadThisPro,
+        Format(lisAnErrorOccurredAtLastStartupWhileLoadingLoadThisPro,
                [EnvironmentOptions.LastSavedProjectFile, LineEnding+LineEnding]),
         mtWarning, [mrYes, lisOpenProjectAgain,
                     mrNoToAll, lisStartWithANewProject]) = mrYes;
@@ -2298,6 +2298,7 @@ procedure TMainIDE.SetupStartProject;
 var
   ProjectLoaded: Boolean;
   AProjectFilename: String;
+  PrjDesc: TProjectDescriptor;
   CmdLineFiles: TStrings;
   i: Integer;
   OpenFlags: TOpenFlags;
@@ -2386,7 +2387,10 @@ begin
       // IDE was closed without a project => restore that state
     end else begin
       // create new project
-      DoNewProject(ProjectDescriptorApplication);
+      PrjDesc := ProjectDescriptors.FindByName(EnvironmentOptions.NewProjectTemplateAtStart);
+      if PrjDesc = nil then
+        PrjDesc := ProjectDescriptorApplication;  // Fallback to Application
+      DoNewProject(PrjDesc);
     end;
   end;
 
@@ -2529,14 +2533,13 @@ var
   function TryGetDesignerFromForm(AForm: TCustomForm;
     out ADesigner: TComponentEditorDesigner): Boolean;
   begin
-    if Assigned(IDETabMaster) and (AForm is TSourceEditorWindowInterface)
-      and (IDETabMaster.TabDisplayState=tdsDesign)
-    then
-      ADesigner := TComponentEditorDesigner(TSourceEditorWindowInterface(AForm).
-        ActiveEditor.GetDesigner(True))
+    if Assigned(IDETabMaster) and (AForm is TSourceEditorWindowInterface) then
+      ADesigner := TComponentEditorDesigner(
+                     IDETabMaster.GetDesigner(
+                       TSourceEditorWindowInterface(AForm).ActiveEditor,
+                       IDETabMaster.TabDisplayState))
     else
       ADesigner := nil;
-
     Result := ADesigner <> nil;
   end;
 
@@ -3960,7 +3963,7 @@ var
 begin
   GetCurrentUnit(ASrcEdit, AnUnitInfo);
   ActiveDesigner := GetActiveDesignerSkipMainBar;
-  if not UpdateEditorCommandsStamp.Changed(ASrcEdit, ActiveDesigner as TDesigner, DisplayState) then
+  if (ActiveDesigner is TDesigner) and not UpdateEditorCommandsStamp.Changed(ASrcEdit, ActiveDesigner as TDesigner, DisplayState) then
     Exit;
 
   Editable := Assigned(ASrcEdit) and not ASrcEdit.ReadOnly;
@@ -4351,7 +4354,7 @@ begin
       LFMFileName:=AnUnitInfo.UnitResourceFileformat.GetUnitResourceFilename(AnUnitInfo.Filename,true);
       if FileExistsCached(LFMFileName) and (not AnUnitInfo.DisableI18NForLFM) then
       begin
-        OpenStatus:=LazarusIDE.DoOpenEditorFile(AnUnitInfo.Filename,-1,-1,[ofAddToRecent]);
+        OpenStatus:=LazarusIDE.DoOpenEditorFile(AnUnitInfo.Filename,-1,-1,[ofAddToRecent, ofDoLoadResource]);
         if OpenStatus=mrOk then
         begin
           AnUnitInfo.Modified:=true;
@@ -4425,6 +4428,8 @@ begin
     if not Project1.OtherDefines.Equals(Project1.CompilerOptions.OtherDefines) then
       Project1.OtherDefines.Assign(Project1.CompilerOptions.OtherDefines);
     Project1.Modified:=True;
+    Project1.DefineTemplates.AllChanged(false);
+    IncreaseBuildMacroChangeStamp;
     MainBuildBoss.SetBuildTargetProject1(false);
     MainIDE.UpdateCaption;
   end;
@@ -5124,6 +5129,10 @@ begin
   // reload lazarus packages
   if LazarusSrcDirChanged then
     PkgBoss.LazarusSrcDirChanged;
+
+  if DebugBoss <> nil then
+    DebugBoss.EnvironmentOptsChanged;
+
   UpdateCaption;
 end;
 
@@ -5206,9 +5215,6 @@ begin
     UpdateCaption;
     if Assigned(ProjInspector) then
       ProjInspector.UpdateTitle;
-    Project1.DefineTemplates.AllChanged(false);
-    IncreaseCompilerParseStamp;
-
     if Project1.UseAsDefault then
     begin
       // save as default
@@ -6422,7 +6428,7 @@ var
 begin
   Result:=mrCancel;
 
-  //debugln('TMainIDE.DoOpenProjectFile A "'+AFileName+'"');
+  debugln('TMainIDE.DoOpenProjectFile A "'+AFileName+'"');
   {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('TMainIDE.DoOpenProjectFile A');{$ENDIF}
   if ExtractFileNameOnly(AFileName)='' then exit;
   OriginalFilename:=AFileName;
@@ -6537,13 +6543,13 @@ begin
        State=iwgfDisabled,LazarusIDE.OwningComponent);
     ProjInspector.OnShowOptions:=@mnuProjectOptionsClicked;
     ProjInspector.OnAddUnitToProject:=@ProjInspectorAddUnitToProject;
-    ProjInspector.OnAddDependency:=@PkgBoss.OnProjectInspectorAddDependency;
+    ProjInspector.OnAddDependency:=@PkgBoss.ProjectInspectorAddDependency;
     ProjInspector.OnRemoveFile:=@ProjInspectorRemoveFile;
-    ProjInspector.OnRemoveDependency:=@PkgBoss.OnProjectInspectorRemoveDependency;
-    ProjInspector.OnReAddDependency:=@PkgBoss.OnProjectInspectorReAddDependency;
-    ProjInspector.OnDragOverTreeView:=@PkgBoss.OnProjectInspectorDragOverTreeView;
-    ProjInspector.OnDragDropTreeView:=@PkgBoss.OnProjectInspectorDragDropTreeView;
-    ProjInspector.OnCopyMoveFiles:=@PkgBoss.OnProjectInspectorCopyMoveFiles;
+    ProjInspector.OnRemoveDependency:=@PkgBoss.ProjectInspectorRemoveDependency;
+    ProjInspector.OnReAddDependency:=@PkgBoss.ProjectInspectorReAddDependency;
+    ProjInspector.OnDragOverTreeView:=@PkgBoss.ProjectInspectorDragOverTreeView;
+    ProjInspector.OnDragDropTreeView:=@PkgBoss.ProjectInspectorDragDropTreeView;
+    ProjInspector.OnCopyMoveFiles:=@PkgBoss.ProjectInspectorCopyMoveFiles;
 
     ProjInspector.LazProject:=Project1;
   end else if STate=iwgfDisabled then
@@ -6998,7 +7004,7 @@ begin
       and ((MainBuildBoss.GetLCLWidgetType=LCLPlatformDirNames[lpCarbon])
           or (MainBuildBoss.GetLCLWidgetType=LCLPlatformDirNames[lpCocoa]))
       then begin
-        Result:=CreateApplicationBundle(TargetExeName, Project1.GetTitleOrName);
+        Result:=CreateApplicationBundle(TargetExeName, Project1.GetTitleOrName, false, Project1);
         if not (Result in [mrOk,mrIgnore]) then begin
           debugln(['Error: (lazarus) [TMainIDE.DoBuildProject] CreateApplicationBundle "',TargetExeName,'" failed']);
           exit;
@@ -9322,7 +9328,7 @@ end;
 
 procedure TMainIDE.DesignerPasteComponents(Sender: TObject;
   LookupRoot: TComponent; TxtCompStream: TStream; ParentControl: TWinControl;
-  var NewComponents: TFPList);
+  NewComponents: TFPList);
 var
   NewClassName: String;
   ARegComp: TRegisteredComponent;
@@ -9376,10 +9382,8 @@ begin
     // create the component
     FormEditor1.CreateChildComponentsFromStream(BinCompStream,
                 ARegComp.ComponentClass,LookupRoot,ParentControl,NewComponents);
-    if NewComponents.Count=0 then begin
+    if NewComponents.Count=0 then
       DebugLn('Error: (lazarus) TMainIDE.DesignerPasteComponent FAILED FormEditor1.CreateChildComponentFromStream');
-      exit;
-    end;
 
   finally
     BinCompStream.Free;
@@ -9714,7 +9718,11 @@ begin
   if InputHistories<>nil then
     DiskEncoding:=InputHistories.FileEncodings[Filename];
   if DiskEncoding='' then
-    DiskEncoding:=GuessEncoding(Source);
+    DiskEncoding:=GuessEncoding(Source)
+  else if DiskEncoding=EncodingUTF8BOM then begin
+    if (Source='') or not CompareMem(@UTF8BOM[1],@Source[1],length(UTF8BOM)) then
+      DiskEncoding:=EncodingUTF8;
+  end;
   MemEncoding:=EncodingUTF8;
   if (DiskEncoding<>MemEncoding) then begin
     {$IFDEF VerboseIDEEncoding}
@@ -11490,7 +11498,15 @@ begin
   {$IFDEF VerboseIDEDisplayState}
   debugln(['TMainIDE.SrcNoteBookActivated']);
   {$ENDIF}
-  DisplayState:=dsSource;
+  if not Assigned(IDETabMaster) then
+    DisplayState := dsSource
+  else
+    case IDETabMaster.TabDisplayState of
+      tdsDesign, tdsOther:
+        DisplayState := dsForm;
+      else
+        DisplayState := dsSource;
+    end;
 end;
 
 procedure TMainIDE.DesignerActivated(Sender: TObject);
@@ -12150,9 +12166,15 @@ begin
     exit;
 
   SrcNB := TSourceNotebook(Sender);
-  if (SrcNB.EditorCount = 1) then begin
-    DoCloseEditorFile(SrcNB.Editors[0], [cfSaveFirst]);
+  if (SrcNB.EditorCount = 0) then begin
     CloseAction := caFree;
+    exit;
+  end;
+  if (SrcNB.EditorCount = 1) then begin
+    if DoCloseEditorFile(SrcNB.Editors[0], [cfSaveFirst]) = mrOK then
+      CloseAction := caFree
+    else
+      CloseAction := caNone;
     exit;
   end;
 
@@ -12377,6 +12399,7 @@ end;
 
 procedure TMainIDE.HandleApplicationActivate(Sender: TObject);
 begin
+  InvalidateFileStateCache;
   DoCheckFilesOnDisk;
 end;
 
@@ -12551,7 +12574,7 @@ begin
     Row := OI.GetActivePropertyRow;
 
   // Get help text for this property
-  if not BeginCodeTools or not OI.ShowInfoBox then
+  if not BeginCodeTools or (not OI.ShowInfoBox and not OI.ShowStatusBar) then
     Exit;
   if (Row <> nil)
   and FindDeclarationOfOIProperty(OI, Row, Code, Caret, i) then
@@ -12594,23 +12617,19 @@ function TMainIDE.ProjInspectorAddUnitToProject(Sender: TObject;
 var
   ActiveSourceEditor: TSourceEditor;
   ActiveUnitInfo: TUnitInfo;
-  ShortUnitName: String;
-  OkToAdd: boolean;
 begin
   Result:=mrOk;
   AnUnitInfo.IsPartOfProject:=true;
   //debugln(['TMainIDE.ProjInspectorAddUnitToProject ',AnUnitInfo.Filename]);
   ActiveSourceEditor:=nil;
   BeginCodeTool(ActiveSourceEditor,ActiveUnitInfo,[]);
-  OkToAdd:=True;
   if FilenameHasPascalExt(AnUnitInfo.Filename) then begin
-    OkToAdd:=CheckDirIsInSearchPath(AnUnitInfo,False);
+    CheckDirIsInSearchPath(AnUnitInfo,False);
     if (pfMainUnitHasUsesSectionForAllUnits in Project1.Flags) then begin
       AnUnitInfo.ReadUnitNameFromSource(false);
-      ShortUnitName:=AnUnitInfo.Unit_Name;
-      if (ShortUnitName<>'') then begin
+      if (AnUnitInfo.Unit_Name<>'') then begin
         if CodeToolBoss.AddUnitToMainUsesSectionIfNeeded(
-                       Project1.MainUnitInfo.Source,ShortUnitName,'') then begin
+               Project1.MainUnitInfo.Source, AnUnitInfo.Unit_Name, '') then begin
           ApplyCodeToolChanges;
           Project1.MainUnitInfo.Modified:=true;
         end else begin
@@ -12621,9 +12640,7 @@ begin
     end;
   end
   else if FilenameExtIs(AnUnitInfo.Filename,'inc') then
-    OkToAdd:=CheckDirIsInSearchPath(AnUnitInfo,True);
-  if OkToAdd then
-    ;
+    CheckDirIsInSearchPath(AnUnitInfo,True);
   Project1.Modified:=true;
 end;
 
@@ -12675,6 +12692,8 @@ procedure TMainIDE.GetLayoutHandler(Sender: TObject; aFormName: string;
 var
   SrcEditWnd: TSourceNotebook;
   ScreenR: TRect;
+  i, aTop: Integer;
+  Child: TControl;
 begin
   DockSibling:='';
   DockAlign:=alNone;
@@ -12686,6 +12705,15 @@ begin
        ScreenR.Left+MainIDEBar.Scale96ToForm(230),
        ScreenR.Bottom-MainIDEBar.Scale96ToForm(50));
     // do not dock object inspector, because this would hide the floating designers
+    // If MainIDEBar has docked child controls place OI at same top
+    for i:=0 to  MainIDEBar.ControlCount-1 do begin
+      Child:=MainIDEBar.Controls[i];
+      if Child.IsControlVisible and (Child.HostDockSite<>nil) then begin
+        aTop:=Child.Top;
+        aTop:=MainIDEBar.ClientToScreen(Point(0,Child.Top)).y;
+        aBounds.Top:=Min(aBounds.Top,aTop);
+      end;
+    end;
   end
   else if (aFormName=NonModalIDEWindowNames[nmiwMessagesView]) then begin
     // place messages below source editor

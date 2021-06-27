@@ -1775,6 +1775,10 @@ msgstr "קבצים"
 msgid "Grid"
 msgstr "רשת"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1834,6 +1838,10 @@ msgstr "מרווח שורה מוגדל"
 #| msgid "Use external gdb debug symbols file"
 msgid "Use external debug symbols file"
 msgstr "השתמש בקובץ סמלים חצוני של מנפה השגיאות gdb"
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
+msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
 msgid "File extensions"
@@ -2578,6 +2586,10 @@ msgstr "אחרון (כלומר בסוף קוד המקור)"
 msgid "Lazarus directory (default for all projects)"
 msgstr "תיקיית לזארוס (ברירת מחדל לכל הפרויקטים)"
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 #, fuzzy
 #| msgid "Guid lines Left,Top"
@@ -3226,10 +3238,6 @@ msgstr ""
 msgid "Enable multi-caret for column selection"
 msgstr ""
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr ""
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr ""
@@ -3286,6 +3294,10 @@ msgstr "מתן שם"
 msgid "New desktop ..."
 msgstr ""
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 msgid "No automatic renaming"
 msgstr "ללא מתן שמות אוטומטי"
@@ -3297,6 +3309,10 @@ msgstr ""
 #: lazarusidestrconsts.dlgnobrackethighlight
 msgid "No Highlight"
 msgstr "ללא הדגשה"
+
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
+msgstr ""
 
 #: lazarusidestrconsts.dlgnotebooktabpos
 msgid "Source notebook tabs position"
@@ -3313,6 +3329,10 @@ msgstr "אל תחצה את השורה אחרי:"
 #| msgid "Do not split line In front of:"
 msgid "Do not split line in front of"
 msgstr "אל תחצה את השורה לפני:"
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
+msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
 msgctxt "lazarusidestrconsts.dlgobjinsp"
@@ -3624,6 +3644,10 @@ msgstr "אפשרויות פרויקט"
 #, object-pascal-format, fuzzy, badformat
 msgid "Options for Project: %s"
 msgstr "אפשרויות לפרוייקט: s%"
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
+msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
 #, fuzzy
@@ -5250,7 +5274,7 @@ msgstr ""
 msgid "Anchor top side to top side of sibling. Use BorderSpacing to set a distance. BorderSpacing of sibling is ignored."
 msgstr ""
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format, fuzzy
 #| msgid "An error occured at last startup while loading %s!%s%sLoad this project again?"
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
@@ -6183,7 +6207,7 @@ msgstr "משתנים"
 msgid "Wrong indentation"
 msgstr "הזחה שגויה"
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr "קרתה חריגה בזמן הסרת %s\"%s:%s\"%s%s"
@@ -8809,8 +8833,16 @@ msgstr "הוסף חריגה"
 msgid "Additional search path"
 msgstr "נתיב חיפוש נוסף"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
 msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
@@ -8845,6 +8877,14 @@ msgstr "אפשרות תלויית מנפה (תלויה בסוג מנפה השג�
 #: lazarusidestrconsts.lisdebugoptionsfrmduplicateexceptionname
 msgid "Duplicate Exception name"
 msgstr "שם כפול של חריגה "
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
 msgid "Enter the name of the exception"
@@ -10360,16 +10400,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr ""
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-msgid "Reduce designer painting"
-msgstr "צמצם את צביעת המעצב"
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-#, fuzzy
-msgctxt "lazarusidestrconsts.lisfepaintdesigneritemsonidlehint"
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr "פריטי מעצב הצבעים מושבתים (צמצם אפשרויות עבור מחשבים איטיים)"
-
 #: lazarusidestrconsts.lisfile
 msgctxt "lazarusidestrconsts.lisfile"
 msgid "File"
@@ -11706,6 +11736,12 @@ msgstr ""
 msgid "&Inspect"
 msgstr "פקח"
 
+#: lazarusidestrconsts.lisinspectaddwatch
+#, fuzzy
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr "הוסף משגיח"
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format
 msgid "%s: class %s inherits from %s"
@@ -12039,6 +12075,7 @@ msgid "Add Data/WatchPoint"
 msgstr ""
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr "הוסף משגיח"
 
@@ -17170,10 +17207,6 @@ msgstr "שם החבילה לא חוקי"
 #| msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%s%sSave old package %s?"
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
 msgstr "טעינת חבילה s% תחליף את החבילה s%s%s מקובץ %. החבילה הישנה שונתה. האם לשמור אותה?"
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
-msgstr "חבילה חדשה"
 
 #: lazarusidestrconsts.lispkgmangpackage
 #, object-pascal-format

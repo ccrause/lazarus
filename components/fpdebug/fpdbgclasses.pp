@@ -39,7 +39,7 @@ interface
 
 uses
   Classes, SysUtils, Maps, FpDbgDwarf, FpDbgUtil, FpDbgLoader, FpDbgInfo,
-  FpdMemoryTools, LazLoggerBase, LazClasses, LazFileUtils, DbgIntfBaseTypes,
+  FpdMemoryTools, {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif}, LazClasses, LazFileUtils, DbgIntfBaseTypes,
   fgl, DbgIntfDebuggerBase, FpPascalBuilder, fpDbgSymTableContext,
   FpDbgDwarfDataClasses, FpDbgCommon, FpErrorMessages;
 
@@ -146,6 +146,7 @@ type
     function ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean; override; overload;
     function ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal; ADest: Pointer; out ABytesRead: Cardinal): Boolean; override; overload;
     function ReadMemoryEx(AnAddress, AnAddressSpace: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean; override;
+    function WriteMemory(AnAddress: TDbgPtr; ASize: Cardinal; ASource: Pointer): Boolean; override; overload;
     function ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr; AContext: TFpDbgLocationContext): Boolean; override;
     function RegisterSize(ARegNum: Cardinal): Integer; override;
 
@@ -238,6 +239,11 @@ type
     // situation after calling functions inside the debugee)
     procedure StoreRegisters; virtual; abstract;
     procedure RestoreRegisters; virtual; abstract;
+    // It could be that an signal led to an exception, and that this
+    // signal is stored to be send to the debuggee again upon continuation.
+    // Use ClearExceptionSignal to remove/eat this signal.
+    procedure ClearExceptionSignal; virtual;
+
     destructor Destroy; override;
     function CompareStepInfo(AnAddr: TDBGPtr = 0; ASubLine: Boolean = False): TFPDCompareStepInfo;
     function IsAtStartOfLine: boolean;
@@ -448,6 +454,7 @@ type
     procedure InitializeLoaders; virtual;
     procedure SetFileName(const AValue: String);
     property LoaderList: TDbgImageLoaderList read FLoaderList write FLoaderList;
+    procedure SetMode(AMode: TFPDMode); experimental; // for testcase
   public
     constructor Create(const AProcess: TDbgProcess); virtual;
     destructor Destroy; override;
@@ -1297,6 +1304,12 @@ begin
   result := GetDbgProcess.ReadData(AnAddress, ASize, ADest^);
 end;
 
+function TDbgMemReader.WriteMemory(AnAddress: TDbgPtr; ASize: Cardinal;
+  ASource: Pointer): Boolean;
+begin
+  result := GetDbgProcess.WriteData(AnAddress, ASize, ASource^);
+end;
+
 function TDbgMemReader.ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr; AContext: TFpDbgLocationContext): Boolean;
 var
   ARegister: TDbgRegisterValue;
@@ -1340,7 +1353,6 @@ function TDbgMemReader.WriteRegister(ARegNum: Cardinal; const AValue: TDbgPtr; A
 var
   ARegister: TDbgRegisterValue;
   StackFrame: Integer;
-  AFrame: TDbgCallstackEntry;
   CtxThread: TDbgThread;
 begin
   result := false;
@@ -1624,6 +1636,11 @@ end;
 procedure TDbgInstance.SetFileName(const AValue: String);
 begin
   FFileName := AValue;
+end;
+
+procedure TDbgInstance.SetMode(AMode: TFPDMode);
+begin
+  FMode := AMode;
 end;
 
 function TDbgInstance.GetPointerSize: Integer;
@@ -2952,6 +2969,11 @@ begin
   ClearCallStack;
   FreeAndNil(FCallStackEntryList);
   inherited;
+end;
+
+procedure TDbgThread.ClearExceptionSignal;
+begin
+  // To be implemented in sub-classes
 end;
 
 { TFpWatchPointData }

@@ -1145,7 +1145,7 @@ end;
 procedure TSynEditCaret.DoLinesEdited(Sender: TSynEditStrings; aLinePos,
   aBytePos, aCount, aLineBrkCnt: Integer; aText: String);
   // Todo: refactor / this is a copy from selection
-  function AdjustPoint(aPoint: Tpoint): TPoint; inline;
+  function AdjustPoint(aPoint: Tpoint): TPoint; {$ifndef cpuaarch64}inline;{$endif} // workaround for issue https://bugs.freepascal.org/view.php?id=38766
   begin
     Result := aPoint;
     if aLineBrkCnt < 0 then begin
@@ -1772,6 +1772,10 @@ begin
   FEndLinePos          := src.FEndLinePos; // 1 based
   FEndBytePos          := src.FEndBytePos; // 1 based
   FPersistent          := src.FPersistent;
+  FLeftCharPos         := src.FLeftCharPos;
+  FRightCharPos        := src.FRightCharPos;
+  FAltStartLinePos     := src.FAltStartLinePos;
+  FAltStartBytePos     := src.FAltStartBytePos;
   FFlags := FFLags - [sbViewedFirstPosValid, sbViewedLastPosValid];
 end;
 

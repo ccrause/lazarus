@@ -102,8 +102,12 @@ interface
 {$ENDIF}
 
 uses
+  LazSynIMMBase,
   {$IFDEF WinIME}
   LazSynIMM,
+  {$ENDIF}
+  {$IFDEF Gtk2IME}
+  LazSynGtk2IMM,
   {$ENDIF}
   {$IFDEF USE_UTF8BIDI_LCL}
   FreeBIDI, utf8bidi,
@@ -426,19 +430,25 @@ type
 
   TCustomSynEdit = class(TSynEditBase)
     procedure SelAvailChange(Sender: TObject);
-  {$IFDEF WinIME}
   private
     FImeHandler: LazSynIme;
-    procedure SetImeHandler(AValue: LazSynIme);
+  {$IFDEF Gtk2IME}
+  protected
+    procedure GTK_IMComposition(var Message: TMessage); message LM_IM_COMPOSITION;
+  {$ENDIF}
+  {$IFDEF WinIME}
+  private
     procedure WMImeRequest(var Msg: TMessage); message WM_IME_REQUEST;
     procedure WMImeNotify(var Msg: TMessage); message WM_IME_NOTIFY;
     procedure WMImeStartComposition(var Msg: TMessage); message WM_IME_STARTCOMPOSITION;
     procedure WMImeComposition(var Msg: TMessage); message WM_IME_COMPOSITION;
     procedure WMImeEndComposition(var Msg: TMessage); message WM_IME_ENDCOMPOSITION;
+  {$ENDIF}
+  private
+    procedure SetImeHandler(AValue: LazSynIme);
   protected
     // SynEdit takes ownership
     property ImeHandler: LazSynIme read FImeHandler write SetImeHandler;
-  {$ENDIF}
   private
     procedure WMDropFiles(var Msg: TMessage); message WM_DROPFILES;
     procedure WMEraseBkgnd(var Msg: TMessage); message WM_ERASEBKGND;
@@ -1093,7 +1103,7 @@ type
     procedure CodeFoldAction(iLine: integer); deprecated;
     procedure UnfoldAll; deprecated;
     procedure FoldAll(StartLevel : Integer = 0; IgnoreNested : Boolean = False); deprecated;
-    property FoldState: String read GetFoldState write SetFoldState; deprecated;
+    property FoldState: String read GetFoldState write SetFoldState;
 
     procedure AddKey(Command: TSynEditorCommand; Key1: word; SS1: TShiftState;
       Key2: word; SS2: TShiftState);
@@ -2323,6 +2333,10 @@ begin
   {$ENDIF}
   FImeHandler.InvalidateLinesMethod := @InvalidateLines;
   {$ENDIF}
+  {$IFDEF Gtk2IME}
+  FImeHandler := LazSynImeGtk2 .Create(Self);
+  FImeHandler.InvalidateLinesMethod := @InvalidateLines;
+  {$ENDIF}
 
   fFontDummy.Name := SynDefaultFontName;
   fFontDummy.Height := SynDefaultFontHeight;
@@ -2654,9 +2668,7 @@ begin
   FreeAndNil(FRightGutterArea);
   FreeAndNil(FTextArea);
   FreeAndNil(fTSearch);
-  {$IFDEF WinIME}
   FreeAndNil(FImeHandler);
-  {$ENDIF}
   FreeAndNil(fMarkupManager);
   FreeAndNil(fKeyStrokes);
   FreeAndNil(FMouseActionSearchHandlerList);
@@ -2894,17 +2906,24 @@ begin
     Result := '';
 end;
 
-{$IFDEF WinIME}
-procedure TCustomSynEdit.WMImeRequest(var Msg: TMessage);
-begin
-  FImeHandler.WMImeRequest(Msg);
-end;
-
 procedure TCustomSynEdit.SetImeHandler(AValue: LazSynIme);
 begin
   if FImeHandler = AValue then Exit;
   FreeAndNil(FImeHandler);
   FImeHandler := AValue;
+end;
+
+{$ifdef Gtk2IME}
+procedure TCustomSynEdit.GTK_IMComposition(var Message: TMessage);
+begin
+  FImeHandler.WMImeComposition(Message);
+end;
+{$endif}
+
+{$IFDEF WinIME}
+procedure TCustomSynEdit.WMImeRequest(var Msg: TMessage);
+begin
+  FImeHandler.WMImeRequest(Msg);
 end;
 
 procedure TCustomSynEdit.WMImeNotify(var Msg: TMessage);
@@ -3651,26 +3670,26 @@ begin
       exit;
 
     if FLeftGutter.Visible and (X < FLeftGutter.Width) then begin
-      // mouse event occured in Gutter ?
+      // mouse event occurred in Gutter ?
       if FLeftGutter.MaybeHandleMouseAction(Info, @DoHandleMouseAction) then
         exit;
     end
     else
     if FRightGutter.Visible and (X > ClientWidth - FRightGutter.Width) then begin
-      // mouse event occured in Gutter ?
+      // mouse event occurred in Gutter ?
       if FRightGutter.MaybeHandleMouseAction(Info, @DoHandleMouseAction) then
         exit;
     end
     else
     begin
-      // mouse event occured in selected block ?
+      // mouse event occurred in selected block ?
       if SelAvail and (X >= FTextArea.Bounds.Left) and (X < FTextArea.Bounds.Right) and
          (Y >= FTextArea.Bounds.Top) and (Y < FTextArea.Bounds.Bottom) and
          IsPointInSelection(FInternalCaret.LineBytePos)
       then
         if DoHandleMouseAction(FMouseSelActions.GetActionsForOptions(MouseOptions), Info) then
           exit;
-      // mouse event occured in text?
+      // mouse event occurred in text?
       if DoHandleMouseAction(FMouseTextActions.GetActionsForOptions(MouseOptions), Info) then
         exit;
     end;
@@ -5133,9 +5152,8 @@ begin
   UpdateScreenCaret;
   if HideSelection and SelAvail then
     Invalidate;
-  {$IFDEF WinIME}
-  FImeHandler.FocusKilled;
-  {$ENDIF}
+  if FImeHandler <> nil then
+    FImeHandler.FocusKilled;
   inherited;
   StatusChanged([scFocus]);
 end;
@@ -7980,11 +7998,12 @@ var
   nFound: integer;
   bBackward, bFromCursor: boolean;
   bPrompt: boolean;
-  bReplace, bReplaceAll: boolean;
+  bReplace, bReplaceAll, SelIsColumn: boolean;
   nAction: TSynReplaceAction;
   CurReplace: string;
   ptFoundStart, ptFoundEnd: TPoint;
   ptFoundStartSel, ptFoundEndSel: TPoint;
+  ReplaceBlockSelection: TSynEditSelection;
 
 
   function InValidSearchRange(First, Last: integer): boolean;
@@ -8011,6 +8030,7 @@ var
 
 begin
   Result := 0;
+  ReplaceBlockSelection := nil;
   // can't search for or replace an empty string
   if Length(ASearch) = 0 then exit;
   // get the text range to search in, ignore the "Search in selection only"
@@ -8020,6 +8040,7 @@ begin
   bReplace := (ssoReplace in AOptions);
   bReplaceAll := (ssoReplaceAll in AOptions);
   bFromCursor := not (ssoEntireScope in AOptions);
+  SelIsColumn := False;
   if not SelAvail then Exclude(AOptions, ssoSelectedOnly);
   if (ssoSelectedOnly in AOptions) then begin
     ptStart := BlockBegin;
@@ -8037,6 +8058,10 @@ begin
       end;
     // ignore the cursor position when searching in the selection
     if bBackward then ptCurrent := ptEnd else ptCurrent := ptStart;
+
+    SelIsColumn := FBlockSelection.ActiveSelectionMode = smColumn;
+    ReplaceBlockSelection := TSynEditSelection.Create(FTheLinesView, False);
+    ReplaceBlockSelection.AssignFrom(FBlockSelection);
   end else begin
     ptStart := Point(1, 1);
     ptEnd.Y := FTheLinesView.Count;
@@ -8066,9 +8091,12 @@ begin
     begin
       //DebugLn(['TCustomSynEdit.SearchReplace FOUND ptStart=',dbgs(ptStart),' ptEnd=',dbgs(ptEnd),' ptFoundStart=',dbgs(ptFoundStart),' ptFoundEnd=',dbgs(ptFoundEnd)]);
       // check if found place is entirely in range
-      if (FBlockSelection.ActiveSelectionMode <> smColumn)
-      or ((ptFoundStart.Y=ptFoundEnd.Y)
-          and (ptFoundStart.X >= ptStart.X) and (ptFoundEnd.X <= ptEnd.X)) then
+      if (not SelIsColumn) or
+         ( (ptFoundStart.Y=ptFoundEnd.Y) and
+           (ptFoundStart.X >= ReplaceBlockSelection.ColumnStartBytePos[ptFoundStart.Y]) and
+           (ptFoundEnd.X   <= ReplaceBlockSelection.ColumnEndBytePos[ptFoundStart.Y])
+         )
+      then
       begin
         // pattern found
         Inc(Result);
@@ -8139,6 +8167,7 @@ begin
     end;
   finally
     SetFoundCaretAndSel;
+    FreeAndNil(ReplaceBlockSelection);
     EndUndoBlock;
     DecPaintLock;
   end;

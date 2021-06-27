@@ -272,7 +272,7 @@ type
 
     procedure RecogniseAnonymousMethod;
     function AnonymousMethodNext: boolean;
-
+    procedure CheckEnumeratorToken;
   Protected
 
   Public
@@ -1042,7 +1042,7 @@ begin
     begin
       if leFirstTokenType in (ClassVisibility+[ttStrict]) then
         break;
-      if leFirstTokenType in [ttClass,ttVar,ttThreadVar,ttConst,ttFunction,ttProcedure,ttOperator,ttConstructor,ttDestructor,ttProperty] then
+      if leFirstTokenType in [ttClass,ttVar,ttThreadVar,ttConst,ttFunction,ttProcedure,ttOperator,ttConstructor,ttDestructor,ttProperty,ttCase] then
         break;
     end
     else
@@ -1123,7 +1123,7 @@ begin
     begin
       if fcTokenList.FirstSolidTokenType in (ClassVisibility + [ttStrict]) then
         break;
-      if fcTokenList.FirstSolidTokenType in [ttClass,ttVar,ttThreadVar, ttConst,ttFunction,ttProcedure,ttOperator,ttConstructor,ttDestructor,ttProperty] then
+      if fcTokenList.FirstSolidTokenType in [ttClass,ttVar,ttThreadVar, ttConst,ttFunction,ttProcedure,ttOperator,ttConstructor,ttDestructor,ttProperty,ttCase] then
         break;
     end
     else
@@ -2458,7 +2458,7 @@ const
   END_VAR_SECTION: TTokenTypeSet =
     [ttVar, ttThreadVar, ttConst, ttLabel, ttResourceString, ttType,
     ttBegin, ttEnd, ttImplementation, ttInitialization,
-    ttProcedure, ttFunction, ttOperator, ttConstructor, ttDestructor, ttClass, ttAsm, ttGeneric];
+    ttProcedure, ttFunction, ttOperator, ttConstructor, ttDestructor, ttClass, ttAsm, ttGeneric, ttCase];
 var
   leEndVarSection: TTokenTypeSet;
 begin
@@ -2493,6 +2493,7 @@ begin
   PushNode(nFunctionHeading);
   Recognise(ttClass);
   Recognise(ttOperator);
+
   RecogniseMethodName(False);
   if fcTokenList.FirstSolidTokenType = ttOpenBracket then
     RecogniseFormalParameters;
@@ -2526,6 +2527,7 @@ begin
   PushNode(nFunctionHeading);
   Recognise(ttOperator);
 
+  CheckEnumeratorToken();
   RecogniseOperatorSymbol();
 
   if fcTokenList.FirstSolidTokenType = ttOpenBracket then
@@ -3962,6 +3964,7 @@ begin
     Recognise(ttSemicolon);
 
   //opt
+  CheckEnumeratorToken();
   if fcTokenList.FirstSolidTokenType in ProcedureDirectives then
     RecogniseProcedureDirectives;
 
@@ -3989,7 +3992,7 @@ begin
 
   RecogniseConstructorHeading(False);
   Recognise(ttSemicolon);
-
+  CheckEnumeratorToken();
   if fcTokenList.FirstSolidTokenType in ProcedureDirectives then
     RecogniseProcedureDirectives;
   RecogniseBlock;
@@ -4006,7 +4009,7 @@ begin
 
   RecogniseDestructorHeading(False);
   Recognise(ttSemicolon);
-
+  CheckEnumeratorToken();
   if fcTokenList.FirstSolidTokenType in ProcedureDirectives then
     RecogniseProcedureDirectives;
   RecogniseBlock;
@@ -4215,7 +4218,7 @@ begin
 
     external is more complex
   }
-
+  CheckEnumeratorToken();
   if (fcTokenList.FirstSolidTokenType in ProcedureDirectives) or
     ((fcTokenList.FirstSolidTokenType = ttSemicolon) and
     (fcTokenList.SolidTokenType(2) in ProcedureDirectives)) then
@@ -4226,6 +4229,7 @@ begin
       Recognise(ttSemiColon);
     lbFirstPass := True;
 
+    CheckEnumeratorToken();
     while (fcTokenList.FirstSolidTokenType in ProcedureDirectives) or
       ((fcTokenList.FirstSolidTokenType = ttSemicolon) and
         (fcTokenList.SolidTokenType(2) in ProcedureDirectives)) do
@@ -4270,6 +4274,7 @@ begin
       end;
 
       lbFirstPass := False;
+      CheckEnumeratorToken();
     end;
 
     PopNode;
@@ -5178,6 +5183,14 @@ procedure TBuildParseTree.RecogniseMethodName(const pbClassNameCompulsory: boole
 var
   lbMore: boolean;
 begin
+  if fcTokenList.FirstSolidTokenType = ttAssign then
+  begin
+    PushNode(nIdentifier);
+    Recognise(ttAssign);
+    PopNode;
+    exit;
+  end
+  else
   if IsSymbolOperator(fcTokenList.FirstSolidToken) then begin
       PushNode(nIdentifier);
       Recognise(Operators);
@@ -5205,7 +5218,10 @@ begin
     while lbMore do
     begin
       Recognise(ttDot);
-      Recognise(IdentiferTokens + Operators);
+      if fcTokenList.FirstSolidTokenType = ttAssign then
+        Recognise(ttAssign)
+      else
+        Recognise(IdentiferTokens + Operators);
 
       if fcTokenList.FirstSolidTokenType = ttLessThan then
       begin
@@ -5688,13 +5704,14 @@ const
   }
   PropertyDirectives = [ttDefault, ttNoDefault, ttStored, ttEnumerator];
 begin
+  CheckEnumeratorToken();
   if ((fcTokenList.FirstSolidTokenType = ttSemicolon) and
     (fcTokenList.SolidTokenType(2) in PropertyDirectives)) or
     (fcTokenList.FirstSolidTokenType in PropertyDirectives) then
   begin
     if fcTokenList.FirstSolidTokenType = ttSemicolon then
       Recognise(ttSemicolon);
-
+    CheckEnumeratorToken();
     while fcTokenList.FirstSolidTokenType in PropertyDirectives do
     begin
       PushNode(nPropertyDirective);
@@ -5720,14 +5737,12 @@ begin
         begin
           Recognise(ttEnumerator);
           RecogniseIdentifier(False, idStrict);
+        end;
       end;
-      end;
-
       PopNode;
+      CheckEnumeratorToken();
     end;
-
   end;
-
 end;
 
 procedure TBuildParseTree.RecogniseExportsSection;
@@ -5924,6 +5939,23 @@ begin
   end;
 end;
 
+procedure TBuildParseTree.CheckEnumeratorToken;
+var
+  lc: TSourceToken;
+begin
+  lc := fcTokenList.FirstSolidToken;
+  if (lc<>nil) and (lc.TokenType=ttIdentifier) and (length(lc.SourceCode)=10) and (lowercase(lc.SourceCode)='enumerator') then
+  begin
+    lc.TokenType:=ttEnumerator;
+    lc.WordType:=wtReservedWord;
+  end;
+  lc := fcTokenList.SolidToken(2);
+  if (lc<>nil) and (lc.TokenType=ttIdentifier) and (length(lc.SourceCode)=10) and (lowercase(lc.SourceCode)='enumerator') then
+  begin
+    lc.TokenType:=ttEnumerator;
+    lc.WordType:=wtReservedWord;
+  end;
+end;
 
 procedure TBuildParseTree.RecogniseLiteralString;
 begin

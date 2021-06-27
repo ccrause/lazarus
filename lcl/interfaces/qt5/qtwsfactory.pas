@@ -94,6 +94,9 @@ function RegisterPairSplitterSide: Boolean;
 function RegisterCustomPairSplitter: Boolean;
 function RegisterCustomFloatSpinEdit: Boolean;
 function RegisterCustomRubberBand: Boolean;
+// ShellCtrls
+function RegisterCustomShellTreeView: Boolean;
+function RegisterCustomShellListView: Boolean;
 // LazDeviceAPIs
 function RegisterLazDeviceAPIs: Boolean;
 
@@ -129,9 +132,12 @@ end;
 
 function RegisterLazAccessibleObject: Boolean; alias : 'WSRegisterLazAccessibleObject';
 begin
-//      RegisterWSLazAccessibleObject(TGtk2WSLazAccessibleObject);
-//      Result := True;
+  {$IFDEF QTACCESSIBILITY}
+  RegisterWSLazAccessibleObject(TQtWSLazAccessibleObject);
+  Result := True;
+  {$ELSE}
   Result := False;
+  {$ENDIF}
 end;
 
 function RegisterControl: Boolean; alias : 'WSRegisterControl';
@@ -551,6 +557,17 @@ function RegisterCustomRubberBand: Boolean; alias : 'WSRegisterCustomRubberBand'
 begin
   RegisterWSComponent(TCustomRubberBand, TQtWSCustomRubberBand);
   Result := True;
+end;
+
+// ShellCtrls
+function RegisterCustomShellTreeView: Boolean; alias : 'WSRegisterCustomShellTreeView';
+begin
+  Result := False;
+end;
+
+function RegisterCustomShellListView: Boolean; alias : 'WSRegisterCustomShellListView';
+begin
+  Result := False;
 end;
 
 function RegisterLazDeviceAPIs: Boolean; alias : 'WSRegisterLazDeviceAPIs';

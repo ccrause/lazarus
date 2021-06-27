@@ -94,7 +94,10 @@ type
     procedure TestFindDeclaration_Generics_Enumerator;
     procedure TestFindDeclaration_Generics;
     procedure TestFindDeclaration_Generics_GuessType;
+    procedure TestFindDeclaration_Generics_GuessType2;
+    procedure TestFindDeclaration_Generics_FindDeclaration;
     procedure TestFindDeclaration_GenericsDelphi_InterfaceAncestor;
+    procedure TestFindDeclaration_GenericsDelphi_FuncParam;
     procedure TestFindDeclaration_ForIn;
     procedure TestFindDeclaration_FileAtCursor;
     procedure TestFindDeclaration_CBlocks;
@@ -106,6 +109,7 @@ type
     procedure TestFindDeclaration_AnonymProc_ExprDot;
     procedure TestFindDeclaration_ArrayMultiDimDot;
     procedure TestFindDeclaration_VarArgsOfType;
+    procedure TestFindDeclaration_ProcRef;
     procedure TestFindDeclaration_UnitSearch_CurrentDir;
     // test all files in directories:
     procedure TestFindDeclaration_FPCTests;
@@ -668,6 +672,16 @@ begin
   FindDeclarations('moduletests/fdt_generics_guesstype.pas');
 end;
 
+procedure TTestFindDeclaration.TestFindDeclaration_Generics_GuessType2;
+begin
+  FindDeclarations('moduletests/fdt_generics_guesstype2.pas');
+end;
+
+procedure TTestFindDeclaration.TestFindDeclaration_Generics_FindDeclaration;
+begin
+  FindDeclarations('moduletests/fdt_generics_finddeclaration.pas');
+end;
+
 procedure TTestFindDeclaration.TestFindDeclaration_GenericsDelphi_InterfaceAncestor;
 begin
   StartProgram;
@@ -681,6 +695,28 @@ begin
   '  IBirdy = interface (IParameters<IItem>)',
   '    [''guid'']',
   '  end;',
+  'end.']);
+  FindDeclarations(Code);
+end;
+
+procedure TTestFindDeclaration.TestFindDeclaration_GenericsDelphi_FuncParam;
+begin
+  StartProgram;
+  Add([
+  '{$mode delphi}',
+  'type',
+  '  TAnt<T> = class',
+  '  type TEvent = procedure(aSender: T);',
+  '  end;',
+  '  TBird = class',
+  '    procedure Fly<T>(Event: TAnt<T>.TEvent; aSender: T)',
+  '  end;',
+  'procedure Run(Sender: TObject);',
+  'begin',
+  'end;',
+  'var Bird: TBird;',
+  'begin',
+  '  Bird.Fly<TObject>(Run,Bird);',
   'end.']);
   FindDeclarations(Code);
 end;
@@ -1046,6 +1082,34 @@ begin
   FindDeclarations(Code);
 end;
 
+procedure TTestFindDeclaration.TestFindDeclaration_ProcRef;
+begin
+  StartProgram;
+  Add([
+  'type',
+  '  TProc = procedure of object;',
+  '  TFoo = class',
+  '  private',
+  '    FTest: TClassProcedure;',
+  '  public',
+  '    procedure TestProc;',
+  '    property Test: TProc read FTest write FTest;',
+  '  end;',
+  'procedure TFoo.TestProc;',
+  'begin',
+  '  Self.Test{declaration:TFoo.Test} := @TestProc{declaration:TFoo.TestProc};',
+  '  Test{declaration:TFoo.Test} := @Self.TestProc{declaration:TFoo.TestProc};',
+  '  // TestProc{declaration:TFoo.TestProc}',
+  'end;',
+  'var Foo: TFoo;',
+  'begin',
+  '  Foo.Test{declaration:TFoo.Test} := @Foo.TestProc{declaration:TFoo.TestProc};',
+  '  with Foo do',
+  '    Test{declaration:TFoo.Test} := @TestProc{declaration:TFoo.TestProc};',
+  'end.']);
+  FindDeclarations(Code);
+end;
+
 procedure TTestFindDeclaration.TestFindDeclaration_UnitSearch_CurrentDir;
 var
   Unit1A, Unit1B: TCodeBuffer;
@@ -1075,7 +1139,7 @@ begin
     'end.']);
     CodeToolBoss.DefineTree.Add(DefTemp);
 
-    debugln(['AAA1 TTestFindDeclaration.TestFindDeclaration_UnitSearch_CurrentDir ',CodeToolBoss.GetUnitPathForDirectory('')]);
+    //debugln(['TTestFindDeclaration.TestFindDeclaration_UnitSearch_CurrentDir ',CodeToolBoss.GetUnitPathForDirectory('')]);
 
     FindDeclarations(Code);
   finally

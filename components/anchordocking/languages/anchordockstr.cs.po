@@ -122,6 +122,14 @@ msgstr "Zarovnat záhlaví"
 msgid "Flatten headers of docked controls"
 msgstr "Zarovnat záhlaví dokovaných komponent"
 
+#: anchordockstr.adrsfloatingwindowsontop
+msgid "Floating windows on top"
+msgstr ""
+
+#: anchordockstr.adrsfloatingwindowsontophint
+msgid "Show floating windows on top of main form"
+msgstr ""
+
 #: anchordockstr.adrsgeneraldockingoptions
 msgid "General docking options"
 msgstr "Obecné volby ukotvení"
@@ -201,6 +209,14 @@ msgstr "Posunout vpravo"
 #: anchordockstr.adrsmovepagerightmost
 msgid "Move page rightmost"
 msgstr "Posunout nejvíce vpravo"
+
+#: anchordockstr.adrsmultilinepages
+msgid "Multiline Tabs"
+msgstr ""
+
+#: anchordockstr.adrsmultilinepageshint
+msgid "Tabs of pages can be shown in multiple lines"
+msgstr ""
 
 #: anchordockstr.adrsnocaptionsforfloatingsites
 msgid "No captions for floating sites"

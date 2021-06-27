@@ -68,6 +68,9 @@
     - on close button: save a restore layout
     - option to show/hide dock headers
     - option HeaderStyle to change appearance of grabbers
+    - option MultiLine show pages tabs on multiple lines when needed
+    - option FloatingWindowsOnTop MainDockForm has FormStyle fsNormal, all other
+      not docked windows get FormStyle fsStayOnTop to not hide helper windows
 
   ToDo:
     - option to save on IDE close (if MainForm is visible on active screen)
@@ -90,6 +93,8 @@
 unit AnchorDocking;
 
 {$mode objfpc}{$H+}
+{$modeswitch advancedrecords}
+{$modeswitch typehelpers}
 
 // better use this definitions in project options, as it used in other units too
 { $DEFINE VerboseAnchorDockRestore}
@@ -349,6 +354,8 @@ type
     FBoundSplitter: TAnchorDockSplitter;
     FUpdateLayout: Integer;
     FMinimizedControl: TControl;
+    procedure CheckFormStyle;
+    procedure FirstShow(Sender: TObject);
     function GetMinimized: Boolean;
     procedure SetHeaderSide(const AValue: TAnchorKind);
   protected
@@ -504,6 +511,7 @@ type
     FDockOutsideMargin: integer;
     FDockParentMargin: integer;
     FDragTreshold: integer;
+    FFloatingWindowsOnTop: boolean;
     FHeaderAlignLeft: integer;
     FHeaderAlignTop: integer;
     FHeaderHint: string;
@@ -512,6 +520,7 @@ type
     FHeaderFilled: boolean;
     FHeaderHighlightFocused: boolean;
     FHideHeaderCaptionFloatingControl: boolean;
+    FMultiLinePages: boolean;
     FPageAreaInPercent: integer;
     FScaleOnResize: boolean;
     FShowHeader: boolean;
@@ -522,11 +531,13 @@ type
     procedure SetDockOutsideMargin(AValue: integer);
     procedure SetDockParentMargin(AValue: integer);
     procedure SetDragTreshold(AValue: integer);
+    procedure SetFloatingWindowsOnTop(AValue: boolean);
     procedure SetHeaderAlignLeft(AValue: integer);
     procedure SetHeaderAlignTop(AValue: integer);
     procedure SetHeaderHint(AValue: string);
     procedure SetHeaderStyle(AValue: THeaderStyleName);
     procedure SetHideHeaderCaptionFloatingControl(AValue: boolean);
+    procedure SetMultiLinePages(AValue: boolean);
     procedure SetPageAreaInPercent(AValue: integer);
     procedure SetScaleOnResize(AValue: boolean);
     procedure SetShowHeader(AValue: boolean);
@@ -555,6 +566,8 @@ type
     property HeaderFilled: boolean read FHeaderFilled write SetHeaderFilled;
     property HeaderHighlightFocused: boolean read FHeaderHighlightFocused write SetHeaderHighlightFocused;
     property DockSitesCanBeMinimized: boolean read FDockSitesCanBeMinimized write SetDockSitesCanBeMinimized;
+    property FloatingWindowsOnTop: boolean read FFloatingWindowsOnTop write SetFloatingWindowsOnTop;
+    property MultiLinePages: boolean read FMultiLinePages write SetMultiLinePages;
     procedure IncreaseChangeStamp; inline;
     property ChangeStamp: integer read FChangeStamp;
     procedure LoadFromConfig(Config: TConfigStorage); overload;
@@ -578,6 +591,23 @@ type
                 var AControl: TControl; DoDisableAutoSizing: boolean) of object;
   TADShowDockMasterOptionsEvent = function(aDockMaster: TAnchorDockMaster): TModalResult;
 
+  { TStyleOfForm }
+
+  TStyleOfForm = record
+    Form: TCustomForm;
+    FormStyle: TFormStyle;
+    class operator = (Item1, Item2: TStyleOfForm): Boolean;
+  end;
+
+  { TFormStyles }
+
+  TFormStyles = class(specialize TFPGList<TStyleOfForm>)
+  public
+    procedure AddForm(const AForm: TCustomForm);
+    function IndexOfForm(const AForm: TCustomForm): Integer;
+    procedure RemoveForm(const AForm: TCustomForm);
+  end;
+
   TAnchorDockMaster = class(TComponent)
   private
     FAllowDragging: boolean;
@@ -585,6 +615,8 @@ type
     FDockOutsideMargin: integer;
     FDockParentMargin: integer;
     FDragTreshold: integer;
+    FFloatingWindowsOnTop: boolean;
+    FFormStyles: TFormStyles;
     FHeaderAlignLeft: integer;
     FHeaderAlignTop: integer;
     FHeaderClass: TAnchorDockHeaderClass;
@@ -596,6 +628,8 @@ type
     FDockSitesCanBeMinimized: boolean;
     FIdleConnected: Boolean;
     FManagerClass: TAnchorDockManagerClass;
+    FMainDockForm: TCustomForm;
+    FMultiLinePages: boolean;
     FOnCreateControl: TADCreateControlEvent;
     FOnOptionsChanged: TNotifyEvent;
     FOnShowOptions: TADShowDockMasterOptionsEvent;
@@ -618,6 +652,7 @@ type
     fNeedSimplify: TFPList; // list of TControl
     fNeedFree: TFPList; // list of TControl
     fSimplifying: boolean;
+    FAllClosing: Boolean;
     fUpdateCount: integer;
     fDisabledAutosizing: TFPList; // list of TControl
     fTreeNameToDocker: TADNameToControl; // TAnchorDockHostSite, TAnchorDockSplitter or custom docksite
@@ -628,8 +663,10 @@ type
     CurrentADHeaderStyle:TADHeaderStyle;
     FHeaderStyleName2ADHeaderStyle:THeaderStyleName2ADHeaderStylesMap;
 
+    procedure FormFirstShow(Sender: TObject);
     function GetControls(Index: integer): TControl;
     function GetLocalizedHeaderHint: string;
+    function GetMainDockForm: TCustomForm;
     procedure MarkCorrectlyLocatedControl(Tree: TAnchorDockLayoutTree);
     function CloseUnneededAndWronglyLocatedControls(Tree: TAnchorDockLayoutTree): boolean;
     function CreateNeededControls(Tree: TAnchorDockLayoutTree;
@@ -637,6 +674,9 @@ type
     function GetNodeSite(Node: TAnchorDockLayoutTreeNode): TAnchorDockHostSite;
     procedure MapTreeToControls(Tree: TAnchorDockLayoutTree);
     function RestoreLayout(Tree: TAnchorDockLayoutTree; Scale: boolean): boolean;
+    procedure ScreenFormAdded(Sender: TObject; Form: TCustomForm);
+    procedure ScreenRemoveForm(Sender: TObject; Form: TCustomForm);
+    procedure SetMainDockForm(AValue: TCustomForm);
     procedure SetMinimizedState(Tree: TAnchorDockLayoutTree);
     procedure UpdateHeaders;
     procedure SetNodeMinimizedState(ANode: TAnchorDockLayoutTreeNode);
@@ -644,6 +684,8 @@ type
     procedure ClearLayoutProperties(AControl: TControl; NewAlign: TAlign = alClient);
     procedure PopupMenuPopup(Sender: TObject);
     procedure ChangeLockButtonClick(Sender: TObject);
+    procedure RefreshFloatingWindowsOnTop;
+    function ScaleBoundsRect(ARect: TRect; FromDPI, ToDPI: integer): TRect;
     function ScaleChildX(p: integer): integer;
     function ScaleChildY(p: integer): integer;
     function ScaleTopLvlX(p: integer): integer;
@@ -661,6 +703,8 @@ type
     procedure SetHeaderFilled(AValue: boolean);
     procedure SetHeaderHighlightFocused(AValue: boolean);
     procedure SetDockSitesCanBeMinimized(AValue: boolean);
+    procedure SetFloatingWindowsOnTop(AValue: boolean);
+    procedure SetMultiLinePages(AValue: boolean);
 
     procedure SetShowMenuItemShowHeader(AValue: boolean);
     procedure SetupSite(Site: TWinControl; ANode: TAnchorDockLayoutTreeNode;
@@ -775,6 +819,7 @@ type
     property DragTreshold: integer read FDragTreshold write SetDragTreshold default 4;
     property DockOutsideMargin: integer read FDockOutsideMargin write SetDockOutsideMargin default 10; // max distance for outside mouse snapping
     property DockParentMargin: integer read FDockParentMargin write SetDockParentMargin default 10; // max distance for snap to parent
+    property FloatingWindowsOnTop: boolean read FFloatingWindowsOnTop write SetFloatingWindowsOnTop default false;
     property PageAreaInPercent: integer read FPageAreaInPercent write SetPageAreaInPercent default 40; // size of inner mouse snapping area for page docking
     property ShowHeader: boolean read FShowHeader write SetShowHeader default true; // set to false to hide all headers
     property ShowMenuItemShowHeader: boolean read FShowMenuItemShowHeader write SetShowMenuItemShowHeader default false;
@@ -793,6 +838,7 @@ type
     property SplitterWidth: integer read FSplitterWidth write SetSplitterWidth default 4;
     property ScaleOnResize: boolean read FScaleOnResize write SetScaleOnResize default true; // scale children when resizing a site
     property AllowDragging: boolean read FAllowDragging write SetAllowDragging default true;
+    property MultiLinePages: boolean read FMultiLinePages write SetMultiLinePages default false;
     property OptionsChangeStamp: int64 read FOptionsChangeStamp;
     procedure IncreaseOptionsChangeStamp; inline;
 
@@ -804,6 +850,9 @@ type
     property PageControlClass: TAnchorDockPageControlClass read FPageControlClass write FPageControlClass;
     property PageClass: TAnchorDockPageClass read FPageClass write FPageClass;
     property HeaderStyleName2ADHeaderStyle:THeaderStyleName2ADHeaderStylesMap read FHeaderStyleName2ADHeaderStyle;
+
+    // for floating windows on top
+    property MainDockForm: TCustomForm read GetMainDockForm write SetMainDockForm;
   end;
 
 var
@@ -1305,6 +1354,13 @@ begin
   IncreaseChangeStamp;
 end;
 
+procedure TAnchorDockSettings.SetFloatingWindowsOnTop(AValue: boolean);
+begin
+  if FFloatingWindowsOnTop=AValue then Exit;
+  FFloatingWindowsOnTop:=AValue;
+  IncreaseChangeStamp;
+end;
+
 procedure TAnchorDockSettings.SetHeaderAlignLeft(AValue: integer);
 begin
   if FHeaderAlignLeft=AValue then Exit;
@@ -1329,6 +1385,12 @@ end;
 procedure TAnchorDockSettings.SetHeaderStyle(AValue: THeaderStyleName);
 begin
   if FHeaderStyle=AValue then Exit;
+
+  // the next two lines can be removed in Lazarus 2.4.0 upwards - there should no old
+  // environmentoptions.xml be out there anymore - see https://bugs.freepascal.org/view.php?id=38960
+  if AValue='Themed caption' then AValue:='ThemedCaption';
+  if AValue='Themed button' then AValue:='ThemedButton';
+
   FHeaderStyle:=AValue;
   IncreaseChangeStamp;
 end;
@@ -1338,6 +1400,13 @@ procedure TAnchorDockSettings.SetHideHeaderCaptionFloatingControl(
 begin
   if FHideHeaderCaptionFloatingControl=AValue then Exit;
   FHideHeaderCaptionFloatingControl:=AValue;
+  IncreaseChangeStamp;
+end;
+
+procedure TAnchorDockSettings.SetMultiLinePages(AValue: boolean);
+begin
+  if FMultiLinePages = AValue then Exit;
+  FMultiLinePages := AValue;
   IncreaseChangeStamp;
 end;
 
@@ -1406,25 +1475,28 @@ end;
 
 procedure TAnchorDockSettings.Assign(Source: TAnchorDockSettings);
 begin
-  FAllowDragging := Source.FAllowDragging;
   FChangeStamp := Source.FChangeStamp;
-  FDockOutsideMargin := Source.FDockOutsideMargin;
-  FDockParentMargin := Source.FDockParentMargin;
-  FDragTreshold := Source.FDragTreshold;
-  FHeaderAlignLeft := Source.FHeaderAlignLeft;
-  FHeaderAlignTop := Source.FHeaderAlignTop;
-  FHeaderHint := Source.FHeaderHint;
-  FHeaderStyle := Source.FHeaderStyle;
-  FHeaderFlatten := Source.FHeaderFlatten;
-  FHeaderFilled := Source.FHeaderFilled;
+
+  FAllowDragging                    := Source.FAllowDragging;
+  FDockOutsideMargin                := Source.FDockOutsideMargin;
+  FDockParentMargin                 := Source.FDockParentMargin;
+  FDockSitesCanBeMinimized          := Source.FDockSitesCanBeMinimized;
+  FDragTreshold                     := Source.FDragTreshold;
+  FFloatingWindowsOnTop             := Source.FFloatingWindowsOnTop;
+  FHeaderAlignLeft                  := Source.FHeaderAlignLeft;
+  FHeaderAlignTop                   := Source.FHeaderAlignTop;
+  FHeaderFilled                     := Source.FHeaderFilled;
+  FHeaderFlatten                    := Source.FHeaderFlatten;
+  FHeaderHighlightFocused           := Source.FHeaderHighlightFocused;
+  FHeaderHint                       := Source.FHeaderHint;
+  FHeaderStyle                      := Source.FHeaderStyle;
   FHideHeaderCaptionFloatingControl := Source.FHideHeaderCaptionFloatingControl;
-  FPageAreaInPercent := Source.FPageAreaInPercent;
-  FScaleOnResize := Source.FScaleOnResize;
-  FShowHeader := Source.FShowHeader;
-  FShowHeaderCaption := Source.FShowHeaderCaption;
-  FSplitterWidth := Source.FSplitterWidth;
-  FHeaderHighlightFocused:=Source.FHeaderHighlightFocused;
-  FDockSitesCanBeMinimized:=Source.FDockSitesCanBeMinimized;
+  FMultiLinePages                   := Source.FMultiLinePages;
+  FPageAreaInPercent                := Source.FPageAreaInPercent;
+  FScaleOnResize                    := Source.FScaleOnResize;
+  FShowHeader                       := Source.FShowHeader;
+  FShowHeaderCaption                := Source.FShowHeaderCaption;
+  FSplitterWidth                    := Source.FSplitterWidth;
 end;
 
 procedure TAnchorDockSettings.IncreaseChangeStamp;
@@ -1435,114 +1507,162 @@ end;
 procedure TAnchorDockSettings.LoadFromConfig(Config: TConfigStorage);
 begin
   Config.AppendBasePath('Settings/');
-  DragTreshold:=Config.GetValue('DragThreshold',4);
-  DockOutsideMargin:=Config.GetValue('DockOutsideMargin',10);
-  DockParentMargin:=Config.GetValue('DockParentMargin',10);
-  PageAreaInPercent:=Config.GetValue('PageAreaInPercent',40);
-  HeaderAlignTop:=Config.GetValue('HeaderAlignTop',80);
-  HeaderAlignLeft:=Config.GetValue('HeaderAlignLeft',120);
-  SplitterWidth:=Config.GetValue('SplitterWidth',4);
-  ScaleOnResize:=Config.GetValue('ScaleOnResize',true);
-  ShowHeader:=Config.GetValue('ShowHeader',true);
-  ShowHeaderCaption:=Config.GetValue('ShowHeaderCaption',true);
-  HideHeaderCaptionFloatingControl:=Config.GetValue('HideHeaderCaptionFloatingControl',true);
-  AllowDragging:=Config.GetValue('AllowDragging',true);
-  HeaderStyle:=Config.GetValue('HeaderStyle','Frame3D');
-  HeaderFlatten:=Config.GetValue('HeaderFlatten',true);
-  HeaderFilled:=Config.GetValue('HeaderFilled',true);
-  HeaderHighlightFocused:=Config.GetValue('HeaderHighlightFocused',False);
-  DockSitesCanBeMinimized:=Config.GetValue('DockSitesCanBeMinimized',False);
+  AllowDragging                    := Config.GetValue('AllowDragging',true);
+  DockOutsideMargin                := Config.GetValue('DockOutsideMargin',10);
+  DockParentMargin                 := Config.GetValue('DockParentMargin',10);
+  DockSitesCanBeMinimized          := Config.GetValue('DockSitesCanBeMinimized',False);
+  DragTreshold                     := Config.GetValue('DragThreshold',4);
+  FloatingWindowsOnTop             := Config.GetValue('FloatingWindowsOnTop',false);
+  HeaderAlignLeft                  := Config.GetValue('HeaderAlignLeft',120);
+  HeaderAlignTop                   := Config.GetValue('HeaderAlignTop',80);
+  HeaderFilled                     := Config.GetValue('HeaderFilled',true);
+  HeaderFlatten                    := Config.GetValue('HeaderFlatten',true);
+  HeaderHighlightFocused           := Config.GetValue('HeaderHighlightFocused',False);
+  HeaderStyle                      := Config.GetValue('HeaderStyle','Frame3D');
+  HideHeaderCaptionFloatingControl := Config.GetValue('HideHeaderCaptionFloatingControl',true);
+  MultiLinePages                   := Config.GetValue('MultiLinePages',false);
+  PageAreaInPercent                := Config.GetValue('PageAreaInPercent',40);
+  ScaleOnResize                    := Config.GetValue('ScaleOnResize',true);
+  ShowHeader                       := Config.GetValue('ShowHeader',true);
+  ShowHeaderCaption                := Config.GetValue('ShowHeaderCaption',true);
+  SplitterWidth                    := Config.GetValue('SplitterWidth',4);
   Config.UndoAppendBasePath;
 end;
 
-procedure TAnchorDockSettings.SaveToConfig(Path: string; Config: TRttiXMLConfig
-  );
+procedure TAnchorDockSettings.SaveToConfig(Path: string; Config: TRttiXMLConfig);
 begin
-  Config.SetDeleteValue(Path+'DragThreshold',DragTreshold,4);
+  Config.SetDeleteValue(Path+'AllowDragging',AllowDragging,true);
   Config.SetDeleteValue(Path+'DockOutsideMargin',DockOutsideMargin,10);
   Config.SetDeleteValue(Path+'DockParentMargin',DockParentMargin,10);
-  Config.SetDeleteValue(Path+'PageAreaInPercent',PageAreaInPercent,40);
-  Config.SetDeleteValue(Path+'HeaderAlignTop',HeaderAlignTop,80);
+  Config.SetDeleteValue(Path+'DockSitesCanBeMinimized',DockSitesCanBeMinimized,False);
+  Config.SetDeleteValue(Path+'DragThreshold',DragTreshold,4);
+  Config.SetDeleteValue(Path+'FloatingWindowsOnTop',FloatingWindowsOnTop,false);
   Config.SetDeleteValue(Path+'HeaderAlignLeft',HeaderAlignLeft,120);
-  Config.SetDeleteValue(Path+'SplitterWidth',SplitterWidth,4);
+  Config.SetDeleteValue(Path+'HeaderAlignTop',HeaderAlignTop,80);
+  Config.SetDeleteValue(Path+'HeaderFilled',HeaderFilled,true);
+  Config.SetDeleteValue(Path+'HeaderFlatten',HeaderFlatten,true);
+  Config.SetDeleteValue(Path+'HeaderHighlightFocused',HeaderHighlightFocused,False);
+  Config.SetDeleteValue(Path+'HeaderStyle',HeaderStyle,'Frame3D');
+  Config.SetDeleteValue(Path+'HideHeaderCaptionFloatingControl',HideHeaderCaptionFloatingControl,true);
+  Config.SetDeleteValue(Path+'MultiLinePages',MultiLinePages,false);
+  Config.SetDeleteValue(Path+'PageAreaInPercent',PageAreaInPercent,40);
   Config.SetDeleteValue(Path+'ScaleOnResize',ScaleOnResize,true);
   Config.SetDeleteValue(Path+'ShowHeader',ShowHeader,true);
   Config.SetDeleteValue(Path+'ShowHeaderCaption',ShowHeaderCaption,true);
-  Config.SetDeleteValue(Path+'HideHeaderCaptionFloatingControl',HideHeaderCaptionFloatingControl,true);
-  Config.SetDeleteValue(Path+'AllowDragging',AllowDragging,true);
-  Config.SetDeleteValue(Path+'HeaderStyle',HeaderStyle,'Frame3D');
-  Config.SetDeleteValue(Path+'HeaderFlatten',HeaderFlatten,true);
-  Config.SetDeleteValue(Path+'HeaderFilled',HeaderFilled,true);
-  Config.SetDeleteValue(Path+'HeaderHighlightFocused',HeaderHighlightFocused,False);
-  Config.SetDeleteValue(Path+'DockSitesCanBeMinimized',DockSitesCanBeMinimized,False);
+  Config.SetDeleteValue(Path+'SplitterWidth',SplitterWidth,4);
 end;
 
 procedure TAnchorDockSettings.SaveToConfig(Config: TConfigStorage);
 begin
   Config.AppendBasePath('Settings/');
-  Config.SetDeleteValue('DragThreshold',DragTreshold,4);
+  Config.SetDeleteValue('AllowDragging',AllowDragging,true);
   Config.SetDeleteValue('DockOutsideMargin',DockOutsideMargin,10);
   Config.SetDeleteValue('DockParentMargin',DockParentMargin,10);
-  Config.SetDeleteValue('PageAreaInPercent',PageAreaInPercent,40);
-  Config.SetDeleteValue('HeaderAlignTop',HeaderAlignTop,80);
+  Config.SetDeleteValue('DockSitesCanBeMinimized',DockSitesCanBeMinimized,False);
+  Config.SetDeleteValue('DragThreshold',DragTreshold,4);
+  Config.SetDeleteValue('FloatingWindowsOnTop',FloatingWindowsOnTop,false);
   Config.SetDeleteValue('HeaderAlignLeft',HeaderAlignLeft,120);
-  Config.SetDeleteValue('SplitterWidth',SplitterWidth,4);
+  Config.SetDeleteValue('HeaderAlignTop',HeaderAlignTop,80);
+  Config.SetDeleteValue('HeaderFilled',HeaderFilled,true);
+  Config.SetDeleteValue('HeaderFlatten',HeaderFlatten,true);
+  Config.SetDeleteValue('HeaderHighlightFocused',HeaderHighlightFocused,False);
+  Config.SetDeleteValue('HeaderStyle',HeaderStyle,'Frame3D');
+  Config.SetDeleteValue('HideHeaderCaptionFloatingControl',HideHeaderCaptionFloatingControl,true);
+  Config.SetDeleteValue('MultiLinePages',MultiLinePages,false);
+  Config.SetDeleteValue('PageAreaInPercent',PageAreaInPercent,40);
   Config.SetDeleteValue('ScaleOnResize',ScaleOnResize,true);
   Config.SetDeleteValue('ShowHeader',ShowHeader,true);
   Config.SetDeleteValue('ShowHeaderCaption',ShowHeaderCaption,true);
-  Config.SetDeleteValue('HideHeaderCaptionFloatingControl',HideHeaderCaptionFloatingControl,true);
-  Config.SetDeleteValue('AllowDragging',AllowDragging,true);
-  Config.SetDeleteValue('HeaderStyle',HeaderStyle,'Frame3D');
-  Config.SetDeleteValue('HeaderFlatten',HeaderFlatten,true);
-  Config.SetDeleteValue('HeaderFilled',HeaderFilled,true);
-  Config.SetDeleteValue('HeaderHighlightFocused',HeaderHighlightFocused,False);
-  Config.SetDeleteValue('DockSitesCanBeMinimized',DockSitesCanBeMinimized,False);
+  Config.SetDeleteValue('SplitterWidth',SplitterWidth,4);
   Config.UndoAppendBasePath;
 end;
 
 function TAnchorDockSettings.IsEqual(Settings: TAnchorDockSettings): boolean;
 begin
-  Result:=(DragTreshold=Settings.DragTreshold)
+  Result:=(AllowDragging=Settings.AllowDragging)
       and (DockOutsideMargin=Settings.DockOutsideMargin)
       and (DockParentMargin=Settings.DockParentMargin)
-      and (PageAreaInPercent=Settings.PageAreaInPercent)
-      and (HeaderAlignTop=Settings.HeaderAlignTop)
+      and (DockSitesCanBeMinimized=Settings.DockSitesCanBeMinimized)
+      and (DragTreshold=Settings.DragTreshold)
+      and (FloatingWindowsOnTop=Settings.FloatingWindowsOnTop)
       and (HeaderAlignLeft=Settings.HeaderAlignLeft)
+      and (HeaderAlignTop=Settings.HeaderAlignTop)
+      and (HeaderFilled=Settings.HeaderFilled)
+      and (HeaderFlatten=Settings.HeaderFlatten)
+      and (HeaderHighlightFocused=Settings.HeaderHighlightFocused)
       and (HeaderHint=Settings.HeaderHint)
-      and (SplitterWidth=Settings.SplitterWidth)
+      and (HeaderStyle=Settings.HeaderStyle)
+      and (HideHeaderCaptionFloatingControl=Settings.HideHeaderCaptionFloatingControl)
+      and (MultiLinePages=Settings.MultiLinePages)
+      and (PageAreaInPercent=Settings.PageAreaInPercent)
       and (ScaleOnResize=Settings.ScaleOnResize)
       and (ShowHeader=Settings.ShowHeader)
       and (ShowHeaderCaption=Settings.ShowHeaderCaption)
-      and (HideHeaderCaptionFloatingControl=Settings.HideHeaderCaptionFloatingControl)
-      and (AllowDragging=Settings.AllowDragging)
-      and (HeaderStyle=Settings.HeaderStyle)
-      and (HeaderFlatten=Settings.HeaderFlatten)
-      and (HeaderFilled=Settings.HeaderFilled)
-      and (HeaderHighlightFocused=Settings.HeaderHighlightFocused)
-      and (DockSitesCanBeMinimized=Settings.DockSitesCanBeMinimized)
+      and (SplitterWidth=Settings.SplitterWidth)
       ;
 end;
 
 procedure TAnchorDockSettings.LoadFromConfig(Path: string;
   Config: TRttiXMLConfig);
 begin
-  DragTreshold:=Config.GetValue(Path+'DragThreshold',4);
-  DockOutsideMargin:=Config.GetValue(Path+'DockOutsideMargin',10);
-  DockParentMargin:=Config.GetValue(Path+'DockParentMargin',10);
-  PageAreaInPercent:=Config.GetValue(Path+'PageAreaInPercent',40);
-  HeaderAlignTop:=Config.GetValue(Path+'HeaderAlignTop',80);
-  HeaderAlignLeft:=Config.GetValue(Path+'HeaderAlignLeft',120);
-  SplitterWidth:=Config.GetValue(Path+'SplitterWidth',4);
-  ScaleOnResize:=Config.GetValue(Path+'ScaleOnResize',true);
-  ShowHeader:=Config.GetValue(Path+'ShowHeader',true);
-  ShowHeaderCaption:=Config.GetValue(Path+'ShowHeaderCaption',true);
-  HideHeaderCaptionFloatingControl:=Config.GetValue(Path+'HideHeaderCaptionFloatingControl',true);
-  AllowDragging:=Config.GetValue(Path+'AllowDragging',true);
-  HeaderStyle:=Config.GetValue(Path+'HeaderStyle','Frame3D');
-  HeaderFlatten:=Config.GetValue(Path+'HeaderFlatten',true);
-  HeaderFilled:=Config.GetValue(Path+'HeaderFilled',true);
-  HeaderHighlightFocused:=Config.GetValue(Path+'HeaderHighlightFocused',False);
-  DockSitesCanBeMinimized:=Config.GetValue(Path+'DockSitesCanBeMinimized',False);
+  AllowDragging                    := Config.GetValue(Path+'AllowDragging',true);
+  DockOutsideMargin                := Config.GetValue(Path+'DockOutsideMargin',10);
+  DockParentMargin                 := Config.GetValue(Path+'DockParentMargin',10);
+  DockSitesCanBeMinimized          := Config.GetValue(Path+'DockSitesCanBeMinimized',false);
+  DragTreshold                     := Config.GetValue(Path+'DragThreshold',4);
+  FloatingWindowsOnTop             := Config.GetValue(Path+'FloatingWindowsOnTop',false);  ;
+  HeaderAlignLeft                  := Config.GetValue(Path+'HeaderAlignLeft',120);
+  HeaderAlignTop                   := Config.GetValue(Path+'HeaderAlignTop',80);
+  HeaderFilled                     := Config.GetValue(Path+'HeaderFilled',true);
+  HeaderFlatten                    := Config.GetValue(Path+'HeaderFlatten',true);
+  HeaderHighlightFocused           := Config.GetValue(Path+'HeaderHighlightFocused',false);
+  HeaderStyle                      := Config.GetValue(Path+'HeaderStyle','Frame3D');
+  HideHeaderCaptionFloatingControl := Config.GetValue(Path+'HideHeaderCaptionFloatingControl',true);
+  MultiLinePages                   := Config.GetValue(Path+'MultiLinePages',false);
+  PageAreaInPercent                := Config.GetValue(Path+'PageAreaInPercent',40);
+  ScaleOnResize                    := Config.GetValue(Path+'ScaleOnResize',true);
+  ShowHeader                       := Config.GetValue(Path+'ShowHeader',true);
+  ShowHeaderCaption                := Config.GetValue(Path+'ShowHeaderCaption',true);
+  SplitterWidth                    := Config.GetValue(Path+'SplitterWidth',4);
+end;
+
+{ TStyleOfForm }
+
+class operator TStyleOfForm. = (Item1, Item2: TStyleOfForm): Boolean;
+begin
+  Result := (Item1.Form = Item2.Form) and
+            (Item1.FormStyle = Item2.FormStyle);
+end;
+
+{ TFormStyles }
+
+procedure TFormStyles.AddForm(const AForm: TCustomForm);
+var
+  AStyleOfForm: TStyleOfForm;
+begin
+  if not Assigned(AForm) then Exit;
+  if IndexOfForm(AForm) >= 0 then Exit;
+  AStyleOfForm.Form := AForm;
+  AStyleOfForm.FormStyle := AForm.FormStyle;
+  Add(AStyleOfForm);
+end;
+
+function TFormStyles.IndexOfForm(const AForm: TCustomForm): Integer;
+var
+  i: Integer;
+begin
+  for i := 0 to Count - 1 do
+    if Self[i].Form = AForm then Exit(i);
+  Result := -1;
+end;
+
+procedure TFormStyles.RemoveForm(const AForm: TCustomForm);
+var
+  AIndex: Integer;
+begin
+  AIndex := IndexOfForm(AForm);
+  if AIndex < 0 then Exit;
+  Delete(AIndex);
 end;
 
 { TAnchorDockMaster }
@@ -1552,12 +1672,41 @@ begin
   Result:=TControl(FControls[Index]);
 end;
 
+procedure TAnchorDockMaster.FormFirstShow(Sender: TObject);
+var
+  AForm: TCustomForm absolute Sender;
+  IsMainDockForm: Boolean;
+begin
+  if not (Sender is TCustomForm) then Exit;
+  if AForm.FormStyle in fsAllStayOnTop then Exit;
+  if not FloatingWindowsOnTop then Exit;
+  IsMainDockForm := (AForm = MainDockForm)
+                or (AForm.IsParentOf(MainDockForm))
+                or (GetParentForm(AForm) = MainDockForm);
+  if IsMainDockForm then
+    AForm.FormStyle := fsNormal
+  else
+    AForm.FormStyle := fsStayOnTop;
+end;
+
 function TAnchorDockMaster.GetLocalizedHeaderHint: string;
 begin
   if HeaderHint<>'' then
     Result:=HeaderHint
   else
     Result:=adrsDragAndDockC;
+end;
+
+function TAnchorDockMaster.GetMainDockForm: TCustomForm;
+begin
+  if not Assigned(FMainDockForm) then
+    FMainDockForm := Application.MainForm;
+  // Workaround: if FloatingWindowsOnTop is loaded on MainForm.Create
+  // Application.MainForm is not set now, but already in Screen.Forms
+  // see https://bugs.freepascal.org/view.php?id=19272
+  if not Assigned(FMainDockForm) and (Screen.FormCount > 0) then
+    FMainDockForm := Screen.Forms[0];
+  Result := FMainDockForm;
 end;
 
 procedure TAnchorDockMaster.SetHeaderAlignLeft(const AValue: integer);
@@ -2001,17 +2150,22 @@ var
   NewBounds: TRect;
   aMonitor: TMonitor;
   aHostSite: TAnchorDockHostSite;
+  ParentForm: TCustomForm;
 begin
   if Site is TCustomForm then begin
     Site.Align:=alNone;
+    TCustomForm(Site).PixelsPerInch:=Screen.PixelsPerInch;
     if AParent=nil then
       TCustomForm(Site).WindowState:=ANode.WindowState
     else
       TCustomForm(Site).WindowState:=wsNormal;
-  end else
-    GetParentForm(Site).WindowState:=ANode.WindowState;
+  end else begin
+    ParentForm:=GetParentForm(Site);
+    ParentForm.WindowState:=ANode.WindowState;
+    ParentForm.PixelsPerInch:=Screen.PixelsPerInch;
+  end;
   if Site is TAnchorDockPanel then
-    GetParentForm(Site).BoundsRect:=ANode.BoundsRect
+    ParentForm.BoundsRect:=ScaleBoundsRect(ANode.BoundsRect,ANode.PixelsPerInch,Screen.PixelsPerInch)
   else begin
     if AParent=nil then begin
       if (ANode.Monitor>=0) and (ANode.Monitor<Screen.MonitorCount) then
@@ -2020,7 +2174,7 @@ begin
         if Site is TCustomForm then
           aMonitor:=TCustomForm(Site).Monitor
         else
-          aMonitor:=GetParentForm(Site).Monitor;
+          aMonitor:=ParentForm.Monitor;
       end;
       WorkArea:=aMonitor.WorkareaRect;
       {$IFDEF VerboseAnchorDockRestore}
@@ -2037,7 +2191,7 @@ begin
   end;
   Site.Constraints.MaxWidth:=0;
   Site.Constraints.MaxHeight:=0;
-  NewBounds:=ANode.BoundsRect;
+  NewBounds:=ScaleBoundsRect(ANode.BoundsRect,ANode.PixelsPerInch,Screen.PixelsPerInch);
   if AParent=nil then begin
     NewBounds:=Rect(ScaleTopLvlX(NewBounds.Left),ScaleTopLvlY(NewBounds.Top),
                     ScaleTopLvlX(NewBounds.Right),ScaleTopLvlY(NewBounds.Bottom));
@@ -2067,7 +2221,10 @@ begin
     {$IFDEF VerboseAnchorDockRestore}
     debugln(['TAnchorDockMaster.RestoreLayout.SetupSite custom Site=',DbgSName(Site),' Site.Bounds=',dbgs(Site.BoundsRect),' BoundSplitterPos=',aNode.BoundSplitterPos]);
     {$ENDIF}
-    aManager.RestoreSite(ANode.BoundSplitterPos);
+    if Application.Scaled then
+      aManager.RestoreSite(MulDiv(ANode.BoundSplitterPos,Screen.PixelsPerInch,ANode.PixelsPerInch))
+    else
+      aManager.RestoreSite(ANode.BoundSplitterPos);
     Site.HostDockSite:=AParent;
   end;
   if Site is TAnchorDockHostSite then begin
@@ -2187,7 +2344,7 @@ function TAnchorDockMaster.RestoreLayout(Tree: TAnchorDockLayoutTree;
       debugln(['TAnchorDockMaster.RestoreLayout.Restore Splitter Node.Name=',aNode.Name,' ',dbgs(aNode.NodeType),' Splitter=',DbgSName(Splitter)]);
       {$ENDIF}
       Splitter.Parent:=AParent;
-      NewBounds:=ANode.BoundsRect;
+      NewBounds:=ScaleBoundsRect(ANode.BoundsRect,ANode.PixelsPerInch,Screen.PixelsPerInch);
       if SrcRectValid(SrcWorkArea) then
         NewBounds:=Rect(ScaleChildX(NewBounds.Left),ScaleChildY(NewBounds.Top),
           ScaleChildX(NewBounds.Right),ScaleChildY(NewBounds.Bottom));
@@ -2304,6 +2461,24 @@ begin
   SrcWorkArea:=WorkArea;
   Restore(Tree.Root,nil);
   Restoring:=true;
+end;
+
+procedure TAnchorDockMaster.ScreenFormAdded(Sender: TObject; Form: TCustomForm);
+begin
+  FFormStyles.AddForm(Form);
+  Form.AddHandlerFirstShow(@FormFirstShow);
+end;
+
+procedure TAnchorDockMaster.ScreenRemoveForm(Sender: TObject; Form: TCustomForm);
+begin
+  FFormStyles.RemoveForm(Form);
+end;
+
+procedure TAnchorDockMaster.SetMainDockForm(AValue: TCustomForm);
+begin
+  if FMainDockForm = AValue then Exit;
+  FMainDockForm := AValue;
+  RefreshFloatingWindowsOnTop;
 end;
 
 function TAnchorDockMaster.DoCreateControl(aName: string;
@@ -2561,6 +2736,56 @@ begin
   AllowDragging:=not AllowDragging;
 end;
 
+procedure TAnchorDockMaster.RefreshFloatingWindowsOnTop;
+var
+  i, AIndex: Integer;
+  AForm, ParentForm: TCustomForm;
+  IsMainDockForm: Boolean;
+  AFormStyle: TFormStyle;
+begin
+  for i := 0 to Screen.FormCount - 1 do
+  begin
+    AForm := Screen.Forms[i];
+    if AForm.FormStyle = fsSplash then continue;
+    ParentForm := GetParentForm(AForm);
+    if FFloatingWindowsOnTop then
+    begin
+      IsMainDockForm := (AForm = MainDockForm)
+                    or (AForm.IsParentOf(MainDockForm))
+                    or (ParentForm = MainDockForm);
+      if IsMainDockForm then
+        AFormStyle := fsNormal
+      else
+        AFormStyle := fsStayOnTop;
+    end else begin
+      AIndex := FFormStyles.IndexOfForm(AForm);
+      if AIndex >= 0 then
+        AFormStyle := FFormStyles[AIndex].FormStyle
+      else
+        AFormStyle := fsNormal;
+    end;
+    if ParentForm is TAnchorDockHostSite then
+      ParentForm.FormStyle := AFormStyle
+    else
+      AForm.FormStyle := AFormStyle;
+  end;
+end;
+
+function TAnchorDockMaster.ScaleBoundsRect(ARect: TRect; FromDPI, ToDPI: integer): TRect;
+begin
+  if not Application.Scaled or (FromDPI <= 0) or (ToDPI <= 0) then
+    Result := ARect
+  else begin
+    Result.Left  :=MulDiv(ARect.Left  ,ToDPI,FromDPI);
+    Result.Top   :=MulDiv(ARect.Top   ,ToDPI,FromDPI);
+    Result.Width :=MulDiv(ARect.Width ,ToDPI,FromDPI);
+    Result.Height:=MulDiv(ARect.Height,ToDPI,FromDPI);
+  end;
+  {$IFDEF VerboseAnchorDockRestore}
+  debugln(['TAnchorDockMaster.ScaleBoundsRect FromDPI=',FromDPI,' ToDPI=',ToDPI,' FromRect[',dbgs(ARect),'] ToRect[',dbgs(Result),']']);
+  {$ENDIF}
+end;
+
 procedure TAnchorDockMaster.SetAllowDragging(AValue: boolean);
 begin
   if FAllowDragging=AValue then Exit;
@@ -2612,6 +2837,13 @@ begin
   OptionsChanged;
 end;
 
+procedure TAnchorDockMaster.SetScaleOnResize(AValue: boolean);
+begin
+  if FScaleOnResize=AValue then Exit;
+  FScaleOnResize:=AValue;
+  OptionsChanged;
+end;
+
 procedure TAnchorDockMaster.SetHeaderFlatten(AValue: boolean);
 begin
   if FHeaderFlatten=AValue then Exit;
@@ -2645,10 +2877,33 @@ begin
   EnableAllAutoSizing;
   OptionsChanged;
 end;
-procedure TAnchorDockMaster.SetScaleOnResize(AValue: boolean);
+
+procedure TAnchorDockMaster.SetFloatingWindowsOnTop(AValue: boolean);
 begin
-  if FScaleOnResize=AValue then Exit;
-  FScaleOnResize:=AValue;
+  if FFloatingWindowsOnTop = AValue then Exit;
+  FFloatingWindowsOnTop := AValue;
+  RefreshFloatingWindowsOnTop;
+  OptionsChanged;
+end;
+
+procedure TAnchorDockMaster.SetMultiLinePages(AValue: boolean);
+var
+  Site: TAnchorDockHostSite;
+  i: Integer;
+begin
+  if FMultiLinePages=AValue then Exit;
+  FMultiLinePages:=AValue;
+  for i:=0 to ComponentCount-1 do
+  begin
+    Site:=TAnchorDockHostSite(Components[i]);
+    if not (Site is TAnchorDockHostSite) then continue;
+    if Assigned(Site.Pages) then
+    begin
+      DisableControlAutoSizing(Site);
+      Site.Pages.MultiLine:=AValue;
+    end;
+  end;
+  EnableAllAutoSizing;
   OptionsChanged;
 end;
 
@@ -2835,15 +3090,19 @@ end;
 constructor TAnchorDockMaster.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
+  FFormStyles:=TFormStyles.Create;
+  FMainDockForm:=nil;
   FControls:=TFPList.Create;
   FAllowDragging:=true;
   FDragTreshold:=4;
   FDockOutsideMargin:=10;
   FDockParentMargin:=10;
+  FFloatingWindowsOnTop:=false;
   FPageAreaInPercent:=40;
   FHeaderAlignTop:=80;
   HeaderAlignLeft:=120;
   FHeaderHint:='';
+  FMultiLinePages:=false;
   FShowHeader:=true;
   FShowHeaderCaption:=true;
   FHideHeaderCaptionFloatingControl:=true;
@@ -2865,7 +3124,10 @@ begin
   FHeaderHighlightFocused:=false;
   FDockSitesCanBeMinimized:=false;
   FOverlappingForm:=nil;
+  FAllClosing:=False;
   FHeaderStyleName2ADHeaderStyle:=THeaderStyleName2ADHeaderStylesMap.create;
+  Screen.AddHandlerFormAdded(@ScreenFormAdded);
+  Screen.AddHandlerRemoveForm(@ScreenRemoveForm);
 end;
 
 destructor TAnchorDockMaster.Destroy;
@@ -2873,6 +3135,8 @@ var
   AControl: TControl;
   i, j: Integer;
 begin
+  Screen.RemoveHandlerFormAdded(@ScreenFormAdded);
+  Screen.RemoveHandlerRemoveForm(@ScreenRemoveForm);
   QueueSimplify:=false;
   FreeAndNil(FRestoreLayouts);
   FreeAndNil(fPopupMenu);
@@ -2901,6 +3165,7 @@ begin
   end;
   end;
   FreeAndNil(FHeaderStyleName2ADHeaderStyle);
+  FreeAndNil(FFormStyles);
   inherited Destroy;
 end;
 
@@ -3211,6 +3476,7 @@ var
   AForm: TCustomForm;
   AControl: TWinControl;
 begin
+  FAllClosing:=True;
   // hide all forms
   i:=Screen.CustomFormCount-1;
   while i>=0 do begin
@@ -3236,6 +3502,7 @@ begin
     end;
     i:=Min(i,Screen.CustomFormCount)-1;
   end;
+  FAllClosing:=False;
 end;
 
 procedure TAnchorDockMaster.SaveLayoutToConfig(Config: TConfigStorage);
@@ -3527,44 +3794,48 @@ end;
 
 procedure TAnchorDockMaster.LoadSettings(Settings: TAnchorDockSettings);
 begin
-  DragTreshold                     := Settings.DragTreshold;
+  AllowDragging                    := Settings.AllowDragging;
   DockOutsideMargin                := Settings.DockOutsideMargin;
   DockParentMargin                 := Settings.DockParentMargin;
+  DockSitesCanBeMinimized          := Settings.DockSitesCanBeMinimized;
+  DragTreshold                     := Settings.DragTreshold;
+  FloatingWindowsOnTop             := Settings.FloatingWindowsOnTop;
   PageAreaInPercent                := Settings.PageAreaInPercent;
-  HeaderAlignTop                   := Settings.HeaderAlignTop;
   HeaderAlignLeft                  := Settings.HeaderAlignLeft;
-  SplitterWidth                    := Settings.SplitterWidth;
+  HeaderAlignTop                   := Settings.HeaderAlignTop;
+  HeaderFilled                     := Settings.HeaderFilled;
+  HeaderFlatten                    := Settings.HeaderFlatten;
+  HeaderHighlightFocused           := Settings.HeaderHighlightFocused;
+  HeaderStyle                      := Settings.HeaderStyle;
+  HideHeaderCaptionFloatingControl := Settings.HideHeaderCaptionFloatingControl;
+  MultiLinePages                   := Settings.MultiLinePages;
   ScaleOnResize                    := Settings.ScaleOnResize;
   ShowHeader                       := Settings.ShowHeader;
   ShowHeaderCaption                := Settings.ShowHeaderCaption;
-  HideHeaderCaptionFloatingControl := Settings.HideHeaderCaptionFloatingControl;
-  AllowDragging                    := Settings.AllowDragging;
-  HeaderStyle                      := Settings.HeaderStyle;
-  HeaderFlatten                    := Settings.HeaderFlatten;
-  HeaderFilled                     := Settings.HeaderFilled;
-  HeaderHighlightFocused           := Settings.HeaderHighlightFocused;
-  DockSitesCanBeMinimized          := Settings.DockSitesCanBeMinimized;
+  SplitterWidth                    := Settings.SplitterWidth;
 end;
 
 procedure TAnchorDockMaster.SaveSettings(Settings: TAnchorDockSettings);
 begin
-  Settings.DragTreshold:=DragTreshold;
-  Settings.DockOutsideMargin:=DockOutsideMargin;
-  Settings.DockParentMargin:=DockParentMargin;
-  Settings.PageAreaInPercent:=PageAreaInPercent;
-  Settings.HeaderAlignTop:=HeaderAlignTop;
-  Settings.HeaderAlignLeft:=HeaderAlignLeft;
-  Settings.SplitterWidth:=SplitterWidth;
-  Settings.ScaleOnResize:=ScaleOnResize;
-  Settings.ShowHeader:=ShowHeader;
-  Settings.ShowHeaderCaption:=ShowHeaderCaption;
-  Settings.HideHeaderCaptionFloatingControl:=HideHeaderCaptionFloatingControl;
-  Settings.AllowDragging:=AllowDragging;
-  Settings.HeaderStyle:=HeaderStyle;
-  Settings.HeaderFlatten:=HeaderFlatten;
-  Settings.HeaderFilled:=HeaderFilled;
-  Settings.HeaderHighlightFocused:=HeaderHighlightFocused;
-  Settings.DockSitesCanBeMinimized:=DockSitesCanBeMinimized;
+  Settings.AllowDragging                    := AllowDragging;
+  Settings.DockOutsideMargin                := DockOutsideMargin;
+  Settings.DockParentMargin                 := DockParentMargin;
+  Settings.DockSitesCanBeMinimized          := DockSitesCanBeMinimized;
+  Settings.DragTreshold                     := DragTreshold;
+  Settings.FloatingWindowsOnTop             := FloatingWindowsOnTop;
+  Settings.PageAreaInPercent                := PageAreaInPercent;
+  Settings.HeaderAlignLeft                  := HeaderAlignLeft;
+  Settings.HeaderAlignTop                   := HeaderAlignTop;
+  Settings.HeaderFilled                     := HeaderFilled;
+  Settings.HeaderFlatten                    := HeaderFlatten;
+  Settings.HeaderHighlightFocused           := HeaderHighlightFocused;
+  Settings.HeaderStyle                      := HeaderStyle;
+  Settings.HideHeaderCaptionFloatingControl := HideHeaderCaptionFloatingControl;
+  Settings.MultiLinePages                   := MultiLinePages;
+  Settings.ScaleOnResize                    := ScaleOnResize;
+  Settings.ShowHeader                       := ShowHeader;
+  Settings.ShowHeaderCaption                := ShowHeaderCaption;
+  Settings.SplitterWidth                    := SplitterWidth;
 end;
 
 function TAnchorDockMaster.SettingsAreEqual(Settings: TAnchorDockSettings
@@ -3971,6 +4242,34 @@ end;
 function TAnchorDockHostSite.GetMinimized: Boolean;
 begin
   Result:=Assigned(FMinimizedControl);
+end;
+
+procedure TAnchorDockHostSite.CheckFormStyle;
+var
+  AControl: TControl;
+  AForm: TCustomForm absolute AControl;
+  IsMainDockForm: Boolean;
+begin
+  AControl := GetOneControl;
+  if not (AControl is TCustomForm) then Exit;
+  if AForm.FormStyle in fsAllStayOnTop then
+  begin
+    FormStyle := AForm.FormStyle;
+    Exit;
+  end;
+  if not DockMaster.FloatingWindowsOnTop then
+    Exit;
+  IsMainDockForm := (AForm = DockMaster.MainDockForm)
+                or (AForm.IsParentOf(DockMaster.MainDockForm))
+                or (GetParentForm(AForm) = DockMaster.MainDockForm);
+  if IsMainDockForm then Exit;
+  FormStyle := fsStayOnTop;
+end;
+
+procedure TAnchorDockHostSite.FirstShow(Sender: TObject);
+begin
+  if Sender <> Self then Exit;
+  CheckFormStyle;
 end;
 
 procedure TAnchorDockHostSite.ChildVisibleChanged(Sender: TObject);
@@ -4423,6 +4722,7 @@ begin
   FPages.FreeNotification(Self);
   FPages.Parent:=Self;
   FPages.Align:=alClient;
+  FPages.MultiLine:=DockMaster.MultiLinePages;
 end;
 
 procedure TAnchorDockHostSite.FreePages;
@@ -5135,7 +5435,22 @@ begin
 end;
 
 procedure TAnchorDockHostSite.DoClose(var CloseAction: TCloseAction);
+var
+  AControl: TControl;
+  AForm: TCustomForm absolute AControl;
 begin
+  if (GetSiteCount=0) and not DockMaster.FAllClosing then
+  begin
+    AControl:=GetOneControl;
+    if (AControl is TCustomForm) then
+    begin
+      AForm.Close;
+      if csDestroying in AForm.ComponentState then
+        CloseAction:=caFree
+      else if AForm.Visible then
+        CloseAction:=caNone;
+    end;
+  end;
   inherited DoClose(CloseAction);
 end;
 
@@ -6037,6 +6352,7 @@ begin
     else
       LayoutNode.BoundSplitterPos:=BoundSplitter.Top;
   end;
+  LayoutNode.PixelsPerInch:=Screen.PixelsPerInch;
 end;
 
 constructor TAnchorDockHostSite.CreateNew(AOwner: TComponent; Num: Integer);
@@ -6054,6 +6370,7 @@ begin
   DockManager:=DockMaster.ManagerClass.Create(Self);
   UseDockManager:=true;
   DragManager.RegisterDockSite(Self,true);
+  AddHandlerFirstShow(@FirstShow);
 end;
 
 destructor TAnchorDockHostSite.Destroy;
@@ -6526,17 +6843,17 @@ function TAnchorDockCloseButton.GetDrawDetails: TThemedElementDetails;
 function WindowPart: TThemedWindow;
   begin
     // no check states available
-    Result := twSmallCloseButtonNormal;
+    Result := twCloseButtonNormal;
     if not IsEnabled then
-      Result := twSmallCloseButtonDisabled
+      Result := {$IFDEF LCLWIN32}twCloseButtonDisabled{$ELSE}twSmallCloseButtonDisabled{$ENDIF}
     else
     if FState in [bsDown, bsExclusive] then
-      Result := twSmallCloseButtonPushed
+      Result := {$IFDEF LCLWIN32}twCloseButtonPushed{$ELSE}twSmallCloseButtonPushed{$ENDIF}
     else
     if FState = bsHot then
-      Result := twSmallCloseButtonHot
+      Result := {$IFDEF LCLWIN32}twCloseButtonHot{$ELSE}twSmallCloseButtonHot{$ENDIF}
     else
-      Result := twSmallCloseButtonNormal;
+      Result := {$IFDEF LCLWIN32}twCloseButtonNormal;{$ELSE}twSmallCloseButtonNormal;{$ENDIF}
   end;
 
 begin
@@ -6580,6 +6897,8 @@ begin
     inc(PreferredWidth,2);
     inc(PreferredHeight,2);
     {$ENDIF}
+    PreferredWidth:=ScaleDesignToForm(PreferredWidth);
+    PreferredHeight:=ScaleDesignToForm(PreferredHeight);
   end;
 end;
 
@@ -6619,6 +6938,8 @@ begin
     inc(PreferredWidth,2);
     inc(PreferredHeight,2);
     {$ENDIF}
+    PreferredWidth:=ScaleDesignToForm(PreferredWidth);
+    PreferredHeight:=ScaleDesignToForm(PreferredHeight);
   end;
 end;
 
@@ -7442,9 +7763,9 @@ begin
   else
     LayoutNode.NodeType:=adltnSplitterHorizontal;
   LayoutNode.Assign(Self,false,false);
-  if not Enabled then begin
+  if not Enabled then
     LayoutNode.BoundsRect:=GetSpliterBoundsWithUnminimizedDockSites;
-  end
+  LayoutNode.PixelsPerInch:=Screen.PixelsPerInch;
 end;
 
 function TAnchorDockSplitter.HasOnlyOneSibling(Side: TAnchorKind; MinPos,

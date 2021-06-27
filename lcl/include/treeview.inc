@@ -2366,11 +2366,10 @@ begin
     ok:=true;
     if ok and (Owner<>nil) and (Owner.AccessibilityOn) then
     begin
-      lAccessibleObject := FOwner.GetAccessibleObject().AddChildAccessibleObject();
+      lAccessibleObject := FOwner.GetAccessibleObject().AddChildAccessibleObject(Result);
       lAccessibleObject.AccessibleDescription := 'Item';
       lAccessibleObject.AccessibleValue := S;
       lAccessibleObject.AccessibleRole := larTreeItem;
-      lAccessibleObject.DataObject := Result;
     end;
   finally
     Include(FOwner.FStates, tvsScrollbarChanged);
@@ -2597,27 +2596,18 @@ end;
 
 procedure TTreeNodes.BeginUpdate;
 begin
-  if FUpdateCount = 0 then SetUpdateState(True);
   Inc(FUpdateCount);
-end;
-
-procedure TTreeNodes.SetUpdateState(Updating: Boolean);
-begin
-  //SendMessage(Handle, WM_SETREDRAW, Ord(not Updating), 0);
-  if Updating then
-    Include(Owner.FStates,tvsUpdating)
-  else begin
-    Exclude(Owner.FStates,tvsUpdating);
-    Include(Owner.FStates,tvsScrollbarChanged);
-    Owner.UpdateScrollbars;
-    Owner.Invalidate;
-  end;
 end;
 
 procedure TTreeNodes.EndUpdate;
 begin
   Dec(FUpdateCount);
-  if FUpdateCount = 0 then SetUpdateState(False);
+  if FUpdateCount = 0 then
+  begin
+    Include(Owner.FStates,tvsScrollbarChanged);
+    Owner.UpdateScrollbars;
+    Owner.Invalidate;
+  end;
 end;
 
 procedure TTreeNodes.FreeAllNodeData;
@@ -4873,7 +4863,7 @@ var
   Node: TTreeNode;
   InsertMarkRect: TRect;
 begin
-  if [tvsUpdating,tvsPainting] * FStates <> [] then Exit;
+  if [tvsPainting] * FStates <> [] then Exit;
   Include(FStates, tvsPainting);
   try
     if Focused then
@@ -5550,28 +5540,32 @@ end;
 procedure TCustomTreeView.Expand(Node: TTreeNode);
 begin
   UpdateScrollbars;
-  if Assigned(FOnExpanded) and not (tvsUpdating in FStates) then
+  if Assigned(FOnExpanded) then
     FOnExpanded(Self, Node);
 end;
 
 function TCustomTreeView.CanExpand(Node: TTreeNode): Boolean;
 begin
   Result := True;
-  if Assigned(FOnExpanding) and not (tvsUpdating in FStates) then
+  if Assigned(FOnExpanding)then
     FOnExpanding(Self, Node, Result);
 end;
 
 procedure TCustomTreeView.Collapse(Node: TTreeNode);
 begin
+  if csDestroying in ComponentState then
+    exit;
   UpdateScrollbars;
-  if Assigned(FOnCollapsed) and not (tvsUpdating in FStates) then
+  if Assigned(FOnCollapsed) then
     FOnCollapsed(Self, Node);
 end;
 
 function TCustomTreeView.CanCollapse(Node: TTreeNode): Boolean;
 begin
   Result := True;
-  if Assigned(FOnCollapsing) and not (tvsUpdating in FStates) then
+  if csDestroying in ComponentState then
+    exit;
+  if Assigned(FOnCollapsing) then
     FOnCollapsing(Self, Node, Result);
 end;
 
@@ -5723,11 +5717,11 @@ begin
      (CursorNode <> nil) then
   begin
     if FMouseDownOnFoldingSign then
-      // mousedown occured on expand sign -> expand/collapse
+      // mousedown occurred on expand sign -> expand/collapse
       CursorNode.Expanded := not CursorNode.Expanded
     else if (LogicalX >= CursorNode.DisplayStateIconLeft) or (tvoRowSelect in Options) then
     begin
-      // mousedown occured in text or icon -> select node and begin drag operation
+      // mousedown occurred in text or icon -> select node and begin drag operation
       {$IFDEF VerboseDrag}
       DebugLn(['TCustomTreeView.MouseDown In Text ',DbgSName(Self),' MouseCapture=',MouseCapture]);
       {$ENDIF}

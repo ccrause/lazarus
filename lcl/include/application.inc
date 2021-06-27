@@ -166,8 +166,11 @@ begin
   LCLProc.SendApplicationMessageFunction:=nil;
   OnGetApplicationName := nil;
 
-  if Application=Self then
+  if Application=Self then begin
+    Assert(CustomApplication=Application, 'TApplication.Destroy: CustomApplication is wrong.');
     Application:=nil;
+    CustomApplication:=nil;
+  end;
 end;
 
 procedure TApplication.ActivateHint(CursorPos: TPoint; CheckHintControlChange: Boolean);
@@ -956,7 +959,7 @@ procedure TApplication.UpdateVisible;
     AForm: TCustomForm;
   begin
     Result := False;
-    // how to count correct? Do we need to count TCustomForms exclude THintWindow
+    // How to count correctly? Do we need to count TCustomForms exclude THintWindow
     // or just count TForm descendants?
     for i := 0 to Screen.FormCount - 1 do
     begin
@@ -973,8 +976,8 @@ procedure TApplication.UpdateVisible;
   end;
 
 begin
-  // if there are visible forms wich shares application taskbar item then application
-  // task bar item must be visible too else hide it
+  // If there are visible forms which share application taskbar item then
+  // application task bar item must be visible, too. Otherwise hide it.
   WidgetSet.AppSetVisible(HasVisibleForms);
 end;
 

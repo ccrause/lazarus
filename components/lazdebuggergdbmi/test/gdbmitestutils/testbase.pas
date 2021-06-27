@@ -31,6 +31,11 @@ type
 
   TGDBMIDebuggerClass = class of TGDBMIDebugger;
 
+  { TTestDebuggerHelper }
+
+  TTestDebuggerHelper = class helper for TDebuggerIntf
+    procedure AddTestBreakPoint(AFilename: String; ALine: Integer; AEnabled: Boolean = True);
+  end;
 
 
   TDebuggerInfo = TExternalExeInfo;
@@ -88,7 +93,7 @@ type
       ResultText: String; ResultDBGType: TDBGType);
   public
     function EvaluateWait(const AExpression: String; var ARes: String;
-      var AResType: TDBGType; EvalFlags: TDBGEvaluateFlags = []): Boolean;
+      var AResType: TDBGType; EvalFlags: TDBGEvaluateFlags = []; ATimeOut: Integer = -1): Boolean;
   end;
 
 
@@ -163,6 +168,18 @@ begin
   Result := Debuggers;
 end;
 
+{ TTestDebuggerHelper }
+
+procedure TTestDebuggerHelper.AddTestBreakPoint(AFilename: String;
+  ALine: Integer; AEnabled: Boolean);
+begin
+  with BreakPoints.Add(AFilename, ALine, True) do begin
+    Enabled := AEnabled;
+    InitialEnabled := AEnabled;
+    EndUpdate;
+  end;
+end;
+
 { TGDBMIDebuggerForTest }
 
 procedure TGDBMIDebuggerForTest.EvalCallBack(Sender: TObject;
@@ -174,14 +191,22 @@ begin
 end;
 
 function TGDBMIDebuggerForTest.EvaluateWait(const AExpression: String;
-  var ARes: String; var AResType: TDBGType; EvalFlags: TDBGEvaluateFlags
-  ): Boolean;
+  var ARes: String; var AResType: TDBGType; EvalFlags: TDBGEvaluateFlags;
+  ATimeOut: Integer): Boolean;
+var
+  t: QWord;
 begin
+  FEvalResType := nil;
   FEvalDone := false;
+  t := GetTickCount64;
   inherited Evaluate(AExpression, @EvalCallBack, EvalFlags);
   while not FEvalDone do begin
     Application.ProcessMessages;
     sleep(5);
+    if ATimeOut > 0 then begin
+      if GetTickCount64 - t > ATimeOut then
+        break;
+    end;
   end;
   ARes := FEvalRes;
   AResType := FEvalResType;
@@ -296,33 +321,37 @@ begin
     i := high(QWord) - FStartTime + 1 + i;
 
   if FTotalGDBInternalErrorCnt > 0
-  then Result := Result + '.gdb_intern_'+IntToStr(FTotalGDBInternalErrorCnt);
+  then Result := Result + '___gdb_intern.'+IntToStr(FTotalGDBInternalErrorCnt);
   if FTotalDsErrorCrash > 0
-  then Result := Result + '.gdb_crash_'+IntToStr(FTotalDsErrorCrash);
+  then Result := Result + '___gdb_crash.'+IntToStr(FTotalDsErrorCrash);
   if FTotalClassVsRecord > 0
-  then Result := Result + '.class_rec_'+IntToStr(FTotalClassVsRecord);
+  then Result := Result + '___class_re._'+IntToStr(FTotalClassVsRecord);
 
-  Result := Result + '.t_'+ IntToStr(i div 1000);
+//  Result := Result + '___time.'+ IntToStr(i div 1000);
 end;
 
 function TGDBTestCase.StartGDB(AppDir, TestExeName: String): TGDBMIDebugger;
 begin
   Result := GdbClass.Create(DebuggerInfo.ExeName);
-  Debugger.LazDebugger := Result;
-  Result.OnDbgOutput  := @InternalDbgOutPut;
-  Result.OnFeedback := @InternalFeedBack;
-  Result.OnDbgEvent:=@InternalDbgEvent;
+  try
+    Debugger.LazDebugger := Result;
+    Result.OnDbgOutput  := @InternalDbgOutPut;
+    Result.OnFeedback := @InternalFeedBack;
+    Result.OnDbgEvent:=@InternalDbgEvent;
 
-  Debugger.InitDebuggerMonitors(Result);
+    Debugger.InitDebuggerMonitors(Result);
 
-  Result.Init;
-  if Result.State = dsError then
-    Fail(' Failed Init');
-  Result.WorkingDir := AppDir;
-  Result.FileName   := TestExeName;
-  Result.Arguments := '';
-  Result.ShowConsole := True;
-
+    Result.Init;
+    if Result.State = dsError then
+      Fail(' Failed Init');
+    Result.WorkingDir := AppDir;
+    Result.FileName   := TestExeName;
+    Result.Arguments := '';
+    Result.ShowConsole := True;
+  except
+    on e: Exception do
+      Fail('INIT Exception: '+E.Message);
+  end;
 end;
 
 procedure TGDBTestCase.CleanGdb;

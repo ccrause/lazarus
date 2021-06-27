@@ -5,7 +5,7 @@ unit GDBMIDebugInstructions;
 interface
 
 uses
-  Classes, SysUtils, StrUtils, math,
+  Classes, SysUtils, StrUtils, Math,
   // LazUtils
   LazLoggerBase, LazClasses, LazStringUtils,
   // LazDebuggerGdbmi
@@ -521,6 +521,7 @@ end;
 constructor TGDBInstruction.Create(ACommand: String; AFlags: TGDBInstructionFlags;
   ATimeOut: Integer = 0);
 begin
+  inherited Create;
   InternalCreate(ACommand, -1, -1, AFlags, ATimeOut);
   Init;
 end;
@@ -528,6 +529,7 @@ end;
 constructor TGDBInstruction.Create(ACommand: String; AThread: Integer;
   AOtherFlags: TGDBInstructionFlags; ATimeOut: Integer = 0);
 begin
+  inherited Create;
   InternalCreate(ACommand, AThread, -1,
                  AOtherFlags + [ifRequiresThread], ATimeOut);
   Init;
@@ -536,6 +538,7 @@ end;
 constructor TGDBInstruction.Create(ACommand: String; AThread, AFrame: Integer;
   AOtherFlags: TGDBInstructionFlags; ATimeOut: Integer = 0);
 begin
+  inherited Create;
   InternalCreate(ACommand, AThread, AFrame,
                  AOtherFlags + [ifRequiresThread, ifRequiresStackFrame], ATimeOut);
   Init;
@@ -578,7 +581,7 @@ type
       Result := ldGdb;
       exit;
     end;
-    if StartsStr('^done,', AData) or (AData = '^done') then begin
+    if LazStartsStr('^done,', AData) or (AData = '^done') then begin
       if FList = nil then
         FList := TGDBMINameValueList.Create(ALineData)
       else
@@ -762,7 +765,7 @@ begin
 //  "(gdb) "
 
   Result := False;
-  if StartsStr('^done,', AData) or (AData = '^done') then begin
+  if LazStartsStr('^done,', AData) or (AData = '^done') then begin
     Result := True;
     if FDone then
       HandleContentError;
@@ -824,7 +827,7 @@ begin
 //OR ^error => keep selected ?
 
   Result := False;
-  if StartsStr('^done,', AData) or (AData = '^done') then begin
+  if LazStartsStr('^done,', AData) or (AData = '^done') then begin
     Result := True;
     if FDone then
       HandleContentError;

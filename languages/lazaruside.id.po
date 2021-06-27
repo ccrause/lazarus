@@ -1731,6 +1731,10 @@ msgstr "File"
 msgid "Grid"
 msgstr "Grid"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1785,6 +1789,10 @@ msgstr "baris spasi ekstra"
 
 #: lazarusidestrconsts.dlgextsymb
 msgid "Use external debug symbols file"
+msgstr ""
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
 msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
@@ -2517,6 +2525,10 @@ msgstr "Terakhir (contoh di akhir dari sumber)"
 msgid "Lazarus directory (default for all projects)"
 msgstr "Direktori Lazarus (default untuk semua proyek)"
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 #, fuzzy
 #| msgid "Guid lines Left,Top"
@@ -3147,10 +3159,6 @@ msgstr ""
 msgid "Enable multi-caret for column selection"
 msgstr ""
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr ""
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr ""
@@ -3203,6 +3211,10 @@ msgstr "Penamaan"
 msgid "New desktop ..."
 msgstr ""
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 #, fuzzy
 #| msgid "no automatic renaming"
@@ -3215,6 +3227,10 @@ msgstr ""
 
 #: lazarusidestrconsts.dlgnobrackethighlight
 msgid "No Highlight"
+msgstr ""
+
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
 msgstr ""
 
 #: lazarusidestrconsts.dlgnotebooktabpos
@@ -3232,6 +3248,10 @@ msgstr "Jangan pisah baris setelah:"
 #| msgid "Do not split line In front of:"
 msgid "Do not split line in front of"
 msgstr "Jangan pisah baris Di depan dari:"
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
+msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
 #, fuzzy
@@ -3526,6 +3546,10 @@ msgstr "Opsi Proyek"
 #: lazarusidestrconsts.dlgprojectoptionsfor
 #, object-pascal-format
 msgid "Options for Project: %s"
+msgstr ""
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
 msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
@@ -5150,7 +5174,7 @@ msgstr ""
 msgid "Anchor top side to top side of sibling. Use BorderSpacing to set a distance. BorderSpacing of sibling is ignored."
 msgstr ""
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format, fuzzy, badformat
 #| msgid "An error occured at last startup while loading %s!%s%sLoad this project again?"
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
@@ -6066,7 +6090,7 @@ msgstr ""
 msgid "Wrong indentation"
 msgstr ""
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr ""
@@ -8655,8 +8679,16 @@ msgstr ""
 msgid "Additional search path"
 msgstr "Tambahan path pencarian"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
 msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
@@ -8690,6 +8722,14 @@ msgstr "Opsi spesifik Debugger (tergantung pada tipe dari debugger)"
 
 #: lazarusidestrconsts.lisdebugoptionsfrmduplicateexceptionname
 msgid "Duplicate Exception name"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
 msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
@@ -10183,16 +10223,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr ""
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-msgid "Reduce designer painting"
-msgstr "Kurangi penggambaran pendesain"
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-#, fuzzy
-msgctxt "lazarusidestrconsts.lisfepaintdesigneritemsonidlehint"
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr "Gambar item pendesain hanya saat menganggur (mengurangi kelebihan beban untuk komputer lambat)"
-
 #: lazarusidestrconsts.lisfile
 msgctxt "lazarusidestrconsts.lisfile"
 msgid "File"
@@ -11509,6 +11539,12 @@ msgstr ""
 msgid "&Inspect"
 msgstr ""
 
+#: lazarusidestrconsts.lisinspectaddwatch
+#, fuzzy
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr "Tambah pengawasan"
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format
 msgid "%s: class %s inherits from %s"
@@ -11840,6 +11876,7 @@ msgid "Add Data/WatchPoint"
 msgstr ""
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr "Tambah pengawasan"
 
@@ -16870,10 +16907,6 @@ msgstr "Nama Paket Tidak Benar"
 #| msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%s%sSave old package %s?"
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
 msgstr "Pengambilan paket %s akan menimpa paket %s%sdari file %s.%sPaket lama diubah.%s%sSimpan paket lama %s?"
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
-msgstr "PaketBaru"
 
 #: lazarusidestrconsts.lispkgmangpackage
 #, object-pascal-format

@@ -1684,6 +1684,10 @@ msgstr "Tiedostot"
 msgid "Grid"
 msgstr "Ristikko"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1737,6 +1741,10 @@ msgstr "Rivien välistys"
 #| msgid "Use external gdb debug symbols file"
 msgid "Use external debug symbols file"
 msgstr "Käytä ulkoista gdb-symbolitiedostoa"
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
+msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
 msgid "File extensions"
@@ -2434,6 +2442,10 @@ msgstr "Viimeinen (esim. lähdekoodin lopussa)"
 msgid "Lazarus directory (default for all projects)"
 msgstr "Lazaruksen kansio (oletus kaikille projekteille)"
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 msgid "Guide lines Left,Top"
 msgstr "Ohjausviivat vasemmalla ja ylhäällä"
@@ -3048,10 +3060,6 @@ msgstr "Navigointinäppäimet siirtävät kaikkia kursoreita"
 msgid "Enable multi-caret for column selection"
 msgstr "Salli moni-osoitin sarakevalintaan"
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr "Useita Lazarus instansseja"
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr "käynnistä aina uusi instanssi"
@@ -3104,6 +3112,10 @@ msgstr "Nimeäminen"
 msgid "New desktop ..."
 msgstr "Uusi työpöytä ..."
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 msgid "No automatic renaming"
 msgstr "Ei automaattista nimeämistä"
@@ -3116,6 +3128,10 @@ msgstr "Ei ole lisättäviä käännösyksiköitä."
 msgid "No Highlight"
 msgstr "Ei korostusta"
 
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnotebooktabpos
 msgid "Source notebook tabs position"
 msgstr "Lähdekoodieditorin välilehtien paikka"
@@ -3127,6 +3143,10 @@ msgstr "Rivi ei katkea, kun sitä edeltää"
 #: lazarusidestrconsts.dlgnotsplitlinefront
 msgid "Do not split line in front of"
 msgstr "Rivi ei katkea, kun sitä seuraa"
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
+msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
 msgctxt "lazarusidestrconsts.dlgobjinsp"
@@ -3416,6 +3436,10 @@ msgstr "Projektin asetukset"
 #, object-pascal-format
 msgid "Options for Project: %s"
 msgstr "Projektin %s asetukset"
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
+msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
 msgid "Project Files"
@@ -4946,7 +4970,7 @@ msgstr "Ankkuroi yläreuna sisarusten alareunaan. Välimatka säädetään sekä
 msgid "Anchor top side to top side of sibling. Use BorderSpacing to set a distance. BorderSpacing of sibling is ignored."
 msgstr "Ankkuroi yläreuna sisarusten yläreunaan. Käytä BorderSpacing välimatkan säätämiseen. Sisarusten BorderSpacing ei vaikuta."
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
 msgstr "Virhe esiintyi, kun avattiin projektia %s!%sAvataanko tämä projekti uudelleen?"
@@ -5831,7 +5855,7 @@ msgstr "Muuttujat"
 msgid "Wrong indentation"
 msgstr "Väärä sisennys"
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr "Keskeytys tapahtui poistettaessa%s\"%s:%s\"%s%s"
@@ -8360,8 +8384,16 @@ msgstr "Lisää keskeytys"
 msgid "Additional search path"
 msgstr "Lisähakupolku"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
 msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
@@ -8396,6 +8428,14 @@ msgstr "Virheenjäljitinkohtaiset asetukset (riippuu tyypistä)"
 #: lazarusidestrconsts.lisdebugoptionsfrmduplicateexceptionname
 msgid "Duplicate Exception name"
 msgstr "Päällekkäinen keskeytyksen nimi"
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
 msgid "Enter the name of the exception"
@@ -9857,14 +9897,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr "Tuhoisa"
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-msgid "Reduce designer painting"
-msgstr "Vähennä lomake-editorin päivittämistä"
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr "Piirrä lomake-editori vain joutoaikana (vähentää viivettä hitaalla tietokoneella)"
-
 #: lazarusidestrconsts.lisfile
 msgid "File"
 msgstr "Tiedosto"
@@ -11151,6 +11183,12 @@ msgstr "Istunnossa"
 msgid "&Inspect"
 msgstr "&Tutki"
 
+#: lazarusidestrconsts.lisinspectaddwatch
+#, fuzzy
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr "Lisää vahti"
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format
 msgid "%s: class %s inherits from %s"
@@ -11483,6 +11521,7 @@ msgid "Add Data/WatchPoint"
 msgstr "Lisää Tieto/Vahtipiste"
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr "Lisää vahti"
 
@@ -16143,10 +16182,6 @@ msgstr "Kelvoton paketin nimi"
 #, object-pascal-format
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
 msgstr "Paketin %s lataaminen korvaa paketin %s%stiedostossa %s.%sVanha paketti on muuttunut.%sTallennetaanko se %s?"
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
-msgstr ""
 
 #: lazarusidestrconsts.lispkgmangpackage
 #, object-pascal-format

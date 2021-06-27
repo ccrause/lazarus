@@ -1683,6 +1683,10 @@ msgstr "Fájlok"
 msgid "Grid"
 msgstr "Rács"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1734,6 +1738,10 @@ msgstr "Extra sorköz"
 #: lazarusidestrconsts.dlgextsymb
 msgid "Use external debug symbols file"
 msgstr "Külső hibakereső szimbólum fájl használata"
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
+msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
 msgid "File extensions"
@@ -2448,6 +2456,10 @@ msgstr "Utolsó (pl. a forráskód végén)"
 msgid "Lazarus directory (default for all projects)"
 msgstr "Lazarus könyvtára (alapértelmezett minden projekthez)"
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 msgid "Guide lines Left,Top"
 msgstr "Segédvonalak balra, fent"
@@ -3059,10 +3071,6 @@ msgstr "A navigáló billentyűk az összes beszúrási jelet mozgatják"
 msgid "Enable multi-caret for column selection"
 msgstr "Többszörös beszúrási jel engedélyezése oszlopkijelöléskor"
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr "Több Lazarus példány"
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr "Mindig új példány indítása"
@@ -3115,6 +3123,10 @@ msgstr "Elnevezések"
 msgid "New desktop ..."
 msgstr "Új felület ..."
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 msgid "No automatic renaming"
 msgstr "Nincs automatikus átnevezés"
@@ -3127,6 +3139,10 @@ msgstr "Nincsenek hozzáadható unit-ok."
 msgid "No Highlight"
 msgstr "Nincs kiemelés"
 
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnotebooktabpos
 msgid "Source notebook tabs position"
 msgstr "Forráskódszerkesztő füleinek helye"
@@ -3138,6 +3154,10 @@ msgstr "Ne legyen sortörés ez után:"
 #: lazarusidestrconsts.dlgnotsplitlinefront
 msgid "Do not split line in front of"
 msgstr "Ne legyen sortörés ez előtt:"
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
+msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
 msgctxt "lazarusidestrconsts.dlgobjinsp"
@@ -3422,6 +3442,10 @@ msgstr "Projekt beállításai"
 #, object-pascal-format
 msgid "Options for Project: %s"
 msgstr "Projekt beállításai: %s"
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
+msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
 msgid "Project Files"
@@ -4941,7 +4965,7 @@ msgstr "Felső szél horgonyzása a testvér alsó széléhez. A megtartott táv
 msgid "Anchor top side to top side of sibling. Use BorderSpacing to set a distance. BorderSpacing of sibling is ignored."
 msgstr "Felső szél horgonyzása a testvér felső széléhez. A BorderSpacing használható a távolság beállításához. A testvér BorderSpacing tulajdonsága nem számít."
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
 msgstr "Hiba történt a legutóbbi indításkor a(z) %s betöltése közben!%sÚjra megnyitja a projektet?"
@@ -5828,7 +5852,7 @@ msgstr "Változók"
 msgid "Wrong indentation"
 msgstr "Hibás behúzás"
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr "Kivétel keletkezett a következő törlése közben:%s\"%s:%s\"%s%s"
@@ -8369,9 +8393,17 @@ msgstr "Kivétel hozzáadása"
 msgid "Additional search path"
 msgstr "További keresési útvonal"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
 msgstr "Az assembler ablak automatikus bezárása ha a forrás nem található"
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
 msgid "Debugger backend"
@@ -8405,6 +8437,14 @@ msgstr "Hibakereső-függő beállítások (a hibakereső típusától függ)"
 #: lazarusidestrconsts.lisdebugoptionsfrmduplicateexceptionname
 msgid "Duplicate Exception name"
 msgstr "Ismétlődő kivételnév"
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
 msgid "Enter the name of the exception"
@@ -9876,15 +9916,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr "Végzetes"
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-msgid "Reduce designer painting"
-msgstr "A tervező sokszínűségének csökkentése"
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-msgctxt "lazarusidestrconsts.lisfepaintdesigneritemsonidlehint"
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr "Tervező elemeinek újrarajzolása csak üresjáratban (lassú számítógépek terhelésének csökkentése)"
-
 #: lazarusidestrconsts.lisfile
 msgctxt "lazarusidestrconsts.lisfile"
 msgid "File"
@@ -11208,6 +11239,12 @@ msgstr "Munkamenetben"
 msgid "&Inspect"
 msgstr "V&izsgálat"
 
+#: lazarusidestrconsts.lisinspectaddwatch
+#, fuzzy
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr "Figyelő hozzáadása"
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format
 msgid "%s: class %s inherits from %s"
@@ -11538,6 +11575,7 @@ msgid "Add Data/WatchPoint"
 msgstr "Figyelési pont hozzáadása"
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr "Figyelő hozzáadása"
 
@@ -16243,10 +16281,6 @@ msgstr "Érvénytelen csomag név"
 #, object-pascal-format
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
 msgstr "A(z) %s csomag betöltése eltávolítja a(z) %s%s csomagot a(z) %s fájlból.%sA régi csomag megváltozott.%sMenti a régi %s csomagot?"
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
-msgstr "NewPackage"
 
 #: lazarusidestrconsts.lispkgmangpackage
 #, object-pascal-format

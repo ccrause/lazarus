@@ -47,7 +47,8 @@ interface
 uses
   FpDebugDebuggerUtils, DbgIntfDebuggerBase, DbgIntfBaseTypes, FpDbgClasses,
   FpDbgUtil, FPDbgController, FpPascalBuilder, FpdMemoryTools, FpDbgInfo,
-  FpPascalParser, FpErrorMessages, Forms, fgl, math, Classes, sysutils, LazLoggerBase;
+  FpPascalParser, FpErrorMessages, FpDbgCallContextInfo, FpDbgDwarf,
+  FpDbgDwarfDataClasses, Forms, fgl, math, Classes, sysutils, {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif};
 
 type
 
@@ -57,6 +58,8 @@ type
   protected
     FDbgController: TDbgController;
     FMemManager: TFpDbgMemManager;
+    FMemReader: TDbgMemReader;
+    FMemConverter: TFpDbgMemConvertorLittleEndian;
     FLockList: TFpDbgLockList;
     FWorkQueue: TFpThreadPriorityWorkerQueue;
   end;
@@ -93,6 +96,7 @@ type
   TFpDbgDebggerThreadWorkerLinkedList = object
   private
     FNextWorker: TFpDbgDebggerThreadWorkerLinkedItem;
+    FLocked: Boolean;
   public
     procedure Add(AWorkItem: TFpDbgDebggerThreadWorkerLinkedItem); // Does not add ref / uses existing ref
     procedure ClearFinishedWorkers;
@@ -164,7 +168,6 @@ type
   protected
     procedure UpdateCallstack_DecRef(Data: PtrInt = 0); virtual; abstract;
     procedure DoExecute; override;
-    procedure DoRemovedFromLinkedList; override; // _DecRef
   end;
 
   { TFpThreadWorkerCallEntry }
@@ -176,7 +179,6 @@ type
     FParamAsString: String;
     procedure UpdateCallstackEntry_DecRef(Data: PtrInt = 0); virtual; abstract;
     procedure DoExecute; override;
-    procedure DoRemovedFromLinkedList; override; // _DecRef
   end;
 
   { TFpThreadWorkerThreads }
@@ -207,9 +209,36 @@ type
     destructor Destroy; override;
   end;
 
+  { TFpThreadWorkerModify }
+
+  TFpThreadWorkerModify = class(TFpDbgDebggerThreadWorkerLinkedItem)
+  private
+    FExpression, FNewVal: String;
+    FStackFrame, FThreadId: Integer;
+    FSuccess: Boolean;
+  protected
+    procedure DoCallback_DecRef(Data: PtrInt = 0); virtual; abstract;
+    procedure DoExecute; override;
+    property Success: Boolean read FSuccess;
+  public
+    constructor Create(ADebugger: TFpDebugDebuggerBase;
+                       //APriority: TFpThreadWorkerPriority;
+                       const AnExpression, ANewValue: String;
+                       AStackFrame, AThreadId: Integer
+                      );
+    function DebugText: String; override;
+  end;
+
   { TFpThreadWorkerEvaluate }
 
   TFpThreadWorkerEvaluate = class(TFpDbgDebggerThreadWorkerLinkedItem)
+  private
+    FAllowFunctions: Boolean;
+    FExpressionScope: TFpDbgSymbolScope;
+
+    function DoWatchFunctionCall(AnExpressionPart: TFpPascalExpressionPart;
+      AFunctionValue, ASelfValue: TFpValue; AParams: TFpPascalExpressionPartList;
+      out AResult: TFpValue; var AnError: TFpError): boolean;
   protected
     function EvaluateExpression(const AnExpression: String;
                                 AStackFrame, AThreadId: Integer;
@@ -263,6 +292,7 @@ type
                        AnEvalFlags: TDBGEvaluateFlags;
                        ACallback: TDBGEvaluateResultCallback
                       );
+    destructor Destroy; override;
     procedure Abort;
   end;
 
@@ -375,7 +405,7 @@ end;
 
 procedure TFpDbgDebggerThreadWorkerLinkedItem.DoRemovedFromLinkedList;
 begin
-  //
+  UnQueue_DecRef;
 end;
 
 { TFpDbgDebggerThreadWorkerLinkedList }
@@ -392,14 +422,18 @@ var
   WorkItem, w: TFpDbgDebggerThreadWorkerLinkedItem;
 begin
   assert(system.ThreadID = classes.MainThreadID, 'TFpDbgDebggerThreadWorkerLinkedList.ClearFinishedCountWorkers: system.ThreadID = classes.MainThreadID');
+  if FLocked then
+    exit;
+  FLocked := True;
   WorkItem := FNextWorker;
   while (WorkItem <> nil) and (WorkItem.RefCount = 1) do begin
     w := WorkItem;
     WorkItem := w.FNextWorker;
-    //w.DoRemovedFromLinkedList;
+    w.DoRemovedFromLinkedList;
     w.DecRef;
   end;
   FNextWorker := WorkItem;
+  FLocked := False;
 end;
 
 procedure TFpDbgDebggerThreadWorkerLinkedList.RequestStopForWorkers;
@@ -418,9 +452,11 @@ var
   WorkItem, w: TFpDbgDebggerThreadWorkerLinkedItem;
 begin
   assert(system.ThreadID = classes.MainThreadID, 'TFpDbgDebggerThreadWorkerLinkedList.WaitForWorkers: system.ThreadID = classes.MainThreadID');
+  assert(not FLocked, 'TFpDbgDebggerThreadWorkerLinkedList.WaitForWorkers: not FLocked');
   if AStop then
     RequestStopForWorkers;
 
+  FLocked := True;
   WorkItem := FNextWorker;
   FNextWorker := nil;
   while (WorkItem <> nil) do begin
@@ -433,6 +469,7 @@ begin
     w.DoRemovedFromLinkedList;
     w.DecRef;
   end;
+  FLocked := False;
 end;
 
 { TFpThreadWorkerControllerRun }
@@ -562,12 +599,6 @@ begin
   Queue(@UpdateCallstack_DecRef);
 end;
 
-procedure TFpThreadWorkerCallStackCount.DoRemovedFromLinkedList;
-begin
-  inherited DoRemovedFromLinkedList;
-  UpdateCallstack_DecRef;  // This trigger PrepareRange => but that still needs to be exec in thread? (or wait for lock)
-end;
-
 { TFpThreadWorkerCallEntry }
 
 procedure TFpThreadWorkerCallEntry.DoExecute;
@@ -596,12 +627,6 @@ begin
   end;
 
   Queue(@UpdateCallstackEntry_DecRef);
-end;
-
-procedure TFpThreadWorkerCallEntry.DoRemovedFromLinkedList;
-begin
-  inherited DoRemovedFromLinkedList;
-  UpdateCallstackEntry_DecRef;
 end;
 
 { TFpThreadWorkerThreads }
@@ -681,14 +706,245 @@ begin
   inherited Destroy;
 end;
 
+{ TFpThreadWorkerModify }
+
+procedure TFpThreadWorkerModify.DoExecute;
+var
+  APasExpr: TFpPascalExpression;
+  ResValue: TFpValue;
+  ExpressionScope: TFpDbgSymbolScope;
+  i64: int64;
+  c64: QWord;
+begin
+  FSuccess := False;
+  ExpressionScope := FDebugger.FDbgController.CurrentProcess.FindSymbolScope(FThreadId, FStackFrame);
+  if ExpressionScope = nil then
+    exit;
+
+  APasExpr := TFpPascalExpression.Create(FExpression, ExpressionScope);
+  try
+    APasExpr.ResultValue; // trigger full validation
+    if not APasExpr.Valid then
+      exit;
+
+    ResValue := APasExpr.ResultValue;
+    if ResValue = nil then
+      exit;
+
+    case ResValue.Kind of
+      skInteger:   if TryStrToInt64(FNewVal, i64) then ResValue.AsInteger := i64;
+      skCardinal:  if TryStrToQWord(FNewVal, c64) then ResValue.AsCardinal := c64;
+      skBoolean:   case LowerCase(trim(FNewVal)) of
+          'true':  ResValue.AsBool := True;
+          'false': ResValue.AsBool := False;
+        end;
+      skChar:      ResValue.AsString := FNewVal;
+      skEnum:      ResValue.AsString := FNewVal;
+      skSet:       ResValue.AsString := FNewVal;
+      skPointer:   if TryStrToQWord(FNewVal, c64) then ResValue.AsCardinal := c64;
+      skFloat: ;
+      skCurrency: ;
+      skVariant: ;
+    end;
+
+
+  finally
+    APasExpr.Free;
+    ExpressionScope.ReleaseReference;
+    Queue(@DoCallback_DecRef);
+  end;
+end;
+
+constructor TFpThreadWorkerModify.Create(ADebugger: TFpDebugDebuggerBase;
+  const AnExpression, ANewValue: String; AStackFrame, AThreadId: Integer);
+begin
+  inherited Create(ADebugger, twpModify);
+  FExpression := AnExpression;
+  FNewVal := ANewValue;
+  FStackFrame := AStackFrame;
+  FThreadId := AThreadId;
+end;
+
+function TFpThreadWorkerModify.DebugText: String;
+begin
+  Result := inherited DebugText;
+end;
+
 { TFpThreadWorkerEvaluate }
+
+function TFpThreadWorkerEvaluate.DoWatchFunctionCall(
+  AnExpressionPart: TFpPascalExpressionPart; AFunctionValue,
+  ASelfValue: TFpValue; AParams: TFpPascalExpressionPartList; out
+  AResult: TFpValue; var AnError: TFpError): boolean;
+var
+  FunctionSymbolData, FunctionSymbolType, FunctionResultSymbolType,
+  TempSymbol: TFpSymbol;
+  ParamSymbol, ExprParamVal: TFpValue;
+  ProcAddress: TFpDbgMemLocation;
+  FunctionResultDataSize: TFpDbgValueSize;
+  ParameterSymbolArr: array of TFpSymbol;
+  CallContext: TFpDbgInfoCallContext;
+  PCnt, i, FoundIdx, ItemsOffs: Integer;
+  rk: TDbgSymbolKind;
+begin
+  Result := False;
+  if FExpressionScope = nil then
+    exit;
+(*
+   AFunctionValue =>  TFpValueDwarfSubroutine  // gotten from <== TFpSymbolDwarfDataProc.GetValueObject;
+                   .DataSympol = TFpSymbolDwarfDataProc  from which we were created
+                   .TypeSymbol = TFpSymbolDwarfTypeProc.TypeInfo : TFpSymbolDwarfType
+
+   AFunctionFpSymbol => TFpSymbolDwarfTypeProc;
+   val
+*)
+
+  FunctionSymbolData := AFunctionValue.DbgSymbol;  // AFunctionValue . FDataSymbol
+  FunctionSymbolType := FunctionSymbolData.TypeInfo;
+  FunctionResultSymbolType := FunctionSymbolType.TypeInfo;
+
+  if not (FunctionResultSymbolType.Kind in [skInteger, skCurrency, skPointer, skEnum,
+      skCardinal, skBoolean, skChar, skClass])
+  then begin
+    DebugLn(['Error result kind  ', dbgs(FunctionSymbolType.Kind)]);
+    AnError := CreateError(fpErrAnyError, ['Result type of function not supported']);
+    exit;
+  end;
+
+  // TODO: pass a value object
+  if (not FunctionResultSymbolType.ReadSize(nil, FunctionResultDataSize)) or
+     (FunctionResultDataSize >  FDebugger.FMemManager.RegisterSize(0))
+  then begin
+    DebugLn(['Error result size', dbgs(FunctionResultDataSize)]);
+    //ReturnMessage := 'Unable to call function. The size of the function-result exceeds the content-size of a register.';
+    AnError := CreateError(fpErrAnyError, ['Result type of function not supported']);
+    exit;
+  end;
+
+  // check params
+
+  ProcAddress := AFunctionValue.DataAddress;
+  if not IsReadableLoc(ProcAddress) then begin
+    DebugLn(['Error proc addr']);
+    AnError := CreateError(fpErrAnyError, ['Unable to calculate function address']);
+    exit;
+  end;
+
+  PCnt := AParams.Count;
+  ItemsOffs := 0;
+  if ASelfValue <> nil then begin
+    inc(PCnt);
+    ItemsOffs := -1; // In the loop "i = 0" is the self object. So "i = 1" should be AParams[0]
+  end;
+
+  SetLength(ParameterSymbolArr, PCnt);
+    for i := 0 to High(ParameterSymbolArr) do
+      ParameterSymbolArr[i] := nil;
+  FoundIdx := 0;
+  try
+    for i := 0 to FunctionSymbolType.NestedSymbolCount - 1 do begin
+      TempSymbol := FunctionSymbolType.NestedSymbol[i];
+      if sfParameter in TempSymbol.Flags then begin
+        if FoundIdx >= PCnt then begin
+          DebugLn(['Error param count']);
+          AnError := CreateError(fpErrAnyError, ['wrong amount of parameters']);
+          exit;
+          //ReturnMessage := Format('Unable to call function%s. Not enough parameters supplied.', [OutputFunctionName]);
+        end;
+        // Type Compatibility
+        // TODO: more checks for type compatibility
+        if (ASelfValue <> nil) and (FoundIdx = 0) then begin
+          // TODO: check self param
+        end
+        else begin
+          ExprParamVal := AParams.Items[FoundIdx + ItemsOffs].ResultValue;
+          if (ExprParamVal = nil) then begin
+            DebugLn('Internal error for arg %d ', [FoundIdx]);
+            AnError := AnExpressionPart.Expression.Error;
+            if not IsError(AnError) then
+              AnError := CreateError(fpErrAnyError, ['internal error, computing parameter']);
+            exit;
+          end;
+          rk := ExprParamVal.Kind;
+          if not (rk in [skInteger, {skCurrency,} skPointer, skEnum, skCardinal, skBoolean, skChar, skClass]) then begin
+            DebugLn('Error not supported kind arg %d : %s ', [FoundIdx, dbgs(rk)]);
+            AnError := CreateError(fpErrAnyError, ['parameter type not supported']);
+            exit;
+          end;
+          if (TempSymbol.Kind <> rk) and
+             ( (TempSymbol.Kind in [skInteger, skCardinal]) <> (rk in [skInteger, skCardinal]) )
+          then begin
+            DebugLn('Error kind mismatch for arg %d : %s <> %s', [FoundIdx, dbgs(TempSymbol.Kind), dbgs(rk)]);
+            AnError := CreateError(fpErrAnyError, ['wrong type for parameter']);
+            exit;
+          end;
+        end;
+        if not IsTargetOrRegNotNil(FDebugger.FDbgController.CurrentProcess.CallParamDefaultLocation(FoundIdx)) then begin
+          DebugLn('error to many args / not supported / arg > %d ', [FoundIdx]);
+          AnError := CreateError(fpErrAnyError, ['too many parameter / not supported']);
+          exit;
+        end;
+        TempSymbol.AddReference;
+        ParameterSymbolArr[FoundIdx] := TempSymbol;
+        inc(FoundIdx)
+      end;
+    end;
+    if FoundIdx <> PCnt then begin
+      DebugLn(['Error param count']);
+      AnError := CreateError(fpErrAnyError, ['wrong amount of parameters']);
+      exit;
+    end;
+
+
+    CallContext := FDebugger.FDbgController.Call(ProcAddress, FExpressionScope.LocationContext,
+      FDebugger.FMemReader, FDebugger.FMemConverter);
+
+    try
+      for i := 0 to High(ParameterSymbolArr) do begin
+        ParamSymbol := CallContext.CreateParamSymbol(i, ParameterSymbolArr[i], FDebugger.FDbgController.CurrentProcess);
+        try
+          if (ASelfValue <> nil) and (i = 0) then
+            ParamSymbol.AsCardinal := ASelfValue.AsCardinal
+          else
+            ParamSymbol.AsCardinal := AParams.Items[i + ItemsOffs].ResultValue.AsCardinal;
+          if IsError(ParamSymbol.LastError) then begin
+            DebugLn('Internal error for arg %d ', [i]);
+            AnError := ParamSymbol.LastError;
+            exit;
+          end;
+        finally
+          ParamSymbol.ReleaseReference;
+        end;
+      end;
+
+      FDebugger.FDbgController.ProcessLoop;
+
+      if not CallContext.IsValid then begin
+        DebugLn(['Error in call ',CallContext.Message]);
+        //ReturnMessage := CallContext.Message;
+        exit;
+      end;
+
+      AResult := CallContext.CreateParamSymbol(-1, FunctionSymbolType,
+        FDebugger.FDbgController.CurrentProcess, FunctionSymbolData.Name);
+      Result := AResult <> nil;
+    finally
+      CallContext.ReleaseReference;
+    end;
+  finally
+    for i := 0 to High(ParameterSymbolArr) do
+      if ParameterSymbolArr[i] <> nil then
+        ParameterSymbolArr[i].ReleaseReference;
+  end;
+
+
+end;
 
 function TFpThreadWorkerEvaluate.EvaluateExpression(const AnExpression: String;
   AStackFrame, AThreadId: Integer; ADispFormat: TWatchDisplayFormat;
   ARepeatCnt: Integer; AnEvalFlags: TDBGEvaluateFlags; out AResText: String;
   out ATypeInfo: TDBGType): Boolean;
 var
-  WatchScope: TFpDbgSymbolScope;
   APasExpr, PasExpr2: TFpPascalExpression;
   PrettyPrinter: TFpPascalPrettyPrinter;
   ResValue: TFpValue;
@@ -698,14 +954,15 @@ begin
   AResText := '';
   ATypeInfo := nil;
 
-  WatchScope := FDebugger.FDbgController.CurrentProcess.FindSymbolScope(AThreadId, AStackFrame);
-  if WatchScope = nil then
+  FExpressionScope := FDebugger.FDbgController.CurrentProcess.FindSymbolScope(AThreadId, AStackFrame);
+  if FExpressionScope = nil then
     exit;
 
-  APasExpr := nil;
   PrettyPrinter := nil;
+  APasExpr := TFpPascalExpression.Create(AnExpression, FExpressionScope);
   try
-    APasExpr := TFpPascalExpression.Create(AnExpression, WatchScope);
+    if FAllowFunctions and (dfEvalFunctionCalls in FDebugger.EnabledFeatures) then
+      APasExpr.OnFunctionCall  := @DoWatchFunctionCall;
     APasExpr.ResultValue; // trigger full validation
     if not APasExpr.Valid then begin
       AResText := ErrorHandler.ErrorAsString(APasExpr.Error);
@@ -724,7 +981,7 @@ begin
        (not IsError(ResValue.LastError)) and (defClassAutoCast in AnEvalFlags)
     then begin
       if ResValue.GetInstanceClassName(CastName) then begin
-        PasExpr2 := TFpPascalExpression.Create(CastName+'('+AnExpression+')', WatchScope);
+        PasExpr2 := TFpPascalExpression.Create(CastName+'('+AnExpression+')', FExpressionScope);
         PasExpr2.ResultValue;
         if PasExpr2.Valid then begin
           APasExpr.Free;
@@ -743,8 +1000,8 @@ begin
     if StopRequested then
       exit;
 
-    PrettyPrinter := TFpPascalPrettyPrinter.Create(WatchScope.SizeOfAddress);
-    PrettyPrinter.Context := WatchScope.LocationContext;
+    PrettyPrinter := TFpPascalPrettyPrinter.Create(FExpressionScope.SizeOfAddress);
+    PrettyPrinter.Context := FExpressionScope.LocationContext;
 
     if defNoTypeInfo in AnEvalFlags then
       Result := PrettyPrinter.PrintValue(AResText, ResValue, ADispFormat, ARepeatCnt)
@@ -772,7 +1029,7 @@ begin
   finally
     PrettyPrinter.Free;
     APasExpr.Free;
-    WatchScope.ReleaseReference;
+    FExpressionScope.ReleaseReference;
   end;
 end;
 
@@ -796,6 +1053,8 @@ begin
   FDispFormat := ADispFormat;
   FRepeatCnt := ARepeatCnt;
   FEvalFlags := AnEvalFlags;
+  if (defAllowFunctionCall in AnEvalFlags) then
+    FAllowFunctions := True;
   FRes := False;
 end;
 
@@ -811,23 +1070,39 @@ end;
 procedure TFpThreadWorkerCmdEval.DoCallback_DecRef(Data: PtrInt);
 var
   CB: TDBGEvaluateResultCallback;
+  Dbg: TFpDebugDebuggerBase;
+  Res: Boolean;
+  ResText: String;
+  ResDbgType: TDBGType;
 begin
   assert(system.ThreadID = classes.MainThreadID, 'TFpThreadWorkerCmdEval.DoCallback_DecRef: system.ThreadID = classes.MainThreadID');
+  CB := nil;
   try
     if FEvalFlags * [defNoTypeInfo, defSimpleTypeInfo, defFullTypeInfo] = [defNoTypeInfo] then
       FreeAndNil(FResText);
 
-    if FCallback <> nil then begin
+    if (FCallback <> nil) then begin
+      // All to local vars, because SELF may be destroyed before/while the callback happens
       CB := FCallback;
+      Dbg := FDebugger;
+      Res := FRes;
+      ResText := FResText;
+      ResDbgType := FResDbgType;
+      FResDbgType := nil; // prevent from being freed => will be freed in callback
       FCallback := nil; // Ensure callback is never called a 2nd time (e.g. if Self.Abort is called, while in Callback)
-      CB(Self, FRes, FResText, FResDbgType);
-      // If Abort was called (during CB), then self is now invalid
-      // Abort would be called, if a new Evaluate Request is made. FEvalWorkItem<>nil
+      (* We cannot call Callback here, because ABORT can be called, and prematurely call UnQueue_DecRef,
+         removing the last ref to this object *)
     end;
   except
   end;
 
   UnQueue_DecRef;
+
+  // Self may now be invalid, unless FDebugger.FEvalWorkItem still has a reference.
+  // Abort may be called (during CB), removing this refence.
+  // Abort would be called, if a new Evaluate Request is made. FEvalWorkItem<>nil
+  if CB <> nil then
+    CB(Dbg, Res, ResText, ResDbgType);
 end;
 
 procedure TFpThreadWorkerCmdEval.DoExecute;
@@ -844,6 +1119,12 @@ begin
   inherited Create(ADebugger, APriority, AnExpression, AStackFrame, AThreadId, wdfDefault, 0,
     AnEvalFlags);
   FCallback := ACallback;
+end;
+
+destructor TFpThreadWorkerCmdEval.Destroy;
+begin
+  inherited Destroy;
+  FreeAndNil(FResDbgType);
 end;
 
 procedure TFpThreadWorkerCmdEval.Abort;

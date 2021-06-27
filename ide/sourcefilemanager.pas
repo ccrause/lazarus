@@ -33,18 +33,12 @@ interface
 
 uses
   Classes, SysUtils, typinfo, math, fpjson, Laz_AVL_Tree,
-  {$IF FPC_FULLVERSION>30004}
-  StrUtils, // StartsStr
-  {$ENDIF}
   // LCL
   Controls, Forms, Dialogs, LCLIntf, LCLType, LclStrConsts,
   LResources, LCLMemManager,
   // LazUtils
-  LConvEncoding, LazFileCache, FileUtil, LazFileUtils, LazLoggerBase, LazUtilities,
-  {$IF FPC_FULLVERSION=30004}
-  LazStringUtils, // StartsStr
-  {$ENDIF}
-  LazUTF8, LazTracer, AvgLvlTree,
+  LConvEncoding, LazFileCache, FileUtil, LazFileUtils, LazLoggerBase,
+  LazUtilities, LazStringUtils, LazUTF8, LazTracer, AvgLvlTree,
   // Codetools
   {$IFDEF IDE_MEM_CHECK}
   MemCheck,
@@ -55,7 +49,7 @@ uses
   NewItemIntf, ProjectIntf, PackageIntf, PackageDependencyIntf, IDEExternToolIntf,
   // IdeIntf
   IDEDialogs, PropEdits, IDEMsgIntf, LazIDEIntf, MenuIntf, IDEWindowIntf, FormEditingIntf,
-  ObjectInspector, ComponentReg, SrcEditorIntf, EditorSyntaxHighlighterDef,
+  ObjectInspector, ComponentReg, SrcEditorIntf, EditorSyntaxHighlighterDef, UnitResources,
   // IDE
   IDEProcs, DialogProcs, IDEProtocol, LazarusIDEStrConsts, NewDialog, NewProjectDlg,
   MainBase, MainBar, MainIntf, Project, ProjectDefs, ProjectInspector, CompilerOptions,
@@ -222,8 +216,8 @@ function FindSourceFileImpl(const AFilename, BaseDirectory: string;
                             Flags: TFindSourceFlags): string;
 function FindUnitsOfOwnerImpl(TheOwner: TObject; Flags: TFindUnitsOfOwnerFlags): TStrings;
 // project
-function AddUnitToProject(const AEditor: TSourceEditorInterface): TModalResult;
 function AddActiveUnitToProject: TModalResult;
+function AddUnitToProject(const AEditor: TSourceEditorInterface): TModalResult;
 function RemoveFromProjectDialog: TModalResult;
 function InitNewProject(ProjectDesc: TProjectDescriptor): TModalResult;
 function InitOpenedProjectFile(AFileName: string; Flags: TOpenFlags): TModalResult;
@@ -250,7 +244,6 @@ function LoadLFM(AnUnitInfo: TUnitInfo; LFMBuf: TCodeBuffer;
                    CloseFlags: TCloseFlags): TModalResult;
 function OpenComponent(const UnitFilename: string; OpenFlags: TOpenFlags;
     CloseFlags: TCloseFlags; out Component: TComponent): TModalResult;
-function UpdateUnitInfoResourceBaseClass(AnUnitInfo: TUnitInfo; Quiet: boolean): boolean;
 function CloseUnitComponent(AnUnitInfo: TUnitInfo; Flags: TCloseFlags): TModalResult;
 function CloseDependingUnitComponents(AnUnitInfo: TUnitInfo;
                                       Flags: TCloseFlags): TModalResult;
@@ -866,7 +859,7 @@ procedure TFileOpener.CheckInternalFile;
 var
   NewBuf: TCodeBuffer;
 begin
-  if StartsStr(EditorMacroVirtualDrive, FFileName) then
+  if LazStartsStr(EditorMacroVirtualDrive, FFileName) then
   begin
     FUnitIndex:=Project1.IndexOfFilename(FFilename);
     if (FUnitIndex < 0) then begin
@@ -1760,17 +1753,21 @@ begin
   MainIDE.SaveEnvironment;
 end;
 
+function AddActiveUnitToProject: TModalResult;
+begin
+  Result := AddUnitToProject(nil);
+end;
+
 function AddUnitToProject(const AEditor: TSourceEditorInterface): TModalResult;
 var
   ActiveSourceEditor: TSourceEditor;
   ActiveUnitInfo: TUnitInfo;
-  s, ShortUnitName, LFMFilename, LFMType, LFMComponentName, LFMClassName: string;
+  s, ShortUnitName: string;
   OkToAdd, IsPascal: boolean;
   Owners: TFPList;
   i: Integer;
   APackage: TLazPackage;
   MsgResult: TModalResult;
-  LFMCode: TCodeBuffer;
 begin
   Result:=mrCancel;
   if AEditor<>nil then
@@ -1871,28 +1868,7 @@ begin
 
   if Project1.AutoCreateForms and IsPascal
   and (pfMainUnitHasCreateFormStatements in Project1.Flags) then
-  begin
     UpdateUnitInfoResourceBaseClass(ActiveUnitInfo,true);
-    if ActiveUnitInfo.ResourceBaseClass in [pfcbcForm,pfcbcCustomForm,pfcbcDataModule] then
-    begin
-      LFMFilename:=ActiveUnitInfo.UnitResourceFileformat.GetUnitResourceFilename(ActiveUnitInfo.Filename,true);
-      if LoadCodeBuffer(LFMCode,LFMFilename,[lbfUpdateFromDisk],false)=mrOk then
-      begin
-        // read lfm header
-        ReadLFMHeader(LFMCode.Source,LFMType,LFMComponentName,LFMClassName);
-        if (LFMComponentName<>'')
-        and (LFMClassName<>'') then begin
-          if IDEMessageDialog(lisAddToStartupComponents,
-            Format(lisShouldTheComponentBeAutoCreatedWhenTheApplicationS, [
-              LFMComponentName]),
-            mtInformation,[mbYes,mbNo])=mrYes then
-          begin
-            Project1.AddCreateFormToProjectFile(LFMClassName,LFMComponentName);
-          end;
-        end;
-      end;
-    end;
-  end;
 end;
 
 procedure UpdateSourceNames;
@@ -2190,7 +2166,7 @@ begin
           LRSFilename:=ChangeFileExt(NewUnitInfo.Filename,'.lrs');
           CodeToolBoss.CreateFile(LRSFilename);
         end;
-        if (NewUnitInfo.Component is TCustomForm)
+        if ((NewUnitInfo.Component is TCustomForm) or (NewUnitInfo.Component is TDataModule))
         and NewFileDescriptor.UseCreateFormStatements
         and NewUnitInfo.IsPartOfProject
         and AProject.AutoCreateForms
@@ -2407,7 +2383,7 @@ begin
 
   if (uifInternalFile in AnUnitInfo.Flags) then
   begin
-    if StartsStr(EditorMacroVirtualDrive, AnUnitInfo.Filename) then
+    if LazStartsStr(EditorMacroVirtualDrive, AnUnitInfo.Filename) then
     begin
       // save to macros
       EMacro := MacroListViewer.MacroByFullName(AnUnitInfo.Filename);
@@ -3539,11 +3515,6 @@ begin
   end;
 end;
 
-function AddActiveUnitToProject: TModalResult;
-begin
-  Result := AddUnitToProject(nil);
-end;
-
 function RemoveFromProjectDialog: TModalResult;
 var
   ViewUnitEntries: TViewUnitEntries;
@@ -3670,22 +3641,18 @@ var
 begin
   EditorInfoIndex := 0;
   SourceEditorManager.IncUpdateLock;
+  Project1.BeginUpdate(true);
   try
-    Project1.BeginUpdate(true);
-    try
-      // call ProjectOpening handlers
-      HandlerResult:=MainIDE.DoCallProjectChangedHandler(lihtProjectOpening, Project1);
-      if ProjInspector<>nil then
-        ProjInspector.LazProject:=Project1;
+    // call ProjectOpening handlers
+    HandlerResult:=MainIDE.DoCallProjectChangedHandler(lihtProjectOpening, Project1);
+    if ProjInspector<>nil then
+      ProjInspector.LazProject:=Project1;
 
-      // read project info file
-      {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('InitOpenedProjectFile B3');{$ENDIF}
-      Project1.ReadProject(AFilename, EnvironmentOptions.BuildMatrixOptions, True);
-      {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('InitOpenedProjectFile B4');{$ENDIF}
-      Result:=CompleteLoadingProjectInfo;
-    finally
-      Project1.EndUpdate;
-    end;
+    // read project info file
+    {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('InitOpenedProjectFile B3');{$ENDIF}
+    Project1.ReadProject(AFilename, EnvironmentOptions.BuildMatrixOptions, True);
+    {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('InitOpenedProjectFile B4');{$ENDIF}
+    Result:=CompleteLoadingProjectInfo;
     {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('InitOpenedProjectFile B5');{$ENDIF}
     if Result<>mrOk then exit;
 
@@ -3792,11 +3759,11 @@ begin
     end;
 
     Project1.UpdateAllVisibleUnits;
-
     IncreaseCompilerParseStamp;
     IDEProtocolOpts.LastProjectLoadingCrashed := False;
     Result:=mrOk;
   finally
+    Project1.EndUpdate;
     SourceEditorManager.DecUpdateLock;
     if (Result<>mrOk) and (Project1<>nil) then begin
       // mark all files, that are left to open as unloaded:
@@ -4520,7 +4487,8 @@ begin
 
   NewUnitInfo.ComponentName:=NewComponent.Name;
   NewUnitInfo.ComponentResourceName:=NewUnitInfo.ComponentName;
-  if UseCreateFormStatements and (NewComponent is TCustomForm)
+  if UseCreateFormStatements
+  and ((NewComponent is TCustomForm) or (NewComponent is TDataModule))
   and NewUnitInfo.IsPartOfProject
   and Project1.AutoCreateForms
   and (pfMainUnitHasCreateFormStatements in Project1.Flags) then
@@ -5353,28 +5321,20 @@ end;
 function RenameUnit(AnUnitInfo: TUnitInfo; NewFilename, NewUnitName: string;
   var LFMCode, LRSCode: TCodeBuffer): TModalResult;
 var
-  NewLFMFilename: String;
-  OldSourceCode: String;
   NewSource: TCodeBuffer;
-  NewFilePath: String;
-  NewLRSFilePath: String;
-  OldFilePath: String;
-  OldLRSFilePath: String;
-  OldFilename: String;
-  NewLRSFilename: String;
+  NewLFMFilename, NewLRSFilename: String;
+  NewFilePath, NewLRSFilePath: String;
+  OldFilename, OldLFMFilename, OldLRSFilename, OldPPUFilename: String;
+  OldFilePath, OldLRSFilePath: String;
+  OldSourceCode, OldUnitPath: String;
+  AmbiguousFilename, OutDir, S: string;
   NewHighlighter: TLazSyntaxHighlighter;
   AmbiguousFiles: TStringList;
-  AmbiguousText: string;
   i: Integer;
-  AmbiguousFilename: String;
-  OldUnitPath: String;
-  OldLFMFilename: String;
-  OldLRSFilename: String;
-  OldPPUFilename: String;
-  OutDir: string;
   Owners: TFPList;
   OldFileExisted: Boolean;
   ConvTool: TConvDelphiCodeTool;
+  AEditor: TSourceEditor;
 begin
   // Project is marked as changed already here.
   Project1.BeginUpdate(true);
@@ -5528,10 +5488,16 @@ begin
     else
       Project1.SessionModified:=true;
     AnUnitInfo.ClearModifieds;
-    for i := 0 to AnUnitInfo.EditorInfoCount -1 do
-      if AnUnitInfo.EditorInfo[i].EditorComponent <> nil then
-        TSourceEditor(AnUnitInfo.EditorInfo[i].EditorComponent).CodeBuffer := NewSource;
+    for i := 0 to AnUnitInfo.EditorInfoCount -1 do begin
+      AEditor := TSourceEditor(AnUnitInfo.EditorInfo[i].EditorComponent);
+      if AEditor <> nil then begin
         // the code is not changed, therefore the marks are kept
+        AEditor.CodeBuffer := NewSource;
+        // change unitname on SourceNotebook
+        S := CreateSrcEditPageName(NewUnitName, AnUnitInfo.Filename, AEditor);
+        AEditor.PageName := S;
+      end;
+    end;
 
     // change unitname in lpi and in main source file
     AnUnitInfo.Unit_Name:=NewUnitName;
@@ -5542,10 +5508,6 @@ begin
       then
         DebugLn(['RenameUnit CodeToolBoss.RenameMainInclude failed: AnUnitInfo.Source="',AnUnitInfo.Source,'" ResourceCode="',ExtractFilename(LRSCode.Filename),'"']);
     end;
-
-    // change unitname on SourceNotebook
-    if AnUnitInfo.OpenEditorInfoCount > 0 then
-      UpdateSourceNames;
 
     // change syntax highlighter
     NewHighlighter:=FilenameToLazSyntaxHighlighter(NewFilename);
@@ -5579,7 +5541,6 @@ begin
     OldFileExisted:=FilenameIsAbsolute(OldFilename) and FileExistsUTF8(OldFilename);
 
     // delete ambiguous files
-    NewFilePath:=ExtractFilePath(NewFilename);
     AmbiguousFiles:=
       FindFilesCaseInsensitive(NewFilePath,ExtractFilename(NewFilename),true);
     if AmbiguousFiles<>nil then begin
@@ -5588,11 +5549,11 @@ begin
         and (CompareFilenames(OldFilePath,NewFilePath)=0)
         and (CompareFilenames(AmbiguousFiles[0],ExtractFilename(OldFilename))=0)
         then
-          AmbiguousText:=Format(lisDeleteOldFile, [ExtractFilename(OldFilename)])
+          S:=Format(lisDeleteOldFile, [ExtractFilename(OldFilename)])
         else
-          AmbiguousText:=Format(lisThereAreOtherFilesInTheDirectoryWithTheSameName,
+          S:=Format(lisThereAreOtherFilesInTheDirectoryWithTheSameName,
                           [LineEnding, LineEnding, AmbiguousFiles.Text, LineEnding]);
-        Result:=IDEMessageDialog(lisAmbiguousFilesFound, AmbiguousText,
+        Result:=IDEMessageDialog(lisAmbiguousFilesFound, S,
           mtWarning,[mbYes,mbNo,mbAbort]);
         if Result=mrAbort then exit;
         if Result=mrYes then begin
@@ -5685,7 +5646,7 @@ begin
                 OutDir:=TLazPackage(Owners[i]).CompilerOptions.GetUnitOutPath(false);
               end;
               if (OutDir<>'') and FilenameIsAbsolute(OutDir) then begin
-                OldPPUFilename:=AppendPathDelim(OutDir)+ChangeFileExt(ExtractFilenameOnly(OldFilename),'.ppu');
+                OldPPUFilename:=AppendPathDelim(OutDir)+ChangeFileExt(ExtractFilename(OldFilename),'.ppu');
                 if FileExistsUTF8(OldPPUFilename) then begin
                   Result:=DeleteFileInteractive(OldPPUFilename,[mbAbort]);
                   if Result=mrAbort then exit;
@@ -6168,7 +6129,8 @@ begin
         end;
         {$ENDIF}
 
-        AnUnitInfo.ResourceBaseClass:=GetComponentBaseClass(NewComponent.ClassType);
+        if NewComponent<>nil then
+          AnUnitInfo.ResourceBaseClass:=GetComponentBaseClass(NewComponent.ClassType);
 
         Project1.InvalidateUnitComponentDesignerDependencies;
         AnUnitInfo.Component:=NewComponent;
@@ -6346,145 +6308,44 @@ begin
     Result:=mrCancel;
 end;
 
-function UpdateUnitInfoResourceBaseClass(AnUnitInfo: TUnitInfo; Quiet: boolean): boolean;
-var
-  LFMFilename, LFMClassName, LFMType, Ancestor, LFMComponentName: String;
-  LFMCode, Code: TCodeBuffer;
-  LoadFileFlags: TLoadBufferFlags;
-  ClearOldInfo: Boolean;
-  Tool: TCodeTool;
-  Node: TCodeTreeNode;
-  ListOfPFindContext: TFPList;
-  i: Integer;
-  Context: PFindContext;
-begin
-  Result:=false;
-  if AnUnitInfo.Component<>nil then
-    exit(true); // a loaded resource is always uptodate
-  if AnUnitInfo.IsVirtual then
-    exit(true); // a new unit is always uptodate
-  ListOfPFindContext:=nil;
-  ClearOldInfo:=true;
-  try
-    // find lfm file
-    if not FilenameIsPascalUnit(AnUnitInfo.Filename) then
-      exit(true); // not a unit -> clear info
-    LFMFilename:=AnUnitInfo.UnitResourceFileformat.GetUnitResourceFilename(
-      AnUnitInfo.Filename,true);
-    if (LFMFilename='') or not FileExistsCached(LFMFilename) then
-      exit(true); // no lfm -> clear info
-  finally
-    if ClearOldInfo then begin
-      AnUnitInfo.ResourceBaseClass:=pfcbcNone;
-      AnUnitInfo.ComponentName:='';
-      AnUnitInfo.ComponentResourceName:='';
-    end;
-  end;
-  try
-    if not FilenameExtIs(LFMFilename,'lfm',true) then
-    begin
-      // no lfm format -> keep old info
-      exit(true);
-    end;
-    // clear old info
-    AnUnitInfo.ResourceBaseClass:=pfcbcNone;
-    AnUnitInfo.ComponentName:='';
-    AnUnitInfo.ComponentResourceName:='';
-    // load lfm
-    LoadFileFlags:=[lbfUpdateFromDisk,lbfCheckIfText];
-    if Quiet then
-      Include(LoadFileFlags,lbfQuiet);
-    if LoadCodeBuffer(LFMCode,LFMFilename,LoadFileFlags,false)<>mrOk then
-      exit; // lfm read error
-    // read lfm header
-    ReadLFMHeader(LFMCode.Source,LFMType,LFMComponentName,LFMClassName);
-    if LFMClassName='' then
-      exit; // lfm syntax error
-
-    // LFM component name
-    AnUnitInfo.ComponentName:=LFMComponentName;
-    AnUnitInfo.ComponentResourceName:=LFMComponentName;
-
-    // check ancestors
-    if LoadCodeBuffer(Code,AnUnitInfo.Filename,LoadFileFlags,false)<>mrOk then
-      exit; // pas read error
-    CodeToolBoss.Explore(Code,Tool,false,true);
-    if Tool=nil then
-      exit; // pas load error
-    try
-      Node:=Tool.FindDeclarationNodeInInterface(LFMClassName,true);
-      if Node=nil then
-        exit(Tool.FindImplementationNode<>nil); // class not found, reliable if whole interface was read
-
-      if (Node=nil) or (Node.Desc<>ctnTypeDefinition)
-      or (Node.FirstChild=nil) or (Node.FirstChild.Desc<>ctnClass) then
-        exit(true); // this is not a class
-      Tool.FindClassAndAncestors(Node.FirstChild,ListOfPFindContext,false);
-      if ListOfPFindContext=nil then
-        exit; // ancestor not found -> probably syntax error
-
-      for i:=0 to ListOfPFindContext.Count-1 do begin
-        Context:=PFindContext(ListOfPFindContext[i]);
-        Ancestor:=UpperCase(Context^.Tool.ExtractClassName(Context^.Node,false));
-        if (Ancestor='TFORM') then begin
-          AnUnitInfo.ResourceBaseClass:=pfcbcForm;
-          exit(true);
-        end else if (Ancestor='TCUSTOMFORM') then begin
-          AnUnitInfo.ResourceBaseClass:=pfcbcCustomForm;
-          exit(true);
-        end else if Ancestor='TDATAMODULE' then begin
-          AnUnitInfo.ResourceBaseClass:=pfcbcDataModule;
-          exit(true);
-        end else if (Ancestor='TFRAME') or (Ancestor='TCUSTOMFRAME') then begin
-          AnUnitInfo.ResourceBaseClass:=pfcbcFrame;
-          exit(true);
-        end else if Ancestor='TCOMPONENT' then
-          exit(true);
-      end;
-    except
-      exit; // syntax error or unit not found
-    end;
-  finally
-    FreeListOfPFindContext(ListOfPFindContext);
-  end;
-end;
-
 function FindBaseComponentClass(AnUnitInfo: TUnitInfo; const AComponentClassName,
   DescendantClassName: string; out AComponentClass: TComponentClass): boolean;
-// returns false if an error occured
+// returns false if an error occurred
 // Important: returns true even if AComponentClass=nil
+var
+  ResFormat: TUnitResourcefileFormatClass;
 begin
   AComponentClass:=nil;
   // find the ancestor class
-  if AnUnitInfo.UnitResourceFileformat<>nil then
+  ResFormat:=AnUnitInfo.UnitResourceFileformat;
+  if ResFormat<>nil then
   begin
-    AComponentClass:=AnUnitInfo.UnitResourceFileformat.FindComponentClass(AComponentClassName);
+    AComponentClass:=ResFormat.FindComponentClass(AComponentClassName);
     if AComponentClass<>nil then
       exit(true);
   end;
-  if AComponentClassName<>'' then begin
-    if (DescendantClassName<>'')
-    and (SysUtils.CompareText(AComponentClassName,'TCustomForm')=0) then begin
-      // this is a common user mistake
-      IDEMessageDialog(lisCodeTemplError,
-        Format(lisTheResourceClassDescendsFromProbablyThisIsATypoFor,
-               [DescendantClassName, AComponentClassName]),
-        mtError,[mbCancel]);
-      Result:=false;
-      exit;
-    end else if (DescendantClassName<>'')
-    and (SysUtils.CompareText(AComponentClassName,'TComponent')=0) then begin
-      // this is not yet implemented
-      IDEMessageDialog(lisCodeTemplError,
-        Format(lisUnableToOpenDesignerTheClassDoesNotDescendFromADes,
-               [LineEnding, DescendantClassName]),
-        mtError,[mbCancel]);
-      Result:=false;
-      exit;
-    end else begin
-      // search in the registered base classes
-      AComponentClass:=FormEditor1.FindDesignerBaseClassByName(AComponentClassName,true);
+  if AComponentClassName<>'' then
+  begin
+    if DescendantClassName<>'' then begin
+      if CompareText(AComponentClassName,'TCustomForm')=0 then begin
+        // this is a common user mistake
+        IDEMessageDialog(lisCodeTemplError,
+                      Format(lisTheResourceClassDescendsFromProbablyThisIsATypoFor,
+                             [DescendantClassName, AComponentClassName]),
+                      mtError,[mbCancel]);
+        exit(false);
+      end
+      else if CompareText(AComponentClassName,'TComponent')=0 then begin
+        // this is not yet implemented
+        IDEMessageDialog(lisCodeTemplError,
+                      Format(lisUnableToOpenDesignerTheClassDoesNotDescendFromADes,
+                             [LineEnding, DescendantClassName]),
+                      mtError,[mbCancel]);
+        exit(false);
+      end;
     end;
+    // search in the registered base classes
+    AComponentClass:=FormEditor1.FindDesignerBaseClassByName(AComponentClassName,true);
   end else begin
     // default is TForm
     AComponentClass:=BaseFormEditor1.StandardDesignerBaseClasses[DesignerBaseClassId_TForm];
@@ -6493,76 +6354,107 @@ begin
 end;
 
 function LoadAncestorDependencyHidden(AnUnitInfo: TUnitInfo;
-  const aComponentClassName: string;
-  OpenFlags: TOpenFlags;
+  const aComponentClassName: string; OpenFlags: TOpenFlags;
   out AncestorClass: TComponentClass;
   out AncestorUnitInfo: TUnitInfo): TModalResult;
 var
-  AncestorClassName, IgnoreBtnText: String;
+  AncestorClsName, IgnoreBtnText, ClsName: String;
   CodeBuf: TCodeBuffer;
   GrandAncestorClass, DefAncestorClass: TComponentClass;
+  ResFormat: TUnitResourcefileFormatClass;
+  ClsUnitInfo: TUnitInfo;
 begin
-  AncestorClassName:='';
   AncestorClass:=nil;
   AncestorUnitInfo:=nil;
 
-  // find the ancestor type in the source
-  if AnUnitInfo.Source=nil then begin
-    Result:=LoadCodeBuffer(CodeBuf,AnUnitInfo.Filename,
-                           [lbfUpdateFromDisk,lbfCheckIfText],true);
-    if Result<>mrOk then exit;
-    AnUnitInfo.Source:=CodeBuf;
-  end;
-  if not CodeToolBoss.FindFormAncestor(AnUnitInfo.Source,aComponentClassName,
-                                       AncestorClassName,true)
-  then begin
-    DebugLn('LoadAncestorDependencyHidden Filename="',AnUnitInfo.Filename,'" ClassName=',aComponentClassName,'. Unable to find ancestor class: ',CodeToolBoss.ErrorMessage);
-  end;
-
-  // try the base designer classes
-  if not FindBaseComponentClass(AnUnitInfo,AncestorClassName,
-    aComponentClassName,AncestorClass) then
-  begin
-    DebugLn(['LoadAncestorDependencyHidden FindUnitComponentClass failed for AncestorClassName=',AncestorClassName]);
-    exit(mrCancel);
-  end;
-
-  // try loading the ancestor first (unit, lfm and component instance)
-
-  if AnUnitInfo.UnitResourceFileformat<>nil then
-    DefAncestorClass:=AnUnitInfo.UnitResourceFileformat.DefaultComponentClass
+  // fallback ancestor is defined by the resource file format of the form/frame/component being loaded
+  // this is offered to the user in case a lookup fails
+  ResFormat:= AnUnitInfo.UnitResourceFileformat;
+  if ResFormat<>nil then
+    DefAncestorClass:=ResFormat.DefaultComponentClass
   else
     DefAncestorClass:=nil;
   // use TForm as default ancestor
   if DefAncestorClass=nil then
     DefAncestorClass:=BaseFormEditor1.StandardDesignerBaseClasses[DesignerBaseClassId_TForm];
+  IgnoreBtnText:='';
+  if DefAncestorClass<>nil then
+    IgnoreBtnText:=Format(lisIgnoreUseAsAncestor, [DefAncestorClass.ClassName]);
 
-  if (AncestorClass=nil) then begin
-    IgnoreBtnText:='';
-    if DefAncestorClass<>nil then
-      IgnoreBtnText:=Format(lisIgnoreUseAsAncestor, [DefAncestorClass.ClassName]);
+  // traverse the chain of ancestors until either:
+  //   - an error occurs
+  //   - FindBaseComponentClass locates an editor class
+  //   - LoadComponentDependencyHidden loads a full LFM
+  //   - no further class parents exist
+  ClsName:=aComponentClassName;
+  ClsUnitInfo:=AnUnitInfo;
+  repeat
+    // if Source is not already loaded, load from Filename
+    if not Assigned(ClsUnitInfo.Source) then begin
+      Result:=LoadCodeBuffer(CodeBuf,ClsUnitInfo.Filename,
+                             [lbfUpdateFromDisk,lbfCheckIfText],true);
+      if Result<>mrOk then exit;
+      ClsUnitInfo.Source:=CodeBuf;
+      if FilenameIsPascalSource(ClsUnitInfo.Filename) then
+        ClsUnitInfo.ReadUnitNameFromSource(true);
+    end;
 
-    Result:=LoadComponentDependencyHidden(AnUnitInfo,AncestorClassName,
+    // get ancestor of ClsName from current ClsUnitInfo
+    if CodeToolBoss.FindFormAncestor(ClsUnitInfo.Source,ClsName,AncestorClsName,true) then begin
+      // is this ancestor a designer class?
+      if not FindBaseComponentClass(ClsUnitInfo,AncestorClsName,ClsName,AncestorClass) then
+      begin
+        DebugLn(['LoadAncestorDependencyHidden FindUnitComponentClass failed for AncsClsName=',AncestorClsName]);
+        exit(mrCancel);
+      end;
+
+      if Assigned(AncestorClass) then
+        break
+      else begin
+        // immediately go to next ancestor
+        ClsName:=AncestorClsName;
+        continue;
+      end;
+    end;
+    // -> the declaration of ClsName is not in ClsUnitInfo, let LoadComponentDependencyHidden locate it
+
+    // try loading the ancestor (unit, lfm and component instance)
+    Result:=LoadComponentDependencyHidden(ClsUnitInfo,ClsName,
              OpenFlags,false,AncestorClass,AncestorUnitInfo,GrandAncestorClass,
              IgnoreBtnText);
     if Result<>mrOk then begin
-      DebugLn(['LoadAncestorDependencyHidden DoLoadComponentDependencyHidden failed AnUnitInfo=',AnUnitInfo.Filename]);
+      DebugLn(['LoadAncestorDependencyHidden DoLoadComponentDependencyHidden failed ClsUnitInfo=',ClsUnitInfo.Filename]);
     end;
     case Result of
     mrAbort: exit;
     mrOk: ;
-    mrIgnore:
-      AncestorUnitInfo:=nil;
+    mrIgnore: break;
     else
       // cancel
-      Result:=mrCancel;
-      exit;
+      exit(mrCancel);
     end;
-  end;
 
-  //DebugLn('LoadAncestorDependencyHidden Filename="',AnUnitInfo.Filename,'" AncestorClassName=',AncestorClassName,' AncestorClass=',dbgsName(AncestorClass));
-  if AncestorClass=nil then
+    // possible outcomes of LoadComponentDependencyHidden:
+    if Assigned(AncestorClass) then
+      // loaded something and got a component class for it -> done, everything is set
+      break
+    else if Assigned(AncestorUnitInfo) then
+      // loaded the unit containing ClsName, but it does not have the ComponentClass -> let FindFormAncestor/FindBaseComponentClass try again
+      ClsUnitInfo:= AncestorUnitInfo
+    else begin
+      // likely a bug: declaration is nowhere and was not caught by user interaction in LoadComponentDependencyHidden
+      DebugLn(['LoadAncestorDependencyHidden DoLoadComponentDependencyHidden empty returns for ClsName=',ClsName, ' ClsUnitInfo=',ClsUnitInfo.Filename]);
+      exit(mrCancel);
+    end;
+  until Assigned(AncestorClass) or (ClsName = '') or not Assigned(ClsUnitInfo);
+
+  if AncestorClass=nil then begin
+    // nothing was found, clear any attempted references
+    AncestorUnitInfo:= nil;
+
+    //DebugLn('LoadAncestorDependencyHidden Filename="',ClsUnitInfo.Filename,'" AncsClsName=',AncestorClsName,' AncestorClass=',dbgsName(AncestorClass));
     AncestorClass:=DefAncestorClass;
+  end;
   Result:=mrOk;
 end;
 
@@ -6575,6 +6467,8 @@ function FindComponentClass(AnUnitInfo: TUnitInfo; const AComponentClassName: st
       designer component
    - AComponentClass<>nil and ComponentUnitInfo=nil
       registered componentclass
+   - AComponentClass=nil and ComponentUnitInfo<>nil
+      componentclass does not exist, but the unit declaring AComponentClassName was found
    - LFMFilename<>''
       lfm of an used unit
    - AncestorClass<>nil
@@ -6719,6 +6613,19 @@ var
     Result:=true;
   end;
 
+  procedure StoreComponentClassDeclaration(UnitFilename: string);
+  begin
+    // The Unit declaring AComponentClassName was located, save UnitInfo for return regardless of AComponentClass instance
+    ComponentUnitInfo:= Project1.UnitInfoWithFilename(UnitFilename);
+    if not Assigned(ComponentUnitInfo) then begin
+      // File was not previously loaded, add reference to project (without loading source for now)
+      ComponentUnitInfo:=TUnitInfo.Create(nil);
+      ComponentUnitInfo.Filename:=UnitFilename;
+      ComponentUnitInfo.IsPartOfProject:=false;
+      Project1.AddFile(ComponentUnitInfo,false);
+    end;
+  end;
+
   function TryFindDeclaration(out TheModalResult: TModalResult): boolean;
   var
     Tool: TCodeTool;
@@ -6838,6 +6745,7 @@ var
         debugln(['FindComponentClass ',AComponentClassName,' is not a TComponent at ',NewTool.CleanPosToStr(NewNode.StartPos,true)]);
         exit;
       end;
+      StoreComponentClassDeclaration(NewTool.MainFilename);
       AncestorNode:=InheritedNode.FirstChild;
       AncestorClassName:=GetIdentifier(@NewTool.Src[AncestorNode.StartPos]);
       //debugln(['TryFindDeclaration declaration of ',AComponentClassName,' found at ',NewTool.CleanPosToStr(NewNode.StartPos),' ancestor="',AncestorClassName,'"']);
@@ -6879,7 +6787,6 @@ var
       {$ENDIF}
       exit;
     end;
-    AncestorClassName:='';
     Code:=CodeToolBoss.LoadFile(UnitFilename,true,false);
     if Code=nil then begin
       debugln(['FindComponentClass unable to load ',AnUnitInfo.Filename]);
@@ -6899,6 +6806,7 @@ var
       {$ENDIF}
       exit;
     end;
+    StoreComponentClassDeclaration(UnitFilename);
     if TryRegisteredClasses(AncestorClassName,AncestorClass,TheModalResult) then
       exit(true);
   end;
@@ -6927,7 +6835,7 @@ begin
   {$ifdef VerboseFormEditor}
   debugln('FindComponentClass START ',AnUnitInfo.Filename,' AComponentClassName=',AComponentClassName);
   {$endif}
-  // first search the resource of ComponentUnitInfo
+  // first search the resource of AnUnitInfo
   if AnUnitInfo<>nil then begin
     if TryUnitComponent(AnUnitInfo.Filename,Result) then exit;
   end;
@@ -6941,8 +6849,7 @@ begin
     if not CodeToolBoss.FindUsedUnitFiles(AnUnitInfo.Source,UsedUnitFilenames)
     then begin
       MainIDE.DoJumpToCodeToolBossError;
-      Result:=mrCancel;
-      exit;
+      exit(mrCancel);
     end;
 
     {$IFDEF VerboseLFMSearch}
@@ -6966,19 +6873,22 @@ begin
     UsedUnitFilenames.Free;
   end;
 
+  // no 100% loadable match found, did we at least get a ComponentUnitInfo?
+  if Assigned(ComponentUnitInfo) then
+    // Return "located, but not loaded" information
+    Result:= mrOK
+  else
+    Result:= mrCancel;
+
   // not found
-  if Quiet then exit(mrCancel);
+  if Quiet then exit;
 
   // show codetool error
-  if (CTErrorMsg<>'') and (not Quiet) then begin
+  if CTErrorMsg<>'' then begin
     CodeToolBoss.SetError(20170421203251,CTErrorCode,CTErrorLine,CTErrorCol,CTErrorMsg);
     MainIDE.DoJumpToCodeToolBossError;
     Result:=mrAbort;
-    exit;
   end;
-
-  // just not found
-  Result:=mrCancel;
 end;
 
 function LoadComponentDependencyHidden(AnUnitInfo: TUnitInfo;
@@ -6991,6 +6901,8 @@ function LoadComponentDependencyHidden(AnUnitInfo: TUnitInfo;
       designer component
    - AComponentClass<>nil and ComponentUnitInfo=nil
       registered componentclass
+   - AComponentClass=nil and ComponentUnitInfo<>nil
+      componentclass does not exist, but the unit declaring AComponentClassName was found
    - Only for MustHaveLFM=false: AncestorClass<>nil
       componentclass does not exist, but the ancestor is a registered class
   mrCancel:
@@ -7084,11 +6996,13 @@ begin
   Quiet:=([ofProjectLoading,ofQuiet]*Flags<>[]);
   HideAbort:=not (ofProjectLoading in Flags);
 
+{  Will be checked in FindComponentClass()
   if not IsValidIdent(AComponentClassName) then
   begin
     DebugLn(['LoadComponentDependencyHidden invalid component class name "',AComponentClassName,'"']);
     exit(mrCancel);
   end;
+}
 
   // check for cycles
   if AnUnitInfo.LoadingComponent then begin
@@ -7116,6 +7030,8 @@ begin
     //   designer component
     //- AComponentClass<>nil and ComponentUnitInfo=nil
     //   registered componentclass
+    //- AComponentClass=nil and ComponentUnitInfo<>nil
+    //   componentclass does not exist, but the unit declaring AComponentClassName was found
     //- LFMFilename<>''
     //   lfm of an used unit
     //- AncestorClass<>nil
@@ -7450,10 +7366,8 @@ begin
 
   // load required packages
   PkgBoss.OpenProjectDependencies(Project1, MainIDE.IDEStarted);
-
-  //DebugLn('CompleteLoadingProjectInfo ',Project1.IDAsString);
   Project1.DefineTemplates.Active:=true;
-
+  MainIDE.UpdateDefineTemplates;
   Result:=mrOk;
 end;
 

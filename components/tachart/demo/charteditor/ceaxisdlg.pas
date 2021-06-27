@@ -1,427 +1,362 @@
 unit ceAxisDlg;
 
 {$mode objfpc}{$H+}
+{$WARN 6058 off : Call to subroutine "$1" marked as inline is not inlined}
 
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, StdCtrls, ButtonPanel,
-  ExtCtrls, Buttons, ComCtrls, Spin,
-  TAChartAxis, TAChartAxisUtils, TATextElements, TAChartCombos, TAGraph,
-  ceShapeBrushPenMarginsFrame, ceFontFrame, cePenFrame;
+  Classes, SysUtils, Forms, Controls, Graphics, Dialogs, ButtonPanel,
+  ExtCtrls, Buttons, ComCtrls,
+  TAChartAxis, TAChartAxisUtils, TATextElements, TAGraph,
+  ceAxisFrame;
 
 type
 
-  { TAxisEditor }
+  TChartAxisParams = record
+    // General visibility
+    Visible: Boolean;
 
-  TAxisEditorPage = (aepTitle, aepLabels, aepGrid, aepLine);
+    // Axis title
+    TitleVisible: Boolean;
+    TitleText: String;
+    TitleAlignment: TAlignment;
+    TitleFontName: String;
+    TitleFontSize: Integer;
+    TitleFontStyle: TFontStyles;
+    TitleFontColor: TColor;
+    TitleFontOrientation: Integer;
+    TitleDistance: Integer;
+    TitleShape: TChartLabelShape;
+    TitleBackgroundStyle: TBrushStyle;
+    TitleBackgroundColor: TColor;
+    TitleBorderVisible: Boolean;
+    TitleBorderColor: TColor;
+    TitleMarginLeft: Integer;
+    TitleMarginTop: Integer;
+    TitleMarginRight: Integer;
+    TitleMarginBottom: Integer;
 
-  TAxisEditor = class(TForm)
+    // Axis range
+    Maximum: Double;
+    Minimum: Double;
+    UseMax: Boolean;
+    UseMin: Boolean;
+    Inverted: Boolean;
+
+    // Tick labels
+    LabelsVisible: Boolean;
+    LabelsFormat: String;
+    LabelsDistance: Integer;
+    TickLength: Integer;
+    TickLengthInner: Integer;
+    TickColor: TColor;
+    LabelFontName: String;
+    LabelFontSize: Integer;
+    LabelFontStyle: TFontStyles;
+    LabelFontColor: TColor;
+    LabelFontOrientation: Integer;
+    LabelShape: TChartLabelShape;
+    LabelBackgroundStyle: TBrushStyle;
+    LabelBackgroundColor: TColor;
+    LabelBorderVisible: Boolean;
+    LabelBorderColor: TColor;
+    LabelMarginLeft: Integer;
+    LabelMarginTop: Integer;
+    LabelMarginRight: Integer;
+    LabelMarginBottom: Integer;
+
+    // Grid
+    GridVisible: Boolean;
+    GridPenStyle: TPenStyle;
+    GridPenWidth: Integer;
+    GridPenColor: TColor;
+
+    // Frame
+    FrameVisible: Boolean;
+    FramePenStyle: TPenStyle;
+    FramePenWidth: Integer;
+    FramePenColor: TColor;
+
+    // Arrow
+    ArrowVisible: Boolean;
+    ArrowBaseLength: Integer;
+    ArrowLength: Integer;
+    ArrowWidth: Integer;
+  end;
+
+  { TChartAxisEditor }
+
+  TChartAxisEditor = class(TForm)
     ButtonPanel: TButtonPanel;
-    GridPenFrame: TPenFrame;
-    Bevel1: TBevel;
-    Bevel2: TBevel;
-    Bevel3: TBevel;
-    Bevel4: TBevel;
-    cbAxisLineVisible: TCheckBox;
-    cbGridVisible: TCheckBox;
-    cbPenColor: TColorButton;
-    cbPenStyle: TChartComboBox;
-    cbPenWidth: TChartComboBox;
-    cbTickColor: TColorButton;
-    cbShow: TCheckBox;
-    cbAutoMin: TCheckBox;
-    cbAutoMax: TCheckBox;
-    cbTitleVisible: TCheckBox;
-    cbInverted: TCheckBox;
-    cbLabelsVisible: TCheckBox;
-    cbFrameVisible: TCheckBox;
-    cbArrowVisible: TCheckBox;
-    edLabelFormat: TEdit;
-    AxisLinePenFrame: TPenFrame;
-    gbAxisLine: TGroupBox;
-    gbGrid: TGroupBox;
-    gbTitleFont: TGroupBox;
-    gbLabelFont: TGroupBox;
-    gbShapeFillBorder: TGroupBox;
-    gbTitleShapeBrushPenMargins: TGroupBox;
-    gbLabels: TGroupBox;
-    gbTicks: TGroupBox;
-    gbFrame: TGroupBox;
-    gbArrow: TGroupBox;
-    lblArrowWidth: TLabel;
-    lblArrowLength: TLabel;
-    lblArrowBaseLength: TLabel;
-    lblLabelDistance: TLabel;
-    lblPenStyle: TLabel;
-    lblPenWidth: TLabel;
-    lblTitleDistance: TLabel;
-    lblTickLength: TLabel;
-    lblTickInnerLength: TLabel;
-    FramePenFrame: TPenFrame;
-    seTickLength: TSpinEdit;
-    seTickInnerLength: TSpinEdit;
-    seTitleDistance: TSpinEdit;
-    seLabelDistance: TSpinEdit;
-    seArrowBaseLength: TSpinEdit;
-    seArrowLength: TSpinEdit;
-    seArrowWidth: TSpinEdit;
-    pgGrid: TTabSheet;
-    TitleFontFrame: TFontFrame;
-    LabelFontFrame: TFontFrame;
-    gbAxisRange: TGroupBox;
-    lblLabelFormat: TLabel;
-    PanelTop: TPanel;
-    seMinimum: TFloatSpinEdit;
-    seMaximum: TFloatSpinEdit;
-    lblAutomatic: TLabel;
-    lblTitle: TLabel;
-    mmoTitle: TMemo;
-    LabelShapeBrushPenMarginsFrame: TShapeBrushPenMarginsFrame;
-    TitleShapeBrushPenMarginsFrame: TShapeBrushPenMarginsFrame;
-    TitleMemoPanel: TPanel;
-    PageControl: TPageControl;
-    TitleParamsPanel: TPanel;
-    rgTitleAlignment: TRadioGroup;
-    pgLabels: TTabSheet;
-    pgTitle: TTabSheet;
-    pgLine: TTabSheet;
-    procedure cbArrowVisibleChange(Sender: TObject);
-    procedure cbAutoMaxChange(Sender: TObject);
-    procedure cbAutoMinChange(Sender: TObject);
-    procedure cbFrameVisibleChange(Sender: TObject);
-    procedure cbGridVisibleChange(Sender: TObject);
-    procedure cbInvertedChange(Sender: TObject);
-    procedure cbLabelsVisibleChange(Sender: TObject);
-    procedure cbAxisLineVisibleChange(Sender: TObject);
-    procedure cbShowChange(Sender: TObject);
-    procedure cbTickColorColorChanged(Sender: TObject);
-    procedure cbTitleVisibleChange(Sender: TObject);
-    procedure edLabelFormatEditingDone(Sender: TObject);
+    procedure FormActivate(Sender: TObject);
     procedure FormCloseQuery(Sender: TObject; var CanClose: boolean);
     procedure FormCreate(Sender: TObject);
-    procedure FormDestroy(Sender: TObject);
     procedure FormShow(Sender: TObject);
     procedure HelpButtonClick(Sender: TObject);
-    procedure mmoTitleChange(Sender: TObject);
     procedure OKButtonClick(Sender: TObject);
-    procedure rgTitleAlignmentClick(Sender: TObject);
-    procedure seArrowBaseLengthChange(Sender: TObject);
-    procedure seArrowLengthChange(Sender: TObject);
-    procedure seArrowWidthChange(Sender: TObject);
-    procedure seLabelDistanceChange(Sender: TObject);
-    procedure seTitleDistanceChange(Sender: TObject);
-    procedure seMaximumChange(Sender: TObject);
-    procedure seMinimumChange(Sender: TObject);
-    procedure seTickLengthChange(Sender: TObject);
-    procedure seTickInnerLengthChange(Sender: TObject);
   private
     FAxis: TChartAxis;
     FOKClicked: Boolean;
-    FSavedAxis: TChartAxis;
-    function GetAlignment(AItemIndex: Integer): TAlignment;
-    function GetAlignmentIndex(AValue: TAlignment): Integer;
-    function GetPage: TAxisEditorPage;
-    procedure SetPage(AValue: TAxisEditorPage);
-    procedure ChangedHandler(Sender: TObject);
-    procedure LabelFontChangedHandler(Sender: TObject);
-    procedure LabelShapeChangedHandler(AShape: TChartLabelShape);
-    procedure TitleFontChangedHandler(Sender: TObject);
-    procedure TitleShapeChangedHandler(AShape: TChartLabelShape);
+    FAxisFrame: TChartAxisFrame;
+    FSavedAxisParams: TChartAxisParams;
+    function GetPage: TChartAxisEditorPage;
+    procedure SetPage(AValue: TChartAxisEditorPage);
   protected
     function GetChart: TChart;
+    procedure RestoreAxisParams; virtual;
+    procedure SaveAxisParams; virtual;
   public
     procedure Prepare(Axis: TChartAxis; ACaptionMask: String);
-    property Page: TAxisEditorPage read GetPage write SetPage;
+    property Page: TChartAxisEditorPage read GetPage write SetPage;
 
   end;
 
 var
-  AxisEditor: TAxisEditor;
+  AxisEditor: TChartAxisEditor;
 
 implementation
 
 {$R *.lfm}
 
-uses
-  ceUtils;
-
-procedure TAxisEditor.cbAutoMaxChange(Sender: TObject);
+procedure TChartAxisEditor.FormActivate(Sender: TObject);
+var
+  w: Integer = 0;
+  h: Integer = 0;
 begin
-  FAxis.Range.UseMax := not cbAutoMax.Checked;
+  FAxisFrame.GetPreferredSize(w, h);
+  inc(w, FAxisFrame.BorderSpacing.Around*2);
+  inc(h, FAxisFrame.BorderSpacing.Around*2);
+
+  Constraints.MinWidth := w;
+  Constraints.MinHeight := h + ButtonPanel.Height + ButtonPanel.BorderSpacing.Around*2;
+
+  // Enforce constraints
+  SetBounds(Left, Top, 1, 1);
 end;
 
-procedure TAxisEditor.cbArrowVisibleChange(Sender: TObject);
-begin
-  FAxis.Arrow.Visible := cbArrowVisible.Checked;
-end;
-
-procedure TAxisEditor.cbAutoMinChange(Sender: TObject);
-begin
-  FAxis.Range.UseMin := not cbAutoMin.Checked;
-end;
-
-procedure TAxisEditor.cbFrameVisibleChange(Sender: TObject);
-begin
-  GetChart.Frame.Visible := cbFrameVisible.Checked;
-end;
-
-procedure TAxisEditor.cbGridVisibleChange(Sender: TObject);
-begin
-  FAxis.Grid.Visible := cbGridVisible.Checked;
-end;
-
-procedure TAxisEditor.cbInvertedChange(Sender: TObject);
-begin
-  FAxis.Inverted := not FAxis.Inverted;
-end;
-
-procedure TAxisEditor.cbLabelsVisibleChange(Sender: TObject);
-begin
-  FAxis.Marks.Visible := cbLabelsVisible.Checked;
-end;
-
-procedure TAxisEditor.cbAxisLineVisibleChange(Sender: TObject);
-begin
-  FAxis.AxisPen.Visible := cbAxisLineVisible.Checked;
-end;
-
-procedure TAxisEditor.cbShowChange(Sender: TObject);
-begin
-  FAxis.Visible := cbShow.Checked;
-end;
-
-procedure TAxisEditor.cbTickColorColorChanged(Sender: TObject);
-begin
-  FAxis.TickColor := cbTickColor.ButtonColor;
-end;
-
-procedure TAxisEditor.cbTitleVisibleChange(Sender: TObject);
-begin
-  FAxis.Title.Visible := cbTitleVisible.Checked;
-end;
-
-procedure TAxisEditor.ChangedHandler(Sender: TObject);
-begin
-  GetChart.Invalidate;
-end;
-
-procedure TAxisEditor.edLabelFormatEditingDone(Sender: TObject);
-begin
-  try
-    FAxis.Marks.Format := edLabelFormat.Text;
-  except
-  end;
-end;
-
-procedure TAxisEditor.FormCloseQuery(Sender: TObject; var CanClose: boolean);
+procedure TChartAxisEditor.FormCloseQuery(Sender: TObject; var CanClose: boolean);
 begin
   if not CanClose then exit;
   if not FOKClicked then begin
-    FAxis.Assign(FSavedAxis);
-    FAxis.Visible := cbShow.Checked;
+    RestoreAxisParams;
     GetChart.Invalidate;
   end;
 end;
 
-procedure TAxisEditor.FormCreate(Sender: TObject);
+procedure TChartAxisEditor.FormCreate(Sender: TObject);
 begin
-  BoldHeaders(self);
-
-  TitleShapeBrushPenMarginsFrame.OnChange := @ChangedHandler;
-  TitleShapeBrushPenMarginsFrame.OnShapeChange := @TitleShapeChangedHandler;
-  TitleFontFrame.OnChange := @TitleFontChangedHandler;
-
-  LabelShapeBrushPenMarginsFrame.OnChange := @ChangedHandler;
-  LabelShapeBrushPenMarginsFrame.OnShapeChange := @LabelShapeChangedHandler;
-  LabelFontFrame.OnChange := @LabelFontChangedHandler;
-
-  FramePenFrame.OnChange := @ChangedHandler;
-  AxisLinePenFrame.OnChange := @ChangedHandler;
-
-  GridPenFrame.OnChange := @ChangedHandler;
+  FAxisFrame := TChartAxisFrame.Create(self);
+  FAxisFrame.Parent := Self;
+  FAxisFrame.Name := '';
+  FAxisFrame.Align := alClient;
+  FAxisFrame.BorderSpacing.Around := 8;
+  FAxisFrame.AutoSize := true;
 end;
 
-procedure TAxisEditor.FormDestroy(Sender: TObject);
-begin
-  FSavedAxis.Free;
-end;
-
-procedure TAxisEditor.FormShow(Sender: TObject);
+procedure TChartAxisEditor.FormShow(Sender: TObject);
 begin
   FOKClicked := false;
+  {
+  FTitleShapeBrushPenMarginsFrame.AutoSize := false;
+  FTitleShapeBrushPenMarginsFrame.Align := alClient;
+  }
 end;
 
-function TAxisEditor.GetAlignment(AItemIndex: Integer): TAlignment;
-const
-  ALIGNMENTS: array[0..2] of TAlignment = (taLeftJustify, taCenter, taRightJustify);
-begin
-  Result := ALIGNMENTS[AItemIndex];
-end;
-
-function TAxisEditor.GetAlignmentIndex(AValue: TAlignment): Integer;
-const
-  ALIGNMENTS: array[TAlignment] of Integer = (0, 2, 1);
-begin
-  Result := ALIGNMENTS[AValue];
-end;
-
-function TAxisEditor.GetChart: TChart;
+function TChartAxisEditor.GetChart: TChart;
 begin
   Result := FAxis.Collection.Owner as TChart;
 end;
 
-function TAxisEditor.GetPage: TAxisEditorPage;
+function TChartAxisEditor.GetPage: TChartAxisEditorPage;
 begin
-  Result := TAxisEditorPage(PageControl.ActivePageIndex);
+  Result := FAxisFrame.Page;
 end;
 
-procedure TAxisEditor.HelpButtonClick(Sender: TObject);
+procedure TChartAxisEditor.HelpButtonClick(Sender: TObject);
 begin
   ModalResult := mrYesToAll;
 end;
 
-procedure TAxisEditor.LabelFontChangedHandler(Sender: TObject);
-begin
-  GetChart.Invalidate;
-end;
-
-procedure TAxisEditor.LabelShapeChangedHandler(AShape: TChartLabelShape);
-begin
-  FAxis.Marks.Shape := AShape;
-end;
-
-procedure TAxisEditor.mmoTitleChange(Sender: TObject);
-begin
-  FAxis.Title.Caption := mmoTitle.Lines.Text;
-end;
-
-procedure TAxisEditor.OKButtonClick(Sender: TObject);
+procedure TChartAxisEditor.OKButtonClick(Sender: TObject);
 begin
   FOKClicked := true;
 end;
 
-procedure TAxisEditor.Prepare(Axis: TChartAxis;
+procedure TChartAxisEditor.Prepare(Axis: TChartAxis;
   ACaptionMask: String);
 begin
   FAxis := Axis;
-  if FSavedAxis = nil then
-    FSavedAxis := TChartAxis.Create(FAxis.Collection);
-  FSavedAxis.Assign(FAxis);
-  FSavedAxis.Visible := false;
+  SaveAxisParams;
+
   if FAxis.Title.Caption <> '' then
     Caption := Format(ACaptionMask, [FAxis.Title.Caption])
   else
     Caption := Format(ACaptionMask, ['#' + IntToStr(FAxis.Index)]);
 
-  cbShow.Checked := Axis.Visible;
+  FAxisFrame.Prepare(Axis);
+end;
 
-  // Page "Title"
-  cbTitleVisible.Checked := Axis.Title.Visible;
-  mmoTitle.Lines.Text := Axis.Title.Caption;
-  with Axis.Title do begin
-    rgTitleAlignment.ItemIndex := GetAlignmentIndex(Alignment);
-    seTitleDistance.Value := Distance;
-    TitleFontFrame.Prepare(LabelFont, true);
-    TitleShapeBrushPenMarginsFrame.Prepare(Shape, LabelBrush, Frame, Margins);
+procedure TChartAxisEditor.RestoreAxisParams;
+begin
+  GetChart.DisableRedrawing;
+  try
+    with FSavedAxisParams do
+    begin
+      // General visibility
+      FAxis.Visible := Visible;
+
+      // Axis title
+      FAxis.Title.Visible := TitleVisible;
+      FAxis.Title.Caption := TitleText;
+      FAxis.Title.Alignment := TitleAlignment;
+      FAxis.Title.LabelFont.Name := TitleFontName;
+      FAxis.Title.LabelFont.Size := TitleFontSize;
+      FAxis.Title.LabelFont.Color := TitleFontColor;
+      FAxis.Title.LabelFont.Style := TitleFontStyle;
+      FAxis.Title.LabelFont.Orientation := TitleFontOrientation;
+      FAxis.Title.Distance := TitleDistance;
+      FAxis.Title.Shape := TitleShape;
+      FAxis.Title.LabelBrush.Color := TitleBackgroundColor;
+      FAxis.Title.LabelBrush.Style := TitleBackgroundStyle;
+      FAxis.Title.Frame.Visible := TitleBorderVisible;
+      FAxis.Title.Frame.Color := TitleBorderColor;
+      FAxis.Title.Margins.Left := TitleMarginLeft;
+      FAxis.Title.Margins.Top := TitleMarginTop;
+      FAxis.Title.Margins.Right := TitleMarginRight;
+      FAxis.Title.Margins.Bottom := TitleMarginBottom;
+
+      // Axis range
+      FAxis.Range.Max := Maximum;
+      FAxis.Range.Min := Minimum;
+      FAxis.Range.UseMax := UseMax;
+      FAxis.Range.UseMin := UseMin;
+      FAxis.Inverted := Inverted;
+
+      // Tick labels
+      FAxis.Marks.Visible := LabelsVisible;
+      FAxis.Marks.Format := LabelsFormat;
+      FAxis.Marks.Distance := LabelsDistance;
+      FAxis.TickLength := TickLength;
+      FAxis.TickInnerLength := TickLengthInner;
+      FAxis.TickColor := TickColor;
+      FAxis.Marks.LabelFont.Name := LabelFontName;
+      FAxis.Marks.LabelFont.Size := LabelFontSize;
+      FAxis.Marks.LabelFont.Color := LabelFontColor;
+      FAxis.Marks.LabelFont.Style := LabelFontStyle;
+      FAxis.Marks.Shape := LabelShape;
+      FAxis.Marks.LabelBrush.Color := LabelBackgroundColor;
+      FAxis.Marks.LabelBrush.Style := LabelBackgroundStyle;
+      FAxis.Marks.Frame.Visible := LabelBorderVisible;
+      FAxis.Marks.Frame.Color := LabelBorderColor;
+      FAxis.Marks.Margins.Left := LabelMarginLeft;
+      FAxis.Marks.Margins.Top := LabelMarginTop;
+      FAxis.Marks.Margins.Right := LabelMarginRight;
+      FAxis.Marks.Margins.Bottom := LabelMarginBottom;
+
+      // Grid
+      FAxis.Grid.Visible := GridVisible;
+      FAxis.Grid.Style := GridPenStyle;
+      FAxis.Grid.Width := GridPenWidth;
+      FAxis.Grid.Color := GridPenColor;
+
+      // Frame
+      GetChart.Frame.Visible := FrameVisible;
+      GetChart.Frame.Style := FramePenStyle;
+      GetChart.Frame.Width := FramePenWidth;
+      GetChart.Frame.Color := FramePenColor;
+
+      // Arrow
+      FAxis.Arrow.Visible := ArrowVisible;
+      FAxis.Arrow.BaseLength := ArrowBaseLength;
+      FAxis.Arrow.Length := ArrowLength;
+      FAxis.Arrow.Width := ArrowWidth;
+    end;
+
+  finally
+    GetChart.EnableRedrawing;
   end;
+end;
 
-  // Page "Labels"
-  cbAutoMin.Checked := not Axis.Range.UseMin;
-  cbAutoMax.Checked := not Axis.Range.UseMax;
-  seMinimum.Value := Axis.Range.Min;
-  seMaximum.Value := Axis.Range.Max;
-  cbInverted.Checked := Axis.Inverted;
-  seTickLength.Value := Axis.TickLength;
-  seTickInnerLength.Value := Axis.TickInnerLength;
-  cbTickColor.ButtonColor := Axis.TickColor;
-  with Axis.Marks do begin
-    seLabelDistance.Value := Distance;
-    cbLabelsVisible.Checked := Visible;
-    edLabelFormat.Text := Format;
-    LabelFontFrame.Prepare(LabelFont, true);
-    LabelShapeBrushPenMarginsFrame.Prepare(Shape, LabelBrush, Frame, Margins);
+procedure TChartAxisEditor.SaveAxisParams;
+begin
+  with FSavedAxisParams do
+  begin
+    // General visibility
+    Visible := FAxis.Visible;
+
+    // Axis title
+    TitleVisible := FAxis.Title.visible;
+    TitleText := FAxis.Title.caption;
+    TitleAlignment := FAxis.Title.Alignment;
+    TitleFontName := FAxis.Title.LabelFont.Name;
+    TitleFontSize := FAxis.Title.LabelFont.Size;
+    TitleFontStyle := FAxis.Title.LabelFont.Style;
+    TitleFontColor := FAxis.Title.LabelFont.Color;
+    TitleFontOrientation := FAxis.Title.LabelFont.Orientation;
+    TitleDistance := FAxis.Title.Distance;
+    TitleShape := FAxis.Title.Shape;
+    TitleBackgroundStyle := FAxis.Title.LabelBrush.Style;
+    TitleBackgroundColor := FAxis.Title.LabelBrush.Color;
+    TitleBorderVisible := FAxis.Title.Frame.Visible;
+    TitleBorderColor := FAxis.Title.Frame.Color;
+    TitleMarginLeft := FAxis.Title.Margins.Left;
+    TitleMarginTop := FAXis.Title.Margins.Top;
+    TitleMarginRight := FAxis.Title.Margins.Right;
+    TitleMarginBottom := FAxis.Title.Margins.Bottom;
+
+    // Axis range
+    Maximum  := FAxis.Range.Max;
+    Minimum := FAxis.Range.Min;
+    UseMax := FAxis.Range.UseMax;
+    UseMin := FAxis.Range.UseMin;
+    Inverted := FAxis.Inverted;
+
+    // Tick labels
+    LabelsVisible := FAxis.Marks.Visible;
+    LabelsFormat := FAxis.Marks.Format;
+    LabelsDistance := FAxis.Marks.Distance;
+    TickLength := FAxis.TickLength;
+    TickLengthInner := FAxis.TickInnerLength;
+    TickColor := FAxis.TickColor;
+    LabelFontName := FAxis.Marks.LabelFont.Name;
+    LabelFontSize := FAxis.Marks.LabelFont.Size;
+    LabelFontStyle := FAxis.Marks.LabelFont.Style;
+    LabelFontColor := FAxis.Marks.LabelFont.Color;
+    LabelShape := FAxis.Marks.Shape;
+    LabelBackgroundStyle := FAxis.Marks.LabelBrush.Style;
+    LabelBackgroundColor := FAxis.Marks.LabelBrush.Color;
+    LabelBorderVisible := FAxis.Marks.Frame.Visible;
+    LabelBorderColor := FAxis.Marks.Frame.Color;
+    LabelMarginLeft := FAxis.Marks.Margins.Left;
+    LabelMarginTop := FAxis.Marks.Margins.Top;
+    LabelMarginRight := FAxis.Marks.Margins.Right;
+    LabelMarginBottom := FAxis.Marks.Margins.Bottom;
+
+    // Grid
+    GridVisible := FAxis.Grid.Visible;
+    GridPenStyle := FAxis.Grid.Style;
+    GridPenWidth := FAxis.Grid.Width;
+    GridPenColor := FAxis.Grid.Color;
+
+    // Frame
+    FrameVisible := GetChart.Frame.Visible;
+    FramePenStyle := GetChart.Frame.Style;
+    FramePenWidth := GetChart.Frame.Width;
+    FramePenColor := GetChart.Frame.Color;
+
+    // Arrow
+    ArrowVisible := FAxis.Arrow.Visible;
+    ArrowBaseLength := FAxis.Arrow.BaseLength;
+    ArrowLength := FAxis.Arrow.Length;
+    ArrowWidth := FAxis.Arrow.Width;
   end;
-
-  // Page "Grid"
-  GridPenFrame.Prepare(FAxis.Grid);
-
-  // Page "Line"
-  cbFrameVisible.Checked := GetChart.Frame.EffVisible;
-  FramePenFrame.Prepare(GetChart.Frame);
-  cbAxisLineVisible.Checked := FAxis.AxisPen.EffVisible;
-  AxisLinePenFrame.Prepare(FAxis.AxisPen);
-  cbArrowVisible.Checked := FAxis.Arrow.Visible;
-  seArrowBaseLength.Value := FAxis.Arrow.BaseLength;
-  seArrowLength.Value := FAxis.Arrow.Length;
-  seArrowWidth.Value := FAxis.Arrow.Width;
 end;
 
-procedure TAxisEditor.rgTitleAlignmentClick(Sender: TObject);
+procedure TChartAxisEditor.SetPage(AValue: TChartAxisEditorPage);
 begin
-  FAxis.Title.Alignment := GetAlignment(rgTitleAlignment.ItemIndex);
+  FAxisFrame.Page := AValue;
 end;
-
-procedure TAxisEditor.seArrowBaseLengthChange(Sender: TObject);
-begin
-  FAxis.Arrow.BaseLength := seArrowBaseLength.value;
-end;
-
-procedure TAxisEditor.seArrowLengthChange(Sender: TObject);
-begin
-  FAxis.Arrow.Length := seArrowLength.Value;
-end;
-
-procedure TAxisEditor.seArrowWidthChange(Sender: TObject);
-begin
-  FAxis.Arrow.Width := seArrowWidth.Value;
-end;
-
-procedure TAxisEditor.seLabelDistanceChange(Sender: TObject);
-begin
-  FAxis.Marks.Distance := seLabelDistance.Value;
-end;
-
-procedure TAxisEditor.seTitleDistanceChange(Sender: TObject);
-begin
-  FAxis.Title.Distance := seTitleDistance.Value;
-end;
-
-procedure TAxisEditor.seMaximumChange(Sender: TObject);
-begin
-  FAxis.Range.Max := seMaximum.Value;
-end;
-
-procedure TAxisEditor.seMinimumChange(Sender: TObject);
-begin
-  FAxis.Range.Min := seMinimum.Value;
-end;
-
-procedure TAxisEditor.seTickLengthChange(Sender: TObject);
-begin
-  FAxis.TickLength := seTickLength.Value;
-end;
-
-procedure TAxisEditor.seTickInnerLengthChange(Sender: TObject);
-begin
-  FAxis.TickInnerLength := seTickInnerLength.Value;
-end;
-
-procedure TAxisEditor.SetPage(AValue: TAxisEditorPage);
-begin
-  PageControl.ActivePageIndex := ord(AValue);
-end;
-
-procedure TAxisEditor.TitleFontChangedHandler(Sender: TObject);
-begin
-  mmoTitle.Font.Assign(FAxis.Title.LabelFont);
-end;
-
-procedure TAxisEditor.TitleShapeChangedHandler(AShape: TChartLabelShape);
-begin
-  FAxis.Title.Shape := AShape;
-end;
-
 
 end.
 

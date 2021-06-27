@@ -34,7 +34,7 @@ procedure TSpinEditExBase.UpdateControl;
 var
   ANumber: T;
 begin
-  if (MaxValue < MinValue) then FMaxValue := MinValue;
+  //if (MaxValue < MinValue) then FMaxValue := MinValue;
   if (FNullValueBehaviour <> nvbShowTextHint) then
     FValue := GetLimitedValue(FValue);
   if (not HandleAllocated) then Exit;
@@ -153,14 +153,17 @@ begin
   else
   if FArrowKeys and (Key = VK_UP) and (Shift = []) then
   begin
+    //disable the key also if ReadOnly = True, so it won;t suddenly start moving the caret (which it doesn't if ArroKeys = True)
     Key := 0;
-    SpinUpDown(True);
+    if not ReadOnly then
+      SpinUpDown(True);
   end
   else
   if FArrowKeys and (Key = VK_Down) and (Shift = []) then
   begin
     Key := 0;
-    SpinUpDown(False);
+    if not ReadOnly then
+      SpinUpDown(False);
   end
 end;
 
@@ -358,7 +361,7 @@ end;
 function TSpinEditExBase.GetLimitedValue(const AValue: T): T;
 begin
   Result := AValue;
-  //Delphi does not constrain when MinValue = MaxValue, and does if MaxValue > MinValue,
+  //Delphi does not constrain when MinValue = MaxValue, and does if MaxValue < MinValue,
   //but the latter makes absolutely no sense at all.
   if FMaxValue > FMinValue then
   begin

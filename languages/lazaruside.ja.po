@@ -1727,6 +1727,10 @@ msgstr "ファイル"
 msgid "Grid"
 msgstr "グリッド"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1783,6 +1787,10 @@ msgstr "行間隔の追加分"
 #| msgid "Use external gdb debug symbols file"
 msgid "Use external debug symbols file"
 msgstr "外部のgdbデバッグシンボルファイルを使用"
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
+msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
 msgid "File extensions"
@@ -2509,6 +2517,10 @@ msgstr "最後（ソースの末尾）"
 msgid "Lazarus directory (default for all projects)"
 msgstr "Lazarusディレクトリ(全てのプロジェクトの既定値)"
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 msgid "Guide lines Left,Top"
 msgstr "ガイドライン 左、上"
@@ -3136,10 +3148,6 @@ msgstr "複数キャレットをカーソルとともに移動"
 msgid "Enable multi-caret for column selection"
 msgstr "列選択のために複数キャレットを可能にする"
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr "複数のLazarusインスタンス"
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr "常に新しいインスタンスを開始"
@@ -3194,6 +3202,10 @@ msgstr "ネーミング"
 msgid "New desktop ..."
 msgstr "新しいデスクトップ ..."
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 msgid "No automatic renaming"
 msgstr "自動的にリネームしない"
@@ -3206,6 +3218,10 @@ msgstr "追加できるユニットがありません。"
 msgid "No Highlight"
 msgstr "強調しない"
 
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnotebooktabpos
 msgid "Source notebook tabs position"
 msgstr "ソースノートブックのタブ位置"
@@ -3217,6 +3233,10 @@ msgstr "後の行を分割しない"
 #: lazarusidestrconsts.dlgnotsplitlinefront
 msgid "Do not split line in front of"
 msgstr "前の行を分割しない"
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
+msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
 msgctxt "lazarusidestrconsts.dlgobjinsp"
@@ -3508,6 +3528,10 @@ msgstr "プロジェクトオプション"
 #, object-pascal-format
 msgid "Options for Project: %s"
 msgstr "プロジェクトのオプション: %s"
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
+msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
 msgid "Project Files"
@@ -5058,7 +5082,7 @@ msgstr "上端を兄弟の下端にアンカー。保たれる距離はこれと
 msgid "Anchor top side to top side of sibling. Use BorderSpacing to set a distance. BorderSpacing of sibling is ignored."
 msgstr "上端を兄弟の下端にアンカー。距離を設定するにはBorderSpacingを使ってください。兄弟のBorderSpacingは無視されます。"
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
 msgstr "最近の%s!%sの読み込み時に起動時にエラーが起こりました。またこのプロジェクトを読み込みますか？"
@@ -5949,7 +5973,7 @@ msgstr "変数"
 msgid "Wrong indentation"
 msgstr "間違ったインデント"
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr "削除中に例外が発生しました %s\"%s:%s\"%s%s"
@@ -8492,8 +8516,16 @@ msgstr "例外を追加"
 msgid "Additional search path"
 msgstr "その他の検索パス"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
 msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
@@ -8528,6 +8560,14 @@ msgstr "デバッガ固有オプション（デバッガの種類に依存）"
 #: lazarusidestrconsts.lisdebugoptionsfrmduplicateexceptionname
 msgid "Duplicate Exception name"
 msgstr "重複した例外名"
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
 msgid "Enter the name of the exception"
@@ -10006,16 +10046,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr "致命的"
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-msgid "Reduce designer painting"
-msgstr "デザイナーによる描画を減らす"
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-#, fuzzy
-msgctxt "lazarusidestrconsts.lisfepaintdesigneritemsonidlehint"
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr "ペイントデザイナーアイテムはアイドル状態のみです（遅いコンピュータのオーバーヘッドを減らすため）"
-
 #: lazarusidestrconsts.lisfile
 msgctxt "lazarusidestrconsts.lisfile"
 msgid "File"
@@ -11330,6 +11360,12 @@ msgstr "セッション内"
 msgid "&Inspect"
 msgstr "検査(&I)"
 
+#: lazarusidestrconsts.lisinspectaddwatch
+#, fuzzy
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr "監視追加"
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format, fuzzy
 #| msgid "%s : Class %s inherits from %s"
@@ -11659,6 +11695,7 @@ msgid "Add Data/WatchPoint"
 msgstr "データ/監視ポイントを追加"
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr "監視追加"
 
@@ -16428,10 +16465,6 @@ msgstr "無効なパッケージ名"
 #, object-pascal-format
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
 msgstr "パッケージを読み込み中 %sはパッケージ %s%sを%sファイルから置き換えます。%s古いパッケージは修正されます。%s古いパッケージ%sを保存しますか？"
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
-msgstr "新規パッケージ"
 
 #: lazarusidestrconsts.lispkgmangpackage
 #, object-pascal-format

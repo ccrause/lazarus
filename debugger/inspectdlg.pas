@@ -50,20 +50,25 @@ type
 
   TIDEInspectDlg = class(TDebuggerDlg)
     EdInspect: TComboBox;
+    ErrorLabel: TLabel;
     PageControl: TPageControl;
     StatusBar1: TStatusBar;
     DataPage: TTabSheet;
     PropertiesPage: TTabSheet;
     MethodsPage: TTabSheet;
+    ErrorPage: TTabSheet;
     ToolBar1: TToolBar;
     btnUseInstance: TToolButton;
     btnBackward: TToolButton;
+    BtnAddWatch: TToolButton;
     ToolButton2: TToolButton;
     btnColClass: TToolButton;
     btnColType: TToolButton;
     btnColVisibility: TToolButton;
     btnForward: TToolButton;
+    ToolButton3: TToolButton;
     ToolButton4: TToolButton;
+    procedure BtnAddWatchClick(Sender: TObject);
     procedure btnBackwardClick(Sender: TObject);
     procedure btnColClassClick(Sender: TObject);
     procedure btnForwardClick(Sender: TObject);
@@ -89,7 +94,7 @@ type
     FDBGInfo: TDBGType;
     FGridData: TStringGrid;
     FGridMethods: TStringGrid;
-    FUpdateLock, FUpdateNeeded: Boolean;
+    FUpdateLock, FUpdateNeeded, FExpressionWasEvaluated: Boolean;
     FTestUpdateLock: Boolean;
     FRowClicked: Integer;
     FHistory: TStringList;
@@ -112,6 +117,7 @@ type
     procedure GridMethodsSetup(Initial: Boolean = False);
     procedure ShowDataFields;
     procedure ShowMethodsFields;
+    //procedure ShowError;
     procedure Clear;
     procedure GotoHistory(AIndex: Integer);
   protected
@@ -295,6 +301,31 @@ end;
 procedure TIDEInspectDlg.btnBackwardClick(Sender: TObject);
 begin
   GotoHistory(FHistoryIndex - 1);
+end;
+
+procedure TIDEInspectDlg.BtnAddWatchClick(Sender: TObject);
+var
+  w: TCurrentWatch;
+begin
+  if DebugBoss = nil then
+    exit;
+  DebugBoss.Watches.CurrentWatches.BeginUpdate;
+  try
+    w := DebugBoss.Watches.CurrentWatches.Find(FExpression);
+    if w = nil then
+      w := DebugBoss.Watches.CurrentWatches.Add(FExpression);
+    if (w <> nil) then begin
+      w.Enabled := True;
+      if EnvironmentOptions.DebuggerAutoSetInstanceFromClass or
+         btnUseInstance.Down
+      then
+        w.EvaluateFlags := w.EvaluateFlags + [defClassAutoCast];
+      DebugBoss.ViewDebugDialog(ddtWatches, False);
+    end;
+  finally
+    DebugBoss.Watches.CurrentWatches.EndUpdate;
+  end;
+
 end;
 
 procedure TIDEInspectDlg.FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
@@ -722,6 +753,7 @@ begin
   DataPage.TabVisible:=false;
   PropertiesPage.TabVisible:=false;
   MethodsPage.TabVisible:=false;
+  ErrorPage.TabVisible:=false;
   GridDataSetup;
   FGridData.Visible := False;
   StatusBar1.SimpleText:='';
@@ -786,14 +818,17 @@ begin
 
   FGridData.OnDblClick := @DataGridDoubleClick;
   FGridData.OnMouseDown := @DataGridMouseDown;
+  FGridMethods.OnMouseDown := @DataGridMouseDown;
 
   ToolBar1.Images := IDEImages.Images_16;
   btnBackward.ImageIndex := IDEImages.LoadImage('arrow_left');
   btnBackward.Caption := '';
   btnForward.ImageIndex := IDEImages.LoadImage('arrow_right');
   btnForward.Caption := '';
+  BtnAddWatch.Caption:=lisInspectAddWatch;
 
   btnUseInstance.Enabled := False;
+  btnUseInstance.Down := EnvironmentOptions.DebuggerAutoSetInstanceFromClass;
   btnColClass.Enabled := False;
   btnColType.Enabled := False;
   btnColVisibility.Enabled := False;
@@ -851,7 +886,7 @@ begin
   btnBackward.Enabled := FHistoryIndex > 0;
   btnForward.Enabled := FHistoryIndex < FHistory.Count - 1;
 
-  if (FExpression=FHistory[FHistoryIndex]) then
+  if (FExpression=FHistory[FHistoryIndex]) and FExpressionWasEvaluated then
     exit;
 
   FExpression:=FHistory[FHistoryIndex];
@@ -863,6 +898,7 @@ procedure TIDEInspectDlg.EvaluateCallback(Sender: TObject; ASuccess: Boolean;
   ResultText: String; ResultDBGType: TDBGType);
 begin
   FUpdateLock := False;
+  FExpressionWasEvaluated := True;
 
   FHumanReadable := ResultText;
   FDBGInfo := ResultDBGType;
@@ -872,6 +908,8 @@ begin
     FreeAndNil(FDBGInfo);
     Clear;
     StatusBar1.SimpleText:=Format(lisInspectUnavailableError, [ShortenedExpression, FHumanReadable]);
+    ErrorLabel.Caption :=Format(lisInspectUnavailableError, [ShortenedExpression, FHumanReadable]);
+    PageControl.ActivePage := ErrorPage;
     Exit;
   end;
   case FDBGInfo.Kind of
@@ -887,10 +925,13 @@ begin
     skCardinal, skBoolean, skChar, skFloat: InspectSimple();
     skArray: InspectSimple();
     skPointer: InspectPointer();
+    skString, skAnsiString, skWideString: InspectSimple;
   //  skDecomposable: ;
     else begin
         Clear;
         StatusBar1.SimpleText:=Format(lisInspectUnavailableError, [ShortenedExpression, FHumanReadable]);
+        ErrorLabel.Caption :=Format(lisInspectUnavailableError, [ShortenedExpression, FHumanReadable]);
+        PageControl.ActivePage := ErrorPage;
       end;
   end;
 end;
@@ -899,6 +940,7 @@ procedure TIDEInspectDlg.UpdateData;
 var
   Opts: TDBGEvaluateFlags;
 begin
+  FExpressionWasEvaluated := False;
   if DebugBoss.State in [dsRun, dsStop, dsIdle] then begin
     // No request can be running
     FUpdateLock := False;

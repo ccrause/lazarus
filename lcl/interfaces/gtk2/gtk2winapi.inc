@@ -812,7 +812,7 @@ var
     try
       if not gdk_pixbuf_loader_write(Loader, TGdkPixBufBuffer(@Header), MIN_LOADER_HEADER_SIZE,nil)
       then begin
-        DebugLn('WARNING: [TGtk2WidgetSet.CreateBitmap] Error occured loading Bitmap Header!');
+        DebugLn('WARNING: [TGtk2WidgetSet.CreateBitmap] Error loading Bitmap Header!');
         Exit;
       end;
       
@@ -839,14 +839,14 @@ var
     
       if not res
       then begin
-        DebugLn('WARNING: [TGtk2WidgetSet.CreateBitmap] Error occured loading Image!');
+        DebugLn('WARNING: [TGtk2WidgetSet.CreateBitmap] Error loading Image!');
         Exit;
       end;
 
       Src := gdk_pixbuf_loader_get_pixbuf(loader);
       if Src = nil
       then begin
-        DebugLn('WARNING: [TGtk2WidgetSet.CreateBitmap] Error occured loading Pixbuf!');
+        DebugLn('WARNING: [TGtk2WidgetSet.CreateBitmap] Error loading Pixbuf!');
         Exit;
       end;
 
@@ -1317,7 +1317,7 @@ begin
 
   // Choose a large enough amount of points
   n_points := Max(X2-X1,Y2-Y1) * 4;
-  SetLength(points, n_points);
+  SetLength(points{%H-}, n_points);
   // And fill them iterating through the ellipse
   for i := 0 to n_points - 1 do
   begin
@@ -2483,6 +2483,7 @@ var
       else
       begin
         theRect.Right := theRect.Left + Min(MaxWidth, AP.cX);
+        theRect.Bottom := theRect.Top +  AP.cY;
         if (Flags and DT_VCENTER) > 0 then
         begin
           OffsetRect(theRect, 0, ((Rect.Bottom - Rect.Top) - (theRect.Bottom - theRect.Top)) div 2);
@@ -2492,6 +2493,7 @@ var
         begin
           OffsetRect(theRect, 0, (Rect.Bottom - Rect.Top) - (theRect.Bottom - theRect.Top));
         end;
+
       end;
     end
     else
@@ -2726,7 +2728,7 @@ begin
       Exit;
     end;
 
-    SetLength(AStr,Count);
+    SetLength(AStr{%H-},Count);
     if Count>0 then
       System.Move(Str^,AStr[1],Count);
 
@@ -5252,10 +5254,12 @@ begin
                 PangoDesc := pango_context_get_font_description(pango_layout_get_context(AFont));
 
               AFontSize := pango_font_description_get_size(PangoDesc);
-              if not pango_font_description_get_size_is_absolute(PangoDesc) or (AFontSize >= PANGO_SCALE) then
-                AFontSize := AFontSize div PANGO_SCALE;
+              if not pango_font_description_get_size_is_absolute(PangoDesc) then
+                AFontSize := MulDiv(AFontSize, Screen.PixelsPerInch, 72 * PANGO_SCALE)
+              else
+                AFontSize := AFontSize div PANGO_SCALE;;
 
-              PLogfont(Buf)^.lfHeight := MulDiv(AFontSize, Screen.PixelsPerInch, 72);
+              PLogfont(Buf)^.lfHeight := AFontSize;
             end;
           end;
         end else
@@ -6908,7 +6912,7 @@ begin
   if NumPts <= 0 then Exit(True);
 
   //Create a copy of the points so we can freely alter them
-  SetLength(ThePoints, NumPts);
+  SetLength(ThePoints{%H-}, NumPts);
   for i := 0 to NumPts - 1 do ThePoints[i] := Points[i];
   PThePoints := @ThePoints[0];
 
@@ -6917,7 +6921,7 @@ begin
 
   // create the PointsArray, which is a copy of Points moved by the DCOrigin
   // only if needed
-  if (DevCtx.IsNullPen and (DevCtx.IsNullBrush or Winding)) then
+  if DevCtx.IsNullPen and DevCtx.IsNullBrush then
     PointArray := nil
   else
   begin

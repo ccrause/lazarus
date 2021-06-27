@@ -1732,6 +1732,10 @@ msgstr "Failai"
 msgid "Grid"
 msgstr "Tinklelis"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1787,6 +1791,10 @@ msgstr "Papildomas tarpas tarp eilučių"
 #| msgid "Use external gdb debug symbols file"
 msgid "Use external debug symbols file"
 msgstr "Naudoti išorinį „gdb“ derinimo simbolių failą"
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
+msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
 msgid "File extensions"
@@ -2511,6 +2519,10 @@ msgstr "Pačiame gale"
 msgid "Lazarus directory (default for all projects)"
 msgstr "Lazarus aplankas (numatytas visiems projektams)"
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 msgid "Guide lines Left,Top"
 msgstr "Kairioji bei viršutinė orientavimo linija"
@@ -3138,10 +3150,6 @@ msgstr "Daugelį žymeklių perkelti žymekliu"
 msgid "Enable multi-caret for column selection"
 msgstr "Įgalinti daugelį žymeklių žymėjimui stulpeliais"
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr "Ne vienas „Lazarus“ programos egzempliorius"
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr "visada stratuoti naują egzempliorių"
@@ -3196,6 +3204,10 @@ msgstr "Pavadinimų suteikimas"
 msgid "New desktop ..."
 msgstr "Naujas darbalaukis…"
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 msgid "No automatic renaming"
 msgstr "Automatiškai nepervadinti"
@@ -3208,6 +3220,10 @@ msgstr "Nėra įkeltinų modulių."
 msgid "No Highlight"
 msgstr "Jokių paryškinimų"
 
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnotebooktabpos
 msgid "Source notebook tabs position"
 msgstr "Rengyklės kortelių vieta"
@@ -3219,6 +3235,10 @@ msgstr "Nelaužti eilutės po"
 #: lazarusidestrconsts.dlgnotsplitlinefront
 msgid "Do not split line in front of"
 msgstr "Nelaužti eilutės priešais"
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
+msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
 msgctxt "lazarusidestrconsts.dlgobjinsp"
@@ -3510,6 +3530,10 @@ msgstr "Projekto parinktys"
 #, object-pascal-format
 msgid "Options for Project: %s"
 msgstr "Projekto parinktys: %s"
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
+msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
 msgid "Project Files"
@@ -5060,7 +5084,7 @@ msgstr "Viršutinį kraštą pririšti prie kaimyno apatinio krašto. Atstumą l
 msgid "Anchor top side to top side of sibling. Use BorderSpacing to set a distance. BorderSpacing of sibling is ignored."
 msgstr "Viršutinį kraštą pririšti prie kaimyno viršutinio krašto. Atstumą lemia kraštinės plotis. Kaimyno kratinės plotis ignoruojamas."
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
 msgstr "Paskutinio starto metu įkeliant projektą „%s“ įvyko klaida!%sVėl įkelti šį projektą?"
@@ -5954,7 +5978,7 @@ msgstr "Kintamieji"
 msgid "Wrong indentation"
 msgstr "Bloga įtrauka"
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr "Įvyko išimtinė situacija trinant%s„%s:%s“%s%s"
@@ -8496,8 +8520,16 @@ msgstr "Pridėti išimtinę situaciją"
 msgid "Additional search path"
 msgstr "Papildomi paieškos keliai"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
 msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
@@ -8532,6 +8564,14 @@ msgstr "Derintuvės specifinės parinktys (priklauso nuo derintuvės tipo)"
 #: lazarusidestrconsts.lisdebugoptionsfrmduplicateexceptionname
 msgid "Duplicate Exception name"
 msgstr "Dubliuoti išimtinės situacijos pavadinimą"
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
 msgid "Enter the name of the exception"
@@ -10010,15 +10050,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr "Kritinė"
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-msgid "Reduce designer painting"
-msgstr "Sumažinti paišymą konstruktoriuje"
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-msgctxt "lazarusidestrconsts.lisfepaintdesigneritemsonidlehint"
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr "Konstruktoriaus elementus piešti tik laukimo režime (sumažina lėtų kompiuterių apkrovą)"
-
 #: lazarusidestrconsts.lisfile
 msgctxt "lazarusidestrconsts.lisfile"
 msgid "File"
@@ -11357,6 +11388,12 @@ msgstr "Sesijoje"
 msgid "&Inspect"
 msgstr "&Inspektuoti"
 
+#: lazarusidestrconsts.lisinspectaddwatch
+#, fuzzy
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr "Pridėti stebimąjį"
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format, fuzzy
 #| msgid "%s : Class %s inherits from %s"
@@ -11686,6 +11723,7 @@ msgid "Add Data/WatchPoint"
 msgstr "Pridėti stebėjimo tašką"
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr "Pridėti stebimąjį"
 
@@ -16463,10 +16501,6 @@ msgstr "Klaidingas paketo pavadinimas"
 #, object-pascal-format
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
 msgstr "keliant paketą „%s“ bus pakeistas paketas „%s“%s, esanti faile „%s“.%sSenojo paketo turinys yra pakeistas.%sĮrašyti senojo paketo „%s“ pakeitimus?"
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
-msgstr "Naujas paketas"
 
 #: lazarusidestrconsts.lispkgmangpackage
 #, object-pascal-format

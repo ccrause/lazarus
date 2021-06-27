@@ -48,7 +48,7 @@ uses
   // LCL
   LCLProc,
   // LazUtils
-  LazClasses, LazLoggerBase, LazFileUtils, LazStringUtils, Maps, LazMethodList,
+  LazClasses, {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif}, LazFileUtils, LazStringUtils, Maps, LazMethodList,
   // DebuggerIntf
   DbgIntfBaseTypes, DbgIntfMiscClasses, DbgIntfPseudoTerminal, DbgIntfCommonStrings;
 
@@ -58,6 +58,11 @@ const
 type
   EDebuggerException = class(Exception);
   EDBGExceptions = class(EDebuggerException);
+
+  TDBGFeature = (
+    dfEvalFunctionCalls   // The debugger supports calling functions in watches/expressions. defAllowFunctionCall in TDBGEvaluateFlag
+  );
+  TDBGFeatures = set of TDBGFeature;
 
   TDBGCommand = (
     dcRun,
@@ -176,7 +181,8 @@ type
     (defNoTypeInfo,        // No Typeinfo object will be returned
      defSimpleTypeInfo,    // Returns: Kind (skSimple, skClass, ..); TypeName (but does make no attempt to avoid an alias)
      defFullTypeInfo,      // Get all typeinfo, resolve all anchestors
-     defClassAutoCast      // Find real class of instance, and use, instead of declared class of variable
+     defClassAutoCast,     // Find real class of instance, and use, instead of declared class of variable
+     defAllowFunctionCall
     );
   TDBGEvaluateFlags = set of TDBGEvaluateFlag;
 
@@ -1831,6 +1837,7 @@ type
     FDebuggerEnvironment: TStrings;
     FCurEnvironment: TStrings;
     FDisassembler: TDBGDisassembler;
+    FEnabledFeatures: TDBGFeatures;
     FEnvironment: TStrings;
     FErrorStateInfo: String;
     FErrorStateMessage: String;
@@ -1876,6 +1883,7 @@ type
                      const AParams: array of const;
                      const ACallback: TMethod): Boolean;
     procedure SetDebuggerEnvironment (const AValue: TStrings ); overload;
+    procedure SetEnabledFeatures(AValue: TDBGFeatures);
     procedure SetEnvironment(const AValue: TStrings);
     procedure SetFileName(const AValue: String);
   protected
@@ -1928,6 +1936,7 @@ type
     class function HasExePath: boolean; virtual; deprecated; // use NeedsExePath instead
     class function NeedsExePath: boolean; virtual;        // If the debugger needs to have an exe path
     class function RequiredCompilerOpts(ATargetCPU, ATargetOS: String): TDebugCompilerRequirements; virtual;
+    class function SupportedFeatures: TDBGFeatures; virtual;
 
     // debugger properties
     class function CreateProperties: TDebuggerProperties; virtual;         // Creates debuggerproperties
@@ -2011,6 +2020,7 @@ type
     property ErrorStateMessage: String read FErrorStateMessage;
     property ErrorStateInfo: String read FErrorStateInfo;
     property SkipStopMessage: Boolean read FSkipStopMessage;
+    property EnabledFeatures: TDBGFeatures read FEnabledFeatures write SetEnabledFeatures;
     //property UnitInfoProvider: TDebuggerUnitInfoProvider                        // Provided by DebugBoss, to map files to packages or project
     //         read GetUnitInfoProvider write FUnitInfoProvider;
     // Events
@@ -3727,7 +3737,7 @@ end;
 
 procedure TBaseBreakPoint.SetPendingToValid(const AValue: TValidState);
 begin
-  assert(Valid = vsPending, 'Can only change state if pending');
+  assert(Valid in [vsPending, vsUnknown], 'Can only change state if pending');
   SetValid(AValue);
 end;
 
@@ -5823,6 +5833,8 @@ var
   nr: TDebuggerNotifyReason;
 begin
   inherited Create;
+  FEnabledFeatures := SupportedFeatures;
+
   for nr := low(TDebuggerNotifyReason) to high(TDebuggerNotifyReason) do
     FDestroyNotificationList[nr] := TMethodList.Create;
   FOnState := nil;
@@ -6233,6 +6245,11 @@ begin
   Result := [];
 end;
 
+class function TDebuggerIntf.SupportedFeatures: TDBGFeatures;
+begin
+  Result := [];
+end;
+
 function TDebuggerIntf.GetCommands: TDBGCommands;
 begin
   Result := COMMANDMAP[State] * GetSupportedCommands;
@@ -6360,6 +6377,13 @@ end;
 procedure TDebuggerIntf.SetDebuggerEnvironment (const AValue: TStrings );
 begin
   FDebuggerEnvironment.Assign(AValue);
+end;
+
+procedure TDebuggerIntf.SetEnabledFeatures(AValue: TDBGFeatures);
+begin
+  AValue := AValue * SupportedFeatures;
+  if FEnabledFeatures = AValue then Exit;
+  FEnabledFeatures := AValue;
 end;
 
 procedure TDebuggerIntf.SetEnvironment(const AValue: TStrings);
@@ -6490,18 +6514,19 @@ begin
   if FReleaseLock > 0
   then exit;
 
+  FReleaseLock := -1;
   Self.Free;
 end;
 
 procedure TDebuggerIntf.LockRelease;
 begin
   inc(FReleaseLock);
-  DebugLnEnter(DBG_VERBOSE, ['> TDebuggerIntf.LockRelease ',FReleaseLock]);
+  DebugLnEnter(DBG_VERBOSE and (FReleaseLock >= 0), ['> TDebuggerIntf.LockRelease ',FReleaseLock]);
 end;
 
 procedure TDebuggerIntf.UnlockRelease;
 begin
-  DebugLnExit(DBG_VERBOSE, ['< TDebuggerIntf.UnlockRelease ',FReleaseLock]);
+  DebugLnExit(DBG_VERBOSE and (FReleaseLock >= 0), ['< TDebuggerIntf.UnlockRelease ',FReleaseLock]);
   dec(FReleaseLock);
   if (FReleaseLock = 0) and (State = dsDestroying)
   then Release;

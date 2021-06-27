@@ -1,62 +1,81 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <fpdoc-descriptions>
-  <package name="lcl">
+  <package name="lazutils">
     <!--
-  ====================================================================
-    DynHashArray
-  ====================================================================
--->
+    ====================================================================
+      DynHashArray
+    ====================================================================
+    -->
     <module name="DynHashArray">
-      <short>Module of managing dynamic sets or associative arrays</short>
+      <short>Contains classes used to manage dynamic sets or associative arrays.</short>
       <descr>
-        <p>Extends the functionality of Pascal by offering alternative data structure : set like array (the order is not kept) with fast find/delete. Its size can change automatically during the execution of the program.  The price is that it is somewhat slower than a number indexes access of an array. </p>
-        <p>This unit defines TDynHashArray, which is very similar to a TList, since
-    it also stores pointer/objects. </p>
-        <p>It supports Add, Remove, Contains, First, Count and Clear.</p>
-        <p>Because of the hashing nature the operations adding, removing and finding is
-    done in constant time on average.</p>
-        <code>Inner structure:
-      There are three parts:
-        1. The array itself (FItems). Every entry is a pointer to the first
-           TDynHashArrayItem of a list with the same hash index. The first item
-           of every same index list is the list beginning and its IsOverflow
-           flag is set to false. All other items are overflow items.
-           To get all items with the same hash index, do a FindHashItem. Then
-           search through all "Next" items until Next is nil or its IsOverflow
-           flag is set to false.
-        2. The items beginning with FFirstItem is a 2-way-connected list of
-           TDynHashArrayItem. This list contains all used items.
-        3. To reduce GetMem/FreeMem calls, free items are cached.
-
-  Issues:
-    The maximum capacity is the PrimeNumber. You can store more items, but the
-    performance decreases. The best idea is to provide your own hash function.
-
-    Important: Items in the TDynHashArray must not change their key.
-      When changing the key of an item, remove it and add it after the change.
-</code>
+        <p>
+          <file>DynHashArray.pp</file> extends the functionality of Pascal by
+          offering alternative data structure: set like array (the order is not kept)
+          with fast find/delete. Its size can change automatically during the
+          execution of the program.  The price is that it is somewhat slower than
+          a number indexes access of an array.
+        </p>
+        <p>
+          This unit defines TDynHashArray, which is very similar to a TList, since
+          it also stores pointer/objects.
+        </p>
+        <p>
+          It supports Add, Remove, Contains, First, Count and Clear.
+        </p>
+        <p>
+          Because of the hashing nature the operations adding, removing and
+          finding is done in constant time on average.
+        </p>
+        <p>
+          <b>Inner structure:</b>
+        </p>
+        <p>
+          There are three parts:
+        </p>
+        <ul>
+          <li>
+            The array itself (FItems). Every entry is a pointer to the first
+               TDynHashArrayItem of a list with the same hash index.
+               The first item of every same index list is the list beginning
+               and its IsOverflow flag is set to false. All other items are
+               overflow items. To get all items with the same hash index,
+               do a FindHashItem. Then search through all "Next" items
+               until Next is nil or its IsOverflow flag is set to false.
+          </li>
+          <li>
+            The items beginning with FFirstItem is a 2-way-connected list
+            of TDynHashArrayItem. This list contains all used items.
+          </li>
+          <li>
+          To reduce GetMem/FreeMem calls, free items are cached.
+        </li>
+        </ul>
+        <p>
+          <b>Issues:</b>
+        </p>
+        <p>
+          The maximum capacity is the PrimeNumber. You can store more items,
+          but the performance decreases. The best idea is to provide your own
+          hash function.
+        </p>
+        <p>
+          Important: Items in the TDynHashArray must not change their key. When
+          changing the key of an item, remove it and add it after the change.
+        </p>
+        <p>
+          This file is part of the <file>LazUtils</file> package.
+        </p>
       </descr>
+
       <!-- unresolved type reference Visibility: default -->
-      <element name="Classes">
-        <short/>
-        <descr/>
-        <seealso/>
-      </element>
-      <!-- unresolved type reference Visibility: default -->
-      <element name="SysUtils">
-        <short/>
-        <descr/>
-        <seealso/>
-      </element>
-      <!-- unresolved type reference Visibility: default -->
-      <element name="LCLProc">
-        <short/>
-        <descr/>
-        <seealso/>
-      </element>
+      <element name="Classes"/>
+      <element name="SysUtils"/>
+      <element name="LazLoggerBase"/>
+
       <!-- function type Visibility: default -->
       <element name="THashFunction">
-        <short>Type for hash function</short>
+        <short>Type for hash function.</short>
         <descr>Each hash function specified by the user has to have these parameters</descr>
         <seealso/>
       </element>
@@ -144,7 +163,7 @@
       </element>
       <!-- enumeration value Visibility: default -->
       <element name="TDynHashArrayOption.dhaoCachingEnabled">
-        <short>It will use cached result if available in IndexOfKey</short>
+        <short>It will use cached result if available in IndexOfKey.</short>
       </element>
       <!-- enumeration value Visibility: default -->
       <element name="TDynHashArrayOption.dhaoCacheContains">
@@ -165,13 +184,13 @@
       </element>
       <!-- variable Visibility: private -->
       <element name="TDynHashArray.FItems">
-        <short>Array pointing to link lists</short>
+        <short>Array pointing to link lists.</short>
         <descr/>
         <seealso/>
       </element>
       <!-- variable Visibility: private -->
       <element name="TDynHashArray.FCount">
-        <short>Number of elements stored</short>
+        <short>Number of elements stored.</short>
         <descr/>
         <seealso/>
       </element>
@@ -451,7 +470,7 @@ StrDispose(s);   </code>
       </element>
       <!-- function Visibility: public -->
       <element name="TDynHashArray.ContainsKey">
-        <short>Returns true if the item is in the set.(through OnGetKeyForHashItem)</short>
+        <short>Returns true if the item is in the set.(through OnGetKeyForHashItem).</short>
         <descr/>
         <errors/>
         <seealso/>
@@ -466,7 +485,7 @@ StrDispose(s);   </code>
       </element>
       <!-- procedure Visibility: public -->
       <element name="TDynHashArray.Remove">
-        <short>Removes an element from the set/hash array</short>
+        <short>Removes an element from the set/hash array.</short>
         <descr><p>An example:</p><code>{$mode objfpc}{$H+}
 
 uses
@@ -506,7 +525,7 @@ end.
       </element>
       <!-- procedure Visibility: public -->
       <element name="TDynHashArray.Clear">
-        <short>Removes all elements from the set/hash array</short>
+        <short>Removes all elements from the set/hash array.</short>
         <descr><p>An example:</p><code>uses
   {$IFDEF UNIX}{$IFDEF UseCThreads}
  cthreads,
@@ -536,14 +555,14 @@ StrDispose(s);   </code>
       </element>
       <!-- procedure Visibility: public -->
       <element name="TDynHashArray.ClearCache">
-        <short>Clears the FContainsCache cache</short>
+        <short>Clears the FContainsCache cache.</short>
         <descr/>
         <errors/>
         <seealso/>
       </element>
       <!-- function Visibility: public -->
       <element name="TDynHashArray.First">
-        <short>Returns the first item or nil</short>
+        <short>Returns the first item or nil.</short>
         <descr/>
         <errors/>
         <seealso/>
@@ -583,7 +602,7 @@ StrDispose(s);   </code>
       </element>
       <!-- function Visibility: public -->
       <element name="TDynHashArray.IndexOf">
-        <short>Returns calculated index from Item through OnGetKeyForHashItem</short>
+        <short>Returns calculated index from Item through OnGetKeyForHashItem.</short>
         <descr/>
         <errors/>
         <seealso/>
@@ -596,7 +615,7 @@ StrDispose(s);   </code>
       </element>
       <!-- function Visibility: public -->
       <element name="TDynHashArray.IndexOfKey">
-        <short>Returns calculated index from Item</short>
+        <short>Returns calculated index from Item.</short>
         <descr>It uses user-defined hash functions or built-in algorithm</descr>
         <errors/>
         <seealso/>
@@ -611,7 +630,7 @@ StrDispose(s);   </code>
       </element>
       <!-- function Visibility: public -->
       <element name="TDynHashArray.FindHashItem">
-        <short>Finds an item as PDynHashArrayItem among all items</short>
+        <short>Finds an item as PDynHashArrayItem among all items.</short>
         <descr/>
         <errors/>
         <seealso/>
@@ -626,7 +645,7 @@ StrDispose(s);   </code>
       </element>
       <!-- function Visibility: public -->
       <element name="TDynHashArray.FindHashItemWithKey">
-        <short>Finds an item as PDynHashArrayItem among all items (through OnGetKeyForHashItem)</short>
+        <short>Finds an item as PDynHashArrayItem among all items (through OnGetKeyForHashItem).</short>
         <descr/>
         <errors/>
         <seealso/>
@@ -641,7 +660,7 @@ StrDispose(s);   </code>
       </element>
       <!-- function Visibility: public -->
       <element name="TDynHashArray.FindItemWithKey">
-        <short>Finds an item among all items (through OnGetKeyForHashItem)</short>
+        <short>Finds an item among all items (through OnGetKeyForHashItem).</short>
         <descr/>
         <errors/>
         <seealso/>
@@ -656,7 +675,7 @@ StrDispose(s);   </code>
       </element>
       <!-- function Visibility: public -->
       <element name="TDynHashArray.GetHashItem">
-        <short>Gets a link list from the "main" array FItems by index</short>
+        <short>Gets a link list from the "main" array FItems by index.</short>
         <descr>So it returns a link list which can be processed.</descr>
         <errors/>
         <seealso/>
@@ -671,7 +690,7 @@ StrDispose(s);   </code>
       </element>
       <!-- procedure Visibility: public -->
       <element name="TDynHashArray.Delete">
-        <short>Deletes a PDynHashArrayItem from link list</short>
+        <short>Deletes a PDynHashArrayItem from link list.</short>
         <descr/>
         <errors/>
         <seealso/>
@@ -682,7 +701,7 @@ StrDispose(s);   </code>
       </element>
       <!-- procedure Visibility: public -->
       <element name="TDynHashArray.AssignTo">
-        <short>Copies all items into a given TList</short>
+        <short>Copies all items into a given TList.</short>
         <descr/>
         <errors/>
         <seealso/>
@@ -712,7 +731,7 @@ StrDispose(s);   </code>
       </element>
       <!-- function Visibility: public -->
       <element name="TDynHashArray.ConsistencyCheck">
-        <short>Check if data in TDynHashArray are OK</short>
+        <short>Check if data in TDynHashArray are OK.</short>
         <descr>Returns a number indicating the nature of inconsistency. 0
          means OK.
 </descr>
@@ -768,7 +787,7 @@ StrDispose(s);   </code>
       </element>
       <!-- property Visibility: public -->
       <element name="TDynHashArray.OnGetKeyForHashItem">
-        <short>User-defined function to obtain a key from an item</short>
+        <short>User-defined function to obtain a key from an item.</short>
         <descr>If this function is specified,then it is possible to use this class as
          an associative array. Otherwise, it implements a set.</descr>
         <seealso/>
@@ -933,7 +952,7 @@ StrDispose(s);   </code>
       </element>
       <!-- constant Visibility: default -->
       <element name="ItemMemManager">
-        <short>A small memory manager</short>
+        <short>A small memory manager.</short>
         <descr/>
         <seealso/>
       </element>

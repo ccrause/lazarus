@@ -205,7 +205,7 @@ type
     // child components
     procedure AddJITChildComponentsFromStream(JITOwnerComponent: TComponent;
                             BinStream: TStream; ComponentClass: TComponentClass;
-                            ParentControl: TWinControl; var NewComponents: TFPList);
+                            ParentControl: TWinControl; NewComponents: TFPList);
     procedure ReadInlineJITChildComponent(Component: TComponent);
   public
     property OnReaderError: TJITReaderErrorEvent
@@ -1335,7 +1335,7 @@ end;
 procedure TJITComponentList.AddJITChildComponentsFromStream(
   JITOwnerComponent: TComponent; BinStream: TStream;
   ComponentClass: TComponentClass; ParentControl: TWinControl;
-  var NewComponents: TFPList);
+  NewComponents: TFPList);
 var
   Reader: TReader;
   DestroyDriver: Boolean;
@@ -1590,6 +1590,8 @@ begin
   System.Move(Pointer(Pointer(AncestorVMT)+vmtMethodStart)^,
               Pointer(Pointer(NewVMT)+vmtMethodStart)^,
               vmtTailSize);
+
+  //debugln(['TJITComponentList.CreateNewJITClass AncestorClass=',AncestorClass.ClassName,' NewClassName=',NewClassName,' NewUnitName=',NewUnitName,' vmtTailSize=',vmtTailSize]);
 
   // override 'ValidateRename' for TComponent descendants
   if AncestorClass.InheritsFrom(TComponent) then begin
@@ -1923,7 +1925,7 @@ begin
   Action:=mrCancel;
   FCurReadErrorMsg:=ErrorMsg;
   FCurUnknownProperty:=''; // ToDo find name property
-  // find out, what error occured
+  // find out, what error occurred
   if RightStr(ErrorMsg,length(SUnknownProperty))=SUnknownProperty then begin
     ErrorType:=jfeUnknownProperty;
     Action:=mrIgnore;

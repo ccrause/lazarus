@@ -27,12 +27,23 @@ type
   published
     procedure TestUTF8Trim;
     procedure TestUTF8Pos;
+    procedure TestUTF8ToUTF16;
     procedure TestFindInvalidUTF8;
     procedure TestFindUnicodeToUTF8;
     procedure TestUTF8QuotedStr;
+    procedure TestUTF8FixBroken;
   end;
 
 implementation
+
+function dbgUnicodeStr(S: UnicodeString): string;
+var
+  i: Integer;
+begin
+  Result:='';
+  for i:=1 to length(S) do
+    Result:=Result+'$'+HexStr(ord(S[i]),4);
+end;
 
 { TTestLazUTF8 }
 
@@ -55,9 +66,53 @@ end;
 
 procedure TTestLazUTF8.TestUTF8Pos;
 begin
-  AssertEquals('Skip first occurence',4,UTF8Pos('ab','abcabc',2));
+  AssertEquals('Skip first occurrence',4,UTF8Pos('ab','abcabc',2));
   AssertEquals('Not found',0,UTF8Pos('abc'#0,'abcabc'));
   AssertEquals('Check #0',2,UTF8Pos('bc'#0,'abc'#0'abc'));
+end;
+
+procedure TTestLazUTF8.TestUTF8ToUTF16;
+
+  procedure t(theUTF8: string; Expected: UnicodeString);
+  var
+    Actual: UnicodeString;
+  begin
+    Actual:=LazUTF8.UTF8ToUTF16(theUTF8);
+    //writeln('TTestLazUTF8.TestUTF8ToUTF16 ','UTF8='+dbgMemRange(PChar(theUTF8),length(theUTF8)));
+    AssertEquals('UTF8='+dbgMemRange(PChar(theUTF8),length(theUTF8)),
+      dbgUnicodeStr(Expected),
+      dbgUnicodeStr(Actual));
+  end;
+
+begin
+  t(#0,#0);
+  t(#1,#1);
+  t(#$20,' ');
+  t(#$7f,#$7f);
+  t(#$80,'');
+  t(#$C0#0,'?'#0); // invalid 2-byte UTF8
+  t(#$C2#$80,#$0080);
+  t(#$DF#$BF,#$07FF);
+  t(#$E0#$A0#$80,#$0800);
+  t(#$E0#$BF#$BF,#$0FFF);
+  t(#$E1#$BF#$BF,#$1FFF);
+  t(#$E3#$BF#$BF,#$3FFF);
+  t(#$E7#$BF#$BF,#$7FFF);
+  t(#$ED#$9F#$BF,#$D7FF);
+  t(#$ED#$A0#$80,'?'); // U+D800 is not Unicode standard conform, but many en/decoders support it anyway
+  t(#$ED#$BF#$BF,'?'); // U+DFFF is not Unicode standard conform, but many en/decoders support it anyway
+  t(#$EE#$80#$80,#$E000);
+  t(#$EF#$80#$80,#$F000);
+  t(#$EF#$BF#$BF,#$FFFF);
+  t(#$F0#$9F#$98#$80,#$D83D#$DE00); // U+1F600
+  t(#$F0#$9F#$BF#$BF,#$D83F#$DFFF); // U+1FFFF
+  t(#$F0#$AF#$BF#$BF,#$D87F#$DFFF); // U+2FFFF
+  t(#$F0#$BF#$BF#$BF,#$D8BF#$DFFF); // U+3FFFF
+  t(#$F1#$BF#$BF#$BF,#$D9BF#$DFFF); // U+7FFFF
+  t(#$F2#$BF#$BF#$BF,#$DABF#$DFFF); // U+8FFFF
+  t(#$F3#$BF#$BF#$BF,#$DBBF#$DFFF); // U+FFFFF
+  t(#$F4#$8F#$BF#$BF,#$DBFF#$DFFF); // U+10FFFF
+  t(#$F7#$BF#$BF#$BF,'?'); // invalid 4 byte out of range
 end;
 
 procedure TTestLazUTF8.TestFindInvalidUTF8;
@@ -92,7 +147,10 @@ begin
   t(UnicodeToUTF8($10000),-1,'unicode($10000)');
   t(UnicodeToUTF8($10900),-1,'unicode($10900)');
   t(UnicodeToUTF8($10ffff),-1,'unicode($10ffff)');
+  t(#$F4#$8F#$BF#$BF,-1,'unicode($10ffff)');
+  t(#$F4#$90#$80#$80,0,'unicode($110000)');
   t(#$c0#0,0,'invalid second byte of 2 byte');
+  t(#$c2#0,0,'valid 2 byte');
   t(#$e0#0,0,'invalid second byte of 3 byte');
   t(#$e0#$80#0,0,'invalid third byte of 3 byte');
   t(#$f0#0,0,'invalid second byte of 4 byte');
@@ -106,6 +164,8 @@ begin
   t(#$e0#$9f#$bf,0,'invalid: $7ff encoded as 3 byte');
   t(#$f0#$80#$80#$80,0,'invalid: 0 encoded as 4 byte');
   t(#$f0#$8f#$bf#$bf,0,'invalid: $ffff encoded as 4 byte');
+  t(#$F7#$BF#$BF#$BF,0,'invalid 4 byte out of range');
+  t(#$ED#$A0#$80,0,'3 byte encoding for reserved UTF-16 surrogate halve');
 end;
 
 procedure TTestLazUTF8.TestFindUnicodeToUTF8;
@@ -133,6 +193,7 @@ begin
   t($3fff,#$E3#$BF#$BF);
   t($7fff,#$E7#$BF#$BF);
   t($ffff,#$EF#$BF#$BF);
+  t($1f600,#$F0#$9F#$98#$80);
   t($1ffff,#$F0#$9F#$BF#$BF);
   t($3ffff,#$F0#$BF#$BF#$BF);
   t($7ffff,#$F1#$BF#$BF#$BF);
@@ -155,6 +216,55 @@ begin
   t('A','A','AAAA');
   t('bAb','A','AbAAbA');
   t('cABc','AB','ABcABABcAB');
+end;
+
+procedure TTestLazUTF8.TestUTF8FixBroken;
+
+  procedure t(const S, Expected: string);
+  var
+    Actual: String;
+  begin
+    Actual:=S;
+    UTF8FixBroken(Actual);
+    AssertEquals('S: '+dbgMemRange(PChar(S),length(S)),
+      dbgMemRange(PChar(Expected),length(Expected)),
+      dbgMemRange(PChar(Actual),length(Actual)));
+  end;
+
+begin
+  t(#$0,#$0);
+  t(#$1,#$1);
+  t(#$7F,#$7F);
+  t(#$80,' ');
+  t(#$BF,' ');
+  t(#$C0#$0,' '#$0);
+  t(#$C0#$7F,' '#$7F);
+  t(#$C0#$80,'  ');
+  t(#$C0#$CF,'  ');
+  t(#$C1#$80,'  ');
+  t(#$C2#$7F,' '#$7F);
+  t(#$C2#$80,#$C2#$80);
+  t(#$DF#$80,#$DF#$80);
+  t(#$DF#$BF,#$DF#$BF);
+  t(#$DF#$C0,'  ');
+  t(#$DF#$70,' '#$70);
+  t(#$E0#$80,'  ');
+  t(#$E0#$80#$80,'   ');
+  t(#$E0#$9F#$BF,'   ');
+  t(#$E0#$A0#$80,#$E0#$A0#$80);
+  t(#$E0#$80#$70,'  '#$70);
+  t(#$EF#$BF#$BF,#$EF#$BF#$BF);
+  t(#$EF#$BF#$7F,'  '#$7F);
+  t(#$EF#$BF#$C0,'   ');
+  t(#$EF#$7F#$80,' '#$7F' ');
+  t(#$F0#$80#$80#$80,'    ');
+  t(#$F0#$8F#$BF#$BF,'    ');
+  t(#$F0#$9F#$BF#$BF,#$F0#$9F#$BF#$BF);
+  t(#$F0#$9F#$BF#$CF,'    ');
+  t(#$F0#$9F#$CF#$BF,'  '#$CF#$BF);
+  t(#$F0#$CF#$BF#$BF,' '#$CF#$BF' ');
+  t(#$F4#$8F#$BF#$BF,#$F4#$8F#$BF#$BF);
+  t(#$F4#$90#$80#$80,'    ');
 end;
 
 initialization

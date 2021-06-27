@@ -26,7 +26,7 @@ uses
   {$ENDIF}
   SysUtils, Classes, types, Math, FPImage,
   // LazUtils
-  LazUtilities, LazLoggerBase, LazTracer, LazUTF8, IntegerList, GraphType,
+  LazLoggerBase, LazTracer, LazUTF8, IntegerList, GraphType, LazUtilities,
   // LCL
   LCLPlatformDef, InterfaceBase, LCLProc, LCLType, LMessages, LCLMessageGlue,
   Controls, Forms, Graphics, GraphUtil, IntfGraphics,
@@ -82,6 +82,9 @@ type
     FGlobalCursor: HCursor;
     FThemeName: string;
     FCSSTheme: TStringList;
+    // tmp
+    cssProvider:PGtkCssProvider;
+
   public
     function CreateDCForWidget(AWidget: PGtkWidget; AWindow: PGdkWindow; cr: Pcairo_t): HDC;
     procedure AddWindow(AWindow: PGtkWindow);

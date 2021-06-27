@@ -41,7 +41,8 @@ type
     dcGrabber,
     dcMarker,
     dcRuberbandSelection,
-    dcRuberbandCreation
+    dcRuberbandCreation,
+    dcNonFormBackgroundColor
   );
 
   { TFormEditorOptionsFrame }
@@ -55,7 +56,6 @@ type
     ColorBox: TColorBox;
     ColorsListBox: TColorListBox;
     CreateCompFocusNameCheckBox: TCheckBox;
-    DesignerPaintLazyCheckBox: TCheckBox;
     FormEditMiscGroupBox: TGroupBox;
     GridGroupBox: TGroupBox;
     GridSizeXSpinEdit: TSpinEdit;
@@ -135,8 +135,6 @@ procedure TFormEditorOptionsFrame.Setup(ADialog: TAbstractOptionsEditorDialog);
     OpenDesignerOnOpenUnitCheckBox.Hint:=lisOpenDesignerOnOpenUnitHint;
     RightClickSelectsCheckBox.Caption:=dlgRightClickSelects;
     RightClickSelectsCheckBox.Hint:=dlgComponentUnderMouseCursorIsFirstSelected;
-    DesignerPaintLazyCheckBox.Caption:=lisFEPaintDesignerItemsOnIdle;
-    DesignerPaintLazyCheckBox.Hint:=lisFEPaintDesignerItemsOnIdleHint;
     CreateCompFocusNameCheckBox.Caption:=lisAskNameOnCreate;
     CreateCompFocusNameCheckBox.Hint:=lisAskForComponentNameAfterPuttingItOnForm;
     SwitchToFavoritesOITabCheckBox.Caption:=lisOFESwitchToObjectInspectorFavoritesTab;
@@ -169,6 +167,7 @@ begin
     ColorsListBox.Items.Objects[Ord(dcGridLinesRightBottom)] := TObject(PtrInt(GuideLineColorRightBottom));
     ColorsListBox.Items.Objects[Ord(dcGrabber)] := TObject(PtrInt(GrabberColor));
     ColorsListBox.Items.Objects[Ord(dcMarker)] := TObject(PtrInt(MarkerColor));
+    ColorsListBox.Items.Objects[Ord(dcNonFormBackgroundColor)] := TObject(PtrInt(NonFormBackgroundColor));
     ColorsListBox.Items.Objects[Ord(dcRuberbandSelection)] := TObject(PtrInt(RubberbandSelectionColor));
     ColorsListBox.Items.Objects[Ord(dcRuberbandCreation)] := TObject(PtrInt(RubberbandCreationColor));
 
@@ -185,7 +184,6 @@ begin
     CheckPackagesOnFormCreateCheckBox.Checked := CheckPackagesOnFormCreate;
     RightClickSelectsCheckBox.Checked := RightClickSelects;
     RubberbandSelectsGrandChildsCheckBox.Checked := RubberbandSelectsGrandChilds;
-    DesignerPaintLazyCheckBox.Checked := DesignerPaintLazy;
     CreateCompFocusNameCheckBox.Checked := CreateComponentFocusNameProperty;
     SwitchToFavoritesOITabCheckBox.Checked := SwitchToFavoritesOITab;
     SwitchToFavoritesOITabCheckBox.Enabled := CreateCompFocusNameCheckBox.Checked;
@@ -205,6 +203,7 @@ begin
     GuideLineColorRightBottom := ColorsListBox.Colors[Ord(dcGridLinesRightBottom)];
     GrabberColor := ColorsListBox.Colors[Ord(dcGrabber)];
     MarkerColor := ColorsListBox.Colors[Ord(dcMarker)];
+    NonFormBackgroundColor := ColorsListBox.Colors[Ord(dcNonFormBackgroundColor)];
     RubberbandSelectionColor := ColorsListBox.Colors[Ord(dcRuberbandSelection)];
     RubberbandCreationColor := ColorsListBox.Colors[Ord(dcRuberbandCreation)];
 
@@ -221,7 +220,6 @@ begin
     CheckPackagesOnFormCreate := CheckPackagesOnFormCreateCheckBox.Checked;
     RightClickSelects := RightClickSelectsCheckBox.Checked;
     RubberbandSelectsGrandChilds := RubberbandSelectsGrandChildsCheckBox.Checked;
-    DesignerPaintLazy := DesignerPaintLazyCheckBox.Checked;
     CreateComponentFocusNameProperty := CreateCompFocusNameCheckBox.Checked;
     SwitchToFavoritesOITab := SwitchToFavoritesOITabCheckBox.Checked;
     FormTitleBarChangesObjectInspector := FormTitleBarChangesObjectInspectorCheckBox.Checked;
@@ -253,6 +251,7 @@ begin
   Items.Add(dlgMarkerColor);
   Items.Add(dlgRuberbandSelectionColor);
   Items.Add(dlgRuberbandCreationColor);
+  Items.Add(dlgNonFormBackgroundColor);
 end;
 
 procedure TFormEditorOptionsFrame.ColorBoxChange(Sender: TObject);

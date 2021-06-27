@@ -1731,6 +1731,10 @@ msgstr "文件"
 msgid "Grid"
 msgstr "网格"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1786,6 +1790,10 @@ msgstr "附加行间距"
 #| msgid "Use external gdb debug symbols file"
 msgid "Use external debug symbols file"
 msgstr "使用外部gdb调试符号文件"
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
+msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
 msgid "File extensions"
@@ -2518,6 +2526,10 @@ msgstr "末尾 (也就是代码的的最后)"
 msgid "Lazarus directory (default for all projects)"
 msgstr "Lazarus目录 (所有工程的默认目录)"
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 msgid "Guide lines Left,Top"
 msgstr "指示线 左(Left),上(Top)"
@@ -3146,10 +3158,6 @@ msgstr "移动光标到页底"
 msgid "Enable multi-caret for column selection"
 msgstr ""
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr "多个Lazarus实例"
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr "总是开始一个新实例"
@@ -3203,6 +3211,10 @@ msgstr "命名"
 msgid "New desktop ..."
 msgstr "新建桌面..."
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 msgid "No automatic renaming"
 msgstr "不自动重命名"
@@ -3214,6 +3226,10 @@ msgstr "没有可用单元来添加."
 #: lazarusidestrconsts.dlgnobrackethighlight
 msgid "No Highlight"
 msgstr "不予高亮"
+
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
+msgstr ""
 
 #: lazarusidestrconsts.dlgnotebooktabpos
 #, fuzzy
@@ -3227,6 +3243,10 @@ msgstr "不要断行 在...后"
 #: lazarusidestrconsts.dlgnotsplitlinefront
 msgid "Do not split line in front of"
 msgstr "不要断行 在...前面"
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
+msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
 msgctxt "lazarusidestrconsts.dlgobjinsp"
@@ -3518,6 +3538,10 @@ msgstr "工程选项"
 #, object-pascal-format
 msgid "Options for Project: %s"
 msgstr "工程:%s选项"
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
+msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
 msgid "Project Files"
@@ -5074,7 +5098,7 @@ msgstr ""
 msgid "Anchor top side to top side of sibling. Use BorderSpacing to set a distance. BorderSpacing of sibling is ignored."
 msgstr "锚顶侧到同属的顶侧.使用边界空格来设置一个距离.同属的边界空间被忽略"
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
 msgstr ""
@@ -5980,7 +6004,7 @@ msgstr "变量"
 msgid "Wrong indentation"
 msgstr "错误缩进"
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr ""
@@ -8548,8 +8572,16 @@ msgstr "添加异常"
 msgid "Additional search path"
 msgstr "附加的搜索路径"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
 msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
@@ -8585,6 +8617,14 @@ msgstr "调试器指定的选项(取决于调试器的类型)"
 #, fuzzy, badformat
 msgid "Duplicate Exception name"
 msgstr "复制成员名\"%s\"."
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
 msgid "Enter the name of the exception"
@@ -10083,16 +10123,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr "致命的"
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-#, fuzzy
-msgid "Reduce designer painting"
-msgstr "设计器"
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-msgctxt "lazarusidestrconsts.lisfepaintdesigneritemsonidlehint"
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr ""
-
 #: lazarusidestrconsts.lisfile
 msgctxt "lazarusidestrconsts.lisfile"
 msgid "File"
@@ -11417,6 +11447,12 @@ msgstr "在会话"
 msgid "&Inspect"
 msgstr "查看(&I)"
 
+#: lazarusidestrconsts.lisinspectaddwatch
+#, fuzzy
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr "增加观察点"
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format, fuzzy, badformat
 #| msgid "%s : Class %s inherits from %s"
@@ -11753,6 +11789,7 @@ msgid "Add Data/WatchPoint"
 msgstr "添加数据/观察点"
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr "增加观察点"
 
@@ -16479,10 +16516,6 @@ msgstr "无效的包名"
 #: lazarusidestrconsts.lispkgmangloadingpackagewillreplacepackage
 #, object-pascal-format
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
-msgstr ""
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
 msgstr ""
 
 #: lazarusidestrconsts.lispkgmangpackage

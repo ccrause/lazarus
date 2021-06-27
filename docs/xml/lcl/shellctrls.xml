@@ -7,7 +7,7 @@
     ====================================================================
     -->
     <module name="ShellCtrls">
-    <short>Contains controls which display files and directories</short>
+    <short>Contains controls which display files and directories.</short>
     <descr>
       <p>
         <file>shellctrls.pas</file> contains tree view and list view controls used to access files and directories on the local file system. The following components are added to the Lazarus IDE component palette:
@@ -38,7 +38,7 @@
       <element name="Masks"/>
 
       <element name="TObjectType">
-        <short>Indicates which objects should be visible in a Shell control</short>
+        <short>Indicates which objects should be visible in a Shell control.</short>
         <descr>
           <p>
             <var>TObjectType</var> is an enumerated type with values that indicate which file system objects are visible in a Shell control. Values from the enumeration are stored in the <var>TObjectTypes</var> set type.
@@ -68,7 +68,7 @@
 
       <element name="TObjectTypes">
         <short>
-          Set type with values that indicate the visible objects in a Shell control
+          Set type with values that indicate the visible objects in a Shell control.
         </short>
         <descr></descr>
         <seealso>
@@ -79,7 +79,7 @@
       </element>
 
       <element name="TFileSortType">
-        <short>Represents sorting options for the items in a shell control</short>
+        <short>Represents sorting options for the items in a shell control.</short>
         <descr>
           <p>
             <var>TFileSortType</var> is an enumerated type with values that control the sort order for the items in a shell control. TFileSortType is the type used to implement the <var>TCustomShellTreeView.FileSortType</var> property.
@@ -91,20 +91,20 @@
       </element>
       <element name="TFileSortType.fstNone">
         <short>
-          No special sorting is done; items will appear in the order provided by the file system
+          No special sorting is done; items will appear in the order provided by the file system.
         </short>
       </element>
       <element name="TFileSortType.fstAlphabet">
-        <short>Items are sorted alphabetically with folders and files mixed</short>
+        <short>Items are sorted alphabetically with folders and files mixed.</short>
       </element>
       <element name="TFileSortType.fstFoldersFirst">
         <short>
-          Items are sorted alphabetically with folders placed at the beginning of the list
+          Items are sorted alphabetically with folders placed at the beginning of the list.
         </short>
       </element>
 
       <element name="TMaskCaseSensitivity">
-        <short>Represents case sensitivity options for file masks</short>
+        <short>Represents case sensitivity options for file masks.</short>
         <descr>
           <p>
             <var>TMaskCaseSensitivity</var> is an enumeration type with values that represent case sensitivity options for the platform or OS where shell controls are implemented. TMaskCaseSensitivity is the type used for the <var>MaskCaseSensitivity</var> property in <var>TCustomShellListView</var>. It is also passed as an argument to methods in <var>TCustomShellTreeView</var>.
@@ -112,26 +112,28 @@
         </descr>
         <seealso>
           <link id="TCustomShellListView.MaskCaseSensitivity"/>
-          <link id="TCustomShellTreeView.GetFilesInDir"/>
         </seealso>
       </element>
       <element name="TMaskCaseSensitivity.mcsPlatformDefault">
-        <short>File masks used the default for the platform or OS</short>
+        <short>File masks used the default for the platform or OS.</short>
       </element>
       <element name="TMaskCaseSensitivity.mcsCaseInsensitive">
-        <short>File masks are case insensitive</short>
+        <short>File masks are case insensitive.</short>
       </element>
       <element name="TMaskCaseSensitivity.mcsCaseSensitive">
-        <short>File masks are case sensitive</short>
+        <short>File masks are case sensitive.</short>
       </element>
 
       <element name="TAddItemEvent">
         <short>
-          Specifies an event handler signalled when an item is added to a shell control
+          Specifies an event handler signalled when an item is added to a shell control.
         </short>
         <descr>
           <p>
-            <var>TAddItemEvent</var> specifies an event handler signalled when an item is added to a shell control. TAddItemEvent is the type used to implement the <var>OnAddItem</var> event handler in <var>TCustomShellListView</var> and <var>TCustomShellTreeView</var>. Applications must implement an object procedure using the signature for the event to respond to the event notification.
+            <var>TAddItemEvent</var> specifies an event handler signalled when an item is added to a shell control. TAddItemEvent is the type used to implement the <var>OnAddItem</var> event handler in <var>TCustomShellListView</var> and <var>TCustomShellTreeView</var>.
+          </p>
+          <p>
+            Applications must implement and assign an object procedure using the signature for the event to respond to the notification. The <var>Sender</var> argument must be cast to the correct class type to access properties and method in the control. Set the value in the <var>CanAdd</var> variable parameter to <b>False</b> to prevent the item from being added in the calling procedure.
           </p>
         </descr>
         <seealso>
@@ -140,21 +142,21 @@
         </seealso>
       </element>
       <element name="TAddItemEvent.Sender">
-        <short>Object generating the event notification</short>
+        <short>Object (control) generating the event notification.</short>
       </element>
       <element name="TAddItemEvent.ABasePath">
-        <short>Base path for the item added to the shell control</short>
+        <short>Base path for the item added to the shell control.</short>
       </element>
       <element name="TAddItemEvent.AFileInfo">
-        <short>Search record with information for the item added to the shell control</short>
+        <short>Search record with information for the item added to the shell control.</short>
       </element>
       <element name="TAddItemEvent.CanAdd">
-        <short>True if the action can continue</short>
+        <short>True if the item can be added.</short>
       </element>
 
       <element name="TCustomShellTreeView">
         <short>
-          The base class for a tree view control used to display files, directories and other objects (such as devices) from the local file system
+          The base class for a tree view control used to display files, directories and other objects (such as devices) from the local file system.
         </short>
         <descr>
           <p>
@@ -179,62 +181,62 @@
       <element name="TCustomShellTreeView.FOnAddItem"/>
 
       <element name="TCustomShellTreeView.GetPath">
-        <short>Gets the value for the Path property</short>
+        <short>Gets the value for the Path property.</short>
         <descr></descr>
         <seealso>
           <link id="TCustomShellTreeView.Path"/>
         </seealso>
       </element>
       <element name="TCustomShellTreeView.GetPath.Result">
-        <short>Value for the property</short>
+        <short>Value for the property.</short>
       </element>
 
       <element name="TCustomShellTreeView.SetFileSortType">
-        <short>Sets the value for the FileSortType property</short>
+        <short>Sets the value for the FileSortType property.</short>
         <descr></descr>
         <seealso>
           <link id="TShellTreeView.FileSortType"/>
         </seealso>
       </element>
       <element name="TCustomShellTreeView.SetFileSortType.AValue">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TCustomShellTreeView.SetObjectTypes">
-        <short>Sets the value for the ObjectTypes property</short>
+        <short>Sets the value for the ObjectTypes property.</short>
         <descr></descr>
         <seealso>
           <link id="TCustomShellTreeView.ObjectTypes"/>
         </seealso>
       </element>
       <element name="TCustomShellTreeView.SetObjectTypes.AValue">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TCustomShellTreeView.SetPath">
-        <short>Sets the value for the Path property</short>
+        <short>Sets the value for the Path property.</short>
         <descr></descr>
         <seealso>
           <link id="TCustomShellTreeView.Path"/>
         </seealso>
       </element>
       <element name="TCustomShellTreeView.SetPath.AValue">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TCustomShellTreeView.SetRoot">
-        <short>Sets the value for the Root property</short>
+        <short>Sets the value for the Root property.</short>
         <descr></descr>
         <seealso>
           <link id="TCustomShellTreeView.Root"/>
         </seealso>
       </element>
       <element name="TCustomShellTreeView.SetRoot.AValue">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TCustomShellTreeView.SetShellListView">
-        <short>Sets the value for the ShellListView property</short>
+        <short>Sets the value for the ShellListView property.</short>
         <descr></descr>
         <seealso>
           <link id="TCustomShellTreeView.ShellListView"/>
@@ -242,22 +244,22 @@
         </seealso>
       </element>
       <element name="TCustomShellTreeView.SetShellListView.Value">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TCustomShellTreeView.SetUseBuiltinIcons">
-        <short>Sets the value for the UseBuiltinIcons property</short>
+        <short>Sets the value for the UseBuiltinIcons property.</short>
         <descr/>
         <seealso>
           <link id="TCustomShellTreeView.UseBuiltinIcons"/>
         </seealso>
       </element>
       <element name="TCustomShellTreeView.SetUseBuiltinIcons.AValue">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TCustomShellTreeView.DoCreateNodeClass">
-        <short>Performs actions needed to create a new tree node in the shell control</short>
+        <short>Performs actions needed to create a new tree node in the shell control.</short>
         <descr>
           <p>
             <var>DoCreateNodeClass</var> is an overridden method used to perform actions needed to create a new tree node in the Items for the shell control. DoCreateNodeClass sets <var>NewNodeClass</var> to the <var>TShellTreeNode</var> class type used in <var>TCustomShellTreeView</var>. DoCreateNodeClass calls the inherited method using NewNodeClass as an argument.
@@ -268,11 +270,11 @@
         </seealso>
       </element>
       <element name="TCustomShellTreeView.DoCreateNodeClass.NewNodeClass">
-        <short>Class reference used to create tree nodes in the shell control</short>
+        <short>Class reference used to create tree nodes in the shell control.</short>
       </element>
 
       <element name="TCustomShellTreeView.Loaded">
-        <short>Performs actions needed when LCL component streaming has been completed</short>
+        <short>Performs actions needed when LCL component streaming has been completed.</short>
         <descr>
           <p>
             <var>Loaded</var> is an overridden procedure used to perform actions needed when LCL component streaming has been completed. In <var>TCustomShellTreeView</var>, this includes calling the inherited method and setting the initial value for the root directory. If the initial root directory was assigned at design-time, <var>PopulateWithBaseFiles</var> is called to load files in the shell control.
@@ -285,13 +287,13 @@
       </element>
 
       <element name="TCustomShellTreeView.CreateNode">
-        <short>Creates a new tree node for the shell control</short>
+        <short>Creates a new tree node for the shell control.</short>
         <descr>
           <p>
-            <var>CreateNode</var> is an overridden method used to create an new <var>TTreeNode</var>  instance for the shell control. CreateNode calls the inherited method to create the class instance for the tree node which used as the return value contains for the method.
+            <var>CreateNode</var> is an overridden method used to create an new <var>TTreeNode</var>  instance for the shell control. CreateNode calls the inherited method to create the class instance used as the return value for the method.
           </p>
           <p>
-            CreateNode ensures that the tree node is a <var>TShellTreeNode</var> class instance; it may have been overridden in the <var>OnCreateNodeClass</var> event handler. If the new tree node is not derived from <var>TShellTreeNode</var>, an <var>EShellCtrl</var> exception is raised to indicate the invalid node type.
+            CreateNode ensures that the tree node is a <var>TShellTreeNode</var> class instance; the class type can be overridden in the <var>OnCreateNodeClass</var> event handler. If the new tree node is not derived from <var>TShellTreeNode</var>, an <var>EShellCtrl</var> exception is raised to indicate the invalid node type.
           </p>
         </descr>
         <errors>
@@ -300,25 +302,30 @@
         <seealso>
           <link id="TShellTreeNode"/>
           <link id="EShellCtrl"/>
+          <link id="#lcl.comctrls.TTreeNodeClass">TTreeNodeClass</link>
+          <link id="#lcl.comctrls.TCustomTreeView.OnCreateNodeClass">TCustomTreeView.OnCreateNodeClass</link>
         </seealso>
       </element>
       <element name="TCustomShellTreeView.CreateNode.Result">
-        <short>New tree node created in the method</short>
+        <short>New tree node created in the method.</short>
       </element>
 
       <element name="TCustomShellTreeView.PopulateTreeNodeWithFiles">
         <short>
-          Adds tree nodes for file system objects found starting at the specified node/path
+          Adds tree nodes for file system objects found starting at the specified node / path.
         </short>
         <descr>
           <p>
-            <var>PopulateTreeNodeWithFiles</var> is a <var>Boolean</var> function used to fill the <var>Items</var> property with tree nodes for file system objects. <var>ANode</var> contains the initial tree node examined in the method. <var>ANodePath</var> contains the path on the local file system to the tree node in <var>ANode</var>. The return value is <b>True</b> if at least on item was added in the method.
+            <var>PopulateTreeNodeWithFiles</var> is a <var>Boolean</var> function used to fill the <var>Items</var> property with the file system objects for a given tree node. <var>ANode</var> contains the initial tree node examined in the method. <var>ANodePath</var> contains the path on the local file system to the tree node in <var>ANode</var>. The return value is <b>True</b> if at least one node was added to Items in the method.
           </p>
           <p>
-            No actions are performed in the method at design-time; the return value is set to <b>False</b>.
+            No actions are performed in the method at design-time, and the return value is set to <b>False</b>.
           </p>
           <p>
-            <var>PopulateTreeNodeWithFiles</var> calls <var>GetFilesInDir</var> to get a list with <var>TFileItem</var> instances for all file system objects matching the <var>ObjectTypes</var> enabled in the shell control. Each of the <var>TFileItem</var> instances are passed to the <var>DoAddItem</var> method to determine if they can be added to the <var>Items</var> in the control. If the new node is for a directory, its <var>HasChildren</var> property is set to <b>True</b>.
+            <var>PopulateTreeNodeWithFiles</var> fills a list with <var>TFileItem</var> instances for file system objects matching the <var>ObjectTypes</var> for the shell control. <var>DoAddItem</var> is called for each <var>TFileItem</var> instance, which signals the <var>OnAddItem</var> event handler (when assigned). The event handler is used to selectively filter file system objects added to the <var>Items</var> in the control. If the <var>TAddItemEvent</var> handler sets its <var>CanAdd</var> argument to <b>False</b>, the file system object is not added to Items.
+          </p>
+          <p>
+            On exit, Items contains the <var>TShellTreeNode</var> instances where ANode is the parent. If an entry is a directory which has sub-directories, its <var>HasChildren</var> property is set to <b>True</b>.
           </p>
           <p>
             <var>PopulateTreeNodeWithFiles</var> is used in the implementation of the <var>PopulateWithBaseFiles</var> and <var>CanExpand</var> methods in <var>TCustomShellTreeView</var>.
@@ -328,24 +335,23 @@
           <link id="TCustomShellTreeView.ObjectTypes"/>
           <link id="TCustomShellTreeView.Items"/>
           <link id="TCustomShellTreeView.DoAddItem"/>
-          <link id="TCustomShellTreeView.GetFilesInDir"/>
           <link id="TCustomShellTreeView.CanExpand"/>
           <link id="TCustomShellTreeView.PopulateWithBaseFiles"/>
           <link id="TShellTreeNode"/>
         </seealso>
       </element>
       <element name="TCustomShellTreeView.PopulateTreeNodeWithFiles.Result">
-        <short>Returns True if at least one item was added to the shell control</short>
+        <short>Returns True if at least one item was added to the shell control.</short>
       </element>
       <element name="TCustomShellTreeView.PopulateTreeNodeWithFiles.ANode">
-        <short>Initial tree node used when filling the Items for the shell control</short>
+        <short>Initial tree node used when filling the Items for the shell control.</short>
       </element>
       <element name="TCustomShellTreeView.PopulateTreeNodeWithFiles.ANodePath">
-        <short>Path to the initial tree node used in the method</short>
+        <short>Path to the initial tree node used in the method.</short>
       </element>
 
       <element name="TCustomShellTreeView.DoSelectionChanged">
-        <short>Performs actions needed when a new item is selected in the shell control</short>
+        <short>Performs actions needed when a new item is selected in the shell control.</short>
         <descr>
           <p>
             <var>DoSelectionChanged</var> is an overridden method used to perform actions needed when a new item is selected in the shell control. DoSelectionChanged calls the inherited DoSelectionChanged method, and ensures that a <var>TCustomShellListView</var> control assigned to <var>ShellListView</var> is synchronized to the current selection in the class.
@@ -374,7 +380,7 @@
       </element>
 
       <element name="TCustomShellTreeView.DoAddItem">
-        <short>Performs actions needed to add a new tree node to the shell control</short>
+        <short>Performs actions needed to add a new tree node to the shell control.</short>
         <descr>
           <p>
             <var>DoAddItem</var> is a procedure used to perform actions needed when a new tree node is added to the shell control. DoAddItem signals the <var>OnAddItem</var> event handler (when assigned) to examine and process the arguments passed to the method.
@@ -397,18 +403,18 @@
         </seealso>
       </element>
       <element name="TCustomShellTreeView.DoAddItem.ABasePath">
-        <short>Base path for the new tree node</short>
+        <short>Base path for the new tree node.</short>
       </element>
       <element name="TCustomShellTreeView.DoAddItem.AFileInfo">
-        <short>TSearchRec with information about the file system object</short>
+        <short>TSearchRec with information about the file system object.</short>
       </element>
       <element name="TCustomShellTreeView.DoAddItem.CanAdd">
-        <short>Indicates if the tree node can be added for the specified path</short>
+        <short>Indicates if the tree node can be added for the specified path.</short>
       </element>
 
       <element name="TCustomShellTreeView.CanExpand">
         <short>
-          Determines if the specified tree node can be expanded in the shell control
+          Determines if the specified tree node can be expanded in the shell control.
         </short>
         <descr>
           <p>
@@ -430,18 +436,14 @@
         </seealso>
       </element>
       <element name="TCustomShellTreeView.CanExpand.Result">
-        <short>True when the tree node contains child nodes and be expanded</short>
+        <short>True when the tree node contains child nodes and be expanded.</short>
       </element>
       <element name="TCustomShellTreeView.CanExpand.Node">
-        <short>Tree node examined in the method</short>
-      </element>
-
-      <element name="TCustomShellTreeView.FBuiltinIconSize">
-        <descr>Defined for the Windows platform only.</descr>
+        <short>Tree node examined in the method.</short>
       </element>
 
       <element name="TCustomShellTreeView.DrawBuiltInIcon">
-        <short>Draws the Shell Icon for the specified tree node</short>
+        <short>Draws the Shell Icon for the specified tree node.</short>
         <descr>
           <p>
             <var>DrawBuiltInIcon</var> is an overridden <var>TSize</var> function used draw an icon in the tree using the Shell icon for the file name in <var>ANode</var>. It re-implements the method in the <var>TCustomTreeView</var> ancestor, and does <b>not</b> call the inherited method.
@@ -463,17 +465,17 @@
         </seealso>
       </element>
       <element name="TCustomShellTreeView.DrawBuiltInIcon.Result">
-        <short>TSize instance with the dimension for the icon</short>
+        <short>TSize instance with the dimension for the icon.</short>
       </element>
       <element name="TCustomShellTreeView.DrawBuiltInIcon.ANode">
-        <short>Tree node with the name for the file system entry</short>
+        <short>Tree node with the name for the file system entry.</short>
       </element>
       <element name="TCustomShellTreeView.DrawBuiltInIcon.ARect">
-        <short>Rectangle where the icon is drawn</short>
+        <short>Rectangle where the icon is drawn.</short>
       </element>
 
       <element name="TCustomShellTreeView.GetBuiltinIconSize">
-        <short>Gets the size for a shell icon used in the control</short>
+        <short>Gets the size for a shell icon used in the control.</short>
         <descr>
           <p>
             <var>GetBuiltinIconSize</var> is an overridden <var>TSize</var> function used to get the dimensions for a shell icon displayed for a file system entry in the control. GetBuiltinIconSize re-implements the method from the <var>TCustomTreeView</var> ancestor, and does <b>not</b> call the inherited method.
@@ -497,11 +499,11 @@
         </seealso>
       </element>
       <element name="TCustomShellTreeView.GetBuiltinIconSize.Result">
-        <short>TSize instance with the dimensions for the shell icon</short>
+        <short>TSize instance with the dimensions for the shell icon.</short>
       </element>
 
       <element name="TCustomShellTreeView.Create">
-        <short>Constructor for the class instance</short>
+        <short>Constructor for the class instance.</short>
         <descr>
           <p>
             <var>Create</var> is the constructor for the class instance.  Create calls the inherited method using the value in <var>AOwner</var> as the owner for the class instance. Create initializes an internal member used to monitor the <var>Root</var> property for changes to its value. Create sets the value in <var>ObjectTypes</var> to display folders.
@@ -519,11 +521,11 @@
         </seealso>
       </element>
       <element name="TCustomShellTreeView.Create.AOwner">
-        <short>Component that owns the class instance</short>
+        <short>Component that owns the class instance.</short>
       </element>
 
       <element name="TCustomShellTreeView.Destroy">
-        <short>Destructor for the class instance</short>
+        <short>Destructor for the class instance.</short>
         <descr>
           <p>
             <var>Destroy</var> is the destructor for the class instance. Destroy ensures that the <var>ShellListView</var> is set to <b>Nil</b> prior to calling the inherited destructor.
@@ -536,7 +538,7 @@
 
       <element name="TCustomShellTreeView.GetBasePath">
         <short>
-          Returns the initial path in the file system hierarchy for the platform
+          Returns the initial path in the file system hierarchy for the platform.
         </short>
         <descr>
           <p>
@@ -561,7 +563,7 @@
 
       <element name="TCustomShellTreeView.GetRootPath">
         <short>
-          Returns the effective root value, returning the value of GetBasePath() of Root is empty or the Root property value otherwise
+          Returns the effective root value, returning the value of GetBasePath() of Root is empty or the Root property value otherwise.
         </short>
         <descr/>
         <errors>
@@ -570,52 +572,16 @@
         </seealso>
       </element>
 
-      <element name="TCustomShellTreeView.GetFilesInDir">
-        <short>Finds all files/directories directly inside a directory</short>
-        <descr>
-          <p>
-            Helper routine. Finds all files/directories directly inside a directory. Does not recurse subdirectories found the current directory.
-          </p>
-          <p>
-            AMask may contain multiple file masks separated by the Semicolon (';') character. Do not add a final delimiter after the last mask in the argument.
-          </p>
-        </descr>
-        <seealso>
-        </seealso>
-      </element>
-      <element name="TCustomShellTreeView.GetFilesInDir.ABaseDir">
-      <short>The base directory</short>
-      </element>
-      <element name="TCustomShellTreeView.GetFilesInDir.AMask">
-      <short>
-        A list of masks used to obtain files which match the mask. The masks should be separated by a Semicolon (';') character. For example: "*.exe;*.txt"
-      </short>
-      </element>
-      <element name="TCustomShellTreeView.GetFilesInDir.AObjectTypes">
-        <short>The kinds of objects to add to the list</short>
-      </element>
-      <element name="TCustomShellTreeView.GetFilesInDir.AResult">
-        <short>
-          An existing TStringList object used to store the  list of files found in the  method
-        </short>
-      </element>
-      <element name="TCustomShellTreeView.GetFilesInDir.AFileSortType">
-        <short>Indicates the sort order for the items in the list</short>
-      </element>
-      <element name="TCustomShellTreeView.GetFilesInDir.ACaseSensitivity">
-        <short>Indicates if file names are compared using case sensitivity in the method</short>
-      </element>
-
       <element name="TCustomShellTreeView.GetPathFromNode">
           <short>
-            Returns the path (including the file name) from the file system that a particular node represents
-          </short>
+            Returns the path (including the file name) from the file system that a particular node represents.
+        </short>
           <descr></descr>
           <seealso></seealso>
       </element>
 
       <element name="TCustomShellTreeView.PopulateWithBaseFiles">
-        <short>Fills the tree view when the Root directory is empty</short>
+        <short>Fills the tree view when the Root directory is empty.</short>
         <descr>
           <remark>
             The implementation of PopulateWithBaseFiles is platform-specific.
@@ -638,7 +604,7 @@
 
       <element name="TCustomShellTreeView.Refresh">
         <short>
-          Updates the tree view to display file system objects starting at the specified tree node
+          Updates the tree view to display file system objects starting at the specified tree node.
         </short>
         <descr>
           Used in the implementation of the SetObjectTypes method.
@@ -650,12 +616,12 @@
       </element>
       <element name="TCustomShellTreeView.Refresh.ANode">
         <short>
-          Tree node with the initial path displayed in the shell control; Nil defaults to the root directory
+          Tree node with the initial path displayed in the shell control; Nil defaults to the root directory.
         </short>
       </element>
 
       <element name="TCustomShellTreeView.UseBuiltinIcons">
-        <short/>
+        <short>Indicates if OS-provided icons are used for entries in the Shell control.</short>
         <descr>
           <p>
             <var>UseBuiltinIcons</var> is a <var>Boolean</var> property which indicates if OS-provided icons are used for the file system entries in the Shell control.
@@ -664,11 +630,8 @@
             The default value for the property is <b>True</b>. Setting a new value for the property causes the <var>Invalidate</var> method to be called to redraw the control.
           </p>
           <p>
-            UseBuiltinIcons is used in the <var>DrawBuiltinIcon</var> method, and controls whether the internal <var>GetShellIcon</var> routine is used to get the icon drawn in the method. When UseBuiltinIcons is set to <b>False</b>, an icon is not drawn in the DrawBuiltinIcon method.
+            UseBuiltinIcons is used in the <var>DrawBuiltinIcon</var> method, and controls whether the corresponding method is called in the widgetset class. When UseBuiltinIcons is set to <b>False</b>, an icon is not drawn in the DrawBuiltinIcon method.
           </p>
-          <remark>
-            The <var>DrawBuiltinIcon</var> and <var>GetBuiltinIconSize</var> methods are defined for the Windows platform only; they requires use of the <var>SHGetFileInfoW</var> routine in the FPC <file>ShellApi.pp</file> unit.
-          </remark>
         </descr>
         <seealso>
           <link id="TCustomShellTreeView.DrawBuiltinIcon"/>
@@ -677,7 +640,7 @@
 
       <element name="TCustomShellTreeView.ObjectTypes">
         <short>
-          Indicates which objects should be shown in this control (for example if it should show files and directories or only directories)
+          Indicates which objects should be shown in this control (for example if it should show files and directories or only directories).
         </short>
         <descr>
         </descr>
@@ -689,7 +652,7 @@
 
       <element name="TCustomShellTreeView.ShellListView">
         <short>
-          Connects this ShellTreeView to a ShellListView
+          Connects this ShellTreeView to a ShellListView.
         </short>
         <descr>
           <p>
@@ -710,7 +673,7 @@
       </element>
 
       <element name="TCustomShellTreeView.FileSortType">
-        <short>Indicates how the items should be sorted in the tree</short>
+        <short>Indicates how the items should be sorted in the tree.</short>
         <descr>
           <p>
             <var>FileSortType</var> is a <var>TFileSortType</var> property used to indicate the sort order for tree nodes in the <var>Items</var> property. See <var>TFileSortType</var> for information about enumeration values and their meanings.
@@ -722,8 +685,11 @@
             No action other than setting the property value is performed in the method at design-time.
           </p>
           <p>
-            The value in <var>FileSortType</var> is used in the <var>PopulateTreeNodeWithFiles</var> method and passed as an argument to <var>GetFilesInDir</var>.
+            The value in <var>FileSortType</var> is used in the <var>PopulateTreeNodeWithFiles</var> method and passed as an argument to the internal <var>GetFilesInDir</var> procedure.
           </p>
+          <remark>
+            The value in FileSortType is not used in <var>PopulateWithBaseFiles</var> on Windows platforms. The entries are logical drive letters, and are processed in the order provided by the file system.
+          </remark>
         </descr>
         <seealso>
           <link id="TFileSortType"/>
@@ -733,13 +699,12 @@
           <link id="TCustomShellTreeView.Path"/>
           <link id="TCustomShellTreeView.PopulateWithBaseFiles"/>
           <link id="TCustomShellTreeView.PopulateTreeNodeWithFiles"/>
-          <link id="TCustomShellTreeView.GetFilesInDir"/>
         </seealso>
       </element>
 
       <element name="TCustomShellTreeView.Root">
         <short>
-          Indicates the directory to start showing the list of items
+          Indicates the directory to start showing the list of items.
         </short>
         <descr>
           <p>
@@ -772,7 +737,7 @@
       </element>
 
       <element name="TCustomShellTreeView.Path">
-        <short>Path to the directory displayed in the shell control</short>
+        <short>Path to the directory displayed in the shell control.</short>
         <descr>
           <p>
             <var>Path</var> is a <var>String</var> property which represents the path on the local file system to the Selected tree node in the  control.
@@ -793,16 +758,15 @@
           </ul>
         </descr>
         <seealso></seealso>
-        <notes><note>Needs review.</note></notes>
       </element>
 
       <element name="TCustomShellTreeView.OnAddItem">
         <short>
-          Event handler signalled when an item (tree node) is added to the shell control
+          Event handler signalled when an item (tree node) is added to the shell control.
         </short>
         <descr>
           <p>
-            <var>OnAddItem</var> is a <var>TAddItemEvent</var> property which contains the event handler signalled when an item (tree node) is added to the shell control. OnAddItem is signalled from the <var>PopulateTreeNodeWithFiles</var> method.
+            <var>OnAddItem</var> is a <var>TAddItemEvent</var> property which contains the event handler signalled when an item (tree node) is added to the shell control. OnAddItem is signalled from the <var>PopulateTreeNodeWithFiles</var> method, and allows the base path and file information for each file to be checked before it is added to the tree view.
           </p>
         </descr>
         <seealso>
@@ -814,7 +778,7 @@
 
       <element name="TShellTreeView">
         <short>
-          Implements a tree view control to display the files, directories and other objects (such as devices) from the local file system
+          Implements a tree view control to display the files, directories and other objects (such as devices) from the local file system.
         </short>
         <descr>
           <p>
@@ -846,6 +810,7 @@
       <element name="TShellTreeView.HotTrack" link="#lcl.comctrls.TTreeView.HotTrack"/>
       <element name="TShellTreeView.Images" link="#lcl.comctrls.TCustomTreeView.Images"/>
       <element name="TShellTreeView.Indent" link="#lcl.comctrls.TCustomTreeView.Indent"/>
+      <element name="TShellTreeView.MultiSelectStyle" link="#lcl.comctrls.TCustomTreeView.MultiSelectStyle"/>
       <element name="TShellTreeView.ParentColor" link="#lcl.controls.TControl.ParentColor"/>
       <element name="TShellTreeView.ParentFont" link="#lcl.controls.TControl.ParentFont"/>
       <element name="TShellTreeView.ParentShowHint" link="#lcl.controls.TControl.ParentShowHint"/>
@@ -911,28 +876,31 @@
 
       <element name="TCSLVFileAddedEvent">
         <short>
-          Specifies an event handler signalled when an item is added to TCustomShellListView
+          Specifies an event handler signalled when an item is added to TCustomShellListView.
         </short>
         <descr>
           <p>
-            <var>TCSLVFileAddedEvent</var> specifies the interface for an event handler signalled when a <var>TListItem</var> instance is added to <var>TCustomShellListView</var>. TCSLVFileAddedEvent is the type used to implement the <var>OnAddItem</var> property in <var>TCustomShellTreeView</var>. Applications must implement an object procedure using the event signature to respond to the notification.
+            <var>TCSLVFileAddedEvent</var> specifies the interface for an event handler signalled when a <var>TListItem</var> instance is added to <var>TCustomShellListView</var>. TCSLVFileAddedEvent is the type used to implement the <var>OnAddItem</var> property in <var>TCustomShellListView</var>.
+          </p>
+          <p>
+            Applications must implement and assign an object procedure using the event signature to respond to the notification. <var>Sender</var> must be cast to the correct class type to access properties and methods in the control for the notification. Or,  use the <var>ListView</var> property in the <var>Item</var> argument.
           </p>
         </descr>
         <seealso>
+          <link id="TCustomShellListView.OnAddItem"/>
           <link id="#lcl.comctrls.TListItem">TListItem</link>
-          <link id="TCustomShellTreeView.OnAddItem"/>
         </seealso>
       </element>
       <element name="TCSLVFileAddedEvent.Sender">
-        <short>Object generating the event notification</short>
+        <short>Object (control) generating the event notification.</short>
       </element>
       <element name="TCSLVFileAddedEvent.Item">
-        <short>List item for the event notification</short>
+        <short>List item for the event notification.</short>
       </element>
 
       <element name="TCustomShellListView">
         <short>
-          The base class that defines a list view control to display the files, directories and other objects (such as devices) from the local file system
+          The base class that defines a list view control to display the files, directories and other objects (such as devices) from the local file system.
         </short>
         <descr>
           <p>
@@ -972,50 +940,48 @@
       <element name="TCustomShellListView.FObjectTypes"/>
       <element name="TCustomShellListView.FRoot"/>
       <element name="TCustomShellListView.FShellTreeView"/>
+      <element name="TCustomShellListView.FUseBuiltInIcons"/>
       <element name="TCustomShellListView.FOnAddItem"/>
       <element name="TCustomShellListView.FOnFileAdded"/>
 
       <element name="TCustomShellListView.SetMask">
-        <short>Sets the value for the Mask property</short>
+        <short>Sets the value for the Mask property.</short>
         <descr></descr>
         <seealso>
           <link id="TCustomShellListView.Mask"/>
         </seealso>
       </element>
       <element name="TCustomShellListView.SetMask.AValue">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TCustomShellListView.SetMaskCaseSensitivity">
-        <short>Sets the value for the MaskCaseSensitivity property</short>
+        <short>Sets the value for the MaskCaseSensitivity property.</short>
         <descr></descr>
         <seealso>
           <link id="TCustomShellListView.MaskCaseSensitivity"/>
         </seealso>
       </element>
       <element name="TCustomShellListView.SetMaskCaseSensitivity.AValue">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TCustomShellListView.SetShellTreeView">
-        <short>Sets the value for the ShellTreeView property</short>
+        <short>Sets the value for the ShellTreeView property.</short>
         <descr></descr>
         <seealso>
           <link id="TCustomShellListView.ShellTreeView"/>
         </seealso>
       </element>
       <element name="TCustomShellListView.SetShellTreeView.Value">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TCustomShellListView.SetRoot">
-        <short>Sets the value for the Root property</short>
+        <short>Sets the value for the Root property.</short>
         <descr>
           <p>
-            Calls <var>Clear</var> to remove list items in the control.
-            Calls PopulateWithRoot to load file system entries in the new root directory.
-            Raises an EInvalidPath exception at run-time if Value contains an invalid path name.
-            Does <b>not</b> raise an exception at design-time to prevent crashing the IDE.
+            Calls <var>Clear</var> to remove list items in the control. Calls <var>PopulateWithRoot</var> to load file system entries in the new root directory. Raises an <var>EInvalidPath</var> exception at run-time if Value contains an invalid path name. Does <b>not</b> raise an exception at design-time to prevent crashing the IDE.
           </p>
         </descr>
         <errors>
@@ -1026,11 +992,29 @@
         </seealso>
       </element>
       <element name="TCustomShellListView.SetRoot.Value">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
+      </element>
+
+      <element name="TCustomShellListView.WSRegisterClass" link="#lcl.controls.TWinControl.WSRegisterClass">
+        <short/>
+        <descr>
+          <p>
+            <var>WSRegisterClass</var> is an overridden class method in <var>TCustomShellListView</var>. It registers properties that are ignored in the class instance during LCL component streaming, including:
+          </p>
+          <ul>
+            <li>ItemIndex (Used in older LCL versions)</li>
+            <li>BevelKind (Provided for Delphi compatibility)</li>
+            <li>TListItem.OverlayIndex (Provided for Delphi compatibility)</li>
+          </ul>
+          <p>
+            It calls the inherited method, and registers the companion widgetset class instance.
+          </p>
+        </descr>
+        <seealso/>
       </element>
 
       <element name="TCustomShellListView.PopulateWithRoot">
-        <short>Fills the list view with file system information for the root directory</short>
+        <short>Fills the list view with file system information for the root directory.</short>
         <descr>
           <p>
             <var>PopulateWithRoot</var> is a procedure used to fill the <var>Items</var> in the list view with file system entries for the <var>Root</var> directory.
@@ -1039,7 +1023,16 @@
             No actions are performed in the method at design-time, or when <var>Root</var>  contains an empty string (<b>''</b>).
           </p>
           <p>
-            <var>PopulateWithRoot</var> calls <var>GetFilesInDir</var> to get a list of file system items for the path which match the <var>Mask</var> and <var>ObjectTypes</var> specified for the control. Each of file information items in the list are passed to <var>DoAddItem</var> and <var>OnAddItem</var> to determine if they can be added to the <var>Items</var> in the control. The <var>OnFileAdded</var> event handler is signalled (when assigned) for each new entry added to Items.
+            <var>PopulateWithRoot</var> calls the internal <var>GetFilesInDir</var> helper to get a list of file system items for the path which match the <var>Mask</var> and <var>ObjectTypes</var> specified for the control. Each of the files in the list are passed to <var>DoAddItem</var> / <var>OnAddItem</var> to determine if they can be added to the <var>Items</var> in the control.
+          </p>
+          <p>
+            A <var>TListItem</var> instance is added to Items to represent the files or directories. The <var>Data</var> property in the list item is used to store a pointer to the file size. Values are added to <var>SubItems</var> with the string representation for the file size, and the file extension.
+          </p>
+          <p>
+            When <var>UseBuiltInIcons</var> is set to <b>True</b>, the <var>GetBuiltInImageIndex</var> method is called to get the <var>ImageIndex</var> for the built-in icon for a list item. This action is performed using the path to the current file name when LargeImages  and/or SmallImages have not been assigned. The value in <var>ViewStyle</var> determines the image size requested. When ViewStyle is <var>vsIcon</var>, LargeImages is checked (when assigned). Otherwise, <var>SmalImages</var> is checked (when assigned). If an imagelist exists in either LargeImages or SmallImages, the existing ImageIndex in the list item is used.
+          </p>
+          <p>
+            The <var>OnFileAdded</var> event handler is signalled (when assigned) for each new entry added to Items.
           </p>
           <p>
             The <var>Sort</var> method is called prior to exit to order the Items in the control using the option specified in the <var>FileSortType</var> property.
@@ -1050,16 +1043,18 @@
           <link id="TCustomShellListView.Items"/>
           <link id="TCustomShellListView.Mask"/>
           <link id="TCustomShellListView.ObjectTypes"/>
+          <link id="TCustomShellListView.UseBuiltInIcons"/>
           <link id="TCustomShellTreeView.FileSortType"/>
-          <link id="TCustomShellTreeView.GetFilesInDir"/>
           <link id="TCustomShellListView.DoAddItem"/>
           <link id="TCustomShellListView.OnAddItem"/>
           <link id="TCustomShellListView.OnFileAdded"/>
+          <link id="TAddItemEvent"/>
+          <link id="TCSLVFileAddedEvent"/>
         </seealso>
       </element>
 
       <element name="TCustomShellListView.Resize">
-        <short>Sets the size for Columns in the list view</short>
+        <short>Sets the size for Columns in the list view.</short>
         <descr>
           <p>
             <var>Resize</var> is a method used to set the size for <var>Columns</var> in the list view control. <var>Resize</var> calls the inherited method, and checks the <var>Columns</var> defined for the control. The <var>Width</var> property is used to determine the layout sizes applied to the columns for the control.
@@ -1073,7 +1068,6 @@
         </descr>
         <seealso>
           <link id="TCustomShellListView.Create"/>
-          <link id="TShellListView.ViewStyle"/>
           <link id="#lcl.comctrls.TCustomListView.ViewStyle">TCustomListView.ViewStyle</link>
           <link id="#lcl.comctrls.TCustomListView.Columns">TCustomListView.Columns</link>
           <link id="#lcl.comctrls.TListColumns">TListColumns</link>
@@ -1084,26 +1078,67 @@
 
       <element name="TCustomShellListView.DoAddItem">
         <short>
-          Signals the OnAddItem event handler when an entry is added to the Items in the control
+          Signals the OnAddItem event handler when an entry is added to the Items in the control.
         </short>
         <descr></descr>
         <seealso></seealso>
       </element>
       <element name="TCustomShellListView.DoAddItem.ABasePath">
-        <short>Base path for the list view</short>
+        <short>Base path for the list view.</short>
       </element>
       <element name="TCustomShellListView.DoAddItem.AFileInfo">
-        <short>TSearchRec with the information for the new entry</short>
+        <short>TSearchRec with the information for the new entry.</short>
       </element>
       <element name="TCustomShellListView.DoAddItem.CanAdd">
         <short>
-          Set the argument to True to allow the item to be added; set to False to prevent adding the item
+          Set the argument to True to allow the item to be added; set to False to prevent adding the item.
         </short>
       </element>
 
+    <element name="TCustomShellListView.GetBuiltinImageIndex">
+      <short>
+        Gets the index position for the built-in icon used for the specified path or file name.
+        </short>
+      <descr>
+        <p>
+          <var>GetBuiltinImageIndex</var> is an <var>Integer</var> function used to get the image index for a built-in icon provided by the operating system or platform.
+        </p>
+        <p>
+          The return value contains the ordinal position for the image used for the file name or path specified in <var>AFilename</var>. The return value is <b>-1</b> if an image could not be selected for the value in AFileName.
+        </p>
+        <p>
+          When <var>ALargeImage</var> is <b>True</b>, the index value refers to a large image as used in the vsIcon view style. When set to <b>False</b>, it refers to a small image as used in the other view styles.
+        </p>
+        <p>
+          GetBuiltinImageIndex calls the GetBuiltInImageIndex method in the widgetset class to get the return value for the method. The widgetset class handles storing the built-in image to the correct image list when the handle for the image list has not already been assigned.
+        </p>
+        <p>
+          GetBuiltinImageIndex is called from the <var>PopulateWithRoot</var> method when <var>UseBuiltInIcons</var> is set to <b>True</b>.
+        </p>
+        <remark>
+          In the current LCL version, GetBuiltinImageIndex is implemented for the Windows platform only.
+        </remark>
+      </descr>
+      <seealso>
+        <link id="TCustomShellListView.UseBuiltInIcons"/>
+        <link id="TCustomShellListView.PopulateWithRoot"/>
+        <link id="#lcl.comctrls.TCustomListView.LargeImages">TCustomListView.LargeImages</link>
+        <link id="#lcl.comctrls.TCustomListView.SmallImages">TCustomListView.SmallImages</link>
+      </seealso>
+    </element>
+    <element name="TCustomShellListView.GetBuiltinImageIndex.Result">
+      <short>Ordinal position for the built-in image.</short>
+    </element>
+    <element name="TCustomShellListView.GetBuiltinImageIndex.AFileName">
+      <short>File name or path used to find the associated image.</short>
+    </element>
+    <element name="TCustomShellListView.GetBuiltinImageIndex.ALargeImage">
+      <short>True if the large image list is used for the image.</short>
+    </element>
+
       <element name="TCustomShellListView.OnFileAdded">
         <short>
-          Event handler signalled when a file is added to the Items in the control
+          Event handler signalled when a file is added to the Items in the control.
         </short>
         <descr>
           <p>
@@ -1123,12 +1158,14 @@
       </element>
 
       <element name="TCustomShellListView.Create">
-        <short>Constructor for the class instance</short>
+        <short>Constructor for the class instance.</short>
         <descr>
           <p>
             <var>Create</var> is the overridden constructor for the class instance. <var>Create</var> calls the inherited method using <var>AOwner</var> as the owner of the class instance. <var>Create</var> sets the default values for properties in the class instance, including:
           </p>
           <dl>
+            <dt>UseBuiltInIcons</dt>
+            <dd>True</dd>
             <dt>ViewStyle</dt>
             <dd>vsReport view style</dd>
             <dt>ObjectTypes</dt>
@@ -1145,17 +1182,16 @@
         <seealso>
           <link id="TCustomShellListView.ObjectTypes"/>
           <link id="TCustomShellListView.Resize"/>
-          <link id="TShellListView.ViewStyle"/>
           <link id="#lcl.comctrls.TCustomListView.ViewStyle">TCustomListView.ViewStyle</link>
           <link id="#lcl.comctrls.TCustomListView.Columns">TCustomListView.Columns</link>
         </seealso>
       </element>
       <element name="TCustomShellListView.Create.AOwner">
-        <short>Owner for the class instance</short>
+        <short>Owner for the class instance.</short>
       </element>
 
       <element name="TCustomShellListView.Destroy">
-        <short>Destructor for the class instance</short>
+        <short>Destructor for the class instance.</short>
         <descr>
           <p>
             <var>Destroy</var> is the overridden destructor for the class instance. <var>Destroy</var> ensures that a control assigned to the <var>ShellTreeView</var> property is set to <b>Nil</b>. <var>Destroy</var> calls the inherited method.
@@ -1167,7 +1203,7 @@
       </element>
 
       <element name="TCustomShellListView.GetPathFromItem">
-        <short>Gets the path on the local file system for the specified item</short>
+        <short>Gets the path on the local file system for the specified item.</short>
         <descr>
           <p>
             <var>GetPathFromItem</var> is a <var>String</var> function used to get the path on the local file system for the list item specified in <var>ANode</var>. The return value contains the content from the <var>Root</var> property with a trailing path delimiter, joined with the <var>Caption</var> for the <var>TListItem</var> in <var>ANode</var>.
@@ -1179,24 +1215,24 @@
         </seealso>
       </element>
       <element name="TCustomShellListView.GetPathFromItem.Result">
-        <short>Complete path to the item</short>
+        <short>Complete path to the item.</short>
       </element>
       <element name="TCustomShellListView.GetPathFromItem.ANode">
-      <short>List item examined in the method</short>
+      <short>List item examined in the method.</short>
       </element>
 
       <element name="TCustomShellListView.Mask">
-        <short>File mask used to select items displayed in the shell control</short>
+        <short>File mask used to select items displayed in the shell control.</short>
         <descr>
           <p>
-            <var>Mask</var> is a <var>String</var> property used to supply a mask which determines the file system objects displayed in the shell control. Mask can contain one or more mask values delimited by the Semicolon (';') character. For example:
+            <var>Mask</var> is a <var>String</var> property used to supply a mask which determines the file system objects displayed in the shell control. Mask can contain one or more mask values delimited by the Semicolon (<b>';'</b>) character. For example:
           </p>
           <pre>*.exe; br*.com; c??.*</pre>
           <p>
             Changing the value in Mask causes the <var>Clear</var> method to be called for the shell control. In addition, the <var>Items</var> property calls its <var>Clear</var> method to remove entries stored in the property. The <var>PopulateWithRoot</var> method is called to re-populate the shell control using the new mask value.
           </p>
           <p>
-            The value in Mask is passed as an argument to the <var>GetFilesInDir</var> method for the <var>ShellTreeView</var> assigned in the control.
+            The value in Mask is passed as an argument to the internal <var>GetFilesInDir</var> helper which gets the file system objects displayed in the List View control.
           </p>
           <p>
             Use <var>MaskCaseSensitivity</var> to specify the case sensitivity option used when matching file masks in the shell control.
@@ -1206,13 +1242,12 @@
           <link id="TCustomShellListView.Items"/>
           <link id="TCustomShellListView.PopulateWithRoot"/>
           <link id="TCustomShellListView.MaskCaseSensitivity"/>
-          <link id="TCustomShellTreeView.GetFilesInDir"/>
           <link id="#lcl.comctrls.TCustomListView.Clear">TCustomListView.Clear</link>
         </seealso>
       </element>
 
       <element name="TCustomShellListView.MaskCaseSensitivity">
-        <short>Case Sensitivity option enabled for file masks in the shell control</short>
+        <short>Case Sensitivity option enabled for file masks in the shell control.</short>
         <descr>
           <p>
             <var>MaskCaseSensitivity</var> is a <var>TMaskCaseSensitivity</var> property which represents the case sensitivity option used for file masks in the shell control. The default value for the property is <var>mcsPlatformDefault</var>. See <var>TMaskCaseSensitivity</var> for a description of the enumeration values and their meanings.
@@ -1229,7 +1264,7 @@
 
       <element name="TCustomShellListView.ObjectTypes">
         <short>
-          Indicates which objects are visible in the control (files and/or directories, hidden files, etc.)
+          Indicates which objects are visible in the control (files and/or directories, hidden files, etc.).
         </short>
         <descr>
         </descr>
@@ -1241,8 +1276,8 @@
 
       <element name="TCustomShellListView.Root">
       <short>
-        Indicates the initial directory path whose objects are displayed in the control
-      </short>
+        Indicates the initial directory path whose objects are displayed in the control.
+        </short>
       <descr>
         <p>
           The most important property of the ShellListView, indicates the directory whose contents will be shown. This property is automatically managed if the property ShellTreeView is filled. If this property is empty, nothing will be shown.
@@ -1254,7 +1289,7 @@
 
       <element name="TCustomShellListView.ShellTreeView">
         <short>
-          Used to connect the ShellListView to a ShellTreeView
+          Used to connect the ShellListView to a ShellTreeView.
         </short>
         <descr>
           <p>
@@ -1272,6 +1307,34 @@
           <link id="TCustomShellTreeView"/>
           <link id="#lcl.comctrls.TCustomTreeView.Selected">TCustomTreeView.Selected</link>
           <link id="#lcl.comctrls.TCustomListView.Clear">TCustomListView.Clear</link>
+        </seealso>
+      </element>
+
+      <element name="TCustomShellListView.UseBuiltInIcons">
+        <short>
+          Indicates if icons provided by the OS or platform are used for items in the list.
+        </short>
+        <descr>
+          <p>
+            <var>UseBuiltInIcons</var> is a <var>Boolean</var> property which indicates if icons provided by the OS or platform are used for the <var>Items</var> in the list view control. The default value for the property is <b>True</b>.
+          </p>
+          <p>
+            UseBuiltInIcons is used when the list view control is populated with the names for the file and/or directories on the local file system. When set to <b>True</b>, the <var>GetBuiltInImageIndex</var> method is called to get the image index for a <var>TListItem</var> stored in the <var>Items</var> property.
+          </p>
+          <p>
+            Set UseBuiltInIcons to <b>False</b> to use custom images provided in the <var>LargeImages</var> or <var>SmallImages</var> properties.
+          </p>
+          <remark>
+            UseBuiltInIcons and GetBuiltInImageIndex require support in the widgetset class to use system-provided icons. This support is currently implemented for the Windows platform only.
+          </remark>
+        </descr>
+        <seealso>
+          <link id="TCustomShellListView.GetBuiltInImageIndex"/>
+          <link id="TCustomShellListView.Items"/>
+          <link id="TCustomShellListView.PopulateWithRoot"/>
+          <link id="TListItem.ImageIndex"/>
+          <link id="#lcl.comctrls.TCustomListView.LargeImages">TCustomListView.LargeImages</link>
+          <link id="#lcl.comctrls.TCustomListView.SmallImages">TCustomListView.SmallImages</link>
         </seealso>
       </element>
 
@@ -1294,6 +1357,7 @@
           <link id="TAddItemEvent"/>
           <link id="TCustomShellListView.Items"/>
           <link id="TCustomShellListView.DoAddItem"/>
+          <link id="TCustomShellListView.PopulateWithRoot"/>
         </seealso>
       </element>
 
@@ -1301,7 +1365,7 @@
 
       <element name="TShellListView">
         <short>
-          Implements a list view control to display the files, directories and other objects (such as devices) on the local file system
+          Implements a list view control to display the files, directories and other objects (such as devices) on the local file system.
         </short>
         <descr>
           <p>
@@ -1348,6 +1412,7 @@
       <element name="TShellListView.Font" link="#lcl.controls.TControl.Font"/>
       <element name="TShellListView.HideSelection" link="#lcl.comctrls.TCustomListView.HideSelection"/>
       <element name="TShellListView.LargeImages" link="#lcl.comctrls.TCustomListView.LargeImages"/>
+      <element name="TShellListView.LargeImagesWidth" link="#lcl.comctrls.TCustomListView.LargeImagesWidth"/>
       <element name="TShellListView.Mask" link="#lcl.shellctrls.TCustomShellListView.Mask"/>
       <element name="TShellListView.MaskCaseSensitivity" link="#lcl.shellctrls.TCustomShellListView.MaskCaseSensitivity"/>
       <element name="TShellListView.MultiSelect" link="#lcl.comctrls.TCustomListView.MultiSelect"/>
@@ -1361,6 +1426,7 @@
       <element name="TShellListView.ShowColumnHeaders" link="#lcl.comctrls.TCustomListView.ShowColumnHeaders"/>
       <element name="TShellListView.ShowHint" link="#lcl.controls.TControl.ShowHint"/>
       <element name="TShellListView.SmallImages" link="#lcl.comctrls.TCustomListView.SmallImages"/>
+      <element name="TShellListView.SmallImagesWidth" link="#lcl.comctrls.TCustomListView.SmallImagesWidth"/>
       <element name="TShellListView.SortColumn" link="#lcl.comctrls.TCustomListView.SortColumn"/>
       <element name="TShellListView.SortType" link="#lcl.comctrls.TCustomListView.SortType"/>
       <element name="TShellListView.StateImages" link="#lcl.comctrls.TCustomListView.StateImages"/>
@@ -1404,7 +1470,7 @@
       <element name="TShellListView.ShellTreeView" link="#lcl.shellctrls.TCustomShellListView.ShellTreeView"/>
 
       <element name="TShellTreeNode">
-        <short>Represents tree nodes in TShellTreeView</short>
+        <short>Represents tree nodes in TShellTreeView.</short>
         <descr>
           <p>
             <var>TShellTreeNode</var> is a <var>TTreeNode</var> descendant which represents tree nodes in <var>TShellTreeView</var>. TShellTreeNode extends the ancestor class with properties and methods needed to work with files or directories on the local file system. TShellTreeNode is the class type reference used to create new nodes in  the <var>TCustomShellTreeView.CreateNode</var> method.
@@ -1419,18 +1485,18 @@
       <element name="TShellTreeNode.FBasePath"/>
 
       <element name="TShellTreeNode.SetBasePath">
-        <short>Sets the value in the BasePath property</short>
+        <short>Sets the value in the BasePath property.</short>
         <descr></descr>
         <seealso>
           <link id="TShellTreeNode.BasePath"/>
         </seealso>
       </element>
       <element name="TShellTreeNode.SetBasePath.ABasePath">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TShellTreeNode.ShortFilename">
-        <short>Gets the short file name for the item represented in the tree node</short>
+        <short>Gets the short file name for the item represented in the tree node.</short>
         <descr>
           <p>
             <var>ShortFilename</var> is a <var>String</var> function used to get the short file name for the item represented in the tree node. ShortFilename tries to get the file name from an internal <var>TSearchRec</var> for the tree node. If the file name is an empty string (<b>''</b>), the name in the search record is used as the return value. ShortFilename <b>does not</b> include path information in the return value.
@@ -1444,12 +1510,12 @@
         </seealso>
       </element>
       <element name="TShellTreeNode.ShortFilename.Result">
-        <short>Short file name for the item represented in the tree node</short>
+        <short>Short file name for the item represented in the tree node.</short>
       </element>
 
       <element name="TShellTreeNode.FullFilename">
         <short>
-          Gets the full file name including path for the item represented in the tree node
+          Gets the full file name including path for the item represented in the tree node.
         </short>
         <descr>
           <p>
@@ -1466,30 +1532,33 @@
         </seealso>
       </element>
       <element name="TShellTreeNode.FullFilename.Result">
-        <short>The full path and name for the file system object</short>
+        <short>The full path and name for the file system object.</short>
       </element>
 
       <element name="TShellTreeNode.IsDirectory">
-        <short>Indicates if the tree node is a directory on the local file system</short>
+        <short>Indicates if the tree node is a directory on the local file system.</short>
         <descr>
           <p>
             <var>IsDirectory</var> is a <var>Boolean</var> function which indicates if the file system object for the the tree node is a directory on the local file system. The return value is <b>True</b> when the file attributes in the <var>TSearchRec</var> for the tree node includes the <var>faDirectory</var> attribute.
           </p>
+          <p>
+            Use <var>HasChildren</var> to determine if the shell tree node has child nodes representing sub-directories.
+          </p>
         </descr>
         <seealso>
           <link id="TShellTreeNode.SetBasePath"/>
-          <link id="TCustomShellTreeView.GetFilesInDir"/>
           <link id="TCustomShellTreeView.PopulateTreeNodeWithFiles"/>
           <link id="TCustomShellTreeView.PopulateWithBaseFiles"/>
           <link id="TCustomShellListView.PopulateWithRoot"/>
+          <link id="#lcl.comctrls.TTreeNode.HasChildren">TTreeNode.HasChildren</link>
         </seealso>
       </element>
       <element name="TShellTreeNode.IsDirectory.Result">
-        <short>True when the tree node represents a directory on the local file system</short>
+        <short>True when the tree node represents a directory on the local file system.</short>
       </element>
 
       <element name="TShellTreeNode.BasePath">
-        <short>Contains the path to the file system object in the tree node</short>
+        <short>Contains the path to the file system object in the tree node.</short>
         <descr>
           <p>
             <var>BasePath</var> is a read-only <var>String</var> property which contains the path on the local file system to the object in the tree node. The value for the property is set when the tree node is created in TShellTreeView methods using the SetBasePath method in the class instance.
@@ -1504,7 +1573,7 @@
       </element>
 
       <element name="EShellCtrl">
-        <short>Exception raised for errors occuring in shell controls</short>
+        <short>Exception raised for errors occuring in shell controls.</short>
         <descr>
           <var>EShellCtrl</var> is a <var>Exception</var> descendant raised when errors occur in shell controls.
         </descr>
@@ -1516,7 +1585,7 @@
       </element>
 
       <element name="EInvalidPath">
-        <short>Exception raised for an invalid path in shell controls</short>
+        <short>Exception raised for an invalid path in shell controls.</short>
         <descr>
           <var>EInvalidPath</var> is a <var>EShellCtrl</var> descendant raised for an invalid path in shell controls.
         </descr>
@@ -1532,7 +1601,7 @@
 
       <element name="DbgS">
         <short>
-          Provides strings values with details about classes used in shell controls for the debugger
+          Provides strings values with details about classes used in shell controls for the debugger.
         </short>
         <descr>
           <p>
@@ -1557,17 +1626,17 @@
         </seealso>
       </element>
       <element name="DbgS.Result">
-        <short>Formatted values for the debugger</short>
+        <short>Formatted values for the debugger.</short>
       </element>
       <element name="DbgS.OT">
-        <short>TObjectTypes examined in the routine</short>
+        <short>TObjectTypes examined in the routine.</short>
       </element>
       <element name="DbgS.CS">
-        <short>TMaskCaseSensitivity examined in the routine</short>
+        <short>TMaskCaseSensitivity examined in the routine.</short>
       </element>
 
       <element name="Register">
-        <short>Registers components for use in the Lazarus IDE</short>
+        <short>Registers components for use in the Lazarus IDE.</short>
         <descr>
           <p>
             The following components are added to the Lazarus IDE component palette:

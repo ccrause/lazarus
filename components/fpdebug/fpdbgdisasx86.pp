@@ -40,7 +40,7 @@ interface
 
 uses
   SysUtils, FpDbgUtil, FpDbgInfo, DbgIntfBaseTypes, FpdMemoryTools,
-  FpDbgClasses, LazLoggerBase, LazClasses;
+  FpDbgClasses, {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif}, LazClasses;
 
 {                   
   The function Disassemble decodes the instruction at the given address.
@@ -56,10 +56,20 @@ uses
 
 
 type
-  TFlag = (flagRex, flagSib, flagModRM, rexB, rexX, rexR, rexW, preOpr, preAdr, preLock, preRep{N}, preRepNE);
+  TFlag = (
+    flagRex, // $4x: set for any $4X
+    flagSib, flagModRM,
+    rexB, rexX, rexR,
+    rexW,    // $4x bit 4:  	64 Bit Operand Size
+    preOpr,  // $66:  	Precision-size override prefix  (32 and 64 bit)
+    preAdr, preLock, preRep{N}, preRepNE);
   TFlags = set of TFlag;
   
   // Keep 8,16,32,64 together
+  TOperandDefaultType = (
+      v_16_32,
+      vq_64_16
+  );
   TOperandSize = (os8, os16, os32, os64, os48, os80, os128);
   TAddressSize = (as16, as32, as64);
   TRegisterType = (reg0, reg8, reg16, reg32, reg64, regMmx, regXmm, regSegment, regControl, regDebug, regX87);
@@ -237,8 +247,8 @@ type
   TX86AsmDecoder = class(TDbgAsmDecoder)
   private const
     MAX_CODEBIN_LEN = 50;
-    FMaxInstructionSize = 16;
-    FMinInstructionSize = 1;
+    //FMaxInstructionSize = 16;
+    //FMinInstructionSize = 1;
   private
     FProcess: TDbgProcess;
     FLastErrWasMem: Boolean;
@@ -721,6 +731,14 @@ var
     end;
   end;
 
+  function OperandSize64_16: TOperandSize;
+  begin
+    // effective AnInstruction.operand size for default 64 AnInstruction.operand size
+    if preOpr in Flags
+    then Result := os16
+    else Result := os64;
+  end;
+
   function OperandSize32: TOperandSize;
   begin
     // effective AnInstruction.operand size for default 32 AnInstruction.operand size
@@ -849,9 +867,13 @@ var
     AddOperand(StdReg(AIndex, AType, AExtReg), REGSIZE[(FProcess.Mode = dm64), AType]);
   end;
 
-  procedure AddStdReg(AIndex: Byte);
+  procedure AddStdReg(AIndex: Byte; AnOpDefType: TOperandDefaultType = v_16_32);
   begin
-    AddOperand(StdReg(AIndex, OPERAND_REG[OperandSize32], rexR in Flags));
+    case AnOpDefType of
+      v_16_32:  AddOperand(StdReg(AIndex, OPERAND_REG[OperandSize32],    rexR in Flags));
+      vq_64_16: AddOperand(StdReg(AIndex, OPERAND_REG[OperandSize64_16], rexB in Flags));
+    end;
+
   end;
 
   procedure AddModReg(AType: TRegisterType; ASize: TOperandSize);
@@ -2264,8 +2286,8 @@ var
         DoGroup16;
       end;
       $19..$1F: begin
-        Include(Flags, flagModRM);
         Opcode := OPnop;
+        AddEv;
       end;
       //---
       $20: begin
@@ -2881,6 +2903,8 @@ var
   end;
 
   procedure DoDisassemble;
+  const
+    OPDEFTYPE_PUSH: array [TFPDMode] {dm32, dm64} of TOperandDefaultType = (v_16_32, vq_64_16);
   begin
     Opcode := OPX_InternalUnknown;
     repeat
@@ -2997,11 +3021,11 @@ var
         //---
         $50..$57: begin
           Opcode := OPpush;
-          AddStdReg(Code[CodeIdx]);
+          AddStdReg(Code[CodeIdx], OPDEFTYPE_PUSH[FProcess.Mode]);
         end;
         $58..$5F: begin
           Opcode := OPpop;
-          AddStdReg(Code[CodeIdx]);
+          AddStdReg(Code[CodeIdx], OPDEFTYPE_PUSH[FProcess.Mode]);
         end;
         //---
         $60: begin

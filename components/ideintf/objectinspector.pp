@@ -470,6 +470,7 @@ type
     function MouseToIndex(y: integer; MustExist: boolean): integer;
     function PropertyPath(Index: integer):string;
     function PropertyPath(Row: TOIPropertyGridRow):string;
+    function PropertyEditorByName(const PropName: string): TPropertyEditor;
     function TopMax: integer;
     procedure BuildPropertyList(OnlyIfNeeded: Boolean = False; FocusEditor: Boolean = True);
     procedure Clear;
@@ -1436,6 +1437,20 @@ begin
   end;
 end;
 
+function TOICustomPropertyGrid.PropertyEditorByName(const PropName: string): TPropertyEditor;
+var
+  AOIPropertyGridRow: TOIPropertyGridRow;
+  i: Integer;
+begin
+  Result := nil;
+  for i := 0 to FRows.Count - 1 do
+  begin
+    AOIPropertyGridRow := TOIPropertyGridRow(FRows[i]);
+    if Assigned(AOIPropertyGridRow.Editor) and (AOIPropertyGridRow.Editor.GetName = PropName) then
+      Exit(AOIPropertyGridRow.Editor);
+  end;
+end;
+
 function TOICustomPropertyGrid.RealDefaultItemHeight: integer;
 begin
   Result := FDefaultItemHeight;
@@ -2145,10 +2160,7 @@ var
 begin
   if not EditorFilter(PropEditor) then
   begin
-    // if some elements of a set is not being shown then free their editor
-    // to avoid memory leaks; sine only visible editors will be cleared.
-    if PropEditor.ClassType = TSetElementPropertyEditor then
-      PropEditor.Free;
+    PropEditor.Free;
     Exit;
   end;
 

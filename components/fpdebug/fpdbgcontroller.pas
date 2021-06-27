@@ -9,7 +9,7 @@ uses
   Classes,
   SysUtils,
   Maps,
-  LazLoggerBase, LazClasses,
+  {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif}, LazClasses,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
   FpDbgDisasX86,
   FpDbgClasses, FpDbgCallContextInfo, FpDbgUtil,
@@ -419,11 +419,15 @@ begin
   inherited Create(AController);
 
   {$IFNDEF Linux}
+  {$IFNDEF Windows}
   raise Exception.Create('Calling functions is only supported on Linux');
   {$ENDIF}
+  {$ENDIF}
 
+  {$IFDEF Linux}
   if FController.CurrentProcess.Mode <> dm64 then
     raise Exception.Create('Calling functions is only supported on 64-bits (x86_64)');
+  {$ENDIF}
 
   FRoutineAddress := LocToAddr(ARoutineAddress);
   FCallContext := ACallContext;
@@ -521,14 +525,19 @@ begin
           // at an actual breakpoint.
           FCallContext.SetError('The function stopped unexpectedly. (Breakpoint, Exception, etc)')
         else
+          begin
+          // Clear any (pending) signals that were sent to the application during
+          // the function-call.
+          AnEventThread.ClearExceptionSignal;
           FCallContext.SetError('The function stopped due to an exception.')
+          end;
         end
       else
+        // We are at the return-adres. (Phew...)
         // Store the necessary data into the context to obtain the function-result
         // later
         StoreRoutineResult();
 
-      // We are at the return-adres. (Phew...)
       //remove the hidden breakpoint.
       RemoveHiddenBreakpointAtReturnAddress;
 
@@ -560,7 +569,14 @@ end;
 
 procedure TDbgControllerCallRoutineCmd.RestoreInstructionPointer;
 begin
-  FController.CurrentThread.SetRegisterValue('rip', FOriginalInstructionPointer);
+  {$ifdef cpui386}
+  FController.CurrentThread.SetRegisterValue('eip', FOriginalInstructionPointer);
+  {$else}
+  if FController.CurrentProcess.Mode <> dm64 then
+    FController.CurrentThread.SetRegisterValue('eip', FOriginalInstructionPointer)
+  else
+    FController.CurrentThread.SetRegisterValue('rip', FOriginalInstructionPointer);
+  {$endif}
 end;
 
 procedure TDbgControllerCallRoutineCmd.StoreRoutineResult;
@@ -1421,7 +1437,6 @@ end;
 function TDbgController.Run: boolean;
 var
   Flags: TStartInstanceFlags;
-  Err: TFpError;
 begin
   result := False;
   FLastError := NoError;

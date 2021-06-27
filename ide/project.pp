@@ -981,9 +981,9 @@ type
     function UpdateIsPartOfProjectFromMainUnit: TModalResult;
 
     // Application.CreateForm statements
-    function AddCreateFormToProjectFile(const AClassName, AName:string):boolean;
+    function AddCreateFormToProjectFile(const AClassName, AName:string): boolean;
     function RemoveCreateFormFromProjectFile(const AName: string): boolean;
-    function FormIsCreatedInProjectFile(const AClassname, AName:string):boolean;
+    function FormIsCreatedInProjectFile(const AClassname, AName:string): boolean;
     function GetAutoCreatedFormsList: TStrings;
     property TmpAutoCreatedForms: TStrings read FTmpAutoCreatedForms write FTmpAutoCreatedForms;
 
@@ -3127,6 +3127,7 @@ begin
     {$IFDEF IDE_MEM_CHECK}CheckHeapWrtMemCnt('TProject.ReadProject C reading values');{$ENDIF}
     FFileVersion:= FXMLConfig.GetValue(ProjOptionsPath+'Version/Value',0);
     UseAppBundle := FXMLConfig.GetValue(ProjOptionsPath+'General/UseAppBundle/Value', True);
+    NSPrincipalClass := FXMLConfig.GetValue(ProjOptionsPath+'General/NSPrincipalClass/Value', '');
     if FLoadAllOptions then
       LoadFromLPI;
     // Resources
@@ -3316,6 +3317,7 @@ begin
   FXMLConfig.SetDeleteValue(Path+'General/Title/Value', Title,'');
   FXMLConfig.SetDeleteValue(Path+'General/Scaled/Value', Scaled,False);
   FXMLConfig.SetDeleteValue(Path+'General/UseAppBundle/Value', UseAppBundle, True);
+  FXMLConfig.SetDeleteValue(Path+'General/NSPrincipalClass/Value', NSPrincipalClass, '');
 
   // fpdoc
   FXMLConfig.SetDeleteValue(Path+'LazDoc/Paths',
@@ -3344,7 +3346,8 @@ begin
   // save the Publish Options
   PublishOptions.SaveToXMLConfig(FXMLConfig,Path+'PublishOptions/',fCurStorePathDelim);
   // save the Run and Build parameter options
-  RunParameterOptions.LegacySave(FXMLConfig,Path,fCurStorePathDelim);
+  if pfCompatibilityMode in Flags then
+    RunParameterOptions.LegacySave(FXMLConfig,Path,fCurStorePathDelim);
   RunParameterOptions.Save(FXMLConfig,Path+'RunParams/',fCurStorePathDelim,rpsLPI, UseLegacyLists);
   // save dependencies
   SavePkgDependencyList(FXMLConfig,Path+'RequiredPackages/',
@@ -4069,16 +4072,11 @@ begin
   until ProjectUnitWithShortFilename(Result)=nil;
 end;
 
-function TProject.AddCreateFormToProjectFile(const AClassName, AName: string):boolean;
+function TProject.AddCreateFormToProjectFile(const AClassName, AName: string): boolean;
 begin
-  if (pfMainUnitHasCreateFormStatements in Project1.Flags) then begin
-    Result:=CodeToolBoss.AddCreateFormStatement(MainUnitInfo.Source,AClassName,AName);
-    if Result then begin
-      MainUnitInfo.Modified:=true;
-    end;
-  end else begin
-    Result:=false;
-  end;
+  Result:=CodeToolBoss.AddCreateFormStatement(MainUnitInfo.Source,AClassName,AName);
+  if Result then
+    MainUnitInfo.Modified:=true;
 end;
 
 function TProject.RemoveCreateFormFromProjectFile(const AName:string):boolean;
@@ -4088,7 +4086,7 @@ begin
     MainUnitInfo.Modified:=true;
 end;
 
-function TProject.FormIsCreatedInProjectFile(const AClassname,AName:string):boolean;
+function TProject.FormIsCreatedInProjectFile(const AClassname,AName:string): boolean;
 var p: integer;
 begin
   Result:=(CodeToolBoss.FindCreateFormStatement(MainUnitInfo.Source,
@@ -6657,6 +6655,7 @@ begin
       // add directory
       FSrcDirectories.AddChild(SrcDirDefTempl);
     end;
+    //DebugLn('TProjectDefineTemplates.UpdateSourceDirectories: Calling CodeToolBoss.DefineTree.ClearCache');
     CodeToolBoss.DefineTree.ClearCache;
   finally
     NewSourceDirs.Free;
@@ -6680,10 +6679,14 @@ begin
   if OptionsDefTempl=nil then begin
     // no custom options -> delete old template
     if (FSrcDirIf<>nil) and FSrcDirIf.DeleteChild('Custom Options') then
+    begin
+      //DebugLn('TProjectDefineTemplates.UpdateDefinesForCustomDefines: Calling CodeToolBoss.DefineTree.ClearCache');
       CodeToolBoss.DefineTree.ClearCache;
+    end;
   end else begin
     UpdateSrcDirIfDef;
     FSrcDirIf.ReplaceChild(OptionsDefTempl);
+    //DebugLn('TProjectDefineTemplates.UpdateDefinesForCustomDefines: Calling CodeToolBoss.DefineTree.ClearCache');
     CodeToolBoss.DefineTree.ClearCache;
   end;
 end;
@@ -6701,6 +6704,7 @@ end;
 
 procedure TProjectDefineTemplates.AllChanged(AActivating: boolean);
 begin
+  if AActivating then ;
   UpdateSrcDirIfDef;
   SourceDirectoriesChanged;
   CustomDefinesChanged;

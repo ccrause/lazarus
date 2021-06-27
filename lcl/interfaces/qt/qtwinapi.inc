@@ -5271,6 +5271,8 @@ begin
   DefButton:= ((uType and $00000300) shr 8) + 1;
   DialogType:= (uType and $0000000F);
   DefIcon := (uType and $000000FF) shr 4;
+
+
   case IconToMessageType(DefIcon) of
     QMessageBoxInformation: Result := QMessageBox_information(AParent, @TitleStr, @Str, ButtonToQtButtons(DialogType), ButtonToQtDefButton(DialogType, DefButton));
     QMessageBoxQuestion: Result := QMessageBox_question(AParent, @TitleStr, @Str, ButtonToQtButtons(DialogType), ButtonToQtDefButton(DialogType, DefButton));

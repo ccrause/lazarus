@@ -613,6 +613,9 @@ begin
         if Result<(1 shl 16) then begin
           // wrong encoded, could be an XSS attack
           Result:=0;
+        end else if Result>$10FFFF then begin
+          // out of range
+          Result:=0;
         end;
       end else begin
         Result:=ord(p^);
@@ -707,7 +710,7 @@ var
   Len: Integer;
 begin
   Len:=UTF8Length(s);
-  SetLength(Result,Len*2);
+  SetLength(Result{%H-},Len*2);
   if Len=0 then exit;
   UTF8ToDoubleByte(PChar(s),length(s),PByte(Result));
 end;
@@ -853,33 +856,33 @@ end;
 { fix any broken UTF8 sequences with spaces }
 procedure UTF8FixBroken(P: PChar);
 var
+  b: byte;
   c: cardinal;
 begin
   if p=nil then exit;
   while p^<>#0 do begin
-    if ord(p^)<%10000000 then begin
+    b:=ord(p^);
+    if b<%10000000 then begin
       // regular single byte character
       inc(p);
     end
-    else if ord(p^)<%11000000 then begin
+    else if b<%11000000 then begin
       // invalid
       p^:=' ';
       inc(p);
     end
-    else if ((ord(p^) and %11100000) = %11000000) then begin
+    else if (b and %11100000) = %11000000 then begin
       // starts with %110 => should be 2 byte character
       if ((ord(p[1]) and %11000000) = %10000000) then begin
-        c:=((ord(p^) and %00011111) shl 6);
-           //or (ord(p[1]) and %00111111);
-        if c<(1 shl 7) then
+        if b<%11000010 then
           p^:=' '  // fix XSS attack
         else
           inc(p,2)
       end
-      else if p[1]<>#0 then
+      else
         p^:=' ';
     end
-    else if ((ord(p^) and %11110000) = %11100000) then begin
+    else if (b and %11110000) = %11100000 then begin
       // starts with %1110 => should be 3 byte character
       if ((ord(p[1]) and %11000000) = %10000000)
       and ((ord(p[2]) and %11000000) = %10000000) then begin
@@ -893,7 +896,7 @@ begin
       end else
         p^:=' ';
     end
-    else if ((ord(p^) and %11111000) = %11110000) then begin
+    else if (b and %11111000) = %11110000 then begin
       // starts with %11110 => should be 4 byte character
       if ((ord(p[1]) and %11000000) = %10000000)
       and ((ord(p[2]) and %11000000) = %10000000)
@@ -904,6 +907,8 @@ begin
            //or (ord(p[3]) and %00111111);
         if c<(1 shl 16) then
           p^:=' ' // fix XSS attack
+        else if (c>$10FFFF) then
+          p^:=' ' // out of range U+10FFFF
         else
           inc(p,4)
       end else
@@ -990,7 +995,7 @@ var
   end;
 
 begin
-  SetLength(Result, SourceLen);
+  SetLength(Result{%H-}, SourceLen);
   if SourceLen=0 then exit;
   SourceCopied:=SourceStart;
   Source:=SourceStart;
@@ -1259,7 +1264,7 @@ begin
     if (P<PE) then
     begin
       CharLen := UTF8CodepointSize(P);
-      SetLength(Capital, CharLen);
+      SetLength(Capital{%H-}, CharLen);
       System.Move(P^, Capital[1], CharLen); // Copy one codepoint to Capital,
       Capital := UTF8UpperCase(Capital);    // UpperCase it
       System.Move(Capital[1], P^, CharLen); // and copy it back.
@@ -2813,22 +2818,22 @@ function FindInvalidUTF8Codepoint(p: PChar; Count: PtrInt; StopOnNonUTF8: Boolea
 // return -1 if ok
 var
   CharLen: Integer;
-  c: Char;
+  c: Byte;
 begin
   if (p<>nil) then begin
     Result:=0;
     while Result<Count do begin
-      c:=p^;
-      if ord(c)<%10000000 then begin
+      c:=ord(p^);
+      if c<%10000000 then begin
         // regular single byte ASCII character (#0 is a character, this is Pascal ;)
         CharLen:=1;
-      end else if ord(c)<=%11000001 then begin
+      end else if c<=%11000001 then begin
         // single byte character, between valid UTF-8 encodings
         // %11000000 and %11000001 map 2 byte to #0..#128, which is invalid and used for XSS attacks
-        if StopOnNonUTF8 or (ord(c)>=192) then
+        if StopOnNonUTF8 or (c>=192) then
           exit;
         CharLen:=1;
-      end else if ord(c)<=%11011111 then begin
+      end else if c<=%11011111 then begin
         // could be 2 byte character (%110xxxxx %10xxxxxx)
         if (Result<Count-1)
         and ((ord(p[1]) and %11000000) = %10000000) then
@@ -2836,25 +2841,31 @@ begin
         else
           exit; // missing following bytes
       end
-      else if ord(c)<=%11101111 then begin
+      else if c<=%11101111 then begin
         // could be 3 byte character (%1110xxxx %10xxxxxx %10xxxxxx)
         if (Result<Count-2)
         and ((ord(p[1]) and %11000000) = %10000000)
         and ((ord(p[2]) and %11000000) = %10000000) then begin
-          if (ord(c)=%11100000) and (ord(p[1])<=%10011111) then
+          if (c=%11100000) and (ord(p[1])<=%10011111) then
             exit; // XSS attack: 3 bytes are mapped to the 1 or 2 byte codes
+          if ((c=%11101101) and (ord(p[1])>=%10100000)) then
+            exit; //Reserved values for UTF-16 surrogate halves
           CharLen:=3;
         end else
           exit; // missing following bytes
       end
-      else if ord(c)<=%11110111 then begin
+      else if c<=%11110111 then begin
         // could be 4 byte character (%11110xxx %10xxxxxx %10xxxxxx %10xxxxxx)
         if (Result<Count-3)
         and ((ord(p[1]) and %11000000) = %10000000)
         and ((ord(p[2]) and %11000000) = %10000000)
         and ((ord(p[3]) and %11000000) = %10000000) then begin
-          if (ord(c)=%11110000) and (ord(p[1])<=%10001111) then
+          if (c=%11110000) and (ord(p[1])<=%10001111) then
             exit; // XSS attack: 4 bytes are mapped to the 1-3 byte codes
+          if (c>%11110100) then
+            exit; // out of range U+10FFFF
+          if (c=%11110100) and (ord(p[1])>%10001111) then
+            exit; // out of range U+10FFFF
           CharLen:=4;
         end else
           exit; // missing following bytes
@@ -3110,7 +3121,7 @@ function UTF8ReverseString(p: PChar; const ByteCount: LongInt): string;
 var
   CharLen, rBytePos: LongInt;
 begin
-  SetLength(Result, ByteCount);
+  SetLength(Result{%H-}, ByteCount);
   rBytePos := ByteCount + 1;
   while (rBytePos > 1) do
   begin
@@ -3510,8 +3521,8 @@ end;
     trNullDest       - Pointer to destination string is nil
     trDestExhausted  - Destination buffer size is not big enough to hold
                      converted string
-    trInvalidChar    - Invalid source char has occured
-    trUnfinishedChar - Unfinished source char has occured
+    trInvalidChar    - Invalid source char found
+    trUnfinishedChar - Unfinished source char found
 
   Converts the specified UTF-8 encoded string to UTF-16 encoded (system endian)
  ------------------------------------------------------------------------------}
@@ -3654,14 +3665,21 @@ begin
           if ((B1 and %11111000) = %11110000) and ((B2 and %11000000) = %10000000)
             and ((B3 and %11000000) = %10000000) and ((B4 and %11000000) = %10000000) then
           begin // 4 byte UTF-8 char
-            C := ((B1 and %00011111) shl 18) or ((B2 and %00111111) shl 12)
+            C := ((B1 and %00000111) shl 18) or ((B2 and %00111111) shl 12)
               or ((B3 and %00111111) shl 6)  or (B4 and %00111111);
-            // to double wide char UTF-16 char
-            Dest[DestI] := System.WideChar($D800 or ((C - $10000) shr 10));
-            Inc(DestI);
-            if DestI >= DestWideCharCount then Break;
-            Dest[DestI] := System.WideChar($DC00 or ((C - $10000) and %0000001111111111));
-            Inc(DestI);
+            if C>$10FFFF then
+            begin
+              if InvalidCharError(3) then Exit(trInvalidChar);
+            end else
+            begin
+              // to double wide char UTF-16 char
+              C:=C-$10000;
+              Dest[DestI] := System.WideChar($D800 or (C shr 10));
+              Inc(DestI);
+              if DestI >= DestWideCharCount then Break;
+              Dest[DestI] := System.WideChar($DC00 or (C and %0000001111111111));
+              Inc(DestI);
+            end;
           end
           else // invalid character, assume triple byte UTF-8 char
             if InvalidCharError(3) then Exit(trInvalidChar);

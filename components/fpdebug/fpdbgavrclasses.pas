@@ -17,7 +17,7 @@ uses
   FpDbgClasses,
   FpDbgLoader,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
-  LazLoggerBase, Maps,
+  {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif}, Maps,
   FpDbgRsp, FpDbgCommon, FpdMemoryTools,
   FpErrorMessages;
 
@@ -46,7 +46,7 @@ type
   private
     FRegs: TInitializedRegisters;
     FRegsUpdated: boolean;   // regs read from target
-    FRegsChanged: boolean;   // write regs to target
+    //FRegsChanged: boolean;   // write regs to target
     FExceptionSignal: integer;
     FIsPaused, FInternalPauseRequested, FIsInInternalPause: boolean;
     FIsSteppingBreakPoint: boolean;
@@ -379,8 +379,8 @@ begin
 end;
 
 procedure TDbgAvrThread.BeforeContinue;
-var
-  regs: TBytes;
+//var
+//  regs: TBytes;
 begin
   if not FIsPaused then
     exit;

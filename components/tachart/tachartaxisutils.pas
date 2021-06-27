@@ -14,7 +14,7 @@ unit TAChartAxisUtils;
 interface
 
 uses
-  Classes, Graphics,
+  Classes, Graphics, Controls,
   TAChartUtils, TACustomSource, TADrawUtils, TAIntervalSources, TAStyles,
   TATypes, TATextElements;
 
@@ -39,20 +39,22 @@ type
 
   TChartAxisTitle = class(TCustomChartAxisTitle)
   strict private
-    FCaption: String;
+    FCaption: TCaption;
     FPositionOnMarks: Boolean;
+    FWordwrap: Boolean;
 
     function GetFont: TFont;
-    procedure SetCaption(AValue: String);
+    procedure SetCaption(AValue: TCaption);
     procedure SetFont(AValue: TFont);
     procedure SetPositionOnMarks(AValue: Boolean);
+    procedure SetWordwrap(AValue: Boolean);
   public
     constructor Create(AOwner: TCustomChart);
 
   public
     procedure Assign(Source: TPersistent); override;
   published
-    property Caption: String read FCaption write SetCaption;
+    property Caption: TCaption read FCaption write SetCaption;
     property Distance default DEF_TITLE_DISTANCE;
     property Frame;
     property LabelBrush;
@@ -60,6 +62,7 @@ type
       read FPositionOnMarks write SetPositionOnMarks default false;
     property TextFormat;
     property Visible default false;
+    property Wordwrap: Boolean read FWordwrap write SetWordwrap default false;
   end;
 
   ICoordTransformer = interface
@@ -279,10 +282,12 @@ type
     function GraphToImage(AGraph: Double): Integer; override;
   end;
 
+  procedure Register;
+
 implementation
 
 uses
-  Math, SysUtils, LResources,
+  Math, SysUtils, LResources, PropEdits,
   TAGeometry, TAMath;
 
 { TChartMinorAxisMarks }
@@ -368,7 +373,9 @@ end;
 
 function TAxisDrawHelper.GetDefaultPenColor: TColor;
 begin
-  Result := TCustomChart(FAxis.Collection.Owner).GetDefaultColor(dctFont);
+  Result := clWindowText;
+  // Not like this: (crashes)
+  // TCustomChart(FAxis.Collection.Owner).GetDefaultColor(dctFont);
 end;
 
 procedure TAxisDrawHelper.InternalAxisLine(
@@ -582,7 +589,7 @@ begin
   Result := LabelFont;
 end;
 
-procedure TChartAxisTitle.SetCaption(AValue: String);
+procedure TChartAxisTitle.SetCaption(AValue: TCaption);
 begin
   if FCaption = AValue then exit;
   FCaption := AValue;
@@ -600,6 +607,14 @@ begin
   FPositionOnMarks := AValue;
   StyleChanged(Self);
 end;
+
+procedure TChartAxisTitle.SetWordwrap(AValue: Boolean);
+begin
+  if FWordwrap = AValue then exit;
+  FWordwrap := AValue;
+  StyleChanged(Self);
+end;
+
 
 { TCustomChartAxisMarks }
 
@@ -815,7 +830,11 @@ begin
   RegisterPropertyToSkip(TChartAxisTitle, 'Font', FONT_NOTE, '');
 end;
 
-initialization
+procedure Register;
+begin
+  RegisterPropertyEditor(
+    TypeInfo(TCaption), TChartAxisTitle, '', TStringMultilinePropertyEditor);
   SkipObsoleteProperties;
+end;
 
 end.
