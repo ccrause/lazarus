@@ -6,17 +6,16 @@ interface
 
 uses
   Classes, SysUtils, Graphics, Forms, Controls, StdCtrls, Dialogs, Spin, ExtCtrls,
-  TATextElements;
+  TATypes, TATextElements;
 
 type
 
-  TShapeChangeEvent = procedure (AShape: TChartLabelShape) of object;
+  TChartShapeChangeEvent = procedure (AShape: TChartLabelShape) of object;
 
-  { TShapeBrushPenMarginsFrame }
+  { TChartShapeBrushPenMarginsFrame }
 
-  TShapeBrushPenMarginsFrame = class(TFrame)
-    Bevel1: TBevel;
-    Bevel2: TBevel;
+  TChartShapeBrushPenMarginsFrame = class(TFrame)
+    Spacer: TBevel;
     cbBorderColor: TColorButton;
     cbFillColor: TColorButton;
     cbFilled: TCheckBox;
@@ -40,22 +39,26 @@ type
     procedure seTopMarginChange(Sender: TObject);
   private
     FOnChange: TNotifyEvent;
-    FOnShapeChange: TShapeChangeEvent;
+    FOnShapeChange: TChartShapeChangeEvent;
     FBrush: TBrush;
-    FPen: TPen;
+    FPen: TChartPen;
     FMargins: TChartLabelMargins;
     FShape: TChartLabelShape;
+    FLockEvents: Integer;
     procedure DoChanged;
     procedure DoShapeChanged(AShape: TChartLabelShape);
     procedure UpdateControls;
+  protected
+    procedure CalculatePreferredSize(var PreferredWidth, PreferredHeight: integer;
+      {%H-}WithThemeSpace: Boolean); override;
   public
     constructor Create(AOwner: TComponent); override;
     procedure GetData(out AShape: TChartLabelShape; ABrush: TBrush;
-      APen: TPen; AMargins: TChartLabelMargins);
-    procedure Prepare(AShape: TChartLabelShape; ABrush: TBrush; APen: TPen;
+      APen: TChartPen; AMargins: TChartLabelMargins);
+    procedure Prepare(AShape: TChartLabelShape; ABrush: TBrush; APen: TChartPen;
       AMargins: TChartLabelMargins);
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
-    property OnShapeChange: TShapeChangeEvent read FOnShapeChange write FOnShapeChange;
+    property OnShapeChange: TChartShapeChangeEvent read FOnShapeChange write FOnShapeChange;
   end;
 
 implementation
@@ -63,11 +66,12 @@ implementation
 {$R *.lfm}
 
 uses
+  Math,
   ceUtils;
 
-{ TShapeBrushPenMarginsFrame }
+{ TChartShapeBrushPenMarginsFrame }
 
-constructor TShapeBrushPenMarginsFrame.Create(AOwner: TComponent);
+constructor TChartShapeBrushPenMarginsFrame.Create(AOwner: TComponent);
 begin
   inherited;
   cbFillColor.Width := cbFillColor.Height;
@@ -75,14 +79,28 @@ begin
   cmbShape.DropdownCount := DEFAULT_DROPDOWN_COUNT;
 end;
 
-procedure TShapeBrushPenMarginsFrame.cbBorderColorColorChanged(Sender: TObject);
+procedure TChartShapeBrushPenMarginsFrame.CalculatePreferredSize(
+  var PreferredWidth, PreferredHeight: integer;
+  WithThemeSpace: Boolean);
+begin
+  PreferredHeight := cmbShape.Height +
+    gbBackground.BorderSpacing.Top + gbBackground.Height +
+    gbMargins.BorderSpacing.Top + gbMargins.Height;
+
+  PreferredWidth := Max(
+    Max(gbBackground.Width, gbBorder.Width) * 2 + Spacer.Width,
+    gbMargins.Width
+  );;
+end;
+
+procedure TChartShapeBrushPenMarginsFrame.cbBorderColorColorChanged(Sender: TObject);
 begin
   FPen.Color := cbBorderColor.ButtonColor;
-  if FPen.Style <> psClear then
+//  if FPen.Style <> psClear then
     DoChanged;
 end;
 
-procedure TShapeBrushPenMarginsFrame.cbFillColorColorChanged(Sender: TObject);
+procedure TChartShapeBrushPenMarginsFrame.cbFillColorColorChanged(Sender: TObject);
 var
   bs: TBrushStyle;
 begin
@@ -93,93 +111,104 @@ begin
     DoChanged;
 end;
 
-procedure TShapeBrushPenMarginsFrame.cbFilledChange(Sender: TObject);
+procedure TChartShapeBrushPenMarginsFrame.cbFilledChange(Sender: TObject);
 begin
   if cbFilled.Checked then FBrush.Style := bsSolid else FBrush.Style := bsClear;
   UpdateControls;
   DoChanged;
 end;
 
-procedure TShapeBrushPenMarginsFrame.cbShowBorderChange(Sender: TObject);
+procedure TChartShapeBrushPenMarginsFrame.cbShowBorderChange(Sender: TObject);
 begin
-  if cbShowBorder.Checked then FPen.Style := psSolid else FPen.Style := psClear;
+  FPen.Visible := cbShowBorder.Checked;
+  if FPen.Visible and (FPen.Style = psClear) then FPen.Style := psSolid;
   UpdateControls;
   DoChanged;
 end;
 
-procedure TShapeBrushPenMarginsFrame.DoChanged;
+procedure TChartShapeBrushPenMarginsFrame.cmbShapeChange(Sender: TObject);
 begin
-  if Assigned(FOnChange) then FOnChange(Self);
+  DoShapeChanged(TChartLabelShape(cmbShape.ItemIndex));
 end;
 
-procedure TShapeBrushPenMarginsFrame.DoShapeChanged(AShape: TChartLabelShape);
+procedure TChartShapeBrushPenMarginsFrame.DoChanged;
 begin
-  if Assigned(FOnShapeChange) then FOnShapeChange(AShape);
+  if (FLockEvents = 0) and Assigned(FOnChange) then
+    FOnChange(Self);
 end;
 
-procedure TShapeBrushPenMarginsFrame.cmbShapeChange(Sender: TObject);
+procedure TChartShapeBrushPenMarginsFrame.DoShapeChanged(AShape: TChartLabelShape);
 begin
-  FShape := TChartLabelShape(cmbShape.ItemIndex);
-  DoShapeChanged(FShape);
+  if (FLockEvents = 0) and Assigned(FOnShapeChange) then
+    FOnShapeChange(AShape);
 end;
 
-procedure TShapeBrushPenMarginsFrame.seBottomMarginChange(Sender: TObject);
+procedure TChartShapeBrushPenMarginsFrame.seBottomMarginChange(Sender: TObject);
 begin
   FMargins.Bottom := seBottomMargin.Value;
   DoChanged;
 end;
 
-procedure TShapeBrushPenMarginsFrame.seLeftMarginChange(Sender: TObject);
+procedure TChartShapeBrushPenMarginsFrame.seLeftMarginChange(Sender: TObject);
 begin
   FMargins.Left := seLeftMargin.Value;
   DoChanged;
 end;
 
-procedure TShapeBrushPenMarginsFrame.seRightMarginChange(Sender: TObject);
+procedure TChartShapeBrushPenMarginsFrame.seRightMarginChange(Sender: TObject);
 begin
   FMargins.Right := seRightMargin.Value;
   DoChanged;
 end;
 
-procedure TShapeBrushPenMarginsFrame.seTopMarginChange(Sender: TObject);
+procedure TChartShapeBrushPenMarginsFrame.seTopMarginChange(Sender: TObject);
 begin
   FMargins.Top := seTopMargin.Value;
   DoChanged;
 end;
 
-procedure TShapeBrushPenMarginsFrame.GetData(out AShape: TChartLabelShape;
-  ABrush: TBrush; APen: TPen; AMargins: TChartLabelMargins);
+procedure TChartShapeBrushPenMarginsFrame.GetData(out AShape: TChartLabelShape;
+  ABrush: TBrush; APen: TChartPen; AMargins: TChartLabelMargins);
 begin
   AShape := TChartLabelShape(cmbShape.ItemIndex);
-  if cbFilled.Checked then ABrush.Style := bsSolid else ABrush.Style := bsClear;
-  ABrush.Color := cbFillColor.ButtonColor;
-  if cbShowBorder.Checked then APen.Style := psSolid else APen.Style := psClear;
-  APen.Color := cbBorderColor.ButtonColor;
+  if HandleAllocated then
+  begin
+    if cbFilled.Checked then ABrush.Style := bsSolid else ABrush.Style := bsClear;
+    ABrush.Color := cbFillColor.ButtonColor;
+    APen.Visible := cbShowBorder.Checked;
+    APen.Style := psSolid;
+    APen.Color := cbBorderColor.ButtonColor;
+  end;
   AMargins.Top := seTopMargin.Value;
   AMargins.Left := seLeftMargin.Value;
   AMargins.Right := seRightMargin.Value;
   AMargins.Bottom := seBottomMargin.Value;
 end;
 
-procedure TShapeBrushPenMarginsFrame.Prepare(AShape: TChartLabelShape;
-  ABrush: TBrush; APen: TPen; AMargins: TChartLabelMargins);
+procedure TChartShapeBrushPenMarginsFrame.Prepare(AShape: TChartLabelShape;
+  ABrush: TBrush; APen: TChartPen; AMargins: TChartLabelMargins);
 begin
+  inc(FLockEvents);
   FShape := AShape;
   FBrush := ABrush;
   FPen := APen;
   FMargins := AMargins;
   cmbShape.ItemIndex := ord(AShape);
   cbFilled.Checked := ABrush.Style <> bsClear;
-  cbFillColor.ButtonColor := ABrush.Color;
-  cbShowBorder.Checked := APen.Style <> psClear;
-  cbBorderColor.ButtonColor := APen.Color;
+  cbFillColor.ButtonColor := ColorToRGB(ABrush.Color);
+  cbShowBorder.Checked := APen.EffVisible;
+  if APen.Color = clDefault then
+    cbBorderColor.ButtonColor := ColorToRGB(clWindowText)
+  else
+    cbBorderColor.ButtonColor := ColorToRGB(APen.Color);
   seTopMargin.Value := AMargins.Top;
   seLeftMargin.Value := AMargins.Left;
   seRightMargin.Value := AMargins.Right;
   seBottomMargin.Value := AMargins.Bottom;
+  dec(FLockEvents);
 end;
 
-procedure TShapeBrushPenMarginsFrame.UpdateControls;
+procedure TChartShapeBrushPenMarginsFrame.UpdateControls;
 begin
   cbBorderColor.Visible := cbShowBorder.Checked;
   cmbShape.Enabled := cbShowBorder.Checked or cbFilled.Checked;

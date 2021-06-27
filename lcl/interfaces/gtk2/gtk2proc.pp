@@ -103,7 +103,7 @@ procedure gtkchanged_editbox_delete_text(Widget: PGtkWidget;
 procedure gtkchanged_editbox_insert_text(Widget: PGtkWidget; {%H-}ANewText: PgChar;
   {%H-}ANewTextLength: gint; {%H-}APosition: pgint; {%H-}data: gPointer); cdecl;
 function gtkchanged_editbox( widget: PGtkWidget; data: gPointer): GBoolean; cdecl;
-function gtkchanged_editbox_delete(widget: PGtkWidget;
+function gtkchanged_editbox_delete({%H-}widget: PGtkWidget;
   {%H-}AType: TGtkDeleteType; {%H-}APos: gint; {%H-}data: gPointer): GBoolean; cdecl;
 function gtkdaychanged(Widget: PGtkWidget; data: gPointer): GBoolean; cdecl;
 function gtktoggledCB( widget: PGtkWidget; data: gPointer): GBoolean; cdecl;
@@ -852,6 +852,8 @@ type
   // TLCLHandledKeyEvent is used to remember, if an gdk key event was already
   // handled.
   TLCLHandledKeyEvent = class
+  private
+    fRefCount: integer;
   public
     thetype: TGdkEventType;
     window: PGdkWindow;
@@ -862,6 +864,8 @@ type
     hardware_keycode : guint16;
     constructor Create(Event: PGdkEventKey);
     function IsEqual(Event: PGdkEventKey): boolean;
+    procedure AddRef;
+    procedure Release;
   end;
 
   TWinControlAccess = class(TWinControl)
@@ -871,6 +875,7 @@ type
 
 constructor TLCLHandledKeyEvent.Create(Event: PGdkEventKey);
 begin
+  fRefCount:=1;
   thetype:=gdk_event_get_type(Event);
   window:=Event^.window;
   send_event:=Event^.send_event;
@@ -890,6 +895,18 @@ begin
       and (time=Event^.time)
       and (keyval=Event^.keyval)
       ;
+end;
+
+procedure TLCLHandledKeyEvent.AddRef;
+begin
+  inc(fRefCount);
+end;
+
+procedure TLCLHandledKeyEvent.Release;
+begin
+  dec(fRefCount);
+  if fRefCount=0 then
+    Free;
 end;
 
 var

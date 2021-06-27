@@ -38,7 +38,9 @@ type
     HideHeaderCaptionForFloatingCheckBox: TCheckBox;
     HighlightFocusedCheckBox: TCheckBox;
     DockSitesCanBeMinimized: TCheckBox;
+    FloatingWindowsOnTop: TCheckBox;
     ScaleOnResizeCheckBox: TCheckBox;
+    MultiLinePagesCheckBox: TCheckBox;
     ShowHeaderCaptionCheckBox: TCheckBox;
     ShowHeaderCheckBox: TCheckBox;
     SplitterWidthLabel: TLabel;
@@ -347,15 +349,17 @@ begin
     TheSettings.HeaderAlignLeft:=HeaderAlignLeftTrackBar.Position;
     TheSettings.SplitterWidth:=SplitterWidthTrackBar.Position;
   end;
+  TheSettings.DockSitesCanBeMinimized:=DockSitesCanBeMinimized.Checked;
+  TheSettings.FloatingWindowsOnTop:=FloatingWindowsOnTop.Checked;
+  TheSettings.HeaderFilled:=FilledHeadersCheckBox.Checked;
+  TheSettings.HeaderFlatten:=FlattenHeadersCheckBox.Checked;
+  TheSettings.HeaderHighlightFocused:=HighlightFocusedCheckBox.Checked;
+  TheSettings.HeaderStyle:=DockMaster.HeaderStyleName2ADHeaderStyle.Data[HeaderStyleComboBox.ItemIndex].StyleDesc.Name;
+  TheSettings.HideHeaderCaptionFloatingControl:=HideHeaderCaptionForFloatingCheckBox.Checked;
+  TheSettings.MultiLinePages:=MultiLinePagesCheckBox.Checked;
   TheSettings.ScaleOnResize:=ScaleOnResizeCheckBox.Checked;
   TheSettings.ShowHeader:=ShowHeaderCheckBox.Checked;
   TheSettings.ShowHeaderCaption:=ShowHeaderCaptionCheckBox.Checked;
-  TheSettings.HideHeaderCaptionFloatingControl:=HideHeaderCaptionForFloatingCheckBox.Checked;
-  TheSettings.HeaderFlatten:=FlattenHeadersCheckBox.Checked;
-  TheSettings.HeaderFilled:=FilledHeadersCheckBox.Checked;
-  TheSettings.HeaderStyle:=DockMaster.HeaderStyleName2ADHeaderStyle.Data[HeaderStyleComboBox.ItemIndex].StyleDesc.Name;
-  TheSettings.HeaderHighlightFocused:=HighlightFocusedCheckBox.Checked;
-  TheSettings.DockSitesCanBeMinimized:=DockSitesCanBeMinimized.Checked;
 end;
 
 procedure TAnchorDockOptionsFrame.LoadFromSettings(
@@ -436,6 +440,14 @@ begin
   DockSitesCanBeMinimized.Checked:=TheSettings.DockSitesCanBeMinimized;
   DockSitesCanBeMinimized.Caption:=adrsAllowDockSitesToBeMinimized;
   DockSitesCanBeMinimized.Hint:=adrsAllowDockSitesToBeMinimized;
+
+  MultiLinePagesCheckBox.Caption:=adrsMultiLinePages;
+  MultiLinePagesCheckBox.Hint:=adrsMultiLinePagesHint;
+  MultiLinePagesCheckBox.Checked:=TheSettings.MultiLinePages;
+
+  FloatingWindowsOnTop.Caption:=adrsFloatingWindowsOnTop;
+  FloatingWindowsOnTop.Hint:=adrsFloatingWindowsOnTopHint;
+  FloatingWindowsOnTop.Checked:=TheSettings.FloatingWindowsOnTop;
 end;
 
 end.

@@ -10,10 +10,18 @@
 }
 
 procedure TScrollingWinControl.SetAutoScroll(Value: Boolean);
+var
+  LOldBounds: TRect;
 begin
   if FAutoScroll = Value then Exit;
   FAutoScroll := Value;
-  UpdateScrollBars;
+  LOldBounds := BoundsRect;
+  if Value then
+    UpdateScrollBars
+  else
+    HideScrollbars;
+  if LOldBounds <> BoundsRect then
+    BoundsRect := LOldBounds;
 end;
 
 procedure TScrollingWinControl.CreateWnd;
@@ -142,6 +150,24 @@ begin
   FVertScrollbar.Assign(Value);
 end;
 
+procedure TScrollingWinControl.HideScrollbars;
+begin
+  if Assigned(FHorzScrollBar) and FHorzScrollBar.HandleAllocated then
+  begin
+    ShowScrollBar(FHorzScrollBar.ControlHandle, SB_Horz, False);
+    FHorzScrollBar.Range := 0;
+    FHorzScrollBar.Page := 80;
+    FHorzScrollBar.Position := 0;
+  end;
+  if Assigned(FVertScrollBar) and FVertScrollBar.HandleAllocated then
+  begin
+    ShowScrollBar(FVertScrollBar.ControlHandle, SB_Vert, False);
+    FVertScrollBar.Range := 0;
+    FVertScrollBar.Page := 80;
+    FVertScrollBar.Position := 0;
+  end;
+end;
+
 procedure TScrollingWinControl.WMSize(var Message: TLMSize);
 var
   NewState: TWindowState;
@@ -248,28 +274,35 @@ end;
 
 procedure TScrollingWinControl.ScrollInView(AControl: TControl);
 var
-  xRect: TRect;
+  LRect: TRect;
+  LPoint: TPoint;
+  LHorzVisible, LVertVisible: Boolean;
 begin
-  if AControl=nil then
-    Exit;
-  xRect := AControl.BoundsRect;
-  OffsetRect(xRect, -HorzScrollBar.Position, -VertScrollBar.Position);
-  if xRect.Left < 0 then
-    HorzScrollBar.Position := HorzScrollBar.Position + xRect.Left
-  else if xRect.Right > ClientWidth then
-  begin
-    if xRect.Right - xRect.Left > ClientWidth then
-      xRect.Right := xRect.Left + ClientWidth;
-    HorzScrollBar.Position := HorzScrollBar.Position + xRect.Right - ClientWidth;
-  end;
-  if xRect.Top < 0 then
-    VertScrollBar.Position := VertScrollBar.Position + xRect.Top
-  else if xRect.Bottom > ClientHeight then
-  begin
-    if xRect.Bottom - xRect.Top > ClientHeight then
-      xRect.Bottom := xRect.Top + ClientHeight;
-    VertScrollBar.Position := VertScrollBar.Position + xRect.Bottom - ClientHeight;
-  end;
+  if (AControl = nil) or not IsParentOf(AControl) then Exit;
+  LHorzVisible := HorzScrollBar.IsScrollBarVisible;
+  LVertVisible := VertScrollBar.IsScrollBarVisible;
+  if not LHorzVisible and not LVertVisible then Exit;
+  LRect := Rect(0, 0, AControl.Width, AControl.Height);
+  LPoint := AControl.ClientToParent(Point(0, 0), Self);
+  OffsetRect(LRect, LPoint.x, LPoint.y);
+  if LHorzVisible then
+    if LRect.Left < 0 then
+      HorzScrollBar.Position := HorzScrollBar.Position + LRect.Left
+    else if LRect.Right > ClientWidth then
+    begin
+      if LRect.Right - LRect.Left > ClientWidth then
+        LRect.Right := LRect.Left + ClientWidth;
+      HorzScrollBar.Position := HorzScrollBar.Position + LRect.Right - ClientWidth;
+    end;
+  if LVertVisible then
+    if LRect.Top < 0 then
+      VertScrollBar.Position := VertScrollBar.Position + LRect.Top
+    else if LRect.Bottom > ClientHeight then
+    begin
+      if LRect.Bottom - LRect.Top > ClientHeight then
+        LRect.Bottom := LRect.Top + ClientHeight;
+      VertScrollBar.Position := VertScrollBar.Position + LRect.Bottom - ClientHeight;
+    end;
 end;
 
 procedure TScrollingWinControl.Loaded;

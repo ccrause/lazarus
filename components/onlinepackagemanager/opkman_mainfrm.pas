@@ -178,6 +178,9 @@ type
     function UpdateP(const ADstDir: String; var ADoExtract: Boolean): TModalResult;
     procedure Rebuild;
     function CheckDstDir(const ADstDir: String): Boolean;
+  protected
+    procedure DoAutoAdjustLayout(const AMode: TLayoutAdjustmentPolicy;
+      const AXProportion, AYProportion: Double); override;
   public
     procedure ShowOptions(const AActivePageIndex: Integer = 0);
   end;
@@ -283,7 +286,7 @@ begin
     try
       MS.LoadFromFile(JSONFile);
       MS.Position := 0;
-      SetLength(JSON, MS.Size);
+      SetLength({%H-}JSON, MS.Size);
       MS.Read(Pointer(JSON)^, Length(JSON));
       try
         SuccessfullyLoaded := SerializablePackages.JSONToPackages(JSON);
@@ -345,6 +348,14 @@ begin
   end;
 end;
 
+
+procedure TMainFrm.DoAutoAdjustLayout(const AMode: TLayoutAdjustmentPolicy;
+  const AXProportion, AYProportion: Double);
+begin
+  inherited;
+  if AMode in [lapAutoAdjustWithoutHorizontalScrolling, lapAutoAdjustForDPI] then
+    VisualTree.AutoAdjustLayout(AXProportion, AYProportion);
+end;
 
 function TMainFrm.Download(const ADstDir: String; var ADoExtract: Boolean): TModalResult;
 begin
@@ -776,7 +787,7 @@ var
   InstallStatus: TInstallStatus;
   NeedToRebuild: Boolean;
 begin
-  if not IsSomethingChecked(False) then
+  if not IsSomethingChecked(True) then
     Exit;
   CanGo := True;
 
@@ -1484,8 +1495,10 @@ begin
   tbHelp.Caption := rsMainFrm_TBHelp_Caption;
   tbHelp.Hint := rsMainFrm_TBHelp_Hint;
 
-  miFromRepository.Caption := rsMainFrm_miFromRepository;
-  miFromExteranlSource.Caption := rsMainFrm_miFromExternalSource;
+  miFromRepository.Caption := rsMainFrm_VSTHeaderColumn_Repository;
+  miFromRepository.Hint := rsMainFrm_VSTHeaderColumn_Repository_Hint;
+  miFromExteranlSource.Caption := rsMainFrm_VSTHeaderColumn_Update;
+  miFromExteranlSource.Hint := rsMainFrm_VSTHeaderColumn_Update_Hint;
   miCreateRepositoryPackage.Caption := rsMainFrm_miCreateRepositoryPackage;
   miCreateJSONForUpdates.Caption := rsMainFrm_miCreateJSONForUpdates;
   miCreateRepository.Caption := rsMainFrm_miCreateRepository;

@@ -81,6 +81,7 @@ type
     procedure DoCallstackFreed_DecRef(Sender: TObject);
   protected
     procedure UpdateCallstack_DecRef(Data: PtrInt = 0); override;
+    procedure DoRemovedFromLinkedList; override;
   public
     constructor Create(ADebugger: TFpDebugDebugger; ACallstack: TCallStackBase; ARequiredMinCount: Integer);
     //procedure RemoveCallStack_DecRef;
@@ -94,6 +95,7 @@ type
     FCallstackEntry: TCallStackEntry;
     procedure DoCallstackFreed_DecRef(Sender: TObject);
     procedure DoCallstackEntryFreed_DecRef(Sender: TObject);
+    procedure DoRemovedFromLinkedList; override;
   protected
     procedure UpdateCallstackEntry_DecRef(Data: PtrInt = 0); override;
   public
@@ -119,6 +121,13 @@ type
     procedure DoRemovedFromLinkedList; override; // _DecRef
   public
     constructor Create(ADebugger: TFpDebugDebuggerBase; ALocals: TLocals);
+  end;
+
+  { TFpThreadWorkerModifyUpdate }
+
+  TFpThreadWorkerModifyUpdate = class(TFpThreadWorkerModify)
+  protected
+    procedure DoCallback_DecRef(Data: PtrInt = 0); override;
   end;
 
   { TFpThreadWorkerWatchValueEvalUpdate }
@@ -290,8 +299,6 @@ type
     FWorkerThreadId: TThreadID;
     FEvalWorkItem: TFpThreadWorkerCmdEval;
     FQuickPause, FPauseForEvent, FSendingEvents: boolean;
-    FMemConverter: TFpDbgMemConvertorLittleEndian;
-    FMemReader: TDbgMemReader;
     FExceptionStepper: TFpDebugExceptionStepping;
     FConsoleOutputThread: TThread;
     // Helper vars to run in debug-thread
@@ -394,6 +401,7 @@ type
     class function CreateProperties: TDebuggerProperties; override;
     class function  GetSupportedCommands: TDBGCommands; override;
     class function SupportedCommandsFor(AState: TDBGState): TDBGCommands; override;
+    class function SupportedFeatures: TDBGFeatures; override;
   end;
 
   { TFpLineInfo }
@@ -511,6 +519,7 @@ type
     procedure DoStateChange(const AOldState: TDBGState); override;
     procedure DoEnableChange; override;
     procedure DoChanged; override;
+    property  Validity: TValidState write SetValid;
   public
     destructor Destroy; override;
   end;
@@ -555,6 +564,7 @@ type
     function ReadMemoryEx(AnAddress, AnAddressSpace: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean; override;
     function ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr;
       AContext: TFpDbgLocationContext): Boolean; override;
+    //WriteMemory is not overwritten. It must ONLY be called in the debug-thread
   end;
 
   { TFpWaitForConsoleOutputThread }
@@ -574,6 +584,18 @@ type
 procedure Register;
 begin
   RegisterDebugger(TFpDebugDebugger);
+end;
+
+{ TFpThreadWorkerModifyUpdate }
+
+procedure TFpThreadWorkerModifyUpdate.DoCallback_DecRef(Data: PtrInt);
+begin
+  //
+  FDebugger.Locals.CurrentLocalsList.Clear;
+  FDebugger.Watches.CurrentWatches.ClearValues;
+  FDebugger.CallStack.CurrentCallStackList.Clear;
+
+  UnQueue_DecRef;
 end;
 
 { TFpDbgDebggerThreadWorkerItemHelper }
@@ -664,6 +686,11 @@ begin
   TFPCallStackSupplier(dbg.CallStack).FCallStackWorkers.ClearFinishedWorkers;
 end;
 
+procedure TFpThreadWorkerCallStackCountUpdate.DoRemovedFromLinkedList;
+begin
+  UpdateCallstack_DecRef;  // This trigger PrepareRange => but that still needs to be exec in thread? (or wait for lock)
+end;
+
 procedure TFpThreadWorkerCallStackCountUpdate.DoCallstackFreed_DecRef(
   Sender: TObject);
 begin
@@ -720,6 +747,11 @@ begin
   FCallstackEntry := nil;
   RequestStop;
   UnQueue_DecRef;
+end;
+
+procedure TFpThreadWorkerCallEntryUpdate.DoRemovedFromLinkedList;
+begin
+  UpdateCallstackEntry_DecRef;
 end;
 
 procedure TFpThreadWorkerCallEntryUpdate.UpdateCallstackEntry_DecRef(
@@ -887,7 +919,6 @@ end;
 
 procedure TFpThreadWorkerLocalsUpdate.DoRemovedFromLinkedList;
 begin
-  inherited DoRemovedFromLinkedList;
   if FLocals <> nil then begin
     if FHasQueued = hqQueued then begin
       UpdateLocals_DecRef;
@@ -956,7 +987,6 @@ end;
 
 procedure TFpThreadWorkerWatchValueEvalUpdate.DoRemovedFromLinkedList;
 begin
-  inherited DoRemovedFromLinkedList;
   if FWatchValue <> nil then begin
     FWatchValue.RemoveFreeNotification(@DoWatchFreed_DecRef);
     if FRes then begin
@@ -1013,9 +1043,9 @@ begin
     assert(FDbgBreakPoint.FInternalBreakpoint = nil, 'TFpThreadWorkerBreakPointSetUpdate.UpdateBrkPoint_DecRef: FDbgBreakPoint.FInternalBreakpoint = nil');
     FDbgBreakPoint.FInternalBreakpoint := InternalBreakpoint;
     if not assigned(InternalBreakpoint) then
-      FDbgBreakPoint.FValid:=vsInvalid // pending?
+      FDbgBreakPoint.Validity := vsInvalid // pending?
     else
-      FDbgBreakPoint.FValid:=vsValid;
+      FDbgBreakPoint.Validity := vsValid;
   end;
 
   UnQueue_DecRef;
@@ -1383,6 +1413,10 @@ end;
 function TFpDbgMemReader.ReadRegister(ARegNum: Cardinal; out AValue: TDbgPtr;
   AContext: TFpDbgLocationContext): Boolean;
 begin
+  // Shortcut, if in debug-thread / do not use Self.F*
+  if ThreadID = FFpDebugDebugger.FWorkerThreadId then
+    exit(inherited ReadRegister(ARegNum, AValue, AContext));
+
   FRegNum := ARegNum;
   FRegContext := AContext;
   FRegValue := 0; // TODO: error detection
@@ -1590,6 +1624,7 @@ begin
   FThreadWorker := TFpThreadWorkerBreakPointSetUpdate.Create(TFpDebugDebugger(Debugger), Self);
   TFpDebugDebugger(Debugger).FWorkQueue.PushItem(FThreadWorker);
 
+  FValid := vsUnknown;
   FIsSet:=true;
   debuglnExit(DBG_BREAKPOINTS, ['<< TFPBreakpoint.SetBreak ' ]);
 end;
@@ -3088,6 +3123,7 @@ var
   WorkItem: TFpThreadWorkerControllerRun;
   AThreadId, AStackFrame: Integer;
   EvalWorkItem: TFpThreadWorkerCmdEval;
+  WorkItemModify: TFpThreadWorkerModifyUpdate;
 begin
   result := False;
   if assigned(FDbgController) then
@@ -3259,6 +3295,15 @@ begin
         FWorkQueue.PushItem(FEvalWorkItem);
         Result := True;
       end;
+    dcModify:
+      begin
+        GetCurrentThreadAndStackFrame(AThreadId, AStackFrame);
+        WorkItemModify := TFpThreadWorkerModifyUpdate.Create(Self, AnsiString(AParams[0].VAnsiString), AnsiString(AParams[1].VAnsiString),
+          AStackFrame, AThreadId);
+        FWorkQueue.PushItem(WorkItemModify);
+        WorkItemModify.DecRef;
+        Result := True;
+      end;
     dcSendConsoleInput:
       begin
         FDbgController.CurrentProcess.SendConsoleInput(String(AParams[0].VAnsiString));
@@ -3276,11 +3321,12 @@ function TFpDebugDebugger.ExecuteInDebugThread(AMethod: TFpDbgAsyncMethod
 var
   WorkItem: TFpThreadWorkerAsyncMeth;
 begin
-  Result := True;
-  if ThreadID = FWorkerThreadId then begin
-    AMethod();
-    exit;
-  end;
+  assert(ThreadID <> FWorkerThreadId, 'TFpDebugDebugger.ExecuteInDebugThread: ThreadID <> FWorkerThreadId');
+  //Result := True;
+  //if ThreadID = FWorkerThreadId then begin
+  //  AMethod();
+  //  exit;
+  //end;
 
   Result := False;
 
@@ -3488,6 +3534,11 @@ end;
 function TFpDebugDebugger.AddBreak(const ALocation: TDbgPtr; AnEnabled: Boolean
   ): TFpDbgBreakpoint;
 begin
+  // Shortcut, if in debug-thread / do not use Self.F*
+  if ThreadID = FWorkerThreadId then
+    if ALocation = 0 then exit(FDbgController.CurrentProcess.AddBreak(nil, AnEnabled))
+                     else exit(FDbgController.CurrentProcess.AddBreak(ALocation, AnEnabled));
+
   FCacheLocation:=ALocation;
   FCacheBoolean:=AnEnabled;
   FCacheBreakpoint := nil;
@@ -3498,6 +3549,11 @@ end;
 function TFpDebugDebugger.AddBreak(const AFuncName: String; ALib: TDbgLibrary;
   AnEnabled: Boolean): TFpDbgBreakpoint;
 begin
+  // Shortcut, if in debug-thread / do not use Self.F*
+  if ThreadID = FWorkerThreadId then
+    if ALib <> nil then exit(ALib.AddBreak(AFuncName, AnEnabled))
+                   else exit(TDbgInstance(FDbgController.CurrentProcess).AddBreak(AFuncName, AnEnabled));
+
   FCacheFileName:=AFuncName;
   FCacheLib:=ALib;
   FCacheBoolean:=AnEnabled;
@@ -3508,6 +3564,10 @@ end;
 
 function TFpDebugDebugger.ReadData(const AAdress: TDbgPtr; const ASize: Cardinal; out AData): Boolean;
 begin
+  // Shortcut, if in debug-thread / do not use Self.F*
+  if ThreadID = FWorkerThreadId then
+    exit(FDbgController.CurrentProcess.ReadData(AAdress, ASize, AData));
+
   FCacheLocation := AAdress;
   FCacheLine:=ASize;
   FCachePointer := @AData;
@@ -3519,6 +3579,10 @@ end;
 function TFpDebugDebugger.ReadData(const AAdress: TDbgPtr;
   const ASize: Cardinal; out AData; out ABytesRead: Cardinal): Boolean;
 begin
+  // Shortcut, if in debug-thread / do not use Self.F*
+  if ThreadID = FWorkerThreadId then
+    exit(FDbgController.CurrentProcess.ReadData(AAdress, ASize, AData, ABytesRead));
+
   FCacheLocation := AAdress;
   FCacheLine:=ASize;
   FCachePointer := @AData;
@@ -3728,7 +3792,7 @@ end;
 
 class function TFpDebugDebugger.Caption: String;
 begin
-  Result:='FpDebug internal Dwarf-debugger (beta)';
+  Result:='FpDebug internal Dwarf-debugger';
 end;
 
 class function TFpDebugDebugger.NeedsExePath: boolean;
@@ -3781,7 +3845,8 @@ end;
 class function TFpDebugDebugger.GetSupportedCommands: TDBGCommands;
 begin
   Result:=[dcRun, dcStop, dcStepIntoInstr, dcStepOverInstr, dcStepOver,
-           dcStepTo, dcRunTo, dcPause, dcStepOut, dcStepInto, dcEvaluate, dcSendConsoleInput
+           dcStepTo, dcRunTo, dcPause, dcStepOut, dcStepInto, dcEvaluate, dcModify,
+           dcSendConsoleInput
            {$IFDEF windows} , dcAttach, dcDetach {$ENDIF}
            {$IFDEF linux} , dcAttach, dcDetach {$ENDIF}
           ];
@@ -3793,6 +3858,11 @@ begin
   Result := inherited SupportedCommandsFor(AState);
   if AState = dsStop then
     Result := Result - [dcStepInto, dcStepOver, dcStepOut, dcStepIntoInstr, dcStepOverInstr];
+end;
+
+class function TFpDebugDebugger.SupportedFeatures: TDBGFeatures;
+begin
+  Result := [dfEvalFunctionCalls];
 end;
 
 initialization

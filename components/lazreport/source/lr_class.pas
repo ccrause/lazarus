@@ -133,7 +133,7 @@ type
   TEndBandEvent = procedure(Band: TfrBand) of object;
   TfrProgressEvent = procedure(n: Integer) of object;
   TBeginColumnEvent = procedure(Band: TfrBand) of object;
-  TPrintColumnEvent = procedure(ColNo: Integer; var Width: Integer) of object;
+  TPrintColumnEvent = procedure(ColNo: Integer; var AWidth: Integer) of object;
   TManualBuildEvent = procedure(Page: TfrPage) of object;
   TObjectClickEvent = procedure(View: TfrView) of object;
   TMouseOverObjectEvent = procedure(View: TfrView; var ACursor: TCursor) of object;
@@ -1665,7 +1665,7 @@ var
   CurVariable: String;
   IsColumns: Boolean;
   SavedAllPages: Integer;      // number of pages in entire report
-  ErrorFlag: Boolean;          // error occured through TfrView drawing
+  ErrorFlag: Boolean;          // error occurred through TfrView drawing
   ErrorStr: String;            // error description
   SubValue: String;            // used in GetValue event handler
   ObjID: Integer = 0;
@@ -6441,7 +6441,7 @@ var
   i: Integer;
 begin
   ErrorFlag := True;
-  ErrorStr := sErrorOccured;
+  ErrorStr := sErrorOccurred;
   for i := 0 to CurView.Memo.Count - 1 do
     ErrorStr := ErrorStr + LineEnding + CurView.Memo[i];
   ErrorStr := ErrorStr + LineEnding +
@@ -10708,8 +10708,8 @@ var
   XML: TLrXMLConfig;
 begin
   XML := TLrXMLConfig.Create(nil);
-  XML.LoadFromStream(Stream);
   try
+    XML.LoadFromStream(Stream);
     LoadFromXML(XML, 'LazReport/');
     FileName := '-stream-';
   finally

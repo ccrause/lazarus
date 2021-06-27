@@ -380,10 +380,10 @@ function RectFromPangoRect(APangoRect: TPangoRectangle): TRect;
 begin
   with APangoRect do
   begin
-    Result.Left := x div PANGO_SCALE;
-    Result.Top := y div PANGO_SCALE;
-    Result.Right := (Width div PANGO_SCALE) + (x div PANGO_SCALE);
-    Result.Bottom := (Height div PANGO_SCALE) + (y div PANGO_SCALE);
+    Result.Left := PANGO_PIXELS(x);
+    Result.Top := PANGO_PIXELS(y);
+    Result.Right := PANGO_PIXELS(Width+x);
+    Result.Bottom := PANGO_PIXELS(Height+y);
   end;
 end;
 
@@ -655,6 +655,8 @@ begin
     GDK_KEY_Tab, GDK_KEY_3270_BackTab, GDK_KEY_ISO_Left_Tab: Result := VK_TAB;
     GDK_KEY_Shift_L, GDK_KEY_Shift_R: Result := VK_SHIFT;
     GDK_KEY_Control_L, GDK_KEY_Control_R: Result := VK_CONTROL;
+    GDK_KEY_F1 .. GDK_KEY_F30:
+      Result:= VK_F1 + (AValue - GDK_KEY_F1);
   end;
 end;
 

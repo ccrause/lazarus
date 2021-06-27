@@ -2021,7 +2021,7 @@ var
   NewTool: TFindDeclarationTool;
   NewNode: TCodeTreeNode;
 begin
-  Result:=FindDeclaration(CursorPos,[fsfFindMainDeclaration],NewTool,NewNode,
+  Result:=FindDeclaration(CursorPos,[fsfFindMainDeclaration,fsfSearchSourceName],NewTool,NewNode,
                           NewPos,NewTopLine);
 end;
 
@@ -2552,8 +2552,9 @@ function TFindDeclarationTool.FindDeclaration(const CursorPos: TCodeXYPosition;
 var
   ExprType: TExpressionType;
 begin
-  Result := FindDeclaration(CursorPos, SearchSmartFlags, ExprType, NewPos, NewTopLine, BlockTopLine, BlockBottomLine) and
-    (NewPos.X >= 0) and (NewPos.Y >= 0);
+  Result := FindDeclaration(CursorPos, SearchSmartFlags, ExprType,
+                            NewPos, NewTopLine, BlockTopLine, BlockBottomLine)
+      and (NewPos.X >= 0) and (NewPos.Y >= 0);
   if Result then begin
     NewTool := ExprType.Context.Tool;
     NewNode := ExprType.Context.Node;
@@ -3916,6 +3917,7 @@ function TFindDeclarationTool.FindDeclarationOfIdentAtParam(
 var
   StartPos, EndPos: integer;
   SkipForward: boolean;
+  Node: TCodeTreeNode;
 begin
   {$IFDEF CTDEBUG}
   DebugLn('[TFindDeclarationTool.FindDeclarationOfIdentAtParam] Identifier=',
@@ -3953,6 +3955,11 @@ begin
     Params.SetResult(CleanFindContext);
   if SkipForward and (Params.NewNode<>nil) then
     Params.NewCodeTool.FindNonForwardClass(Params);
+  if (Params.NewNode<>nil) and (Params.NewNode.Desc=ctnProcedure) then begin
+    Node:=Params.NewNode.FirstChild;
+    if (Node<>nil) and (Node.Desc=ctnProcedureHead) then
+      Params.NewNode:=Node;
+  end;
   {$IFDEF ShowExprEval}
   DbgOut('[TFindDeclarationTool.FindDeclarationOfIdentAtParam] Ident=',
     '"',GetIdentifier(Params.Identifier),'" ');
@@ -4980,8 +4987,9 @@ begin
 
         ctnIdentifier:
           if (ContextNode.Parent.Desc in [ctnConstDefinition,ctnVarDefinition])
-          and (ContextNode=ContextNode.Parent.LastChild)
-          and SearchInTypeOfVarConst then exit;
+              and (ContextNode=ContextNode.Parent.LastChild)
+              and SearchInTypeOfVarConst then
+            exit;
 
         ctnEnumIdentifier,ctnLabel:
           if SearchInEnumLabelDefinition then exit;
@@ -6264,8 +6272,8 @@ var
   Identifier: string;
   CleanDeclCursorPos: integer;
   DeclarationTool: TFindDeclarationTool;
-  DeclarationNode: TCodeTreeNode;
-  AliasDeclarationNode: TCodeTreeNode; // if exists: always in front of DeclarationNode
+  DeclarationNode: TCodeTreeNode; // in DeclarationTool
+  AliasDeclarationNode: TCodeTreeNode; // if exists: always in front of DeclarationNode, and in DeclarationTool
   Params: TFindDeclarationParams;
   PosTree: TAVLTree; // tree of PChar positions in Src
   ReferencePos: TCodeXYPosition;
@@ -6281,7 +6289,9 @@ var
     if PosTree=nil then
       PosTree:=TAVLTree.Create;
     p:=@Src[ACleanPos];
-    //debugln('TFindDeclarationTool.FindReferences.AddReference ',CleanPosToStr(ACleanPos),' ',dbgs(PosTree.Find(p)=nil),' Code=',dbgstr(copy(Src,ACleanPos-8,8)+'|'+dbgstr(copy(Src,ACleanPos,5))));
+    {$IFDEF VerboseFindReferences}
+    debugln('TFindDeclarationTool.FindReferences.AddReference ',CleanPosToStr(ACleanPos),' ',dbgs(PosTree.Find(p)=nil),' Code=',dbgstr(copy(Src,ACleanPos-8,8)+'|'+dbgstr(copy(Src,ACleanPos,5))));
+    {$ENDIF}
     if PosTree.Find(p)=nil then
       PosTree.Add(p);
   end;
@@ -6314,6 +6324,11 @@ var
   var
     IdentStartPos: Integer;
     IdentEndPos: integer;
+    UnitNamePos, UnitInFilePos: TAtomPosition;
+    NewCodeTool: TFindDeclarationTool;
+    AnUnitName: String;
+    UnitInFilename: AnsiString;
+    Node: TCodeTreeNode;
   begin
     if (not IsComment) then
       UnitStartFound:=true;
@@ -6326,17 +6341,19 @@ var
     if IdentEndPos-IdentStartPos<>length(Identifier) then exit;
     if CompareIdentifiers(PChar(Pointer(Identifier)),@Src[IdentStartPos])<>0 then exit;
     if IsComment and (SkipComments or (not UnitStartFound)) then exit;
-    {debugln(['Identifier with same name found at: ',
+    {$IFDEF VerboseFindReferences}
+    debugln(['Identifier with same name found at: ',
       IdentStartPos,'=',CleanPosToStr(StartPos),' ',GetIdentifier(@Src[IdentStartPos]),
       ' CleanDeclCursorPos=',CleanDeclCursorPos,
       ' MaxPos=',MaxPos,
       ' IsComment=',IsComment,
       ' SkipComments=',SkipComments,
       ' UnitStartFound=',UnitStartFound
-      ]);}
+      ]);
+    {$ENDIF}
 
     CursorNode:=BuildSubTreeAndFindDeepestNodeAtPos(IdentStartPos,true);
-    //debugln('  CursorNode=',CursorNode.DescAsString,' Forward=',dbgs(CursorNode.SubDesc and ctnsForwardDeclaration));
+    //debugln('  CursorNode=',NodePathAsString(CursorNode),' Forward=',dbgs(CursorNode.SubDesc and ctnsForwardDeclaration));
 
     if (DeclarationTool=Self)
     and ((IdentStartPos=CleanDeclCursorPos) or (CursorNode=AliasDeclarationNode))
@@ -6377,12 +6394,34 @@ var
       end;
 
       //debugln(' Found=',dbgs(Found));
-      if Found and (Params.NewNode<>nil) then begin
-        UseProcHead(Params.NewNode);
-        //debugln('Context=',Params.NewNode.DescAsString,' ',dbgs(Params.NewNode.StartPos),' ',dbgs(DeclarationNode.StartPos));
+      Node:=Params.NewNode;
+      if Found and (Node<>nil) then begin
+        if ((Node.Desc=ctnUseUnit) or (Node.Parent.Desc=ctnUseUnit))
+            and (Params.NewCodeTool=Self) then begin
+          // identifier is a unit reference
+          if (DeclarationNode.Desc=ctnSrcName)
+              or ((DeclarationNode.Parent<>nil) and (DeclarationNode.Parent.Desc=ctnSrcName)) then begin
+            // searching a unit reference -> check if it is the same
+            MoveCursorToNodeStart(Node);
+            if ReadNextUsedUnit(UnitNamePos,UnitInFilePos) then begin
+              // cursor is on an used unit -> try to locate it
+              MoveCursorToCleanPos(UnitNamePos.StartPos);
+              ReadNextAtom;
+              AnUnitName:=ExtractUsedUnitNameAtCursor(@UnitInFilename);
+              NewCodeTool:=FindCodeToolForUsedUnit(AnUnitName,UnitInFilename,false);
+              if NewCodeTool=DeclarationTool then begin
+                AddReference(IdentStartPos);
+                exit;
+              end;
+            end;
+          end;
+        end;
+
+        UseProcHead(Node);
+        //debugln('Context=',NodePathAsString(Params.NewNode),' FoundPos=',Params.NewCodeTool.CleanPosToStr(Params.NewNode.StartPos,true),' SearchPos=',DeclarationTool.CleanPosToStr(DeclarationNode.StartPos,true));
         if (Params.NewNode=DeclarationNode)
         or (Params.NewNode=AliasDeclarationNode) then begin
-          //debugln(['ReadIdentifier reference found, adding ...']);
+          debugln(['ReadIdentifier reference found, adding ...']);
           AddReference(IdentStartPos);
         end;
       end;
@@ -6559,7 +6598,7 @@ var
     end;
 
     // find alias declaration node
-    //debugln('FindDeclarationNode DeclarationNode=',DeclarationNode.DescAsString);
+    //debugln('FindDeclarationNode DeclarationNode=',NodePathAsString(DeclarationNode),' at ',DeclarationTool.CleanPosToStr(DeclarationNode.StartPos));
     AliasDeclarationNode:=nil;
     case DeclarationNode.Desc of
 
@@ -6574,7 +6613,7 @@ var
 
     ctnVarDefinition:
       if DeclarationNode.HasParentOfType(ctnProcedureHead) then begin
-        AliasDeclarationNode:=FindCorrespondingProcParamNode(DeclarationNode,ProcAttr);
+        AliasDeclarationNode:=DeclarationTool.FindCorrespondingProcParamNode(DeclarationNode,ProcAttr);
       end;
 
     ctnTypeDefinition:
@@ -6598,7 +6637,6 @@ var
         AliasDeclarationNode:=DeclarationNode;
         DeclarationNode:=Node;
       end;
-      //debugln('FindDeclarationNode AliasDeclarationNode=',AliasDeclarationNode.DescAsString,' ',DeclarationTool.CleanPosToStr(AliasDeclarationNode.StartPos,DeclarationTool<>Self));
     end;
 
     // search comment in front of declaration
@@ -6635,7 +6673,7 @@ var
     if MaxPos>SrcLen then MaxPos:=SrcLen;
 
     if DeclarationTool<>Self then begin
-      MinPos:=UseNode.Parent.EndPos;
+      MinPos:=UseNode.StartPos;
       exit;
     end;
 
@@ -6698,7 +6736,9 @@ var
   AVLNode: TAVLTreeNode;
 begin
   Result:=false;
-  //debugln('FindReferences ',MainFilename,' CursorPos=',CursorPos.Code.Filename,' x=',dbgs(CursorPos.X),' y=',dbgs(CursorPos.Y),' SkipComments=',dbgs(SkipComments));
+  {$IFDEF VerboseFindReferences}
+  debugln('FindReferences ',MainFilename,' CursorPos=',CursorPos.Code.Filename,' x=',dbgs(CursorPos.X),' y=',dbgs(CursorPos.Y),' SkipComments=',dbgs(SkipComments));
+  {$ENDIF}
   
   ListOfPCodeXYPosition:=nil;
   Params:=nil;
@@ -6759,23 +6799,24 @@ var
   var
     ReferencePos: TCodeXYPosition;
     UnitNamePos, UnitInFilePos: TAtomPosition;
+    UnitNameP: PChar;
   begin
     Result:=false;
     if UsesNode=nil then exit;
-    //DebugLn(['CheckUsesSection ']);
+    //DebugLn(['CheckUsesSection ',UsesNode.DescAsString]);
     MoveCursorToNodeStart(UsesNode);
     if (UsesNode.Desc=ctnUsesSection) then begin
       ReadNextAtom;
       if not UpAtomIs('USES') then
         RaiseUsesExpected(20170421200509);
     end;
+    UnitNameP:=PChar(UpperUnitName);
     repeat
       ReadNextAtom;  // read name
       ReadNextUsedUnit(UnitNamePos,UnitInFilePos); // read dotted name + IN file
       if CurPos.StartPos>SrcLen then break;
-      if AtomIsChar(';') then break;
-      if UpAtomIs(UpperUnitName) then begin // compare case insensitive
-        if CleanPosToCaret(CurPos.StartPos,ReferencePos) then begin
+      if CompareSrcIdentifiers(UnitNamePos.StartPos,UnitNameP) then begin // compare case insensitive
+        if CleanPosToCaret(UnitNamePos.StartPos,ReferencePos) then begin
           //DebugLn(['CheckUsesSection found in uses section: ',Dbgs(ReferencePos)]);
           Result:=true;
           AddCodePosition(ListOfPCodeXYPosition,ReferencePos);
@@ -6955,6 +6996,10 @@ begin
 
   ctnUnit:
     Result:=PositionInSourceName(CleanPos);
+
+  ctnIdentifier:
+    if Node.Parent.Desc=ctnSrcName then
+      Result:=true;
   end;
 end;
 
@@ -9733,22 +9778,30 @@ var
       ReadNextAtom;
       RaiseIdentExpected(20191003163224);
     end;
-    ResolveChildren;
-    if ExprType.Desc in xtAllTypeHelperTypes then begin
-      // Lazarus supports record helpers for basic types (string) as well (with TYPEHELPERS modeswitch!).
-    end else if (ExprType.Context.Node=nil) then begin
-      MoveCursorToCleanPos(CurAtom.StartPos);
-      ReadNextAtom;
-      RaiseIllegalQualifierFound(20191003163056);
-    end else if ExprType.Context.Node.Desc in AllPointContexts then begin
-      // ok, allowed
-    end else begin
-      // not allowed
-      //debugln(['ResolvePoint ',ExprTypeToString(ExprType)]);
-      MoveCursorToCleanPos(CurAtom.StartPos);
-      ReadNextAtom;
-      RaiseIllegalQualifierFound(20191003163059);
-    end;
+    repeat
+      ResolveChildren;
+      if ExprType.Desc in xtAllTypeHelperTypes then begin
+        // Lazarus supports record helpers for basic types (string) as well (with TYPEHELPERS modeswitch!).
+        break;
+      end else if (ExprType.Context.Node=nil) then begin
+        MoveCursorToCleanPos(CurAtom.StartPos);
+        ReadNextAtom;
+        RaiseIllegalQualifierFound(20191003163056);
+        break;
+      end else if ExprType.Context.Node.Desc in AllPointContexts then begin
+        // ok, allowed
+        break;
+      end else if ExprType.Context.Node.Desc = ctnGenericParameter then begin
+        // ok, allowed
+        Params.UpdateContexWithGenParamValue(ExprType.Context);
+      end else begin
+        // not allowed
+        //debugln(['ResolvePoint ',ExprTypeToString(ExprType)]);
+        MoveCursorToCleanPos(CurAtom.StartPos);
+        ReadNextAtom;
+        RaiseIllegalQualifierFound(20191003163059);
+      end;
+    until False;
   end;
 
   procedure ResolveAs;
@@ -14071,6 +14124,10 @@ var
   lPNode, lVNode: TCodeTreeNode;
   lPTool, lVTool: TFindDeclarationTool;
 begin
+  if Assigned(Parent) then begin
+    Parent.UpdateContexWithGenParamValue(SpecializeParamContext);
+    exit;
+  end;
   lMapping := GenParamValueMappings.FirstParamValueMapping;
   while lMapping <> nil do begin
     lPNode := lMapping.GenericParamNode;

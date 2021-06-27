@@ -2170,6 +2170,7 @@ end;
 
 constructor TDebuggerUnitInfo.Create(const AFileName: String; const AFullFileName: String);
 begin
+  inherited Create;
   FFileName := AFileName;
   FDbgFullName := TrimFilename(AFullFileName);
   FLocationType := dltUnknown;
@@ -2178,6 +2179,7 @@ end;
 constructor TDebuggerUnitInfo.Create(const AUnitName, AClassName,
   AFunctionName, AFunctionArgs: String);
 begin
+  inherited Create;
   include(FFlags, dlfSearchByFunctionName);
   FUnitName := AUnitName;
   FSrcClassName := AClassName;
@@ -2315,6 +2317,7 @@ end;
 
 constructor TSnapshot.Create(ASnapMgr: TSnapshotManager);
 begin
+  inherited Create;
   FTimeStamp := Now;
   FSnapMgr := ASnapMgr;
   AddReference;
@@ -5446,6 +5449,9 @@ begin
   if AConfig.GetValue(APath + 'ClassAutoCast', False)
   then Include(FEvaluateFlags, defClassAutoCast)
   else Exclude(FEvaluateFlags, defClassAutoCast);
+  if AConfig.GetValue(APath + 'AllowFunctionCall', False)
+  then Include(FEvaluateFlags, defAllowFunctionCall)
+  else Exclude(FEvaluateFlags, defAllowFunctionCall);
   try    ReadStr(AConfig.GetValue(APath + 'DisplayFormat', 'wdfDefault'), FDisplayFormat);
   except FDisplayFormat := wdfDefault; end;
   FRepeatCount := AConfig.GetValue(APath + 'RepeatCount', 0);
@@ -5462,6 +5468,7 @@ begin
   WriteStr(s{%H-}, FDisplayFormat);
   AConfig.SetDeleteValue(APath + 'DisplayFormat', s, 'wdfDefault');
   AConfig.SetDeleteValue(APath + 'ClassAutoCast', defClassAutoCast in FEvaluateFlags, False);
+  AConfig.SetDeleteValue(APath + 'AllowFunctionCall', defAllowFunctionCall in FEvaluateFlags, False);
   AConfig.SetDeleteValue(APath + 'RepeatCount', FRepeatCount, 0);
 
   TIdeWatchValueList(FValueList).SaveDataToXMLConfig(AConfig, APath + 'ValueList/');
@@ -5530,6 +5537,9 @@ begin
   if AConfig.GetValue(APath + 'ClassAutoCast', False)
   then Include(FEvaluateFlags, defClassAutoCast)
   else Exclude(FEvaluateFlags, defClassAutoCast);
+  if AConfig.GetValue(APath + 'AllowFunctionCall', False)
+  then Include(FEvaluateFlags, defAllowFunctionCall)
+  else Exclude(FEvaluateFlags, defAllowFunctionCall);
   i := StringCase
     (AConfig.GetValue(APath + 'DisplayStyle/Value', TWatchDisplayFormatNames[wdfDefault]),
     TWatchDisplayFormatNames);
@@ -5546,6 +5556,7 @@ begin
   AConfig.SetDeleteValue(APath + 'DisplayStyle/Value',
     TWatchDisplayFormatNames[DisplayFormat], TWatchDisplayFormatNames[wdfDefault]);
   AConfig.SetDeleteValue(APath + 'ClassAutoCast', defClassAutoCast in FEvaluateFlags, False);
+  AConfig.SetDeleteValue(APath + 'AllowFunctionCall', defAllowFunctionCall in FEvaluateFlags, False);
   AConfig.SetDeleteValue(APath + 'RepeatCount', FRepeatCount, 0);
 end;
 

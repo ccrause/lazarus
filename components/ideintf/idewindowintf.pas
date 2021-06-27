@@ -17,7 +17,7 @@ unit IDEWindowIntf;
 interface
 
 uses
-  Math, Classes, SysUtils, StrUtils,
+  Math, Classes, SysUtils,
   // LCL
   LCLIntf, LCLType, Forms, Controls,
   // LazUtils
@@ -436,8 +436,6 @@ type
   { TIDEDockMaster }
 
   TIDEDockMaster = class
-  protected
-    FHideSimpleLayoutOptions: boolean;
   public
     procedure MakeIDEWindowDockable(AControl: TWinControl); virtual; abstract; // make AControl dockable, it can be docked and other dockable windows can be docked to it, this does not make it visible
     procedure MakeIDEWindowDockSite(AForm: TCustomForm; ASides: TDockSides = [alBottom]); virtual; abstract; // make AForm a dock site, AForm can not be docked, its Parent must be kept nil, this does not make it visible
@@ -448,7 +446,7 @@ type
     procedure CloseAll; virtual; // close all forms, called after IDE has saved all and shuts down
     procedure ResetSplitters; virtual; abstract; // if the dock site has been resized after loading, you have to reset (percentual) splitters
     function DockedDesktopOptClass: TAbstractDesktopDockingOptClass; virtual; abstract;
-    property HideSimpleLayoutOptions: boolean read FHideSimpleLayoutOptions;
+    procedure SetMainDockWindow(AForm: TCustomForm); virtual; abstract;
   end;
 
   TIDEWindowGlobalOption = class
@@ -580,7 +578,7 @@ var
   I: Integer;
 begin
   for I := 0 to FOptList.Count-1 do
-  if StartsStr(FOptList[I], aFormID) then
+  if LazStartsStr(FOptList[I], aFormID) then
     Exit(TIDEWindowGlobalOption(FOptList.Objects[I]).CanSetVisibility);
   Result := True;//default is true
 end;

@@ -539,6 +539,10 @@ type
     function FindUsedUnitReferences(Code: TCodeBuffer; X, Y: integer;
           SkipComments: boolean; out UsedUnitFilename: string;
           var ListOfPCodeXYPosition: TFPList): boolean;
+    function FindReferencesInFiles(Files: TStringList;
+          DeclarationCode: TCodeBuffer; const DeclarationCaretXY: TPoint;
+          SearchInComments: boolean;
+          var TreeOfPCodeXYPosition: TAVLTree): boolean;
     function RenameIdentifier(TreeOfPCodeXYPosition: TAVLTree;
           const OldIdentifier, NewIdentifier: string;
           DeclarationCode: TCodeBuffer = nil; DeclarationCaretXY: PPoint = nil): boolean;
@@ -819,7 +823,7 @@ type
       const OldFormName, OldFormClassName: string;
       const NewFormName, NewFormClassName: string): boolean;
     function FindFormAncestor(Code: TCodeBuffer; const FormClassName: string;
-      var AncestorClassName: string; DirtySearch: boolean): boolean;
+      out AncestorClassName: string; DirtySearch: boolean): boolean;
 
     // form components
     function CompleteComponent(Code: TCodeBuffer;
@@ -2654,12 +2658,12 @@ begin
     Result:=true;
   end else begin
     //debugln(['TCodeToolManager.FindReferences cache not valid']);
-    {debugln(['TCodeToolManager.FindReferences IdentifierCode=',Cache.IdentifierCode=IdentifierCode,
-      ' X=',Cache.X=X,' Y=',Cache.Y=Y,
-      ' SourcesChangeStep=',Cache.SourcesChangeStep=SourceCache.ChangeStamp,',',Cache.SourcesChangeStep=CTInvalidChangeStamp64,
-      ' FilesChangeStep=',Cache.FilesChangeStep=FileStateCache.TimeStamp,',',Cache.FilesChangeStep=CTInvalidChangeStamp64,
-      ' InitValuesChangeStep=',Cache.InitValuesChangeStep=DefineTree.ChangeStep,',',Cache.InitValuesChangeStep=CTInvalidChangeStamp,
-      '']);}
+    //debugln(['TCodeToolManager.FindReferences IdentifierCode=',Cache.IdentifierCode=IdentifierCode,
+    //  ' X=',Cache.X=X,' Y=',Cache.Y=Y,
+    //  ' SourcesChangeStep=',Cache.SourcesChangeStep=SourceCache.ChangeStamp,',',Cache.SourcesChangeStep=CTInvalidChangeStamp64,
+    //  ' FilesChangeStep=',Cache.FilesChangeStep=FileStateCache.TimeStamp,',',Cache.FilesChangeStep=CTInvalidChangeStamp64,
+    //  ' InitValuesChangeStep=',Cache.InitValuesChangeStep=DefineTree.ChangeStep,',',Cache.InitValuesChangeStep=CTInvalidChangeStamp,
+    //  '']);
     Cache.Clear;
     Cache.IdentifierCode:=IdentifierCode;
     Cache.X:=X;
@@ -2673,7 +2677,7 @@ begin
     CursorPos.Y:=Y;
     CursorPos.Code:=IdentifierCode;
     try
-      Result:=FCurCodeTool.FindDeclaration(CursorPos,[fsfFindMainDeclaration],
+      Result:=FCurCodeTool.FindDeclaration(CursorPos,[fsfFindMainDeclaration,fsfSearchSourceName],
                        Cache.NewTool,Cache.NewNode,Cache.NewPos,NewTopLine);
     except
       on e: Exception do HandleException(e);
@@ -2705,12 +2709,14 @@ begin
   if NewTopLine=0 then ;
   if not InitCurCodeTool(SearchInCode) then exit;
   if Cache.IsPrivate and (FCurCodeTool<>Cache.NewTool) then begin
-    //debugln(['TCodeToolManager.FindReferences identifier is not reachable from this unit => skipping search']);
+    {$IFDEF VerboseFindReferences}
+    debugln(['TCodeToolManager.FindReferences identifier is not reachable from this unit => skipping search']);
+    {$ENDIF}
     exit(true);
   end;
 
   CursorPos:=Cache.NewPos;
-  {$IFDEF CTDEBUG}
+  {$IF defined(CTDEBUG) or defined(VerboseFindReferences)}
   DebugLn('TCodeToolManager.FindReferences Searching ',dbgs(FCurCodeTool.Scanner<>nil),' for reference to x=',dbgs(CursorPos.X),' y=',dbgs(CursorPos.Y),' ',CursorPos.Code.Filename);
   {$ENDIF}
   try
@@ -2771,6 +2777,66 @@ begin
   {$IFDEF CTDEBUG}
   DebugLn('TCodeToolManager.FindUnitReferences END ');
   {$ENDIF}
+end;
+
+function TCodeToolManager.FindReferencesInFiles(Files: TStringList;
+  DeclarationCode: TCodeBuffer; const DeclarationCaretXY: TPoint;
+  SearchInComments: boolean; var TreeOfPCodeXYPosition: TAVLTree): boolean;
+var
+  i, j: Integer;
+  Code: TCodeBuffer;
+  ListOfPCodeXYPosition: TFPList;
+  Cache: TFindIdentifierReferenceCache;
+  Filename: String;
+begin
+  Result:=false;
+  ListOfPCodeXYPosition:=nil;
+  TreeOfPCodeXYPosition:=nil;
+  Cache:=nil;
+  try
+    // search in every file
+    for i:=0 to Files.Count-1 do begin
+      Filename:=Files[i];
+      if ExtractFileNameOnly(Filename)='' then
+        continue; // invalid filename
+      //debugln(['TCodeToolManager.FindReferencesInFiles ',Filename]);
+      j:=i-1;
+      while (j>=0) and (CompareFilenames(Filename,Files[j])<>0) do dec(j);
+      if j>=0 then continue; // skip duplicate
+
+      Code:=LoadFile(Filename,true,false);
+      if Code=nil then begin
+        debugln('TCodeToolManager.FindReferencesInFiles unable to load "',Filename,'"');
+        exit;
+      end;
+
+      // search references
+      FreeListOfPCodeXYPosition(ListOfPCodeXYPosition);
+      if not FindReferences(
+        DeclarationCode,DeclarationCaretXY.X,DeclarationCaretXY.Y,
+        Code, not SearchInComments, ListOfPCodeXYPosition, Cache) then
+      begin
+        debugln('TCodeToolManager.FindReferencesInFiles unable to FindReferences in "',Code.Filename,'"');
+        exit;
+      end;
+      //debugln('TCodeToolManager.FindReferencesInFiles FindReferences in "',Code.Filename,'" ',dbgs(ListOfPCodeXYPosition<>nil));
+
+      // add to tree
+      if ListOfPCodeXYPosition<>nil then begin
+        if TreeOfPCodeXYPosition=nil then
+          TreeOfPCodeXYPosition:=CreateTreeOfPCodeXYPosition;
+        AddListToTreeOfPCodeXYPosition(ListOfPCodeXYPosition,
+                                              TreeOfPCodeXYPosition,true,false);
+      end;
+    end;
+
+    Result:=true;
+  finally
+    CodeToolBoss.FreeListOfPCodeXYPosition(ListOfPCodeXYPosition);
+    if not Result then
+      CodeToolBoss.FreeTreeOfPCodeXYPosition(TreeOfPCodeXYPosition);
+    Cache.Free;
+  end;
 end;
 
 function TCodeToolManager.RenameIdentifier(TreeOfPCodeXYPosition: TAVLTree;
@@ -5698,7 +5764,7 @@ begin
 end;
 
 function TCodeToolManager.FindFormAncestor(Code: TCodeBuffer;
-  const FormClassName: string; var AncestorClassName: string;
+  const FormClassName: string; out AncestorClassName: string;
   DirtySearch: boolean): boolean;
 begin
   Result:=false;

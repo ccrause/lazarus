@@ -1694,6 +1694,10 @@ msgstr "الجذاذات"
 msgid "Grid"
 msgstr "الشّبكة"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1744,6 +1748,10 @@ msgstr ""
 
 #: lazarusidestrconsts.dlgextsymb
 msgid "Use external debug symbols file"
+msgstr ""
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
 msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
@@ -2456,6 +2464,10 @@ msgstr ""
 msgid "Lazarus directory (default for all projects)"
 msgstr ""
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 msgid "Guide lines Left,Top"
 msgstr ""
@@ -3066,10 +3078,6 @@ msgstr ""
 msgid "Enable multi-caret for column selection"
 msgstr ""
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr ""
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr ""
@@ -3122,6 +3130,10 @@ msgstr ""
 msgid "New desktop ..."
 msgstr ""
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 msgid "No automatic renaming"
 msgstr ""
@@ -3134,6 +3146,10 @@ msgstr ""
 msgid "No Highlight"
 msgstr ""
 
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnotebooktabpos
 msgid "Source notebook tabs position"
 msgstr ""
@@ -3144,6 +3160,10 @@ msgstr ""
 
 #: lazarusidestrconsts.dlgnotsplitlinefront
 msgid "Do not split line in front of"
+msgstr ""
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
 msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
@@ -3427,6 +3447,10 @@ msgstr ""
 #: lazarusidestrconsts.dlgprojectoptionsfor
 #, object-pascal-format
 msgid "Options for Project: %s"
+msgstr ""
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
 msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
@@ -4949,7 +4973,7 @@ msgstr ""
 msgid "Anchor top side to top side of sibling. Use BorderSpacing to set a distance. BorderSpacing of sibling is ignored."
 msgstr ""
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
 msgstr ""
@@ -5840,7 +5864,7 @@ msgstr ""
 msgid "Wrong indentation"
 msgstr ""
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr ""
@@ -8388,8 +8412,16 @@ msgstr ""
 msgid "Additional search path"
 msgstr ""
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
 msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
@@ -8423,6 +8455,14 @@ msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmduplicateexceptionname
 msgid "Duplicate Exception name"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
 msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
@@ -9896,15 +9936,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr ""
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-msgid "Reduce designer painting"
-msgstr ""
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-msgctxt "lazarusidestrconsts.lisfepaintdesigneritemsonidlehint"
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr ""
-
 #: lazarusidestrconsts.lisfile
 msgctxt "lazarusidestrconsts.lisfile"
 msgid "File"
@@ -11197,6 +11228,11 @@ msgstr ""
 msgid "&Inspect"
 msgstr ""
 
+#: lazarusidestrconsts.lisinspectaddwatch
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr ""
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format
 msgid "%s: class %s inherits from %s"
@@ -11526,6 +11562,7 @@ msgid "Add Data/WatchPoint"
 msgstr ""
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr ""
 
@@ -16222,10 +16259,6 @@ msgstr ""
 #: lazarusidestrconsts.lispkgmangloadingpackagewillreplacepackage
 #, object-pascal-format
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
-msgstr ""
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
 msgstr ""
 
 #: lazarusidestrconsts.lispkgmangpackage

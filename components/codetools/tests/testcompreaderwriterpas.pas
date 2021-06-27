@@ -249,8 +249,8 @@ type
     property AQWord: QWord read FAQWord write FAQWord stored AQWordIsStored;
     property AInt64: Int64 read FAInt64 write FAInt64 stored AInt64IsStored;
     property ACurrency: Currency read FACurrency write FACurrency stored ACurrencyIsStored;
-    property ASingle: Single read FASingle write FASingle stored ASingleIsStored;
-    property ADouble: Double read FADouble write FADouble stored ADoubleIsStored;
+    property ASingle: Single read FASingle write FASingle stored ASingleIsStored nodefault;
+    property ADouble: Double read FADouble write FADouble stored ADoubleIsStored nodefault;
     property AExtended: Extended read FAExtended write FAExtended stored AExtendedIsStored;
     property AChar: Char read FAChar write FAChar stored ACharIsStored;
     property AWideChar: WideChar read FAWideChar write FAWideChar stored AWideCharIsStored;
@@ -923,7 +923,7 @@ function TTestCompReaderWriterPas.WriteDescendant(Component: TComponent;
 begin
   Writer.WriteDescendant(Component,Ancestor);
   FStream.Position:=0;
-  SetLength(Result,FStream.size);
+  SetLength(Result{%H-},FStream.size);
   if Result<>'' then
     FStream.Read(Result[1],length(Result));
   {$IFDEF VerboseCompWriterPas}
@@ -950,6 +950,8 @@ begin
   if cwpoNoSelf in Writer.Options then
     ExpS:=ExpS+'end;'+LineEnding;
   ExpS:=ExpS+CSPDefaultSignatureEnd+LineEnding;
+  //writeln('TTestCompReaderWriterPas.TestWriteDescendant ACTUAL=',Actual);
+  //writeln('TTestCompReaderWriterPas.TestWriteDescendant EXP=',ExpS);
   CheckDiff(Msg,ExpS,Actual);
   AssertEquals(Msg+' NeedAccessClass',NeedAccessClass,Writer.NeedAccessClass);
 end;
@@ -1022,7 +1024,7 @@ begin
       DefAWideChar:=succ(AWideChar);
       Enum:=TEnum(0);
       DefEnum:=succ(Enum);
-      EnumRg:=TEnumRg(0);
+      EnumRg:={%H-}TEnumRg(0);
       DefEnumRg:=succ(EnumRg);
       SetOfEnum:=[];
       DefSetOfEnum:=[red];
@@ -1030,11 +1032,11 @@ begin
       DefSetOfEnumRg:=[red];
       SetOfBool:=[];
       DefSetOfBool:=[true];
-      MyInt:=TMyInt(0);
+      MyInt:={%H-}TMyInt(0);
       DefMyInt:=MyInt+1;
       SetOfMyInt:=[];
       DefSetOfMyInt:=[2];
-      MyChar:=TMyChar(0);
+      MyChar:={%H-}TMyChar(0);
       DefMyChar:=succ(MyChar);
       SetOfMyChar:=[];
       DefSetOfMyChar:=[#4];
@@ -1178,9 +1180,9 @@ begin
       DefABoolean:=not ABoolean;
       AByteBool:=boolean(high(byte));
       DefAByteBool:=not AByteBool;
-      AWordBool:=boolean(high(word));
+      AWordBool:=wordbool(high(word));
       DefAWordBool:=not AWordBool;
-      ALongBool:=boolean(high(longword));
+      ALongBool:=longbool(high(longword));
       DefALongBool:=not ALongBool;
       AByte:=high(byte);
       DefAByte:=AByte-1;
@@ -1354,7 +1356,7 @@ begin
       V2:=low(ShortInt);
       V3:=high(Word);
       V4:=low(SmallInt);
-      V5:=high(LongWord);
+      V5:=high(LongWord){%H-};
       V6:=low(LongInt);
       V7:=high(QWord);
       V8:=low(int64);

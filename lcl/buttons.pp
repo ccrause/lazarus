@@ -236,6 +236,9 @@ type
     property Constraints;
     property Default;
     property DefaultCaption;
+    property DragCursor;
+    property DragKind;
+    property DragMode;
     property Enabled;
     property Font;
     property Glyph;
@@ -423,6 +426,9 @@ type
     property Caption;
     property Color;
     property Down;
+    property DragCursor;
+    property DragKind;
+    property DragMode;
     property Enabled;
     property Flat;
     property Font;
@@ -440,6 +446,9 @@ type
     property OnClick;
     property OnContextPopup;
     property OnDblClick;
+    property OnDragDrop;
+    property OnDragOver;
+    property OnEndDrag;
     property OnMouseDown;
     property OnMouseEnter;
     property OnMouseLeave;
@@ -450,6 +459,7 @@ type
     property OnMouseWheelUp;
     property OnPaint;
     property OnResize;
+    property OnStartDrag;
     property OnChangeBounds;
     property ShowCaption;
     property ShowHint;

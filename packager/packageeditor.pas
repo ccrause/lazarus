@@ -53,7 +53,8 @@ uses
   MainBase, IDEProcs, DialogProcs, LazarusIDEStrConsts, IDEDefs, CompilerOptions,
   EnvironmentOpts, InputHistory, PackageSystem, PackageDefs, AddToPackageDlg,
   AddPkgDependencyDlg, AddFPMakeDependencyDlg, ProjPackChecks, PkgVirtualUnitEditor,
-  MissingPkgFilesDlg, CleanPkgDeps, ProjPackFilePropGui, ProjPackEditing;
+  MissingPkgFilesDlg, CleanPkgDeps, ProjPackFilePropGui, ProjPackEditing,
+  BasePkgManager;
   
 const
   PackageEditorMenuRootName = 'PackageEditor';
@@ -1521,7 +1522,7 @@ begin
           OtherFile.AddToUsesPkgSection:=false;
       end;
     end;
-    LazPackage.ModifySilently;
+    LazPackage.Modified:=True;
   end;
 end;
 
@@ -1538,11 +1539,8 @@ begin
   CurDependency:=GetSingleSelectedDependency;
   if (LazPackage=nil) or (CurDependency=nil)
   or not FPropGui.CheckApplyDependency(CurDependency) then exit;
-  // Try to load the package again. Min/max version may have changed.
-  CurDependency.LoadPackageResult := lprUndefined;
-  PackageGraph.OpenDependency(CurDependency, False);
-  //fForcedFlags:=[pefNeedUpdateRequiredPkgs];
   LazPackage.Modified:=True;
+  PkgBoss.ApplyDependency(CurDependency);
 end;
 
 procedure TPackageEditorForm.CallRegisterProcCheckBoxChange(Sender: TObject);
@@ -1564,7 +1562,7 @@ begin
       continue;
     CurFile.HasRegisterProc:=FPropGui.CallRegisterProcCheckBox.Checked;
     if not NodeData.Removed then
-      LazPackage.ModifySilently;
+      LazPackage.Modified:=True;
   end;
 end;
 
@@ -1593,7 +1591,7 @@ begin
           continue;
         CurFile.FileType:=CurPFT;
         if not NodeData.Removed then
-          LazPackage.ModifySilently;
+          LazPackage.Modified:=True;
       end;
       exit;
     end;
@@ -3005,7 +3003,6 @@ begin
   else
     Moved := LazPackage.MoveRequiredDependencyDown(Dependency);
   if not Moved then exit;
-  LazPackage.ModifySilently;
   RequiredBranch:=FilterEdit.GetExistingBranch(FRequiredPackagesNode);
   OldIndex:=RequiredBranch.Items.IndexOf(Dependency.AsString(False,True)+OPNote(Dependency));
   NewIndex:=OldIndex+Offset;
@@ -3052,7 +3049,9 @@ begin
   //debugln(['TPackageEditorForm.CanCloseEditor ',Caption]);
   if (LazPackage<>nil) and (not (lpfDestroying in LazPackage.Flags)) then
   begin
-    if (not LazPackage.ReadOnly) and LazPackage.Modified then
+    if LazPackage.ReadOnly then
+      LazPackage.Modified:=false // clear modified flag, so that it will be closed
+    else if LazPackage.Modified then
     begin
       MsgResult:=MessageDlg(lisPkgMangSavePackage,
         Format(lisPckEditPackageHasChangedSavePackage, [LazPackage.IDAsString, LineEnding]),

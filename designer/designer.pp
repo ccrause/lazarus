@@ -63,7 +63,7 @@ type
     Value: boolean) of object;
   TOnPasteComponents = procedure(Sender: TObject; LookupRoot: TComponent;
     TxtCompStream: TStream; Parent: TWinControl;
-    var NewComponents: TFPList) of object;
+    NewComponents: TFPList) of object;
   TOnPastedComponents = procedure(Sender: TObject; LookupRoot: TComponent) of object;
   TOnPersistentDeleted = procedure(Sender: TObject; APersistent: TPersistent)
     of object;
@@ -82,7 +82,6 @@ type
     dfHasSized,
     dfNeedPainting,
     dfDuringPaintControl,
-    dfDuringDeletePers,
     dfDestroyingForm,
     dfShowEditorHints,
     dfShowComponentCaptions,
@@ -2018,10 +2017,6 @@ begin
       // client grid
       if (Sender is TWinControl) and (csAcceptsControls in Sender.ControlStyle) then
         PaintClientGrid(TWinControl(Sender),DDC);
-
-      if (WidgetSet.GetLCLCapability(lcCanDrawOutsideOnPaint) <> 0) and 
-         not EnvironmentOptions.DesignerPaintLazy then
-          DoPaintDesignerItems;
     end;
    
     // clean up
@@ -2992,7 +2987,6 @@ var
   Special: Boolean;
 begin
   if APersistent=nil then exit;
-  Include(FFlags, dfDuringDeletePers);
   try
     //debugln(['TDesigner.DoDeletePersistent A ',dbgsName(APersistent),' FreeIt=',FreeIt]);
     // unselect component
@@ -3034,7 +3028,6 @@ begin
   finally
     // unmark component
     DeletingPersistent.Remove(APersistent);
-    Exclude(FFlags, dfDuringDeletePers);
   end;
 end;
 
@@ -3178,10 +3171,8 @@ begin
     {$IFDEF VerboseDesigner}
     DebugLn('[TDesigner.Notification] opRemove ',dbgsName(AComponent));
     {$ENDIF}
-    // Notification is usually triggered by TheFormEditor.DeleteComponent
-    //  in DoDeletePersistent. Don't call it again.
-    if not (dfDuringDeletePers in FFlags) then // Needed eg. for TControlSelection
-      DoDeletePersistent(AComponent,false);    //  with copy/paste.
+    // Notification is usually triggered by TheFormEditor.DeleteComponent in DoDeletePersistent.
+    DoDeletePersistent(AComponent,false);
   end;
 end;
 
@@ -3628,6 +3619,7 @@ begin
       else
         Icon.Canvas.Brush.Color := clBtnFace;
       Icon.Canvas.FillRect(TextRect);
+      Icon.Canvas.Font.Color := clWindowText;
       DrawText(Icon.Canvas.Handle, PChar(AComponent.Name), -1, TextRect,
         DT_CENTER or DT_VCENTER or DT_SINGLELINE or DT_NOCLIP);
       TextRect.Left := (ItemLeft + ItemRight - LongInt(Round(TextSize.cx/ScaleFactor))) div 2;

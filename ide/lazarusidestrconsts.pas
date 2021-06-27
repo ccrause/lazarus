@@ -152,14 +152,6 @@ resourcestring
   lisMoveUp = 'Move Up';
   lisMoveDown = 'Move Down';
 
-  dlgMultipleInstances = 'Multiple Lazarus instances';
-  dlgMultipleInstances_AlwaysStartNew = 'always start a new instance';
-  dlgMultipleInstances_OpenFilesInRunning = 'open files in a running instance';
-  dlgMultipleInstances_ForceSingleInstance = 'do not allow multiple instances';
-  dlgRunningInstanceModalError = 'The running Lazarus instance cannot accept any files.'+sLineBreak+'Do you want to open them in a new IDE instance?'+sLineBreak+sLineBreak+'%s';
-  dlgForceUniqueInstanceModalError = 'The running Lazarus instance cannot accept any files.';
-  dlgRunningInstanceNotRespondingError = 'Lazarus instance is running but not responding.';
-
   // *** Rest of the resource strings ***
 
   lisImportPackageListXml = 'Import package list (*.xml)';
@@ -264,7 +256,7 @@ resourcestring
   lisKMPublishProject = 'Publish project';
   lisOpenTheFileAsNormalSource = 'Open the file as normal source';
   lisOpenAsXmlFile = 'Open as XML file';
-  lisAnErrorOccuredAtLastStartupWhileLoadingLoadThisPro = 'An error occurred '
+  lisAnErrorOccurredAtLastStartupWhileLoadingLoadThisPro = 'An error occurred '
     +'at last startup while loading %s!'
     +'%sLoad this project again?';
   lisOpenProjectAgain = 'Open project again';
@@ -567,6 +559,7 @@ resourcestring
   lisInspectClassInherit = '%s: class %s inherits from %s';
   lisInspectUnavailableError = '%s: unavailable (error: %s)';
   lisInspectPointerTo = 'Pointer to %s';
+  lisInspectAddWatch = 'Add watch';
   lisColClass = 'Class';
   lisColVisibility = 'Visibility';
   lisColReturns = 'Returns';
@@ -1315,8 +1308,7 @@ resourcestring
   dlgFrmEditor = 'Form Editor';
   dlgObjInsp = 'Object Inspector';
   dlgEnvFiles = 'Files';
-
-  //
+  dlgEnvIdeStartup = 'IDE Startup';
   dlgEnvBckup = 'Backup';
   dlgNaming = 'Naming';
   lisInformation = 'Information';
@@ -1475,7 +1467,6 @@ resourcestring
   dlgMaxRecentFiles = 'Max recent files';
   dlgMaxRecentProjs = 'Max recent project files';
   dlgMaxRecentHint = 'Value 0 means unlimited.';
-  dlgQOpenLastPrj = 'Open last project and packages at start';
   dlgLazarusDir = 'Lazarus directory (default for all projects)';
   dlgFpcExecutable = 'Compiler executable (e.g. %s)';
   dlgFpcSrcPath = 'FPC source directory';
@@ -1511,6 +1502,7 @@ resourcestring
   dlgRightBottomClr = 'Guide lines Right,Bottom';
   dlgGrabberColor = 'Grabber color';
   dlgMarkerColor = 'Marker color';
+  dlgNonFormBackgroundColor = 'Other Designer background color (e. g. TDataModule)';
   dlgRuberbandSelectionColor = 'Rubberband Selection';
   dlgRuberbandCreationColor = 'Rubberband Creation';
   dlgRubberbandSelectsGrandChildren = 'Select grandchildren';
@@ -1524,9 +1516,6 @@ resourcestring
   dlgrightClickSelects = 'Right click selects';
   dlgComponentUnderMouseCursorIsFirstSelected = 'Component under mouse cursor '
     +'is first selected, then the popup menu commands work on it.';
-  lisFEPaintDesignerItemsOnIdle = 'Reduce designer painting';
-  lisFEPaintDesignerItemsOnIdleHint = 'Paint designer items only on idle '
-    +'(reduce overhead for slow computers)';
   lisAskNameOnCreate = 'Ask name on create';
   lisAskForComponentNameAfterPuttingItOnForm = 'Ask for component '
     +'name after putting it on a designer form.';
@@ -1607,6 +1596,7 @@ resourcestring
   lisShowsDescriptionForSelectedProperty = 'A box at the bottom shows '
     +'description for the selected property.';
   lisShowPropertyFilterInObjectInspector = 'Show property filter';
+
   dlgEnvBackupHelpNote = 'Notes: Project files are all files in the project directory';
   lisEnvOptDlgInvalidDebuggerFilename = 'Invalid debugger filename';
   lisEnvOptDlgInvalidDebuggerFilenameMsg = 'The debugger file "%s" is not an executable.';
@@ -1618,6 +1608,20 @@ resourcestring
   lisPkgMangThePackageFailedToCompileRemoveItFromTheInstallati = 'The package "%s" '
     +'failed to compile.%sRemove it from the installation list?';
   lisEnvOptDlgTestDirNotFoundMsg = 'Test directory "%s" not found.';
+
+  // Ide Startup options
+  dlgFileAssociationInOS = 'Opening Files from OS';
+  dlgLazarusInstances = 'Lazarus instances';
+  dlgMultipleInstances_AlwaysStartNew = 'always start a new instance';
+  dlgMultipleInstances_OpenFilesInRunning = 'open files in a running instance';
+  dlgMultipleInstances_ForceSingleInstance = 'do not allow multiple instances';
+  dlgRunningInstanceModalError = 'The running Lazarus instance cannot accept any files.'
+    +sLineBreak+'Do you want to open them in a new IDE instance?'+sLineBreak+sLineBreak+'%s';
+  dlgForceUniqueInstanceModalError = 'The running Lazarus instance cannot accept any files.';
+  dlgRunningInstanceNotRespondingError = 'Lazarus instance is running but not responding.';
+  dlgProjectToOpenOrCreate = 'Project to Open or Create';
+  dlgQOpenLastPrj = 'Open last project and packages at start';
+  dlgNewProjectType = 'New Project Type';
 
   // open-dialog filters
   dlgFilterAll = 'All files';
@@ -2705,6 +2709,7 @@ resourcestring
   lisForWindows = 'For Windows';
   lisForMacOSDarwin = 'For macOS (Darwin)';
   dlgPOUseAppBundle = 'Use Application Bundle for running and debugging';
+  dlgNSPrincipalClass = 'NSPrincipalClass';
   dlgPOCreateAppBundle = 'Create Application Bundle';
   dlgPOUseManifest = 'Use manifest resource (and enable themes)';
   dlgPODpiAwareness = 'DPI awareness';
@@ -3791,8 +3796,7 @@ resourcestring
   lisCodeToolsDefsName = 'Name:';
   lisOnlyMessagesWithTheseFPCIDsCommaSeparated = 'Only messages with these FPC'
     +' IDs (comma separated):';
-  lisOnlyMessagesFittingThisRegularExpression = 'Only messages fitting this '
-    +'regular expression:';
+  lisOnlyMessagesFittingThisRegularExpression = 'Only messages fitting this regular expression:';
   lisURLOnWikiTheBaseUrlIs = 'URL on wiki (the base url is %s)';
   lisTestURL = 'Test URL';
   lisDeleteThisAddition = 'Delete this addition';
@@ -3802,11 +3806,9 @@ resourcestring
   lisSelectedAddition = 'Selected addition:';
   lisNoMessageSelected = '(no message selected)';
   lisAdditionFitsTheCurrentMessage = 'Addition fits the current message';
-  lisAdditionDoesNotFitTheCurrentMessage = 'Addition does not fit the current '
-    +'message';
+  lisAdditionDoesNotFitTheCurrentMessage = 'Addition does not fit the current message';
   lisFilterAlreadyExists = 'Filter already exists';
-  lisAFilterWithTheNameAlreadyExists = 'A filter with the name "%s" already '
-    +'exists.';
+  lisAFilterWithTheNameAlreadyExists = 'A filter with the name "%s" already exists.';
   lisSaveMessages = 'Save messages';
   lisCodeToolsDefsDescription = 'Description:';
   lisCodeToolsDefsVariable = 'Variable:';
@@ -3816,13 +3818,13 @@ resourcestring
   lisCodeToolsDefsautoGenerated = '%s, auto generated';
   lisCodeToolsDefsnoneSelected = 'none selected';
   lisCodeToolsDefsInvalidParent = 'Invalid parent';
-  lisACanNotHoldTControlsYouCanOnlyPutNonVisualComponen = 'A %s cannot hold '
-    +'TControls.%sYou can only put nonvisual components on it.';
+  lisACanNotHoldTControlsYouCanOnlyPutNonVisualComponen = 'A %s cannot hold TControls.'
+    +'%sYou can only put nonvisual components on it.';
   lisUpdateReferences = 'Update references?';
-  lisTheUnitIsUsedByOtherFilesUpdateReferencesAutomatic = 'The unit %s is '
-    +'used by other files.%sUpdate references automatically?';
-  lisCodeToolsDefsAutoCreatedNodesReadOnly = 'Auto created nodes cannot be '
-    +'edited,%snor can they have non auto created child nodes.';
+  lisTheUnitIsUsedByOtherFilesUpdateReferencesAutomatic = 'The unit %s is used by other files.'
+    +'%sUpdate references automatically?';
+  lisCodeToolsDefsAutoCreatedNodesReadOnly = 'Auto created nodes cannot be edited,'
+    +'%snor can they have non auto created child nodes.';
   lisCodeToolsDefsInvalidParentNode = 'Invalid parent node';
   lisCodeToolsDefsParentNodeCanNotContainCh = 'Parent node cannot contain child nodes.';
   lisCodeToolsDefsNewNode = 'NewNode';
@@ -4436,7 +4438,6 @@ resourcestring
     +'%sfrom file %s.'
     +'%sThe old package is modified.'
     +'%sSave old package %s?';
-  lisPkgMangNewPackage = 'NewPackage';
   lisProbablyYouNeedToInstallSomePackagesForBeforeConti = 'Probably you need to '
     +'install some packages before continuing.'
     +'%sWarning:'
@@ -5396,12 +5397,16 @@ resourcestring
   lisAnchorsOfSelectedControls = 'Anchors of selected controls';
   lisAnchorsOf = 'Anchors of %s';
   lisDebugOptionsFrmName = 'Name:';
+  lisDebugOptionsFrmEditClass = 'Change type';
+  lisDebugOptionsFrmEditClassWarn = 'Changing the type for the current debugger backend. Use "Add" or "Copy" to create a new backend with a new type.';
   lisDebugOptionsFrmAdditionalSearchPath = 'Additional search path';
   lisDebugOptionsFrmDebuggerGeneralOptions = 'Debugger general options';
   lisDebugOptionsFrmShowMessageOnStop = 'Show message on stop';
   lisDebugOptionsFrmShowExitCodeOnStop = 'Show message on stop with Error (Exit-code <> 0)';
   lisDebugOptionsFrmResetDebuggerOnEachRun = 'Reset Debugger after each run';
   lisDebugOptionsFrmAutoCloseAsm = 'Automatically close the assembler window, after source not found';
+  lisDebugOptionsFrmAutoInstanceClass = 'Automatically set "use instance class type" for new watches';
+  lisDebugOptionsFrmAllowFunctionCalls = 'BETA: Allow function calls in watches (if supported by backend)';
   lisDebugOptionsFrmDebuggerSpecific = 'Debugger specific options (depends on '
     +'type of debugger)';
   lisDebugOptionsFrmEventLog = 'Event Log';
@@ -6188,7 +6193,7 @@ resourcestring
     +'Lazarus package files (.lpk). Do not build.';
 
   // Custom form editor
-  lisCFEAnExceptionOccuredDuringDeletionOf = 'An exception occurred during '
+  lisCFEAnExceptionOccurredDuringDeletionOf = 'An exception occurred during '
     +'deletion of%s"%s:%s"%s%s';
   lisCFETCustomFormEditorDeleteComponentWhereIsTheTCustomN = 'TCustomFormEditor'
     +'.DeleteComponent  Where is the TCustomNonFormDesignerForm? %s';

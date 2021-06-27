@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <fpdoc-descriptions>
-  <package name="lcl">
+  <package name="lazutils">
     <!--
     ====================================================================
       ExtendedStrings
@@ -8,11 +8,11 @@
     -->
     <module name="ExtendedStrings">
       <short>
-        Implements an extended string list that allows its Objects property to hold records
-      </short>
+        Implements an extended string list that allows its Objects property to hold records.
+        </short>
       <descr>
         <p>
-          <file>extendedstrings.pas</file> implements <var>TExtendedStrings</var>, which is a <var>TStringList</var> that allows its <var>Objects</var> property to hold any type of records.
+          <file>extendedstrings.pas</file> implements <var>TExtendedStrings</var>, which is a <var>TStringList</var> that allows its <var>Objects</var> property to hold any type of record.
         </p>
         <p>
           This file is part of the <file>LazUtils</file> package.
@@ -29,31 +29,36 @@
       <!-- enumeration type Visibility: default -->
       <element name="TExtStringsOption">
         <short>
-          Defines actions needed when creating or freeing records in TExtendedStringList
+          Defines actions needed when creating or freeing records in TExtendedStringList.
         </short>
         <descr>
           <p>
             <var>TExtStringsOption</var> is an enumeration type with values that define actions needed when creating or freeing records in TExtendedStringList. Values from TExtStringsOption are stored in the <var>TExtStringsOptions</var> type.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso>
+          <link id="TExtStringsOption"/>
+          <link id="TExtStringsOptions"/>
+        </seealso>
       </element>
       <!-- enumeration value Visibility: default -->
       <element name="TExtStringsOption.esoClearRecordsOnCreate">
-        <short>Memory allocated to a new record is cleared (filled with #0)</short>
+        <short>Memory allocated to a new record is cleared (filled with #0).</short>
       </element>
       <!-- enumeration value Visibility: default -->
       <element name="TExtStringsOption.esoFreeObjectsOnDelete">
-        <short>Objects call their free method before they are deleted</short>
+        <short>Objects call their free method before they are deleted.</short>
       </element>
 
       <!-- set type Visibility: default -->
       <element name="TExtStringsOptions">
         <short>
-          Stores TExtStringsOption values
+          Stores TExtStringsOption values.
         </short>
         <descr>
-          <var>TExtStringsOptions</var> is a set type used to store <var>TExtStringsOption</var> values. TExtStringsOptions is the type used for the <var>TExtendedStringList.Options</var> property.
+          <p>
+            <var>TExtStringsOptions</var> is a set type used to store <var>TExtStringsOption</var> values. TExtStringsOptions is the type used for the <var>TExtendedStringList.Options</var> property.
+          </p>
         </descr>
         <seealso></seealso>
       </element>
@@ -61,11 +66,11 @@
       <!-- object Visibility: default -->
       <element name="TExtendedStringList" link="#rtl.Classes.TStringList">
         <short>
-          Implements a string list that allows Records in its Objects property
+          Implements a string list that allows Records in its Objects property.
         </short>
         <descr>
           <p>
-            <var>TExtendedStringList</var> is a TStringList descendant that provides support for using Records in the class. The Records property allows access to records stored in the class. TExtendedStringList provides overridden methods to maintain values in the Objects property. New properties and methods are included to control actions needed when adding or freeing Records stored in the Objects property.
+            <var>TExtendedStringList</var> is a <var>TStringList</var> descendant that provides support for using records in the class. The <var>Records</var> property allows access to records stored in the class. TExtendedStringList provides overridden methods to maintain values in the <var>Objects</var> property. New properties and methods are included to control actions needed when adding or freeing Records stored in the Objects property.
           </p>
         </descr>
         <seealso></seealso>
@@ -144,40 +149,42 @@
       <!-- procedure Visibility: protected -->
       <element name="TExtendedStringList.ResizeRecord">
         <short>
-          Changes the memory allocation size for the specified record
+          Changes the memory allocation size for the specified record.
         </short>
         <descr>
           <p>
-            <var>ResizeRecord</var> is a procedure used to change the memory allocation size for the specified record. ResizeRecord calls ReAllocMem to change the allocated memory size to the value in NewSize. ResizeRecord is called when the value in the RecordSize property is changed.
+            <var>ResizeRecord</var> is a procedure used to change the memory allocation size for the specified record. ResizeRecord calls <var>ReAllocMem</var> to change the allocated memory size to the value in <var>NewSize</var>. ResizeRecord is called when the value in the <var>RecordSize</var> property is changed.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso>
+          <link id="TExtendedStringList.RecordSize"/>
+        </seealso>
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.ResizeRecord.ARecord">
-        <short>Pointer to the record</short>
+        <short>Pointer to the record.</short>
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.ResizeRecord.Index">
-        <short>Ordinal position for the specified record</short>
+        <short>Ordinal position for the specified record.</short>
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.ResizeRecord.OldSize">
-        <short>Previous memory allocation size</short>
+        <short>Previous memory allocation size.</short>
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.ResizeRecord.NewSize">
-        <short>New memory allocation size</short>
+        <short>New memory allocation size.</short>
       </element>
 
       <!-- function Visibility: protected -->
       <element name="TExtendedStringList.GetObject">
         <short>
-          Reimplements the read access specifier for Objects
+          Re-implements the read access specifier for the Objects property.
         </short>
         <descr>
           <p>
-            <var>GetObject</var> is an overridden TObject function which reimplements the read access specifier for the Objects property. GetObject calls the inherited method to retrieve the value at the position in Index. GetObject ensures that the return value is cast to a TObject instance when assigned, or <var>Nil</var> when unassigned.
+            <var>GetObject</var> is an overridden TObject function which re-implements the read access specifier for the Objects property. GetObject calls the inherited method to retrieve the value at the position in Index. GetObject ensures that the return value is cast to a TObject instance when assigned, or <var>Nil</var> when unassigned.
           </p>
           <p>
             GetObject and PutObject are called directly (as opposed to using the Objects property) in methods which maintain values in Records.
@@ -187,17 +194,17 @@
       </element>
       <!-- function result Visibility: default -->
       <element name="TExtendedStringList.GetObject.Result">
-        <short>TObject stored at the specified position</short>
+        <short>TObject stored at the specified position.</short>
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.GetObject.Index">
-        <short>Ordinal position for the requested value</short>
+        <short>Ordinal position for the requested value.</short>
       </element>
 
       <!-- procedure Visibility: protected -->
       <element name="TExtendedStringList.PutObject">
         <short>
-          Reimplements the write access specifier for Objects
+          Reimplements the write access specifier for Objects.
         </short>
         <descr>
           <p>
@@ -211,17 +218,17 @@
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.PutObject.Index">
-        <short>Ordinal position for value</short>
+        <short>Ordinal position for value.</short>
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.PutObject.AnObject">
-        <short>Object to store at the specified position</short>
+        <short>Object to store at the specified position.</short>
       </element>
 
       <!-- constructor Visibility: public -->
       <element name="TExtendedStringList.Create">
         <short>
-          Constructor for the class instance
+          Constructor for the class instance.
         </short>
         <descr>
           <p>
@@ -241,13 +248,13 @@
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.Create.InitialRecordSize">
-        <short>Memory size allocated for records</short>
+        <short>Memory size allocated for records.</short>
       </element>
 
       <!-- destructor Visibility: public -->
       <element name="TExtendedStringList.Destroy">
         <short>
-          Destructor for the class instance
+          Destructor for the class instance.
         </short>
         <descr>
           <p>
@@ -260,7 +267,7 @@
       <!-- procedure Visibility: public -->
       <element name="TExtendedStringList.Clear">
         <short>
-          Removes items stored in the string list
+          Removes items stored in the string list.
         </short>
         <descr>
           <p>
@@ -273,7 +280,7 @@
       <!-- procedure Visibility: public -->
       <element name="TExtendedStringList.Delete">
         <short>
-           Deletes the item at the specified position
+           Deletes the item at the specified position.
         </short>
         <descr>
           <p>
@@ -284,13 +291,13 @@
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.Delete.Index">
-        <short>Ordinal position for the item</short>
+        <short>Ordinal position for the item.</short>
       </element>
 
       <!-- procedure Visibility: public -->
       <element name="TExtendedStringList.CreateRecord">
         <short>
-          Allocates memory for a new record
+          Allocates memory for a new record instance.
         </short>
         <descr>
           <p>
@@ -304,13 +311,13 @@
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.CreateRecord.Index">
-        <short>Ordinal position for the record</short>
+        <short>Ordinal position for the record.</short>
       </element>
 
       <!-- procedure Visibility: public -->
       <element name="TExtendedStringList.FreeRecord">
         <short>
-          Frees memory allocated for the specified record
+          Frees memory allocated for the record at the specified position.
         </short>
         <descr>
           <p>
@@ -324,13 +331,13 @@
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.FreeRecord.Index">
-        <short>Ordinal position for the record</short>
+        <short>Ordinal position for the record.</short>
       </element>
 
       <!-- procedure Visibility: public -->
       <element name="TExtendedStringList.FreeAllRecords">
         <short>
-          Frees memory allocated for Records in the class
+          Frees memory allocated for all Records in the class.
         </short>
         <descr>
           <p>
@@ -347,7 +354,7 @@
       <!-- function Visibility: public -->
       <element name="TExtendedStringList.RecordAllocated">
         <short>
-          Determines if memory has been allocated for the specified record
+          Determines if memory has been allocated for the specified record.
         </short>
         <descr>
           <p>
@@ -361,17 +368,17 @@
       </element>
       <!-- function result Visibility: default -->
       <element name="TExtendedStringList.RecordAllocated.Result">
-        <short>True if memory has been allocated for the record</short>
+        <short>True if memory has been allocated for the record.</short>
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.RecordAllocated.Index">
-        <short>Ordinal position for the record</short>
+        <short>Ordinal position for the record.</short>
       </element>
 
       <!-- property Visibility: public -->
       <element name="TExtendedStringList.Records">
         <short>
-          Provides indexed access to records in the string list
+          Provides indexed access to records in the string list.
         </short>
         <descr>
           <p>
@@ -388,13 +395,13 @@
       </element>
       <!-- argument Visibility: default -->
       <element name="TExtendedStringList.Records.Index">
-        <short>Ordinal position for the record</short>
+        <short>Ordinal position for the record.</short>
       </element>
 
       <!-- property Visibility: public -->
       <element name="TExtendedStringList.RecordSize">
         <short>
-          Memory allocation size for Records in the class
+          Memory allocation size for Records in the class.
         </short>
         <descr>
           <p>
@@ -407,11 +414,11 @@
       <!-- property Visibility: public -->
       <element name="TExtendedStringList.Options">
         <short>
-          Contains record options enabled in the class
+          Contains record options enabled in the class.
         </short>
         <descr>
           <p>
-            <var>Options</var> is a TExtStringsOptions property that contains the record options enabled for the class. Options can contains values from the TExtStringsOption enumeration, including:
+            <var>Options</var> is a <var>TExtStringsOptions</var> property that contains the record options enabled for the class. Options can contains values from the <var>TExtStringsOption</var> enumeration, including:
           </p>
           <dl>
             <dt><var>esoClearRecordsOnCreate</var></dt>
@@ -427,7 +434,10 @@
             The default value for the property is <var>[ esoClearRecordsOnCreate ]</var> as set in the constructor for the class.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso>
+          <link id="TExtStringsOptions"/>
+          <link id="TExtStringsOption"/>
+        </seealso>
       </element>
     </module>
     <!-- ExtendedStrings -->

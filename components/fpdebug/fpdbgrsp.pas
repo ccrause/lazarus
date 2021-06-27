@@ -136,7 +136,7 @@ var
 implementation
 
 uses
-  LazLoggerBase, StrUtils,
+  {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif}, StrUtils,
   FpImgReaderBase,
   {$IFNDEF WINDOWS}BaseUnix, termio;
   {$ELSE}winsock2, windows;

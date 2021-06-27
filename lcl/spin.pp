@@ -33,10 +33,11 @@ type
   private const
     DefIncrement = 1;
     DefDecimals = 2;
-    DefMaxValue = 100;
+    DefMaxValue = 0;
   private
     FIncrement: Double;
     FDecimals: Integer;
+    FEditorEnabled: Boolean;
     FMaxValue: Double;
     FMinValue: Double;
     FValue: Double;
@@ -44,6 +45,7 @@ type
     FUpdatePending: Boolean;
     FValueChanged: Boolean;
     function GetValue: Double;
+    procedure SetEditorEnabled(AValue: Boolean);
     procedure UpdateControl;
     function MaxValueStored: Boolean;
     function IncrementStored: Boolean;
@@ -70,6 +72,7 @@ type
     function StrToValue(const S: String): Double; virtual;
   public
     property DecimalPlaces: Integer read FDecimals write SetDecimals default DefDecimals;
+    property EditorEnabled: Boolean read FEditorEnabled write SetEditorEnabled default True;
     property Increment: Double read FIncrement write SetIncrement stored IncrementStored nodefault;
     property MinValue: Double read FMinValue write SetMinValue;
     property MaxValue: Double read FMaxValue write SetMaxValue stored MaxValueStored nodefault;
@@ -92,6 +95,7 @@ type
     property Color;
     property Constraints;
     property DecimalPlaces;
+    property EditorEnabled;
     property Enabled;
     property Font;
     property Increment;
@@ -151,7 +155,7 @@ type
   public
     property Value: integer read GetValue write SetValue default 0;
     property MinValue: integer read GetMinValue write SetMinValue default 0;
-    property MaxValue: integer read GetMaxValue write SetMaxValue default 100;
+    property MaxValue: integer read GetMaxValue write SetMaxValue default 0;
     property Increment: integer read GetIncrement write SetIncrement default 1;
   end;
   
@@ -170,6 +174,7 @@ type
     property BorderSpacing;
     property Color;
     property Constraints;
+    property EditorEnabled;
     property Enabled;
     property Font;
     property Increment;

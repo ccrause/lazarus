@@ -118,12 +118,14 @@ uses
   FpDbgInfo,
   FpDbgLoader, FpDbgDisasX86,
   DbgIntfBaseTypes, DbgIntfDebuggerBase,
-  LazLoggerBase, UTF8Process,
+  {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif}, UTF8Process,
   FpDbgCommon, FpdMemoryTools, FpErrorMessages;
 
 type
 
   TFpWinCtxFlags = (cfSkip, cfControl, cfFull);
+  TFpContextChangeFlag = (ccfControl, ccfInteger);
+  TFpContextChangeFlags = set of TFpContextChangeFlag;
 
   { TDbgWinThread }
 
@@ -134,8 +136,10 @@ type
     FIsSkippingBreakPointAddress: TDBGPtr;
   protected
     FThreadContextChanged: boolean;
+    FThreadContextChangeFlags: TFpContextChangeFlags;
     FCurrentContext: PFpContext; // FCurrentContext := Pointer((PtrUInt(@_UnAligendContext) + 15) and not PtrUInt($F));
     _UnAligendContext: TFpContext;
+    _StoredContext: TFpContext;
     procedure LoadRegisterValues; override;
     function GetFpThreadContext(var AStorage: TFpContext; out ACtxPtr: PFpContext; ACtxFlags: TFpWinCtxFlags): Boolean;
     function SetFpThreadContext(ACtxPtr: PFpContext; ACtxFlags: TFpWinCtxFlags = cfSkip): Boolean;
@@ -153,6 +157,8 @@ type
     function ReadThreadState: boolean;
 
     procedure SetRegisterValue(AName: string; AValue: QWord); override;
+    procedure StoreRegisters; override;
+    procedure RestoreRegisters; override;
     function GetInstructionPointerRegisterValue: TDbgPtr; override;
     function GetStackBasePointerRegisterValue: TDbgPtr; override;
     function GetStackPointerRegisterValue: TDbgPtr; override;
@@ -306,8 +312,7 @@ var
   _IsWow64Process: function (hProcess:HANDLE; WoW64Process: PBOOL):BOOL; stdcall = nil;
   _Wow64GetThreadContext: function (hThread: THandle; var   lpContext: WOW64_CONTEXT): BOOL; stdcall = nil;
   _Wow64SetThreadContext: function (hThread: THandle; const lpContext: WOW64_CONTEXT): BOOL; stdcall = nil;
-
-function DebugBreakProcess(Process:HANDLE): WINBOOL; external 'kernel32' name 'DebugBreakProcess';
+  _DebugBreakProcess: function(Process:HANDLE): WINBOOL; stdcall = nil;
 
 procedure LoadKernelEntryPoints;
 var
@@ -324,6 +329,7 @@ begin
   Pointer(_DebugActiveProcessStop) := GetProcAddress(hMod, 'DebugActiveProcessStop');
   Pointer(_DebugActiveProcess) := GetProcAddress(hMod, 'DebugActiveProcess');
   Pointer(_GetFinalPathNameByHandle) := GetProcAddress(hMod, 'GetFinalPathNameByHandleW');
+  Pointer(_DebugBreakProcess) := GetProcAddress(hMod, 'DebugBreakProcess');
   {$ifdef cpux86_64}
   Pointer(_IsWow64Process) := GetProcAddress(hMod, 'IsWow64Process');
   Pointer(_Wow64GetThreadContext) := GetProcAddress(hMod, 'Wow64GetThreadContext');
@@ -336,6 +342,7 @@ begin
   DebugLn(DBG_WARNINGS and (_DebugActiveProcessStop = nil), ['WARNING: Failed to get DebugActiveProcessStop']);
   DebugLn(DBG_WARNINGS and (_DebugActiveProcess = nil), ['WARNING: Failed to get DebugActiveProcess']);
   DebugLn(DBG_WARNINGS and (_GetFinalPathNameByHandle = nil), ['WARNING: Failed to get GetFinalPathNameByHandle']);
+  DebugLn(DBG_WARNINGS and (_DebugBreakProcess = nil), ['WARNING: Failed to get DebugBreakProcess']);
   {$ifdef cpux86_64}
   DebugLn(DBG_WARNINGS and (_IsWow64Process = nil), ['WARNING: Failed to get IsWow64Process']);
   DebugLn(DBG_WARNINGS and (_Wow64GetThreadContext = nil), ['WARNING: Failed to get Wow64GetThreadContext']);
@@ -557,11 +564,13 @@ begin
   Result := InvalidLoc;
   case Mode of
     dm32: case AParamIdx of
+       -1: Result := RegisterLoc(0); // EAX
         0: Result := RegisterLoc(0); // EAX
         1: Result := RegisterLoc(2); // EDX
         2: Result := RegisterLoc(1); // ECX
       end;
     dm64: case AParamIdx of
+       -1: Result := RegisterLoc(0); // RAX
         0: Result := RegisterLoc(2); // RCX
         1: Result := RegisterLoc(1); // RDX
         2: Result := RegisterLoc(8); // R8
@@ -647,7 +656,8 @@ begin
   result := nil;
   AProcess := TProcessUTF8.Create(nil);
   try
-    AProcess.Options:=[poDebugProcess, poNewProcessGroup];
+    // To debug sub-processes, this needs to be poDebugProcess
+    AProcess.Options:=[poDebugProcess, poDebugOnlyThisProcess, poNewProcessGroup];
     if siForceNewConsole in AFlags then
       AProcess.Options:=AProcess.Options+[poNewConsole];
     AProcess.Executable:=AFilename;
@@ -1333,7 +1343,9 @@ begin
   //hndl := OpenProcess(PROCESS_CREATE_THREAD or PROCESS_QUERY_INFORMATION or PROCESS_VM_OPERATION or PROCESS_VM_WRITE or PROCESS_VM_READ, False, TargetPID);
   hndl := OpenProcess(PROCESS_ALL_ACCESS, false, ProcessID);
   PauseRequested:=true;
-  result := DebugBreakProcess(hndl);
+  Result := False;
+  if _DebugBreakProcess <> nil then
+    Result := _DebugBreakProcess(hndl);
   if not Result then begin
     DebugLn(DBG_WARNINGS, ['pause failed(1) ', GetLastError]);
     if (_CreateRemoteThread <> nil) and (DebugBreakAddr <> nil) then begin
@@ -1509,6 +1521,10 @@ begin
       cfControl: ACtxPtr^.WOW.ContextFlags := WOW64_CONTEXT_CONTROL;
       cfFull:    ACtxPtr^.WOW.ContextFlags := WOW64_CONTEXT_SEGMENTS or WOW64_CONTEXT_INTEGER or WOW64_CONTEXT_CONTROL or WOW64_CONTEXT_DEBUG_REGISTERS;
     end;
+    if ccfControl in FThreadContextChangeFlags then
+      ACtxPtr^.def.ContextFlags := ACtxPtr^.def.ContextFlags or WOW64_CONTEXT_CONTROL;
+    if ccfInteger in FThreadContextChangeFlags then
+      ACtxPtr^.def.ContextFlags := ACtxPtr^.def.ContextFlags or WOW64_CONTEXT_INTEGER;
     Result := (_Wow64SetThreadContext <> nil) and _Wow64SetThreadContext(Handle, ACtxPtr^.WOW);
   end
   else begin
@@ -1517,6 +1533,10 @@ begin
       cfControl: ACtxPtr^.def.ContextFlags := CONTEXT_CONTROL;
       cfFull:    ACtxPtr^.def.ContextFlags := CONTEXT_SEGMENTS or CONTEXT_INTEGER or CONTEXT_CONTROL or CONTEXT_DEBUG_REGISTERS;
     end;
+    if ccfControl in FThreadContextChangeFlags then
+      ACtxPtr^.def.ContextFlags := ACtxPtr^.def.ContextFlags or CONTEXT_CONTROL;
+    if ccfInteger in FThreadContextChangeFlags then
+      ACtxPtr^.def.ContextFlags := ACtxPtr^.def.ContextFlags or CONTEXT_INTEGER;
     Result := SetThreadContext(Handle, ACtxPtr^.def);
   {$ifdef cpux86_64}
   end;
@@ -1679,6 +1699,7 @@ begin
       debugln(['Failed to SetFpThreadContext()']);
   end;
   FThreadContextChanged := False;
+  FThreadContextChangeFlags := [];
   FCurrentContext := nil;
 end;
 
@@ -1717,18 +1738,22 @@ begin
     exit;
 
   Result := GetFpThreadContext(_UnAligendContext, FCurrentContext, cfFull);
+  //FThreadContextChanged := False; TODO: why was that not here?
+  FThreadContextChangeFlags := [];
   FRegisterValueListValid:=False;
 end;
 
 procedure TDbgWinThread.SetRegisterValue(AName: string; AValue: QWord);
 begin
-  if ReadThreadState then
+  if not ReadThreadState then
     exit;
 
   {$ifdef cpui386}
     case AName of
       'eip': FCurrentContext^.def.Eip := AValue;
       'eax': FCurrentContext^.def.Eax := AValue;
+      'ecx': FCurrentContext^.def.Ecx := AValue;
+      'edx': FCurrentContext^.def.Edx := AValue;
     else
       raise Exception.CreateFmt('Setting the [%s] register is not supported', [AName]);
     end;
@@ -1737,20 +1762,38 @@ begin
     case AName of
       'eip': FCurrentContext^.WOW.Eip := AValue;
       'eax': FCurrentContext^.WOW.Eax := AValue;
+      'ecx': FCurrentContext^.WOW.Ecx := AValue;
+      'edx': FCurrentContext^.WOW.Edx := AValue;
     else
       raise Exception.CreateFmt('Setting the [%s] register is not supported', [AName]);
     end;
   end
   else begin
     case AName of
-      'eip': FCurrentContext^.def.Rip := AValue;
-      'eax': FCurrentContext^.def.Rax := AValue;
+      'rip': FCurrentContext^.def.Rip := AValue;
+      'rax': FCurrentContext^.def.Rax := AValue;
+      'rcx': FCurrentContext^.def.Rcx := AValue;
+      'rdx': FCurrentContext^.def.Rdx := AValue;
     else
       raise Exception.CreateFmt('Setting the [%s] register is not supported', [AName]);
     end;
   end;
   {$endif}
   FThreadContextChanged:=True;
+  case AName of
+    'eip', 'rip': Include(FThreadContextChangeFlags, ccfControl);
+    else          Include(FThreadContextChangeFlags, ccfInteger);
+  end;
+end;
+
+procedure TDbgWinThread.StoreRegisters;
+begin
+  _StoredContext := _UnAligendContext;
+end;
+
+procedure TDbgWinThread.RestoreRegisters;
+begin
+  _UnAligendContext := _StoredContext;
 end;
 
 function TDbgWinThread.GetInstructionPointerRegisterValue: TDbgPtr;

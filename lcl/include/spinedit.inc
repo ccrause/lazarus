@@ -12,11 +12,10 @@
 
 procedure TCustomFloatSpinEdit.UpdateControl;
 begin
-  if MaxValue < MinValue then FMaxValue := MinValue;
+  // Both Min and Max can be < 0 and Max is read first. Don't adjust. Issue #38810.
+  //if MaxValue < MinValue then FMaxValue := MinValue;
   FValue := GetLimitedValue(FValue);
-  
   if (not HandleAllocated) then Exit;
-
   if ([csLoading, csDestroying] * ComponentState <> []) then
     FUpdatePending := True
   else
@@ -160,6 +159,16 @@ begin
   Result := FValue;
 end;
 
+procedure TCustomFloatSpinEdit.SetEditorEnabled(AValue: Boolean);
+begin
+  if FEditorEnabled <> AValue then
+  begin
+    FEditorEnabled := AValue;
+    if HandleAllocated then
+      TWSCustomFloatSpinEditClass(WidgetSetClass).SetEditorEnabled(Self, AValue);
+  end;
+end;
+
 function TCustomFloatSpinEdit.IncrementStored: Boolean;
 begin
   Result := not SameValue(FIncrement, DefIncrement);
@@ -182,6 +191,7 @@ begin
   FMaxValue := DefMaxValue;
   FUpdatePending := True;
   FValueChanged := True;
+  FEditorEnabled := True;
 
   with GetControlClassDefaultSize do
     SetInitialBounds(0, 0, CX, CY);
@@ -190,7 +200,7 @@ end;
 function TCustomFloatSpinEdit.GetLimitedValue(const AValue: Double): Double;
 begin
   Result := AValue;
-  //Delphi does not constrain when MinValue = MaxValue, and does if MaxValue > MinValue,
+  //Delphi does not constrain when MinValue = MaxValue, and does if MaxValue < MinValue,
   //but the latter makes absolutely no sense at all.
   if FMaxValue > FMinValue then
   begin

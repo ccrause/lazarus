@@ -562,7 +562,7 @@ begin
   //DebugLn(['LCLIntfCellRenderer_Render END ',DbgSName(LCLObject)]);
 end;
 
-procedure LCLIntfCellRenderer_ClassInit(aClass: gpointer; class_data: gpointer); cdecl;
+procedure LCLIntfCellRenderer_ClassInit(aClass: gpointer; {%H-}class_data: gpointer); cdecl;
 //aClass: PLCLIntfCellRendererClass
 var
   LCLClass: PLCLIntfCellRendererClass;
@@ -599,7 +599,7 @@ begin
   RendererClass^.render := @LCLIntfCellRenderer_Render;
 end;
 
-procedure LCLIntfCellRenderer_ClassFinalize(g_class: gpointer; class_data: gpointer); cdecl;
+procedure LCLIntfCellRenderer_ClassFinalize({%H-}g_class: gpointer; {%H-}class_data: gpointer); cdecl;
 begin
   // DebugLn('LCLIntfCellRenderer_ClassFinalize: finalization');
 end;
@@ -655,8 +655,6 @@ var
   ListColumn: TListColumn;
   ListItem: TListItem;
   Value: TGValue;
-  AMinH: gint;
-  ANatH: gint;
 begin
   if not Gtk3IsObject(cell) then
     exit;
@@ -676,16 +674,18 @@ begin
     not (TCustomComboBox(TGtk3Widget(Data).LCLObject).Style.HasEditBox) and
     not (TCustomComboBox(TGtk3Widget(Data).LCLObject).DroppedDown) then
   begin
-    Value.g_type := G_TYPE_UINT;
-    Value.data[0].v_uint := 0;
+    Value.clear;
+    Value.init(G_TYPE_UINT);
+    Value.set_uint(0);
     g_object_get_property(PgObject(cell),'ypad',@Value);
-    Value.data[0].v_int := 0;
     g_object_set_property(PGObject(cell), 'ypad', @Value);
+    Value.unset;
   end else
   if wtListView in TGtk3Widget(Data).WidgetType then
   begin
     // DebugLn(['LCLIntfCellRenderer_CellDataFunc stamp=',iter^.stamp,' tree_model=',dbgs(tree_model),' cell=',dbgs(cell),' WidgetInfo=',WidgetInfo <> nil,' Time=',TimeToStr(Now)]);
-    Value.g_type := G_TYPE_STRING;
+    //Value.g_type := G_TYPE_STRING;
+
     gtk_tree_model_get(tree_model, iter, [0, @ListItem, -1]);
     if (ListItem = nil) and TCustomListView(TGtk3Widget(Data).LCLObject).OwnerData then
       ListItem := TCustomListView(TGtk3Widget(Data).LCLObject).Items[LCLCellRenderer^.Index];
@@ -707,24 +707,32 @@ begin
       if ListColumn.Index-1 <= ListItem.SubItems.Count-1 then
         S := ListItem.SubItems.Strings[LCLCellRenderer^.ColumnIndex-1];
 
-    Value.data[0].v_pointer := PgChar(S);
+    Value.clear;
+    Value.init(G_TYPE_STRING);
+    Value.set_string(PgChar(S));
     cell^.set_property('text', @Value);
+    Value.unset;
   end else
   if (wtListBox in TGtk3Widget(Data).WidgetType) then
   begin
     if TGtk3ListBox(Data).ListBoxStyle < lbOwnerDrawFixed then
     begin
-      Value.g_type := G_TYPE_STRING;
-      Value.data[0].v_pointer := nil;
+      value.clear;
+      value.init(G_TYPE_STRING);
+      value.set_string(nil);
       cell^.get_property('text', @Value);
+      value.unset;
       // DebugLn('PropertyType=',dbgs(Value.g_type),' IsString=',dbgs(Value.g_type = G_TYPE_STRING),' getString=',Value.get_string);
 
       S := TCustomListBox(TGtk3Widget(Data).LCLObject).Items.Strings[LCLCellRenderer^.Index];
       // DebugLn('LCLCellRenderer^.Index=',dbgs(LCLCellRenderer^.Index),' text=',Str);
-      Value.data[0].v_pointer := PgChar(S);
-      // Value.set_string(Str);
+      //Value.data[0].v_pointer := PgChar(S);
+      value.clear;
+      value.init(G_TYPE_STRING);
+      Value.set_string(PgChar(S));
       // set text only if we are not ownerdrawn !
       cell^.set_property('text', @Value);
+      Value.unset;
       // DebugLn('IsFixedCellSize ',dbgs(PGtkTreeView(TGtk3Widget(Data).GetContainerWidget)^.get_fixed_height_mode));
     end else
     begin

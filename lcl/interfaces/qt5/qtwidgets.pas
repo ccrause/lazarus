@@ -111,7 +111,7 @@ type
     FWidgetNeedFontColorInitialization: Boolean;
     FChildOfComplexWidget: TChildOfComplexWidget;
     FOwnWidget: Boolean;
-    FProps: TStringListUTF8Fast;
+    FProps: TStringList;
     FPaintData: TPaintData;
     FCentralWidget: QWidgetH;
     FContext: HDC;
@@ -167,6 +167,7 @@ type
   public
     constructor Create(const AWinControl: TWinControl; const AParams: TCreateParams); virtual; overload;
     constructor CreateFrom(const AWinControl: TWinControl; AWidget: QWidgetH); virtual;
+    procedure InitializeAccessibility; virtual;
     procedure InitializeWidget; virtual;
     procedure DeInitializeWidget; virtual;
     procedure RecreateWidget;
@@ -433,6 +434,7 @@ type
     function getViewOrigin: TPoint;
     function viewportWidget: QWidgetH;
     function horizontalScrollBar: TQtScrollBar;
+    procedure InitializeAccessibility; override;
     function verticalScrollBar: TQtScrollBar;
     procedure setFocusPolicy(const APolicy: QtFocusPolicy); override;
     procedure setHorizontalScrollBar(AScrollBar: TQtScrollBar);
@@ -465,6 +467,7 @@ type
   public
     function CanAdjustClientRectOnResize: Boolean; override;
     function cornerWidget: TQtWidget;
+    procedure InitializeAccessibility; override;
     function MapToGlobal(APt: TPoint; const AWithScrollOffset: Boolean = False): TPoint; override;
     function MapFromGlobal(APt: TPoint; const AWithScrollOffset: Boolean = False): TPoint; override;
     function viewport: TQtViewPort;
@@ -787,7 +790,6 @@ type
     function CanPaintBackground: Boolean; override;
     function EventFilter(Sender: QObjectH; Event: QEventH): Boolean; cdecl; override;
     function getClientBounds: TRect; override;
-    function getClientOffset: TPoint; override;
     function getText: WideString; override;
     procedure preferredSize(var PreferredWidth, PreferredHeight: integer;
       {%H-}WithThemeSpace: Boolean); override;
@@ -1956,6 +1958,70 @@ const
 
   QtCheckStateRole = Ord(QtUserRole) + 1;
   QtListViewOwnerDataRole = Ord(QtUserRole) + 2;
+
+{$IFDEF QTACCESSIBILITY}
+const
+  QtAXObjectName           = 'AxObject';
+  axActionNamePress        = 'Press';
+  axActionNameIncrease     = 'Increase';
+  axActionNameDecrease     = 'Decrease';
+  axActionNameShowMenu     = 'ShowMenu';
+  axActionNameSetFocus     = 'SetFocus';
+  axActionNameToggle       = 'Toggle';
+  axActionNameScrolLeft    = 'Scroll Left';
+  axActionNameScrollRight  = 'Scroll Right';
+  axActionNameScrollUp     = 'Scroll Up';
+  axActionNameScrollDown   = 'Scroll Down';
+  axActionNamePreviousPage = 'Previous Page';
+  axActionNameNextPage     = 'Next Page';
+
+function LazRoleToQtRole(ALazRole: TLazAccessibilityRole): QAccessibleRole;
+function CreateAccessibleName(AObject: TLazAccessibleObject): String;
+function QtAxFactory(name: QStringH; obj: QObjectH): QAccessibleInterfaceH; cdecl;
+
+type
+  TQtAccessibleObject = class(TObject)
+  private
+    FLazAxObject: TLazAccessibleObject;
+    FAxWidget: QWidgetH;
+  public
+    constructor Create(ALazAxObject: TLazAccessibleObject; AWidget: QWidgetH);
+    destructor Destroy; override;
+    procedure actionNamesOverride(names: PWideString) cdecl; virtual; abstract;
+    procedure childOverride(index: integer; out child:  QAccessibleInterfaceH) cdecl; virtual;
+    procedure childAtOverride(x: integer; y: integer; out child: QAccessibleInterfaceH) cdecl; virtual; abstract;
+    procedure childCountOverride(count: PInteger) cdecl; virtual;
+    procedure doActionOverride(name: PWideString) cdecl; virtual; abstract;
+    procedure indexOfChildOverride() cdecl; virtual; abstract;
+    procedure parentOverride(out parent: QAccessibleInterfaceH) cdecl; virtual; abstract;
+    procedure rectOverride(left, top, width, height: PInteger) cdecl; virtual; abstract;
+    procedure roleOverride(out role: QAccessibleRole) cdecl; virtual;
+    procedure stateOverride(out state: QAccessibleState) cdecl; virtual; abstract;
+    procedure textOverride(text: QAccessibleText; retval: PWideString) cdecl; virtual;
+    function isVisible: Boolean; virtual;
+  end;
+
+  TQtAccessibleTree = class(TQtAccessibleObject)
+  public
+    constructor Create(ALazAxObject: TLazAccessibleObject; AWidget: QWidgetH);
+    procedure childOverride(index: integer; out child:  QAccessibleInterfaceH) cdecl; virtual;
+    procedure childCountOverride(count: PInteger) cdecl; virtual;
+  end;
+
+  TQtAccessibleTreeRow = class(TQtAccessibleObject)
+  public
+    constructor Create(ALazAxObject: TLazAccessibleObject; AWidget: QWidgetH);
+    procedure actionNamesOverride(names: PWideString)cdecl; override;
+    procedure childCountOverride(count: PInteger)cdecl; override;
+    procedure doActionOverride(name: PWideString)cdecl; override;
+    procedure parentOverride(out parent: QAccessibleInterfaceH)cdecl; override;
+    procedure rectOverride(left, top, width, height: PInteger) cdecl; override;
+    procedure roleOverride(out role: QAccessibleRole)cdecl; override;
+    procedure textOverride(text: QAccessibleText; retval: PWideString) cdecl; override;
+    function isVisible: Boolean; override;
+  end;
+{$ENDIF}
+
 implementation
 
 uses
@@ -2003,6 +2069,7 @@ begin
 
   FParams := AParams;
   InitializeWidget;
+  InitializeAccessibility;
 end;
 
 constructor TQtWidget.CreateFrom(const AWinControl: TWinControl;
@@ -2037,6 +2104,32 @@ begin
 
   // Set mouse move messages policy
   QWidget_setMouseTracking(Widget, True);
+
+  InitializeAccessibility;
+end;
+
+procedure TQtWidget.InitializeAccessibility;
+{$IFDEF QTACCESSIBILITY}
+var
+  WStr: WideString;
+  LCLAxObject: TLazAccessibleObject;
+{$ENDIF}
+begin
+  {$IFDEF QTACCESSIBILITY}
+  if Assigned(LCLObject) then begin
+    LCLAxObject := LCLObject.GetAccessibleObject;
+    if (LCLAxObject <> nil) then begin
+      WStr := GetUtf8String(CreateAccessibleName(LCLAxObject));
+      QWidget_setAccessibleName(Widget, @WStr);
+      WStr := GetUtf8String(LCLAxObject.AccessibleDescription);
+      QWidget_setAccessibleDescription(Widget, @WStr);
+     end;
+  end
+  else begin
+    WStr := GetUtf8String(ClassName);
+    QWidget_setAccessibleName(Widget, @WStr);
+  end;
+  {$ENDIF}
 end;
 
 procedure TQtWidget.InitializeWidget;
@@ -2201,6 +2294,7 @@ begin
   FParams.WndParent := HwndFromWidgetH(Parent);
   DeinitializeWidget;
   InitializeWidget;
+  InitializeAccessibility;
 end;
 
 procedure TQtWidget.DestroyNotify(AWidget: TQtWidget);
@@ -4222,7 +4316,8 @@ begin
   try
     // do not loop with LCL but do not apply it to TQtMainWindow !
     if not (csDesigning in LCLObject.ComponentState) and
-      not ((ClassType = TQtMainWindow) or (ClassType = TQtWindowArea)) and InUpdate then
+      not ((ClassType = TQtMainWindow) {$IFDEF QTSCROLLABLEFORMS} or (ClassType = TQtWindowArea){$ENDIF})
+      and InUpdate then
     begin
       AQtClientRect := Rect(0, 0, 0, 0);
       if FOwner <> nil then
@@ -5643,7 +5738,7 @@ var
 begin
   if FProps=nil then
   begin
-    FProps:=TStringListUTF8Fast.Create;
+    FProps:=TStringList.Create;
     FProps.Sorted:=true;
   end;
   i := Fprops.IndexOf(AnIndex);
@@ -7066,14 +7161,18 @@ end;
 procedure TQtMainWindow.BeginUpdate;
 begin
   inherited BeginUpdate;
+  {$IFDEF QTSCROLLABLEFORMS}
   if Assigned(ScrollArea) then
     ScrollArea.BeginUpdate;
+  {$ENDIF}
 end;
 
 procedure TQtMainWindow.EndUpdate;
 begin
+  {$IFDEF QTSCROLLABLEFORMS}
   if Assigned(ScrollArea) then
     ScrollArea.EndUpdate;
+  {$ENDIF}
   inherited EndUpdate;
 end;
 
@@ -8115,53 +8214,30 @@ var
   LeftMargin: Integer;
   TopMargin: Integer;
   RightMargin: Integer;
-  BottomMargin: Integer;
-  {$IFDEF HASX11}
-  Font: QFontH;
-  FontMetrics: QFontMetricsH;
-  FontHeight: Integer;
-  {$ENDIF}
+  BottomMargin, AStyleMetric: Integer;
 begin
   if ALayout = nil then
     exit;
   QWidget_getContentsMargins(AWidget,@LeftMargin, @TopMargin, @RightMargin, @BottomMargin);
 
-  {if contentsMargins TopMargin is huge then we must rethink about TopMargin
-   size (eg.oxygen theme have 32 top margin while plastique have 19
-   with same font height) }
-  {$IFDEF HASX11}
-  Font := QWidget_font(AWidget);
-  FontMetrics := QFontMetrics_create(Font);
-  try
-    FontHeight := QFontMetrics_height(FontMetrics);
-  finally
-    QFontMetrics_destroy(FontMetrics);
-  end;
-  {currently applies only to wrong TopMargin calculation (eg.gtk style).}
-  if (TopMargin - FontHeight < 2) then
-    TopMargin := FontHeight + 2 // top & bottom +1px
-  else {currently applies only to oxygen & nitrogen theme.}
-  if ((TopMargin - BottomMargin - 2) > FontHeight) then
-  begin
-    {do not touch fusion style !}
-    if QtWidgetSet.StyleName <> 'fusion' then
-    begin
-      TopMargin := TopMargin - BottomMargin - 3;
-      BottomMargin := 0;
-    end;
-  end;
-  {$ENDIF}
-  {if there's no text set margin to bottom margin size. issue #23642}
-  if getText = '' then
+  AStyleMetric := QStyle_pixelMetric(QApplication_style(), QStyleSE_DockWidgetTitleBarText, nil, Widget);
+
+  {issue #37576}
+  {if (AStyle = 'fusion') or (AStyle = 'gtk2') or
+    (AStyle = 'qt5ct-style') then}
+  if AStyleMetric = 0 then
+  else
+  if (getText = '') then
     TopMargin := BottomMargin;
+
   QLayout_setContentsMargins(ALayout, LeftMargin, TopMargin, RightMargin, BottomMargin);
   QLayout_invalidate(ALayout);
 
   if (LCLObject <> nil) and testAttribute(QtWA_Mapped) then
   begin
-    {.$IFDEF VerboseQtResize}
+    {$IFDEF VerboseQtResize}
     DebugLn('TQtGroupBox.setLayoutThemeMargins: ',dbgsName(LCLObject),' casp: ',dbgs(caspComputingBounds in LCLObject.AutoSizePhases),' mapped ',dbgs(testAttribute(QtWA_Mapped)));
-    {.$ENDIF}
+    {$ENDIF}
     LCLObject.DoAdjustClientRectChange(False);
     LCLObject.InvalidateClientRectCache(True);
   end;
@@ -8307,15 +8383,6 @@ begin
   end;
 end;
 
-function TQtGroupBox.getClientOffset: TPoint;
-begin
-  Result:=inherited getClientOffset;
-  // issue #28155
-  // there's no client offset since FCentralWidget is at it's position 0,0
-  if testAttribute(QtWA_Mapped) and QWidget_testAttribute(FCentralWidget, QtWA_Mapped) then
-    Result := Point(0, 0);
-end;
-
 function TQtGroupBox.getClientBounds: TRect;
 var
   R, R1: TRect;
@@ -8378,7 +8445,15 @@ var
   L, T, R, B: Integer;
   ASize: TSize;
 begin
-  QWidget_getContentsMargins(Widget,@L, @T, @R, @B);
+  if WithThemeSpace then
+    QWidget_getContentsMargins(Widget,@L, @T, @R, @B)
+  else
+  begin
+    L := 0;
+    T := 0;
+    R := 0;
+    B := 0;
+  end;
   QGroupBox_minimumSizeHint(QGroupBoxH(Widget), @ASize);
   PreferredWidth := ASize.cx + L + R;
   PreferredHeight := ASize.cy + B + T;
@@ -8478,7 +8553,7 @@ end;
 
 function TQtFrame.CanPaintBackground: Boolean;
 begin
-  Result := CanSendLCLMessage and getEnabled and
+  Result := CanSendLCLMessage and {getEnabled and}
     (LCLObject.Color <> clBackground) and (LCLObject.Color <> clDefault);
 end;
 
@@ -9667,7 +9742,7 @@ begin
     Result := Point(0, 0)
   else
   begin
-    Result.X := QTextCursor_position(TextCursor);
+    Result.X := QTextCursor_positionInBlock(TextCursor);
     Result.Y := QTextCursor_blockNumber(TextCursor);
   end;
   QTextCursor_destroy(TextCursor);
@@ -16278,6 +16353,7 @@ begin
   Palette.ForceColor := False;
   setVisible(FVisible);
   QtWidgetSet.AddHandle(Self);
+  InitializeAccessibility;
 end;
 
 {$IFNDEF DARWIN}
@@ -17110,6 +17186,15 @@ begin
   Result := FHScrollBar;
 end;
 
+procedure TQtAbstractScrollArea.InitializeAccessibility;
+var
+  WStr: WideString;
+begin
+  inherited InitializeAccessibility;
+  WStr := GetUtf8String(ClassName+':ViewPort');
+  QWidget_setAccessibleName(viewPortWidget, @WStr);
+end;
+
 {------------------------------------------------------------------------------
   Function: TQtAbstractScrollArea.verticalScrollbar
   Params:  None
@@ -17478,6 +17563,27 @@ function TQtCustomControl.MapFromGlobal(APt: TPoint;
 begin
   //TODO: see what to do with ccwScrollingWinControl
   Result := inherited MapFromGlobal(APt);
+end;
+
+procedure TQtCustomControl.InitializeAccessibility;
+{$IFDEF QTACCESSIBILITY}
+var
+  LCLAxObject: TLazAccessibleObject;
+{$ENDIF}
+begin
+  inherited InitializeAccessibility;
+  {$IFDEF QTACCESSIBILITY}
+  if (LCLObject <> nil) then begin
+    // TWinControl.Handle is still not set so can't do handle creation through LCLAxObject.CreateHandle
+    LCLAxObject :=  LCLObject.GetAccessibleObject;
+      if LCLAxObject.AccessibleRole = larTreeView then
+        LCLAxObject.Handle :=
+          HWND(TQtAccessibleTree.Create(LCLAxObject, Widget))
+      else
+        LCLAxObject.Handle :=
+          HWND(TQtAccessibleObject.Create(LCLAxObject, Widget));
+  end;
+  {$ENDIF}
 end;
 
 {------------------------------------------------------------------------------
@@ -19661,7 +19767,9 @@ begin
     AParent := QApplication_activeWindow;
   {$ENDIF}
   Widget := CreateWidget(AParent);
+  {$IFNDEF QTDIALOGSUSEHTMLTEXT}
   TextFormat := QtPlainText;
+  {$ENDIF}
   setProperty(Widget, 'lclwidget', Int64(PtrUInt(Self)));
   QtWidgetSet.AddHandle(Self);
 end;
@@ -19799,5 +19907,352 @@ begin
     end;
   end;
 end;
+
+
+{$IFDEF QTACCESSIBILITY}
+function LazRoleToQtRole(ALazRole: TLazAccessibilityRole): QAccessibleRole;
+begin
+  case ALazRole of
+    larIgnore: Result := QAccessibleClient;  // Qt follows ATSPI roles and doesn't have an ignore
+    larAnimation: Result := QAccessibleAnimation;
+    larButton: Result := QAccessibleButton;
+    larCell: Result := QAccessibleCell;
+    larChart: Result := QAccessibleChart;
+    larCheckBox: Result := QAccessibleCheckBox;
+    larClock: Result := QAccessibleClock;
+    larColorPicker: Result := QAccessibleColorChooser;
+    larColumn: Result := QAccessibleColumn;
+    larComboBox: Result := QAccessibleComboBox;
+    larDateField: Result := QAccessibleStaticText;
+    larGrid: Result := QAccessibleTable;
+    larGroup: Result := QAccessibleGrouping;
+    larImage: Result := QAccessibleGraphic;
+    larLabel: Result := QAccessibleStaticText;
+    larListBox: Result := QAccessibleList;
+    larListItem: Result := QAccessibleListItem;
+    larMenuBar: Result := QAccessibleMenuBar;
+    larMenuItem: Result := QAccessibleMenuItem;
+    larProgressIndicator: Result := QAccessibleProgressBar;
+    larRadioButton: Result := QAccessibleRadioButton;
+    larResizeGrip: Result := QAccessibleGrip;
+    larRow: Result := QAccessibleRow;
+    larScrollBar: Result := QAccessibleScrollBar;
+    larSpinner: Result := QAccessibleSpinBox;
+    larTabControl: Result := QAccessiblePageTab;
+    larText: Result := QAccessibleSTaticText;
+    larTextEditorMultiline: Result := QAccessibleEditableText;
+    larTextEditorSingleline: Result := QAccessibleEditableText;
+    larToolBar: Result := QAccessibleToolBar;
+    larToolBarButton: Result := QAccessibleButton;
+    larTrackBar: Result := QAccessibleSlider;
+    larTreeView: Result := QAccessibleTree;
+    larTreeItem: Result := QAccessibleTreeItem;
+    larWindow: Result := QAccessibleWindow;
+  else
+    // including larIgnore, larUnknown
+    Result := QAccessibleNoRole;
+  end;
+end;
+
+function CreateAccessibleName(AObject: TLazAccessibleObject): String;
+var
+  TargControl: TControl;
+  S: String;
+begin
+  S := '';
+  if Assigned(AObject) then begin
+    if AObject.AccessibleName <> '' then
+      S := AObject.AccessibleName;
+    if (S = '') and (AObject.OwnerControl <> nil) then begin
+      TargControl := AObject.OwnerControl;
+      S := TargControl.Caption;
+      if S = '' then
+        S := TargControl.Name;
+      if S = '' then
+        S := TargControl.ClassName;
+    end;
+  end;
+  Result := S;
+end;
+{$ENDIF}
+
+function LCLControlRectToQtScreenRect(ARect: TRect; AControl: TControl): TRect;
+var
+  Pt: TPoint;
+begin
+  Pt := AControl.ClientToScreen(ARect.TopLeft);
+  Result := Rect(Pt.X, Pt.Y, Pt.X + ARect.Width, Pt.Y + ARect.Height);
+end;
+
+function QtScreenPointToLCLControlPoint(APoint: TPoint; AControl: TControl): TPoint;
+begin
+  Result := AControl.ScreenToClient(APoint);
+end;
+
+{$IFDEF QTACCESSIBILITY}
+function QtAxFactory(name: QStringH; obj: QObjectH): QAccessibleInterfaceH; cdecl;
+var
+  CreateLCLAccessibleInterface: Boolean;
+  H: HWND;
+  QtObj: TQtObject;
+  objName: string;
+  WStr: WideString;
+begin
+  Result := nil;
+  CreateLCLAccessibleInterface := False;
+  if QObject_isWidgetType(obj) then begin
+    QObject_objectName(obj, @WStr);
+    objName := UTF16ToUTF8(WStr);
+    if (objName = QtAXObjectName) then
+      CreateLCLAccessibleInterface := True
+    else begin
+      H := HwndFromWidgetH(QWidgeth(obj));
+      if (H <> 0) then begin
+        QtObj := TQtObject(H);
+        if (QtObj is TQtCustomControl) then
+          CreateLCLAccessibleInterface := True;
+      end
+    end
+  end;
+
+  if CreateLCLAccessibleInterface then begin
+    Result := QLCLAccessibleWidget_Create(QWidgetH(obj), QAccessibleClient, nil);
+  end
+  else
+    Result := nil;
+end;
+
+constructor TQtAccessibleObject.Create(ALazAxObject: TLazAccessibleObject; AWidget: QWidgetH);
+var
+  WStr: WideString;
+  AxInterface: QLCLAccessibleWidgetH;
+begin
+  inherited Create;
+  FLazAxObject := ALazAxObject;
+  if (AWidget = QWidgetH(0)) then begin
+    FAxWidget := QWidget_Create();
+    WStr := GetUtf8String(QtAXObjectName);
+    QObject_setObjectName(FAxWidget, @WStr);
+  end
+  else
+    FAxWidget := AWidget;
+
+  AxInterface := QLCLAccessibleWidgetH(QAccessible_queryAccessibleInterface(FAxWidget));
+  QLCLAccessibleWidget_override_child(AxInterface, @childOverride);
+  QLCLAccessibleWidget_override_childCount(AxInterface, @childCountOverride);
+  QLCLAccessibleWidget_override_role(AxInterface, @roleOverride);
+  QLCLAccessibleWidget_override_text(AxInterface, @textOverride);
+end;
+
+destructor TQtAccessibleObject.Destroy;
+var
+  WStr: WideString;
+  objName: string;
+begin
+  QObject_objectName(FAxWidget, @WStr);
+  objName := UTF16ToUTF8(WStr);
+  if (objName = QtAXObjectName) then
+    QObject_Destroy(FAxWidget);
+
+  inherited Destroy;
+end;
+
+procedure TQtAccessibleObject.childOverride(index: integer; out child:  QAccessibleInterfaceH) cdecl;
+var
+  childCount: Integer;
+  lclAxChild: TLazAccessibleObject;
+  qtAxObject: TQtAccessibleObject;
+begin
+  child := QAccessibleInterfaceH(0);
+  childCount := 0;
+  lclAxChild := FLazAxObject.GetFirstChildAccessibleObject;
+  while Assigned(lclAxChild) and (childCount < index) do begin
+    inc(ChildCount);
+    lclAxChild := FLazAxObject.GetNextChildAccessibleObject;
+  end;
+  if Assigned(lclAxChild) and (lclAxChild.Handle <> 0) then begin
+    qtAxObject := TQtAccessibleObject(lclAxChild.Handle);
+    child := QAccessible_queryAccessibleInterface(qtAxObject.FAxWidget);
+  end;
+end;
+
+procedure TQtAccessibleObject.childCountOverride(count: PInteger) cdecl;
+var
+  childCount: Integer;
+  lclAxChild: TLazAccessibleObject;
+begin
+  childCount := 0;
+  lclAxChild := FLazAxObject.GetFirstChildAccessibleObject;
+  while Assigned(lclAxChild) do begin
+    inc(ChildCount);
+    lclAxChild := FLazAxObject.GetNextChildAccessibleObject;
+  end;
+  count^ := childCount;
+end;
+
+procedure TQtAccessibleObject.roleOverride(out role: QAccessibleRole) cdecl;
+begin
+  if (FLazAxObject <> nil) then
+    role := LazRoleToQtRole(FLazAxObject.AccessibleRole)
+  else
+    role := QAccessibleNoRole;
+end;
+
+procedure TQtAccessibleObject.textOverride(text: QAccessibleText; retval: PWideString) cdecl;
+begin
+  case text of
+  QAccessibleName:
+      retval^ := GetUtf8String(CreateAccessibleName(FLazAxObject));
+  QAccessibleDescription:
+    retval^ := GetUtf8String(FLazAxObject.AccessibleDescription);
+  QAccessibleValue:
+    retval^ := GetUtf8String(FLazAxObject.AccessibleValue);
+  else
+   retval^ := GetUtf8String('');
+  end;
+end;
+
+function TQtAccessibleObject.isVisible: Boolean;
+begin
+  Result := FLazAxObject.OwnerControl.Visible;
+end;
+
+constructor TQtAccessibleTree.Create(ALazAxObject: TLazAccessibleObject; AWidget: QWidgetH);
+var
+  AxInterface: QLCLAccessibleWidgetH;
+begin
+  inherited Create(ALazAxObject, AWidget);
+
+  AxInterface := QLCLAccessibleWidgetH(QAccessible_queryAccessibleInterface(FAxWidget));
+  QLCLAccessibleWidget_override_child(AxInterface, @childOverride);
+  QLCLAccessibleWidget_override_childCount(AxInterface, @childCountOverride);
+end;
+
+procedure TQtAccessibleTree.childOverride(index: integer; out child:  QAccessibleInterfaceH); cdecl;
+var
+  ChildIndex: Integer;
+  LCLAxChild: TLazAccessibleObject;
+  RowAxObject: TQtAccessibleTreeRow;
+begin
+  child := QAccessibleInterfaceH(0);
+  ChildIndex := 0;
+  for LCLAxChild in FLazAxObject do begin
+    RowAxObject := TQtAccessibleTreeRow(LCLAxChild.Handle);
+    if RowAxObject.isVisible then begin
+      if ChildIndex = index then begin
+        child := QAccessible_queryAccessibleInterface(RowAxObject.FAxWidget);
+        Exit;
+      end;
+      Inc(ChildIndex);
+    end;
+  end;
+end;
+
+procedure TQtAccessibleTree.childCountOverride(count: PInteger); cdecl;
+var
+  Tree: TCustomTreeView;
+  TreeNode: TTreeNode;
+  ChildCount: Integer;
+begin
+  Tree := TCustomTreeView(FLazAxObject.OwnerControl);
+  ChildCount := 0;
+  TreeNode := Tree.Items.GetFirstVisibleNode;
+  while (TreeNode <> nil) do begin
+    Inc(ChildCount);
+    TreeNode := TreeNode.GetNextVisible;
+  end;
+  count^ := ChildCount;
+end;
+
+
+constructor TQtAccessibleTreeRow.Create(ALazAxObject: TLazAccessibleObject; AWidget: QWidgetH);
+var
+  AxInterface: QLCLAccessibleWidgetH;
+begin
+  inherited Create(ALazAxObject, AWidget);
+
+  AxInterface := QLCLAccessibleWidgetH(QAccessible_queryAccessibleInterface(FAxWidget));
+  QLCLAccessibleWidget_override_actionNames(AxInterface, @actionNamesOverride);
+  QLCLAccessibleWidget_override_child(AxInterface, nil);
+  QLCLAccessibleWidget_override_childAt(AxInterface, nil);
+  QLCLAccessibleWidget_override_childCount(AxInterface, @childCountOverride);
+  QLCLAccessibleWidget_override_doAction(AxInterface, @doActionOverride);
+  QLCLAccessibleWidget_override_parent(AxInterface, @parentOVerride);
+  QLCLAccessibleWidget_override_rect(AxInterface, @rectOverride);
+  QLCLAccessibleWidget_override_role(AxInterface, @roleOverride);
+  QLCLAccessibleWidget_override_text(AxInterface, @textOverride);
+end;
+
+procedure TQtAccessibleTreeRow.actionNamesOverride(names: PWideString)cdecl;
+begin
+  names^ := GetUtf8String(axActionNamePress); // Takes a comma separated string of actions
+end;
+
+procedure TQtAccessibleTreeRow.doActionOverride(name: PWideString)cdecl;
+var s: string;
+  TreeNode: TTreeNode;
+begin
+  s := UTF16ToUTF8(name^);
+  if s = axActionNamePress then begin
+    TreeNode := TTreeNode(FLazAxObject.DataObject);
+    TreeNode.TreeView.Select(TreeNode);
+  end;
+end;
+
+procedure TQtAccessibleTreeRow.childCountOverride(count: PInteger)cdecl;
+begin
+  count^ := 0;
+end;
+
+procedure TQtAccessibleTreeRow.parentOverride(out parent: QAccessibleInterfaceH)cdecl;
+begin
+  parent := QLCLAccessibleWidgetH(QAccessible_queryAccessibleInterface(
+     TQtAccessibleObject(FLazAxObject.Parent.Handle).FAxWidget));
+end;
+
+procedure TQtAccessibleTreeRow.rectOverride(left, top, width, height: PInteger)cdecl;
+var
+  TreeNode: TTreeNode;
+  NodeR: TRect;
+  R: TRect;
+begin
+  TreeNode := TTreeNode(FLazAxObject.DataObject);
+  NodeR := TreeNode.DisplayRect(False);
+  R := LCLControlRectToQtScreenRect(NodeR, TreeNode.TreeView);
+  left^ := R.Left;
+  top^ := R.Top;
+  width^ := R.Width;
+  height^ := R.Height;
+end;
+
+procedure TQtAccessibleTreeRow.roleOverride(out role: QAccessibleRole)cdecl;
+begin
+  role := QAccessibleTreeItem;
+end;
+
+procedure TQtAccessibleTreeRow.textOverride(text: QAccessibleText; retval: PWideString) cdecl;
+var
+  TreeNode: TTreeNode;
+begin
+  TreeNode := TTreeNode(FLazAxObject.DataObject);
+  case text of
+    QAccessibleName, QAccessibleDescription, QAccessibleValue:
+      retval^ := GetUtf8String(TreeNode.Text);
+    else
+     retval^ := GetUtf8String('');
+    end;
+end;
+
+function TQtAccessibleTreeRow.isVisible:Boolean;
+var
+  TreeNode: TTreeNode;
+begin
+  TreeNode := TTreeNode(FLazAxObject.DataObject);
+  Result := TreeNode.IsVisible;
+end;
+{$ENDIF}
+
+
+
 
 end.

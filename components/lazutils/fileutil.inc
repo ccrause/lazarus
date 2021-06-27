@@ -56,9 +56,9 @@ begin
     exit;
   end;
   if ResolveLinks then begin
-    SetLength(File1,Len1);
+    SetLength(File1{%H-},Len1);
     System.Move(Filename1^,File1[1],Len1);
-    SetLength(File2,Len2);
+    SetLength(File2{%H-},Len2);
     System.Move(Filename2^,File2[1],Len2);
     if ResolveLinks then
       Result:=ComparePhysicalFilenames(File1,File2)
@@ -324,17 +324,17 @@ begin
   Searcher:=TCopyDirTree.Create;
   try
     // Destination directories are always created. User setting has no effect!
-    Flags:=Flags+[cffCreateDestDirectory];
-    Searcher.FFlags:=Flags;
+    Searcher.FFlags:=Flags+[cffCreateDestDirectory];
     Searcher.FCopyFailedCount:=0;
     Searcher.FSourceDir:=TrimFilename(SetDirSeparators(SourceDir));
     Searcher.FTargetDir:=TrimFilename(SetDirSeparators(TargetDir));
 
     // Don't even try to copy to a subdirectory of SourceDir.
+    //append a pathedelim, otherwise CopyDirTree('/home/user/foo','/home/user/foobar') will fail at this point. Issue #0038644
     {$ifdef CaseInsensitiveFilenames}
-      if AnsiStartsText(Searcher.FSourceDir, Searcher.FTargetDir) then Exit;
+      if AnsiStartsText(AppendPathDelim(Searcher.FSourceDir), AppendPathDelim(Searcher.FTargetDir)) then Exit;
     {$ELSE}
-      if AnsiStartsStr(Searcher.FSourceDir, Searcher.FTargetDir) then Exit;
+      if AnsiStartsStr(AppendPathDelim(Searcher.FSourceDir), AppendPathDelim(Searcher.FTargetDir)) then Exit;
     {$ENDIF}
     Searcher.Search(SourceDir);
     Result:=Searcher.FCopyFailedCount=0;

@@ -1675,6 +1675,10 @@ msgstr "Dosyalar"
 msgid "Grid"
 msgstr "Izgara"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1726,6 +1730,10 @@ msgstr "Ekstra satır aralığı"
 #: lazarusidestrconsts.dlgextsymb
 msgid "Use external debug symbols file"
 msgstr "Harici hata ayıklama sembolleri dosyasını kullan"
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
+msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
 msgid "File extensions"
@@ -2419,6 +2427,10 @@ msgstr "Son (yani kaynağın sonunda)"
 msgid "Lazarus directory (default for all projects)"
 msgstr "Lazarus dizini (tüm projeler için varsayılan)"
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 msgid "Guide lines Left,Top"
 msgstr "Kılavuz Çizgileri Sol, Üst"
@@ -3026,10 +3038,6 @@ msgstr "İmleçle birlikte çok satırlı hareket"
 msgid "Enable multi-caret for column selection"
 msgstr "Sütun seçimi için çoklu dizge etkinleştir"
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr "Aynı anda birden çok Lazarus çalıştırma"
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr "her zaman yeni bir Lazarus da dosyayı aç"
@@ -3082,6 +3090,10 @@ msgstr "Adlandırma"
 msgid "New desktop ..."
 msgstr "Yeni masaüstü ..."
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 msgid "No automatic renaming"
 msgstr "Otomatik yeniden adlandırma yok"
@@ -3094,6 +3106,10 @@ msgstr "Eklenebilecek birim yok."
 msgid "No Highlight"
 msgstr "Vurgulama Yok"
 
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnotebooktabpos
 msgid "Source notebook tabs position"
 msgstr "Kaynak sekmeleri konumu"
@@ -3105,6 +3121,10 @@ msgstr "Satırın sonuna bölme"
 #: lazarusidestrconsts.dlgnotsplitlinefront
 msgid "Do not split line in front of"
 msgstr "Satırın önüne bölme"
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
+msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
 msgctxt "lazarusidestrconsts.dlgobjinsp"
@@ -3388,6 +3408,10 @@ msgstr "Proje Seçenekleri"
 #, object-pascal-format
 msgid "Options for Project: %s"
 msgstr "Proje Seçenekleri: %s"
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
+msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
 msgid "Project Files"
@@ -4903,7 +4927,7 @@ msgstr "Kardeşin üst tarafını alt tarafına tutturun. Tutulan mesafe, bunun 
 msgid "Anchor top side to top side of sibling. Use BorderSpacing to set a distance. BorderSpacing of sibling is ignored."
 msgstr "Üst tarafı kardeşin üst tarafına tutturun. Bir mesafe ayarlamak için BorderSpacing kullanın. Kardeşin bordürünün boşluğu yok sayılır."
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
 msgstr "%s yüklenirken son başlatılışta bir hata oluştu!%sBu projeyi tekrar yükle?"
@@ -5790,7 +5814,7 @@ msgstr "Değişkenler"
 msgid "Wrong indentation"
 msgstr "Yanlış girinti"
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr "%s\"%s:%s\"%s%s öğesinin silinmesi sırasında bir istisna oluştu"
@@ -8331,9 +8355,17 @@ msgstr "İstisna Ekle"
 msgid "Additional search path"
 msgstr "Ek arama yolu"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
 msgstr "Kaynak bulunamadıktan sonra assembler penceresini otomatik olarak kapatın"
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
 msgid "Debugger backend"
@@ -8367,6 +8399,14 @@ msgstr "Hata ayıklayıcıya özgü seçenekler (hata ayıklayıcı türüne ba�
 #: lazarusidestrconsts.lisdebugoptionsfrmduplicateexceptionname
 msgid "Duplicate Exception name"
 msgstr "İstisna adı çoğalt"
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
 msgid "Enter the name of the exception"
@@ -9838,15 +9878,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr "Ölümcül"
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-msgid "Reduce designer painting"
-msgstr "Tasarımcı boyamayı azaltın"
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-msgctxt "lazarusidestrconsts.lisfepaintdesigneritemsonidlehint"
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr "Tasarımcı öğelerini sadece boşta boyayın (yavaş bilgisayarlar için yükü azaltır)"
-
 #: lazarusidestrconsts.lisfile
 msgctxt "lazarusidestrconsts.lisfile"
 msgid "File"
@@ -11171,6 +11202,12 @@ msgstr "Oturumda"
 msgid "&Inspect"
 msgstr "&Denetle"
 
+#: lazarusidestrconsts.lisinspectaddwatch
+#, fuzzy
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr "İzleme ekle"
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format
 msgid "%s: class %s inherits from %s"
@@ -11501,6 +11538,7 @@ msgid "Add Data/WatchPoint"
 msgstr "Veri/İzleme Noktası Ekle"
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr "İzleme ekle"
 
@@ -16174,10 +16212,6 @@ msgstr "Geçersiz Paket Adı"
 #, object-pascal-format
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
 msgstr "%s dosyası yükleniyor, %s%s dosyası %s dosyasından olacak.%s eski paket değiştirildi.%s Eski paketi kaydetsin mi %s?"
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
-msgstr "YeniPaket"
 
 #: lazarusidestrconsts.lispkgmangpackage
 #, object-pascal-format

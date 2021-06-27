@@ -156,6 +156,7 @@ type
     procedure ShowDetails(const AButtonID: Integer);
     procedure OpenPackage(const AButtonID: Integer);
     procedure ResetDependencyNodes;
+    function GetPackageAbsolutePath(APackageName: String): String;
   public
     constructor Create(const AParent: TWinControl; const AImgList: TImageList;
       APopupMenu: TPopupMenu);
@@ -173,6 +174,7 @@ type
     function ResolveDependencies: TModalResult;
     function GetCheckedRepositoryPackages: Integer;
     procedure SetupColors;
+    procedure AutoAdjustLayout(AXProportion, AYProportion: Double);
   published
     property OnChecking: TOnChecking read FOnChecking write FOnChecking;
     property OnChecked: TNotifyEvent read FOnChecked write FOnChecked;
@@ -201,24 +203,24 @@ begin
      Anchors := [akLeft, akTop, akRight];
      Images := AImgList;
      PopupMenu := APopupMenu;
-     DefaultNodeHeight := FVST.Scale96ToForm(25);
-     Indent := FVST.Scale96ToForm(22);
+     DefaultNodeHeight := 25;
+     Indent := 22;
      TabOrder := 1;
      DefaultText := '';
      Header.AutoSizeIndex := 4;
-     Header.Height := FVST.Scale96ToForm(25);
+     Header.Height := 25;
      Colors.DisabledColor := clBlack;
      with Header.Columns.Add do
      begin
        Position := 0;
-       Width := FVST.Scale96ToForm(270);
+       Width := 270;
        Text := rsMainFrm_VSTHeaderColumn_PackageName;
      end;
      with Header.Columns.Add do
      begin
        Position := 1;
        Alignment := taCenter;
-       Width := FVST.Scale96ToForm(90);
+       Width := 90;
        {$IFDEF LCLCarbon}
        Options := Options - [coResizable];
        {$ENDIF}
@@ -228,7 +230,7 @@ begin
      begin
        Position := 2;
        Alignment := taCenter;
-       Width := FVST.Scale96ToForm(110);
+       Width := 110;
        {$IFDEF LCLCarbon}
        Options := Options - [coResizable];
        {$ENDIF}
@@ -239,7 +241,7 @@ begin
      begin
        Position := 3;
        Alignment := taCenter;
-       Width := FVST.Scale96ToForm(110);
+       Width := 110;
        {$IFDEF LCLCarbon}
        Options := Options - [coResizable];
        {$ENDIF}
@@ -248,27 +250,27 @@ begin
      end;
      with Header.Columns.Add do
      begin
-        Position := 4;
-        Width := FVST.Scale96ToForm(280);
-        {$IFDEF LCLCarbon}
-        Options := Options - [coResizable];
-        {$ENDIF}
-        Text := rsMainFrm_VSTHeaderColumn_Data;
+       Position := 4;
+       Width := 280;
+       {$IFDEF LCLCarbon}
+       Options := Options - [coResizable];
+       {$ENDIF}
+       Text := rsMainFrm_VSTHeaderColumn_Data;
       end;
      with Header.Columns.Add do
      begin
-        Position := 5;
-        Alignment := taCenter;
-        Width := FVST.Scale96ToForm(88);
-        Options := Options - [coResizable];
-        Text := rsMainFrm_VSTHeaderColumn_Rating;
-      end;
+       Position := 5;
+       Alignment := taCenter;
+       Width := 80;
+       Options := Options - [coResizable];
+       Text := rsMainFrm_VSTHeaderColumn_Rating;
+     end;
      with Header.Columns.Add do
      begin
-        Position := 6;
-        Alignment := taCenter;
-        Width := FVST.Scale96ToForm(20);
-        Options := Options - [coResizable];
+       Position := 6;
+       Alignment := taCenter;
+       Width := 20;
+       Options := Options - [coResizable];
      end;
      Header.Options := [hoAutoResize, hoColumnResize, hoRestrictDrag, hoShowSortGlyphs, hoVisible, hoShowHint];
      {$IFDEF LCLCarbon}
@@ -313,7 +315,7 @@ begin
    end;
   FShowHintFrm := TShowHintFrm.Create(nil);
   if AImgList <> nil then
-    FStarSize := AImgList.WidthForPPI[FVSt.ImagesWidth, FVST.Font.PixelsPerInch]
+    FStarSize := AImgList.Width
   else
     FStarSize := 0;
 end;
@@ -333,6 +335,9 @@ var
   LazarusPkg: TLazarusPackage;
   UniqueID: Integer;
 begin
+  FHoverNode := nil;
+  FHoverNodeOld := nil;
+  FOldButtonNode := nil;
   FVST.Clear;
   FVST.NodeDataSize := SizeOf(TData);
   UniqueID := 0;
@@ -511,6 +516,7 @@ begin
        GrandChildData^.OrphanedPackage := SerializablePackages.Items[I].OrphanedPackage;
        GrandChildData^.DataType := 21;
        Data^.OrphanedPackage := SerializablePackages.Items[I].OrphanedPackage;
+       FVST.IsVisible[GrandChildNode] := False;
     end;
     FVST.SortTree(0, laz.VirtualTrees.sdAscending);
     ExpandEx;
@@ -606,16 +612,11 @@ end;
 
 procedure TVisualTree.DoOpenPackage(const APackageName: String);
 var
-  LazarusPkg: TLazarusPackage;
+  PackageAbsolutePath: String;
 begin
-  LazarusPkg := SerializablePackages.FindLazarusPackage(APackageName);
-  if (LazarusPkg <> nil) and (FileExists(LazarusPkg.PackageAbsolutePath)) then
-  begin
-    if PackageEditingInterface.DoOpenPackageFile(LazarusPkg.PackageAbsolutePath, [], True) <> mrOk then
+  PackageAbsolutePath  := GetPackageAbsolutePath(APackageName);
+  if PackageEditingInterface.DoOpenPackageFile(PackageAbsolutePath, [], True) <> mrOk then
       MessageDlgEx(rsMainFrm_VSTText_Open_Error, mtError, [mbOk], TForm(FVST.Parent.Parent));
-  end
-  else
-    MessageDlgEx(rsMainFrm_VSTText_Open_Notfound, mtError, [mbOk], TForm(FVST.Parent.Parent));
 end;
 
 procedure TVisualTree.OpenPackage(const AButtonID: Integer);
@@ -746,7 +747,7 @@ var
     I: Integer;
   begin
     for I := 0 to ACnt - 1 do
-      imgres.Draw(ACanvas, AX + I*AWidth + 5, AY, AStartIndex + ATyp);
+      imgres.Draw(ACanvas, AX + I*AWidth, AY, AStartIndex + ATyp);
   end;
 
 var
@@ -1132,7 +1133,11 @@ begin
         if (FVST.CheckState[Node] = csCheckedNormal) or (FVST.CheckState[Node] = csMixedNormal) then
         begin
           if (FVST.IsVisible[Node]) or (Data^.IsDependencyNode) then
-            MetaPkg.Checked := True
+          begin
+            MetaPkg.Checked := True;
+            if Data^.IsDependencyNode then
+              MetaPkg.IsDependencyPackage := True;
+          end
           else
             MetaPkg.Checked := False;
         end
@@ -1148,7 +1153,11 @@ begin
         if FVST.CheckState[Node] = csCheckedNormal then
         begin
           if (FVST.IsVisible[Node]) or (Data^.IsDependencyNode) then
-            LazarusPkg.Checked := True
+          begin
+            LazarusPkg.Checked := True;
+            if Data^.IsDependencyNode then
+              LazarusPkg.IsDependencyPackage:= True
+          end
           else
             LazarusPkg.Checked := False;
         end
@@ -1438,6 +1447,11 @@ begin
     FVST.Color := clDefault;
     FVST.TreeOptions.PaintOptions := FVST.TreeOptions.PaintOptions - [toAlwaysHideSelection];
   end;
+end;
+
+procedure TVisualTree.AutoAdjustLayout(AXProportion, AYProportion: Double);
+begin
+  FStarSize := round(FStarSize * AXProportion);
 end;
 
 procedure TVisualTree.VSTCompareNodes(Sender: TBaseVirtualTree; Node1,
@@ -1809,6 +1823,16 @@ begin
   end;
 end;
 
+function TVisualTree.GetPackageAbsolutePath(APackageName: String): String;
+var
+  LazarusPkg: TLazarusPackage;
+begin
+  Result := '';
+  LazarusPkg := SerializablePackages.FindLazarusPackage(APackageName);
+  if (LazarusPkg <> nil) and (FileExists(LazarusPkg.PackageAbsolutePath)) then
+    Result := LazarusPkg.PackageAbsolutePath;
+end;
+
 procedure TVisualTree.VSTMouseMove(Sender: TObject; Shift: TShiftState; X, Y: Integer);
 var
   Data: PData;
@@ -1880,7 +1904,7 @@ begin
 
     if (Data^.Button = nil) and
        (
-         ((Data^.DataType = 2) and (Data^.PackageState in [psExtracted, psInstalled])) or
+         ((Data^.DataType = 2) and (Data^.PackageState in [psExtracted, psInstalled]) and (GetPackageAbsolutePath(Data^.LazarusPackageName) <> '')) or
          ((Data^.DataType = 3) and (Trim(Data^.Description) <> '')) or
          ((Data^.DataType = 9) and (Trim(Data^.License) <> '')) or
          ((Data^.DataType = 19) and (Trim(Data^.CommunityDescription) <> '')) or
@@ -1955,7 +1979,7 @@ begin
              if Data^.DataType = 1 then
              begin
                R := FVST.GetDisplayRect(Node, DownColumn, False);
-               Data^.Rating := Trunc((FHoverP.X - R.Left - 1)/16) + 1;
+               Data^.Rating := Trunc((FHoverP.X - R.Left - 1)/FStarSize) + 1;
                if Data^.Rating > 5 then
                  Data^.Rating := 5;
                MetaPkg := SerializablePackages.Items[Data^.PID];

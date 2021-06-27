@@ -714,6 +714,7 @@ begin
   Src := GetCommonSourceFor(AppDir + 'ExceptTestPrg.pas');
   TestCompile(Src, ExeName);
 
+  FGotExceptCount := 0;
   dbg := StartGDB(AppDir, ExeName);
   try
     dbg.Exceptions.Add('MyExceptionIgnore').Enabled := False;
@@ -995,8 +996,8 @@ end;
 
 initialization
   RegisterDbgTest(TTestExceptionAddrDirect);
-  RegisterDbgTest(TTestExceptionAddrInDirect);
-  RegisterDbgTest(TTestExceptionForceName);
+  RegisterDbgTest(TTestExceptionAddrInDirect, [stDwarfSet, stStabs]);
+  RegisterDbgTest(TTestExceptionForceName, [stDwarfSet, stStabs]);
 
   ControlTestExceptionOne                  := TestControlRegisterTest('TTestExceptionOne');
   ControlTestExceptionOneException         := TestControlRegisterTest('Exception', ControlTestExceptionOne);

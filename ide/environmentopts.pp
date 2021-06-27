@@ -543,6 +543,8 @@ type
     XML_PATH_DEBUGGER_CONF_OLD = 'EnvironmentOptions/Debugger/Class%s/%s/';
   private
     FCurrentDebuggerPropertiesConfig: TDebuggerPropertiesConfig;
+    FDebuggerAllowFunctionCalls: boolean;
+    FDebuggerAutoSetInstanceFromClass: boolean;
     FDebuggerShowExitCodeMessage: boolean;
     FHasActiveDebuggerEntry: Boolean;
     fRegisteredSubConfig: TObjectList;
@@ -575,7 +577,6 @@ type
     // designer
     FCreateComponentFocusNameProperty: boolean;
     FSwitchToFavoritesOITab: boolean;
-    FDesignerPaintLazy: boolean;
     FShowBorderSpacing: boolean;
     FShowGrid: boolean;
     FSnapToGrid: boolean;
@@ -592,6 +593,7 @@ type
     FRightClickSelects: boolean;
     FGrabberColor: TColor;
     FMarkerColor: TColor;
+    FNonFormBackgroundColor: TColor;
     FRubberbandSelectionColor: TColor;
     FRubberbandCreationColor: TColor;
     FRubberbandSelectsGrandChilds: boolean;
@@ -681,6 +683,7 @@ type
     FRecentPackageFiles: TStringList;
     FMaxRecentPackageFiles: integer;
     FOpenLastProjectAtStart: boolean;
+    FNewProjectTemplateAtStart: string;
     FMultipleInstances: TIDEMultipleInstancesOption;
     // Prevent repopulating Recent project files menu with example projects if it was already cleared up.
     FAlreadyPopulatedRecentFiles : Boolean;
@@ -851,14 +854,14 @@ type
                                         write FRightClickSelects;
     property GrabberColor: TColor read FGrabberColor write FGrabberColor;
     property MarkerColor: TColor read FMarkerColor write FMarkerColor;
+    property NonFormBackgroundColor: TColor read FNonFormBackgroundColor
+                                            write FNonFormBackgroundColor;
     property RubberbandSelectionColor: TColor read FRubberbandSelectionColor
                                               write FRubberbandSelectionColor;
     property RubberbandCreationColor: TColor read FRubberbandCreationColor
                                              write FRubberbandCreationColor;
     property RubberbandSelectsGrandChilds: boolean read FRubberbandSelectsGrandChilds
                                                   write FRubberbandSelectsGrandChilds;
-    property DesignerPaintLazy: boolean read FDesignerPaintLazy
-                                        write FDesignerPaintLazy;
     property CreateComponentFocusNameProperty: boolean read FCreateComponentFocusNameProperty
                                                       write FCreateComponentFocusNameProperty;
     property SwitchToFavoritesOITab: boolean read FSwitchToFavoritesOITab
@@ -907,6 +910,8 @@ type
     property DebuggerShowExitCodeMessage: boolean read FDebuggerShowExitCodeMessage write FDebuggerShowExitCodeMessage;
     property DebuggerResetAfterRun: boolean read FDebuggerResetAfterRun write FDebuggerResetAfterRun;
     property DebuggerAutoCloseAsm: boolean read FDebuggerAutoCloseAsm write FDebuggerAutoCloseAsm;
+    property DebuggerAutoSetInstanceFromClass: boolean read FDebuggerAutoSetInstanceFromClass write FDebuggerAutoSetInstanceFromClass;
+    property DebuggerAllowFunctionCalls: boolean read FDebuggerAllowFunctionCalls write FDebuggerAllowFunctionCalls;
     property FppkgConfigFile: string read GetFppkgConfigFile write SetFppkgConfigFile;
     property FppkgConfigFileHistory: TStringList read FFppkgConfigFileHistory write FFppkgConfigFileHistory;
     // ShowCompileDialog and AutoCloseCompileDialog are currently not used.
@@ -979,6 +984,8 @@ type
     property LastOpenPackages: TLastOpenPackagesList read FLastOpenPackages;
     property OpenLastProjectAtStart: boolean read FOpenLastProjectAtStart
                                              write FOpenLastProjectAtStart;
+    property NewProjectTemplateAtStart: string read FNewProjectTemplateAtStart
+                                               write FNewProjectTemplateAtStart;
     property MultipleInstances: TIDEMultipleInstancesOption read FMultipleInstances
                                                            write FMultipleInstances;
     property FileDialogFilter: string read FFileDialogFilter write FFileDialogFilter;
@@ -2129,10 +2136,10 @@ begin
   FRightClickSelects:=true;
   FGrabberColor:=clBlack;
   FMarkerColor:=clDkGray;
+  FNonFormBackgroundColor:=clWindow;
   FRubberbandSelectionColor:=clNavy;
   FRubberbandCreationColor:=clMaroon;
   FRubberbandSelectsGrandChilds:=DefaultRubberbandSelectsGrandChilds;
-  FDesignerPaintLazy:=true;
   FCreateComponentFocusNameProperty:=false;
   FSwitchToFavoritesOITab:=false;
   FFormTitleBarChangesObjectInspector:=false;
@@ -2485,6 +2492,8 @@ begin
   DebuggerShowExitCodeMessage:=FXMLCfg.GetValue(Path+'DebuggerOptions/DebuggerShowExitCodeMessage/Value', True);
   DebuggerResetAfterRun :=FXMLCfg.GetValue(Path+'DebuggerOptions/DebuggerResetAfterRun/Value', False);
   FDebuggerAutoCloseAsm :=FXMLCfg.GetValue(Path+'DebuggerOptions/DebuggerAutoCloseAsm/Value', False);
+  FDebuggerAutoSetInstanceFromClass :=FXMLCfg.GetValue(Path+'DebuggerOptions/DebuggerAutoSetInstanceFromClass/Value', False);
+  FDebuggerAllowFunctionCalls :=FXMLCfg.GetValue(Path+'DebuggerOptions/DebuggerAllowFunctionCalls/Value', False);
   FDebuggerEventLogClearOnRun := FXMLCfg.GetValue(Path+'Debugger/EventLogClearOnRun', True);
   FDebuggerEventLogCheckLineLimit := FXMLCfg.GetValue(Path+'Debugger/EventLogCheckLineLimit', False);
   FDebuggerEventLogLineLimit := FXMLCfg.GetValue(Path+'Debugger/EventLogLineLimit', 1000);
@@ -2576,6 +2585,7 @@ begin
     FAutoSaveIntervalInSecs:=FXMLCfg.GetValue(Path+'AutoSave/IntervalInSecs',DefaultAutoSaveIntervalInSecs);
     FLastSavedProjectFile:=FXMLCfg.GetValue(Path+'AutoSave/LastSavedProjectFile','');
     FOpenLastProjectAtStart:=FXMLCfg.GetValue(Path+'AutoSave/OpenLastProjectAtStart',true);
+    FNewProjectTemplateAtStart:=FXMLCfg.GetValue(Path+'NewProjectTemplateAtStart/Value','Application');
     FShowCompileDialog:=FXMLCfg.GetValue(Path+'ShowCompileDialog/Value',false);
     FAutoCloseCompileDialog:=FXMLCfg.GetValue(Path+'AutoCloseCompileDialog/Value',false);
     FAutoSaveActiveDesktop:=FXMLCfg.GetValue(Path+'AutoSave/ActiveDesktop',True);
@@ -2611,12 +2621,12 @@ begin
     FRightClickSelects:=FXMLCfg.GetValue(Path+'FormEditor/RightClickSelects',true);
     FGrabberColor:=FXMLCfg.GetValue(Path+'FormEditor/GrabberColor/Value',FGrabberColor);
     FMarkerColor:=FXMLCfg.GetValue(Path+'FormEditor/MarkerColor/Value',FMarkerColor);
+    FNonFormBackgroundColor:=FXMLCfg.GetValue(Path+'FormEditor/NonFormBackgroundColor/Value',FNonFormBackgroundColor);
     FRubberbandSelectionColor:=FXMLCfg.GetValue(Path+'FormEditor/Rubberband/SelectionColor/Value',
        FRubberbandSelectionColor);
     FRubberbandCreationColor:=FXMLCfg.GetValue(Path+'FormEditor/Rubberband/CreationColor/Value',
        FRubberbandCreationColor);
     FRubberbandSelectsGrandChilds:=FXMLCfg.GetValue(Path+'FormEditor/Rubberband/SelectsGrandChilds/Value',DefaultRubberbandSelectsGrandChilds);
-    FDesignerPaintLazy:=FXMLCfg.GetValue(Path+'FormEditor/DesignerPaint/Lazy/Value',true);
     FCreateComponentFocusNameProperty:=FXMLCfg.GetValue(
        Path+'FormEditor/CreateComponentFocusNameProperty/Value',false);
     FSwitchToFavoritesOITab:=FXMLCfg.GetValue(Path+'FormEditor/SwitchToFavoritesOITab/Value',false);
@@ -2880,6 +2890,10 @@ begin
       FDebuggerResetAfterRun, False);
   FXMLCfg.SetDeleteValue(Path+'DebuggerOptions/DebuggerAutoCloseAsm/Value',
       FDebuggerAutoCloseAsm, False);
+  FXMLCfg.SetDeleteValue(Path+'DebuggerOptions/DebuggerAutoSetInstanceFromClass/Value',
+      FDebuggerAutoSetInstanceFromClass, False);
+  FXMLCfg.SetDeleteValue(Path+'DebuggerOptions/DebuggerAllowFunctionCalls/Value',
+      FDebuggerAllowFunctionCalls, False);
   for i := 0 to FDebuggerFileHistory.Count -1 do
     if FDebuggerFileHistory[i] = '' then
       SaveRecentList(FXMLCfg,TStrings(FDebuggerFileHistory.Objects[i]),Path+'DebuggerFilename/History/')
@@ -2951,6 +2965,8 @@ begin
     FXMLCfg.SetDeleteValue(Path+'AutoSave/IntervalInSecs',FAutoSaveIntervalInSecs,DefaultAutoSaveIntervalInSecs);
     FXMLCfg.SetDeleteValue(Path+'AutoSave/LastSavedProjectFile',FLastSavedProjectFile,'');
     FXMLCfg.SetDeleteValue(Path+'AutoSave/OpenLastProjectAtStart',FOpenLastProjectAtStart,true);
+
+    FXMLCfg.SetDeleteValue(Path+'NewProjectTemplateAtStart/Value',FNewProjectTemplateAtStart,'Application');
     FXMLCfg.SetDeleteValue(Path+'AutoSave/ActiveDesktop', FAutoSaveActiveDesktop, True);
     FXMLCfg.DeletePath(Path+'AutoSave/LastOpenPackages/');
     if FOpenLastProjectAtStart then
@@ -2975,13 +2991,13 @@ begin
     FXMLCfg.SetDeleteValue(Path+'FormEditor/RightClickSelects',FRightClickSelects,true);
     FXMLCfg.SetDeleteValue(Path+'FormEditor/GrabberColor/Value',FGrabberColor,clBlack);
     FXMLCfg.SetDeleteValue(Path+'FormEditor/MarkerColor/Value',FMarkerColor,clDkGray);
+    FXMLCfg.SetDeleteValue(Path+'FormEditor/NonFormBackgroundColor/Value',FNonFormBackgroundColor,clWindow);
     FXMLCfg.SetDeleteValue(Path+'FormEditor/Rubberband/SelectionColor/Value',
        FRubberbandSelectionColor,clBlack);
     FXMLCfg.SetDeleteValue(Path+'FormEditor/Rubberband/CreationColor/Value',
        FRubberbandCreationColor,clRed);
     FXMLCfg.SetDeleteValue(Path+'FormEditor/Rubberband/SelectsGrandChilds/Value',
        FRubberbandSelectsGrandChilds,DefaultRubberbandSelectsGrandChilds);
-    FXMLCfg.SetDeleteValue(Path+'FormEditor/DesignerPaint/Lazy/Value',FDesignerPaintLazy,true);
     FXMLCfg.SetDeleteValue(Path+'FormEditor/CreateComponentFocusNameProperty/Value',
        FCreateComponentFocusNameProperty,false);
     FXMLCfg.SetDeleteValue(Path+'FormEditor/SwitchToFavoritesOITab/Value',FSwitchToFavoritesOITab,false);

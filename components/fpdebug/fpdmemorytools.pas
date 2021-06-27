@@ -26,7 +26,7 @@ interface
 
 uses
   Classes, SysUtils, math, DbgIntfBaseTypes, FpErrorMessages, LazClasses,
-  Laz_AVL_Tree, LazLoggerBase;
+  Laz_AVL_Tree, {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif};
 
 const
   MINIMUM_MEMREAD_LIMIT = 1024;
@@ -146,6 +146,8 @@ type
     //                         AnOpts: TFpDbgMemReadOptions): Boolean; inline;
     function ReadSet        (const ALocation: TFpDbgMemLocation; ASize: TFpDbgValueSize;
                              out AValue: TBytes): Boolean; inline;
+    function WriteSet        (const ALocation: TFpDbgMemLocation; ASize: TFpDbgValueSize;
+                             const AValue: TBytes): Boolean; inline;
     //function ReadSet        (const ALocation: TFpDbgMemLocation; ASize: TFpDbgValueSize;
     //                         out AValue: TBytes;
     //                         AnOpts: TFpDbgMemReadOptions): Boolean; inline;
@@ -168,6 +170,7 @@ type
     // inherited Memreaders should implement partial size ReadMemory, and forward it to the TDbgProcess class
     function ReadMemory(AnAddress: TDbgPtr; ASize: Cardinal; ADest: Pointer; out ABytesRead: Cardinal): Boolean; virtual; overload;
     function ReadMemoryEx(AnAddress, AnAddressSpace: TDbgPtr; ASize: Cardinal; ADest: Pointer): Boolean; virtual; abstract;
+    function WriteMemory(AnAddress: TDbgPtr; ASize: Cardinal; ASource: Pointer): Boolean; virtual; abstract; overload;
     // ReadRegister may need TargetMemConvertor
     // Register with reduced size are treated as unsigned
     // TODO: ReadRegister should only take THREAD-ID, not context
@@ -427,6 +430,8 @@ type
     destructor Destroy; override;
     procedure ClearLastError;
 
+    function RegisterSize(ARegNum: Cardinal): Integer; // This is not context dependent
+
     function SetLength(var ADest: TByteDynArray; ALength: Int64): Boolean; overload;
     function SetLength(var ADest: RawByteString; ALength: Int64): Boolean; overload;
     function SetLength(var ADest: AnsiString; ALength: Int64): Boolean; overload;
@@ -458,8 +463,10 @@ function IsValidLoc(const ALocation: TFpDbgMemLocation): Boolean; inline;     //
 function IsReadableLoc(const ALocation: TFpDbgMemLocation): Boolean; inline;  // Valid and not Nil // can be const or reg
 function IsReadableMem(const ALocation: TFpDbgMemLocation): Boolean; inline;  // Valid and target or sel <> nil
 function IsNilLoc(const ALocation: TFpDbgMemLocation): Boolean; inline;    // Valid AND NIL // Does not check mlfTargetRegister
+// TODO: registers should be targed.... // May have to rename some of those
 function IsTargetNil(const ALocation: TFpDbgMemLocation): Boolean; inline;    // valid targed = nil
 function IsTargetNotNil(const ALocation: TFpDbgMemLocation): Boolean; inline; // valid targed <> nil
+function IsTargetOrRegNotNil(const ALocation: TFpDbgMemLocation): Boolean; inline; // valid targed <> nil
 
 function ZeroSize: TFpDbgValueSize; inline;
 function SizeVal(const ASize: Int64): TFpDbgValueSize; inline;
@@ -615,6 +622,12 @@ end;
 function IsTargetNotNil(const ALocation: TFpDbgMemLocation): Boolean;
 begin
   Result := (ALocation.MType = mlfTargetMem) and (ALocation.Address <> 0);
+end;
+
+function IsTargetOrRegNotNil(const ALocation: TFpDbgMemLocation): Boolean;
+begin
+  Result := ((ALocation.MType = mlfTargetMem) and (ALocation.Address <> 0)) or
+            (ALocation.MType = mlfTargetRegister);
 end;
 
 function ZeroSize: TFpDbgValueSize;
@@ -963,6 +976,12 @@ begin
   Result := ASize > 0;
   if Result then
     Result := MemManager.ReadMemory(rdtSet, ALocation, ASize, @AValue[0], Length(AValue), Self);
+end;
+
+function TFpDbgLocationContext.WriteSet(const ALocation: TFpDbgMemLocation;
+  ASize: TFpDbgValueSize; const AValue: TBytes): Boolean;
+begin
+  Result := MemManager.WriteMemory(rdtSet, ALocation, ASize, @AValue[0], Length(AValue), Self);
 end;
 
 function TFpDbgLocationContext.ReadFloat(const ALocation: TFpDbgMemLocation;
@@ -1679,6 +1698,12 @@ begin
 
         Result := True;
       end;
+    mlfTargetMem:
+      begin
+        if (BitOffset = 0) and (ADestSize.BitSize = 0) and (ADestSize.Size > 0) then begin
+          FMemReader.WriteMemory(LocToAddr(ADestLocation), SizeToFullBytes(ADestSize), ASource);
+        end;
+      end;
   end;
 
   if (not Result) and (not IsError(FLastError)) then
@@ -1724,6 +1749,11 @@ end;
 procedure TFpDbgMemManager.ClearLastError;
 begin
   FLastError := NoError;
+end;
+
+function TFpDbgMemManager.RegisterSize(ARegNum: Cardinal): Integer;
+begin
+  Result := FMemReader.RegisterSize(ARegNum);
 end;
 
 function TFpDbgMemManager.ReadMemoryEx(

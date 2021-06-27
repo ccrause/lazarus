@@ -8,11 +8,11 @@
     -->
     <module name="ObjectLists">
       <short>
-        Defines classes used to associate objects/pointers with objects/pointers
-      </short>
+        Defines classes used to associate objects/pointers with objects/pointers.
+        </short>
       <descr>
         <p>
-          Defines classes used to associate objects/pointers with objects/pointers. Converted to use generics by Juha. Item and Object types can now be defined.
+          <file>objectlists.pas</file> defines classes used to associate objects/pointers with objects/pointers. Converted to use generics by Juha. Item and Object types can now be defined.
         </p>
       </descr>
 
@@ -22,29 +22,33 @@
       <element name="SysUtils"/>
 
       <element name="T2Pointer">
-        <short></short>
+        <short>Record type with pointers to members in the association.</short>
         <descr>
-          T2Pointer is a record type used to maintain an association between the pointers to the members in the record.
+          <p>
+            <var>T2Pointer</var> is a record type used to maintain an association between the pointers to the members in the record.
+          </p>
         </descr>
         <seealso></seealso>
       </element>
 
       <element name="T2Pointer.Item">
-        <short>Pointer to the item for the association</short>
+        <short>Pointer to the item for the association.</short>
         <descr></descr>
         <seealso></seealso>
       </element>
 
       <element name="T2Pointer.Associated">
-        <short>Pointer to the associated item in the record</short>
+        <short>Pointer to the associated item in the record.</short>
         <descr></descr>
         <seealso></seealso>
       </element>
 
       <element name="P2Pointer">
-        <short>Pointer to the T2Pointer record type</short>
+        <short>Pointer to the T2Pointer record type.</short>
         <descr>
-          Used to implement the list of item and object associations in TObjectArray.
+          <p>
+            Used to implement the list of item / object associations in <var>TObjectArray</var>.
+          </p>
         </descr>
         <seealso>
           <link id="TObjectArray.Items"/>
@@ -54,7 +58,7 @@
 
       <element name="TObjectArray">
         <short>
-          Implement an array of items with their associated objects
+          Implements an array of items with their associated objects.
         </short>
         <descr>
           <p>
@@ -72,7 +76,7 @@
       <element name="TObjectArray.FList"/>
 
       <element name="TObjectArray.Get">
-        <short>Gets the value for the Items property</short>
+        <short>Gets the value for the Items property.</short>
         <descr/>
         <seealso>
           <link id="TObjectArray.Items"/>
@@ -80,28 +84,28 @@
         </seealso>
       </element>
       <element name="TObjectArray.Get.Result">
-        <short>TItem value for the property</short>
+        <short>TItem value for the property.</short>
       </element>
       <element name="TObjectArray.Get.Index">
-        <short>Ordinal position for the requested item</short>
+        <short>Ordinal position for the requested item.</short>
       </element>
 
       <element name="TObjectArray.Put">
-        <short>Sets the value for the Items property</short>
+        <short>Sets the value for the Items property.</short>
         <descr/>
         <seealso>
           <link id="TObjectArray.Items"/>
         </seealso>
       </element>
       <element name="TObjectArray.Put.Index">
-        <short>Ordinal position for the updated item</short>
+        <short>Ordinal position for the updated item.</short>
       </element>
       <element name="TObjectArray.Put.AValue">
-        <short>New TItem value for the property</short>
+        <short>New TItem value for the property.</short>
       </element>
 
       <element name="TObjectArray.GetObject">
-        <short>Gets the value for the Objects property</short>
+        <short>Gets the value for the Objects property.</short>
         <descr/>
         <seealso>
           <link id="TObjectArray.Objects"/>
@@ -109,14 +113,14 @@
         </seealso>
       </element>
       <element name="TObjectArray.GetObject.Result">
-        <short>TObj value for the property</short>
+        <short>TObj value for the property.</short>
       </element>
       <element name="TObjectArray.GetObject.Index">
-        <short>Ordinal position for the requested object</short>
+        <short>Ordinal position for the requested object.</short>
       </element>
 
       <element name="TObjectArray.PutObject">
-        <short>Sets the value for the Objects property</short>
+        <short>Sets the value for the Objects property.</short>
         <descr/>
         <seealso>
           <link id="TObjectArray.Objects"/>
@@ -124,14 +128,14 @@
         </seealso>
       </element>
       <element name="TObjectArray.PutObject.Index">
-        <short>Ordinal position for the updated object</short>
+        <short>Ordinal position for the updated object.</short>
       </element>
       <element name="TObjectArray.PutObject.AValue">
-        <short>New TObj value for the property</short>
+        <short>New TObj value for the property.</short>
       </element>
 
       <element name="TObjectArray.SetCapacity">
-        <short>Sets the value for the Capacity property</short>
+        <short>Sets the value for the Capacity property.</short>
         <descr>
           <p>
             <var>SetCapacity</var> calls <var>ReallocMem</var> to ensure that <var>List</var> contains enough memory for the number of <var>T2Pointer</var> instances specified in <var>AValue</var>. The <var>Count</var> property is also updated in the method (when needed) to reflect the new value for the property.
@@ -143,11 +147,11 @@
         </seealso>
       </element>
       <element name="TObjectArray.SetCapacity.AValue">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TObjectArray.SetCount">
-        <short>Sets the value for the Count property</short>
+        <short>Sets the value for the Count property.</short>
         <descr>
           <p>
             <var>SetCount</var> calls <var>SetCapacity</var> when the new value for the property is larger than the existing value in <var>Capacity</var>.
@@ -160,12 +164,12 @@
         </seealso>
       </element>
       <element name="TObjectArray.SetCount.AValue">
-        <short>New value for the property</short>
+        <short>New value for the property.</short>
       </element>
 
       <element name="TObjectArray.Grow">
         <short>
-          Increases the storage Capacity for the class instance
+          Increases the storage Capacity for the class instance.
         </short>
         <descr>
           <p>
@@ -187,7 +191,7 @@
 
       <element name="TObjectArray.Shrink">
         <short>
-          Decreases the Capacity and allocated storage for the class instance
+          Decreases the Capacity and allocated storage for the class instance.
         </short>
         <descr>
           <p>
@@ -203,7 +207,7 @@
       </element>
 
       <element name="TObjectArray.Add">
-        <short>Adds the specified item</short>
+        <short>Adds the specified item.</short>
         <descr>
           <p>
             <var>Add</var> is an <var>Integer</var> function used to add the item specified in <var>Item</var> to the storage for the class instance. Add calls the <var>AddObject</var> method to store the value in Item. The associated object is unassigned (<b>Nil)</b> in the method. Use <var>AddObject</var> to store an Item and its associated object.
@@ -219,15 +223,15 @@
         </seealso>
       </element>
       <element name="TObjectArray.Add.Result">
-        <short>Ordinal position in storage when the item was added</short>
+        <short>Ordinal position in storage when the item was added.</short>
       </element>
       <element name="TObjectArray.Add.Item">
-        <short>Item added in the method</short>
+        <short>Item added in the method.</short>
       </element>
 
       <element name="TObjectArray.AddObject">
         <short>
-          Adds the specified item and its associated object to the storage in the class instance
+          Adds the specified item and its associated object to the storage in the class instance.
         </short>
         <descr>
           <p>
@@ -261,19 +265,19 @@
       </element>
       <element name="TObjectArray.AddObject.Result">
         <short>
-          Ordinal position where the association for the item and the object was stored
+          Ordinal position where the association for the item and the object was stored.
         </short>
       </element>
       <element name="TObjectArray.AddObject.Item">
-        <short>Item stored in the association</short>
+        <short>Item stored in the association.</short>
       </element>
       <element name="TObjectArray.AddObject.Associated">
-        <short>Object stored in the association</short>
+        <short>Object stored in the association.</short>
       </element>
 
       <element name="TObjectArray.Clear">
         <short>
-          Removes all item/object associations stored in the List
+          Removes all item/object associations stored in the List.
         </short>
         <descr>
           <p>
@@ -294,7 +298,7 @@
 
       <element name="TObjectArray.Delete">
         <short>
-          Deletes an item/object association stored at the specified position in the List
+          Deletes an item/object association stored at the specified position in the List.
         </short>
         <descr>
           <p>
@@ -316,12 +320,12 @@
         </seealso>
       </element>
       <element name="TObjectArray.Delete.Index">
-        <short>Ordinal position in List for the association deleted in the method</short>
+        <short>Ordinal position in List for the association deleted in the method.</short>
       </element>
 
       <element name="TObjectArray.Exchange">
         <short>
-          Swaps the item/object associations at the specified positions in List
+          Swaps the item/object associations at the specified positions in List.
         </short>
         <descr>
           <p>
@@ -339,18 +343,18 @@
       </element>
       <element name="TObjectArray.Exchange.Index1">
         <short>
-          Ordinal position for the first item/object association
+          Ordinal position for the first item/object association.
         </short>
       </element>
       <element name="TObjectArray.Exchange.Index2">
         <short>
-          Ordinal position for the second item/object association
+          Ordinal position for the second item/object association.
         </short>
       </element>
 
       <element name="TObjectArray.First">
         <short>
-          Gets the first TItem class instance in the List, or Nil when empty
+          Gets the first TItem class instance in the List, or Nil when empty.
         </short>
         <descr>
           <p>
@@ -366,12 +370,12 @@
         </seealso>
       </element>
       <element name="TObjectArray.First.Result">
-        <short>TItem class instance at the first position in the List</short>
+        <short>TItem class instance at the first position in the List.</short>
       </element>
 
       <element name="TObjectArray.IndexOf">
         <short>
-          Gets the ordinal position in List where the specified TItem instance is stored
+          Gets the ordinal position in List where the specified TItem instance is stored.
         </short>
         <descr>
           <p>
@@ -387,15 +391,15 @@
         </seealso>
       </element>
       <element name="TObjectArray.IndexOf.Result">
-        <short>Ordinal position for the requested TItem instance</short>
+        <short>Ordinal position for the requested TItem instance.</short>
       </element>
       <element name="TObjectArray.IndexOf.Item">
-        <short>TItem instance to locate in the List of associations</short>
+        <short>TItem instance to locate in the List of associations.</short>
       </element>
 
       <element name="TObjectArray.Insert">
         <short>
-          Inserts a new association at the specified position in List
+          Inserts a new association at the specified position in List.
         </short>
         <descr>
           <p>
@@ -417,32 +421,32 @@
         </seealso>
       </element>
       <element name="TObjectArray.Insert.Index">
-        <short>Ordinal position where the association is inserted</short>
+        <short>Ordinal position where the association is inserted.</short>
       </element>
       <element name="TObjectArray.Insert.Item">
-        <short>TItem instance used in the inserted association</short>
+        <short>TItem instance used in the inserted association.</short>
       </element>
 
       <element name="TObjectArray.InsertObject">
         <short>
-          Inserts an item/object association at the specified position in the List
+          Inserts an item/object association at the specified position in the List.
         </short>
         <descr></descr>
         <seealso></seealso>
       </element>
       <element name="TObjectArray.InsertObject.Index">
-        <short>Ordinal position in List where the association is inserted</short>
+        <short>Ordinal position in List where the association is inserted.</short>
       </element>
       <element name="TObjectArray.InsertObject.Item">
-        <short>TItem instance for the new association</short>
+        <short>TItem instance for the new association.</short>
       </element>
       <element name="TObjectArray.InsertObject.Associated">
-        <short>TObj instance for the association</short>
+        <short>TObj instance for the association.</short>
       </element>
 
       <element name="TObjectArray.Last">
         <short>
-          Gets the last TItem instance in the List, or Nil when empty
+          Gets the last TItem instance in the List, or Nil when empty.
         </short>
         <descr>
           <p>
@@ -456,12 +460,12 @@
         </seealso>
       </element>
       <element name="TObjectArray.Last.Result">
-        <short>TItem instance stored at the last position in List</short>
+        <short>TItem instance stored at the last position in List.</short>
       </element>
 
       <element name="TObjectArray.Move">
         <short>
-          Relocates the association stored at the position in CurIndex to the position in NewIndex
+          Relocates the association stored at the position in CurIndex to the position in NewIndex.
         </short>
         <descr>
           <p>
@@ -483,12 +487,12 @@
         <short>Ordinal position where the association is currently stored </short>
       </element>
       <element name="TObjectArray.Move.NewIndex">
-        <short>Ordinal position where the association is moved</short>
+        <short>Ordinal position where the association is moved.</short>
       </element>
 
       <element name="TObjectArray.Assign">
         <short>
-          Assigns TItem class instances specified in SrcList to the List storage in the class
+          Assigns TItem class instances specified in SrcList to the List storage in the class.
         </short>
         <descr>
           <p>
@@ -507,13 +511,13 @@
       </element>
       <element name="TObjectArray.Assign.SrcList">
         <short>
-          TList with the TItem class instances stored in the method
+          TList with the TItem class instances stored in the method.
         </short>
       </element>
 
       <element name="TObjectArray.Remove">
         <short>
-          Removes the association with the specified TItem class instance
+          Removes the association with the specified TItem class instance.
         </short>
         <descr>
           <p>
@@ -527,19 +531,19 @@
         </seealso>
       </element>
       <element name="TObjectArray.Remove.Result">
-        <short>Ordinal position for the association removed in the method</short>
+        <short>Ordinal position for the association removed in the method.</short>
       </element>
       <element name="TObjectArray.Remove.Item">
-        <short>TItem class instance to locate in the List</short>
+        <short>TItem class instance to locate in the List.</short>
       </element>
 
       <element name="TObjectArray.Pack">
         <short>
-          Removes all associations where the Item class instance is unassigned (contains Nil)
+          Removes all associations where the Item class instance is unassigned (contains Nil).
         </short>
         <descr>
           <p>
-            <var>Pack</var> is a procedure used to remove all associations where the Item class instance is unassigned (contains <b>Nil</b>). Pack iterates over the allocated storage in <var>List</var> to determine if the <var>T2Pointer.Item</var> member is unassigned. When an an unassigned item is found, subsequent associations are moved into the storage position(s) for any unused items. Pack updates the value in the <var>Count</var> property to reflect the new number of associations in List.
+            <var>Pack</var> is a procedure used to remove all associations where the Item class instance is unassigned (contains <b>Nil</b>). Pack iterates over the allocated storage in <var>List</var> to determine if the <var>T2Pointer.Item</var> member is unassigned. When an an unassigned item is found, subsequent associations are moved to fill the storage position(s) for any unused items. Pack updates the value in the <var>Count</var> property to reflect the new number of associations in List.
           </p>
         </descr>
         <seealso>
@@ -551,7 +555,7 @@
 
       <element name="TObjectArray.Capacity">
         <short>
-          Specifies the number of associations that can be stored in the List
+          Specifies the number of associations that can be stored in the List.
         </short>
         <descr>
           <p>
@@ -567,7 +571,7 @@
 
       <element name="TObjectArray.Count">
         <short>
-          Number of item/object associations currently stored in the List
+          Number of item/object associations currently stored in the List.
         </short>
         <descr>
           <p>
@@ -593,7 +597,7 @@
 
       <element name="TObjectArray.Items">
         <short>
-          Provides indexed access to the TItem class instances stored in the List
+          Provides indexed access to the TItem class instances stored in the List.
         </short>
         <descr>
           <p>
@@ -607,12 +611,12 @@
         </seealso>
       </element>
       <element name="TObjectArray.Items.Index">
-        <short>Ordinal position for the requested value</short>
+        <short>Ordinal position for the requested value.</short>
       </element>
 
       <element name="TObjectArray.Objects">
         <short>
-          Provides indexed access to the TObj class instances stored in the List
+          Provides indexed access to the TObj class instances stored in the List.
         </short>
         <descr>
           <p>
@@ -626,18 +630,18 @@
         </seealso>
       </element>
       <element name="TObjectArray.Objects.Index">
-        <short>Ordinal position for the requested value</short>
+        <short>Ordinal position for the requested value.</short>
       </element>
 
       <element name="TObjectArray.List">
         <short>
-          Provides access to the list which implements the storage for the item/object associations in the class instance
+          Provides access to the list which implements the storage for the item/object associations in the class instance.
         </short>
         <descr>
           <p>
             <var>List</var> is a read-only <var>P2Pointer</var> property which provides access to the list which implements the storage for the class instance. It is organized as pointers to a sequence of T2Pointer records. To access the record, and its Item and Object properties, use a subscript in the range 0..Count-1. For example:
           </p>
-          <code>
+<code>
 // type TMyObjStrsArr = specialize TObjectArray&lt;TMyObject, TStrings&gt;;
 // var aObjArr: TMyObjStrsArr;
 // var lFound: Boolean;
@@ -649,7 +653,7 @@ begin
    if lFound then break;
 end;
 Exit(lFound);
-          </code>
+</code>
           <p>
             Content in the record can be accessed using the indexed Items and Objects properties as well.
           </p>

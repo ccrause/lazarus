@@ -41,57 +41,57 @@
         <UnitName Value="DockedMainIDE"/>
       </Item4>
       <Item5>
-        <Filename Value="source\dockedresizeframe.pas"/>
-        <UnitName Value="DockedResizeFrame"/>
-      </Item5>
-      <Item6>
         <Filename Value="source\dockedresizer.pas"/>
         <UnitName Value="DockedResizer"/>
-      </Item6>
-      <Item7>
+      </Item5>
+      <Item6>
         <Filename Value="source\dockedoptionside.pas"/>
         <UnitName Value="DockedOptionsIDE"/>
-      </Item7>
-      <Item8>
+      </Item6>
+      <Item7>
         <Filename Value="source\dockedoptionsframe.pas"/>
         <DisableI18NForLFM Value="True"/>
         <UnitName Value="DockedOptionsFrame"/>
-      </Item8>
-      <Item9>
+      </Item7>
+      <Item8>
         <Filename Value="source\dockedtools.pas"/>
         <UnitName Value="DockedTools"/>
-      </Item9>
-      <Item10>
+      </Item8>
+      <Item9>
         <Filename Value="source\dockeddesignform.pas"/>
         <UnitName Value="DockedDesignForm"/>
+      </Item9>
+      <Item10>
+        <Filename Value="source\dockedsourcepagecontrol.pas"/>
+        <UnitName Value="DockedSourcePageControl"/>
       </Item10>
       <Item11>
-        <Filename Value="source\dockedmodulepagecontrol.pas"/>
-        <UnitName Value="DockedModulePageControl"/>
+        <Filename Value="source\dockedsourcewindow.pas"/>
+        <UnitName Value="DockedSourceWindow"/>
       </Item11>
       <Item12>
-        <Filename Value="source\dockedsourceeditorwindow.pas"/>
-        <UnitName Value="DockedSourceEditorWindow"/>
-      </Item12>
-      <Item13>
-        <Filename Value="source\dockedsourceeditorpagecontrols.pas"/>
-        <UnitName Value="DockedSourceEditorPageControls"/>
-      </Item13>
-      <Item14>
         <Filename Value="source\dockedanchordesigner.pas"/>
         <UnitName Value="DockedAnchorDesigner"/>
-      </Item14>
-      <Item15>
+      </Item12>
+      <Item13>
         <Filename Value="source\dockedbasicanchordesigner.pas"/>
         <UnitName Value="DockedBasicAnchorDesigner"/>
-      </Item15>
-      <Item16>
+      </Item13>
+      <Item14>
         <Filename Value="source\dockedanchorcontrol.pas"/>
         <UnitName Value="DockedAnchorControl"/>
+      </Item14>
+      <Item15>
+        <Filename Value="source\dockedgrip.pas"/>
+        <UnitName Value="DockedGrip"/>
+      </Item15>
+      <Item16>
+        <Filename Value="source\dockedoptionsframe.lfm"/>
+        <Type Value="LFM"/>
       </Item16>
       <Item17>
-        <Filename Value="source\dockedanchorgrip.pas"/>
-        <UnitName Value="dockedanchorgrip"/>
+        <Filename Value="source\dockedresizecontrol.pas"/>
+        <UnitName Value="DockedResizeControl"/>
       </Item17>
     </Files>
     <CompatibilityMode Value="True"/>

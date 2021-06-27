@@ -5,12 +5,16 @@ unit FpErrorMessages;
 interface
 
 uses
-  SysUtils, variants, LazLoggerBase;
+  SysUtils, variants, {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif};
 
 type
    TFpErrorCode = Integer;
 
 resourcestring
+  // menu caption from LazDebuggerFpGdbmi package
+  fpgdbmiDisplayGDBInsteadOfFpDebugWatches = 'Display GDB instead of FpDebug '
+    +'Watches';
+
   // %0:s is always linebreak
   MsgfpErrAnyError                        = '%1:s';
   MsgfpErrSymbolNotFound                  = 'Identifier not found: "%1:s"';

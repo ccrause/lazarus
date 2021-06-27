@@ -180,6 +180,8 @@ begin
   Result:=inherited GetAcceleratorString(AVKey,AShiftState);
 end;
 
+
+
 {------------------------------------------------------------------------------
   Function: RawImage_CreateBitmap
   Params: ARawImage:
@@ -196,6 +198,9 @@ var
   NewData: PByte;
   ImageFormat: cairo_format_t;
   ARowStride: PtrUInt;
+  x,y:integer;
+  src,dst,SrcRowPtr,DstRowPtr:pbyte;
+  ridx,gidx,bidx,aidx:byte;
 begin
   Result := False;
   ABitmap := 0;
@@ -203,8 +208,58 @@ begin
 
   if ARawImage.DataSize > 0 then
   begin
-    NewData := GetMem(ARawImage.DataSize);
-    Move(ARawImage.Data^, NewData^, ARawImage.DataSize);
+    case Desc.LineEnd of
+    rileQWordBoundary:
+      begin
+        ARowStride := Desc.Width;
+        if Desc.Width and 1 <> 0 then Inc(ARowStride);
+        ARowStride := ARowStride shl 2;
+      end;
+    rileDQWordBoundary:
+      begin
+        ARowStride := Desc.Width shr 1;
+        if Desc.Width and 3 <> 0 then Inc(ARowStride);
+        ARowStride := ARowStride shl 3;
+      end;
+    else
+      ARowStride := Desc.Width shl 2;
+    end;
+
+    // check if the pixels are in order, pixbuf expects them in R-G-B-A
+    Desc.GetRGBIndices(Ridx, Gidx, Bidx, AIdx);
+
+    GetMem(NewData, ArawImage.DataSize);
+
+    //if (Ridx <> 0) or (Gidx <> 1) or (Bidx <> 2) or (AIdx <> 3) then
+    if desc.Depth=32 then
+    begin
+      // put components in right order
+
+      DstRowPtr := NewData;
+      SrcRowPtr := ArawImage.Data;
+      y := Desc.Height;
+      while y > 0 do
+      begin
+        Src := SrcRowPtr;
+        Dst := DstRowPtr;
+        x := Desc.Width;
+        while x > 0 do
+        begin
+          Dst[0] := Src[Ridx];
+          Dst[1] := Src[Gidx];
+          Dst[2] := Src[Bidx];
+          Dst[3] := Src[Aidx] ;
+
+          Inc(Src, 4);
+          Inc(Dst, 4);
+          Dec(x);
+        end;
+        Inc(SrcRowPtr, ARowstride);
+        Inc(DstRowPtr, ARowstride);
+        Dec(y);
+      end;
+    end;
+
   end
   else
     NewData := nil;
@@ -212,27 +267,32 @@ begin
   // this is only a rough implementation, there is no check against bitsperpixel
   case Desc.Depth of
     1: ImageFormat := CAIRO_FORMAT_A1;
-    2: ImageFormat := CAIRO_FORMAT_A8;
+    8: ImageFormat := CAIRO_FORMAT_A8;
     else
        ImageFormat := CAIRO_FORMAT_ARGB32;
   end;
   ARowStride := GetBytesPerLine(Desc.Width, Desc.BitsPerPixel, rileDWordBoundary);
   ABitmap := HBitmap(TGtk3Image.Create(NewData, Desc.Width, Desc.Height, ARowStride, ImageFormat,
-                     not ASkipMask));  // Using ASkipMask for DataOwner param prevents a crash later.
+                     {not ASkipMask}true));  // Using ASkipMask for DataOwner param prevents a crash later.
   Result := ABitmap <> 0;
+
+ { if ASkipMask then
+  FreeMem(NewData); }
 
   if ASkipMask then Exit;
 
   if (ARawImage.Mask <> nil) and (ARawImage.MaskSize > 0) then
   begin
-    NewData := GetMem(ARawImage.MaskSize);
-    Move(ARawImage.Mask^, NewData^, ARawImage.MaskSize);
+    NewData := GetMem(ARawImage.MaskSize*8);
+    FillChar(NewData^,  ARawImage.MaskSize*8,$00);
+    //Move(ARawImage.Mask^, NewData^, ARawImage.MaskSize*8);
   end
   else
     NewData := nil;
 
-  ARowStride := GetBytesPerLine(Desc.Width, Desc.BitsPerPixel, rileDWordBoundary);
-  AMask := HBitmap(TGtk3Image.Create(NewData, Desc.Width, Desc.Height, ARowStride, CAIRO_FORMAT_A1, True));
+
+  ARowStride := GetBytesPerLine(Desc.Width, {Desc.BitsPerPixel}8, rilebyteBoundary);
+  AMask := HBitmap(TGtk3Image.Create(NewData, Desc.Width, Desc.Height, ARowStride, CAIRO_FORMAT_A8, True));
 
 end;
 
@@ -360,7 +420,7 @@ function TGtk3WidgetSet.RawImage_DescriptionFromDevice(ADC: HDC; out
 begin
   Result := true;
 
-  FillStandardDescription(ADesc);
+  FillStandardDescription(ADesc{%H-});
   (*
   if IsValidDC(ADC)
   then begin
@@ -465,7 +525,7 @@ function RawImage_DescriptionFromDrawable(out
 var
   Visual: PGdkVisual;
   Image: PGdkPixbuf;
-  Width, Height, Depth: integer;
+  Width, Height: integer;
   IsBitmap: Boolean;
   AMask: guint32;
   AShift: gint;
@@ -693,6 +753,8 @@ begin
     Height := R.Bottom - R.Top;
   end;
 
+  WorkMask:=nil;
+
   if (Width = Image.Width) and (Height = Image.Height) then
   begin
     WorkImage := Image;
@@ -745,6 +807,7 @@ begin
       if InvertPixels then
         WorkMask.invertPixels(QImageInvertRGB);
         *)
+      if (WorkMask.bits<>nil) and (ARawImage.Mask<>nil) then
       Move(WorkMask.bits^, ARawImage.Mask^, ARawImage.MaskSize);
       // if InvertPixels then
       //  WorkMask.invertPixels(QImageInvertRGB);
@@ -1130,8 +1193,8 @@ function TGtk3WidgetSet.AddEventHandler(AHandle: THandle; AFlags: dword;
   //lEventHandler: PWaitHandleEventHandler;
 begin
   Result := nil;
-  (*
   if AEventHandler = nil then exit;
+  (*
   New(lEventHandler);
   giochannel := g_io_channel_unix_new(AHandle);
   lEventHandler^.Handle := AHandle;
@@ -1247,8 +1310,8 @@ function TGtk3WidgetSet.AddProcessEventHandler(AHandle: THandle;
 //  lHandler: PChildSignalEventHandler;
 begin
   Result := nil;
-  (*
   if AEventHandler = nil then exit(nil);
+  (*
   New(lHandler);
   lHandler^.PID := TPid(AHandle);
   lHandler^.UserData := AData;
@@ -1266,8 +1329,8 @@ procedure TGtk3WidgetSet.RemoveProcessEventHandler(var AHandler: PProcessEventHa
 // var
 //  lHandler: PChildSignalEventHandler absolute AHandler;
 begin
-  (*
   if AHandler = nil then exit;
+  (*
   if lHandler^.PrevHandler = nil then
     FChildSignalHandlers := lHandler^.NextHandler
   else

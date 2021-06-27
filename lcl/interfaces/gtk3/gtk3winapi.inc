@@ -96,42 +96,15 @@ begin
 end;
 
 function TGtk3WidgetSet.ClientToScreen(Handle: HWND; var P: TPoint): Boolean;
-var
-  AWidget: TGtk3Widget;
-  TempAlloc: TGtkAllocation;
-  Pt: TPoint;
 begin
   {$ifdef VerboseGtk3WinApi}
     DebugLn('Trace:> [TGtk3WidgetSet.ClientToScreen] ',dbgs(P));
   {$endif}
   // Result:=inherited ClientToScreen(Handle, P);
   Result := False;
-  Pt := Point(0, 0);
+  P := Point(0, 0);
   if IsValidHandle(Handle) then
-  begin
-    AWidget := TGtk3Widget(Handle);
-    if not AWidget.IsWidgetOk then
-    begin
-      DebugLn('TGtk3WidgetSet.ClientToScreen invalid widget ...');
-      exit;
-    end;
-    if Gtk3IsGdkWindow(AWidget.Widget^.window) then
-    begin
-      gdk_window_get_origin(AWidget.Widget^.window, @Pt.X, @Pt.Y);
-      gtk_widget_get_allocation(AWidget.Widget, @TempAlloc);
-      Pt.X += TempAlloc.x;
-      Pt.Y += TempAlloc.y;
-    end
-    else
-    begin
-      gtk_widget_get_allocation(AWidget.Widget, @TempAlloc);
-      Pt.X := TempAlloc.x;
-      Pt.Y := TempAlloc.y;
-    end;
-    Result := True;
-    inc(P.X, Pt.X);
-    inc(P.Y, Pt.Y);
-  end;
+    Result := TGtk3Widget(Handle).ClientToScreen(P);
   {$ifdef VerboseGtk3WinApi}
     DebugLn('Trace:< [TGtk3WidgetSet.ClientToScreen] ',dbgs(P),' result=',dbgs(Result));
   {$endif}
@@ -186,7 +159,6 @@ function TGtk3WidgetSet.ClipboardGetOwnerShip(ClipboardType: TClipboardType;
   Formats: PClipboardFormat): boolean;
 var
   pclp:PGtkClipboard;
-  pc:pgchar;
   pcname:PgdkAtom;
 begin
   case ClipboardType of
@@ -207,7 +179,7 @@ end;
 function TGtk3WidgetSet.ClipboardRegisterFormat(const AMimeType: string): TClipboardFormat;
 begin
   if Assigned(Application) then
-    Result := TClipboardFormat(TGdkAtom.intern(PChar(AMimeType), False))
+    Result := {%H-}TClipboardFormat(TGdkAtom.intern(PChar(AMimeType), False))
   else
     RaiseGDBException(
       'ERROR: TGtk3WidgetSet.ClipboardRegisterFormat gdk not initialized');
@@ -337,7 +309,6 @@ end;
 function TGtk3WidgetSet.CreateBrushIndirect(const LogBrush: TLogBrush): HBRUSH;
 var
   ABrush: TGtk3Brush;
-  Color: TColor;
 begin
   Result := 0;
   // DebugLn('TGtk3WidgetSet.CreateBrushIndirect color=',dbgs(logBrush.lbColor),' style=',dbgs(logBrush.lbStyle));
@@ -439,10 +410,6 @@ begin
 end;
 
 function TGtk3WidgetSet.CreateIconIndirect(IconInfo: PIconInfo): HICON;
-var
-  PixBuf: PGdkPixBuf;
-  W: gint;
-  H: gint;
 begin
   Result := 0;
   if IsValidGDIObject(IconInfo^.hbmColor) then
@@ -600,11 +567,9 @@ end;
 function TGtk3WidgetSet.DrawFrameControl(DC: HDC; const aRect: TRect; uType,
   uState: Cardinal): Boolean;
 begin
-  {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
-  DebugLn('WARNING: TGtk3WidgetSet.DrawFrameControl not implemented ...');
-  {$ENDIF}
-  Result := False;
-  // inherited DrawFrameControl(DC, aRect, uType, uState);
+  Result:=false;
+  if IsValidDC(DC) then
+    Result:=TGtk3DeviceContext(DC).drawFrameControl(aRect,uType,uState);
 end;
 
 function TGtk3WidgetSet.DrawFocusRect(DC: HDC; const aRect: TRect): boolean;
@@ -687,13 +652,13 @@ var
   procedure DoCalcRect;
   var
     AP: TSize;
-    J, MaxWidth, DefHeight,
+    J, MaxWidth,
     LineWidth, LineHeight: Integer;
   begin
     theRect := Rect;
 
     MaxWidth := theRect.Right - theRect.Left;
-    DefHeight := theRect.Bottom - theRect.Top;
+    //DefHeight := theRect.Bottom - theRect.Top;
 
     (*
     if Flags and DT_CENTER  <> 0then
@@ -757,7 +722,7 @@ var
         // do not break at word boundaries
         TextExtentPoint(PChar(AStr), length(AStr), AP);
         MaxWidth := AP.cX;
-        DefHeight := AP.cY;
+        //DefHeight := AP.cY;
       end;
 
       Gtk3WordWrap(DC, PChar(AStr), MaxWidth, Lines, NumLines);
@@ -978,7 +943,7 @@ begin
       Exit;
     end;
 
-    SetLength(AStr,Count);
+    SetLength(AStr{%H-},Count);
     if Count>0 then
       System.Move(Str^,AStr[1],Count);
 
@@ -1041,6 +1006,7 @@ begin
         l:=StrLen(Lines[i]);
         DrawLine(Lines[i], l, theRect.Top);
         dec(pIndex,l+length(LineEnding));
+        Size:=default(TSize);
         GetTextExtentPoint(DC, Lines[i], l, Size);
         LineHeight := Size.cY;
       end
@@ -1274,7 +1240,7 @@ var
 
     ALogFontA.lfHeight := pango_font_description_get_size(Font);
     if not pango_font_description_get_size_is_absolute(Font) then
-      ALogFontA.lfHeight := ALogFontA.lfHeight div PANGO_SCALE;
+      ALogFontA.lfHeight := PANGO_PIXELS(ALogFontA.lfHeight);
 
     // pango does not have underline and strikeout params for font
     // ALogFontA.lfUnderline := ;
@@ -1384,7 +1350,6 @@ end;
 
 function TGtk3WidgetSet.IntersectClipRect(dc: hdc; Left, Top, Right,Bottom: Integer): Integer;
 var
-  ncorg,dcOrigin:TPoint;
   rgn,clip:HRGN;
 begin
   {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
@@ -1402,6 +1367,7 @@ begin
  { ncorg:=Tgtk3DeviceContext(dc).fncOrigin;
   GetWindowOrgEx(DC, @DCOrigin);
   Result:=inherited IntersectClipRect(dc, Left, Top, Right, Bottom);}
+  Result:=0;
 end;
 
 
@@ -1713,7 +1679,7 @@ begin
     begin
       AData := g_object_get_data(AWidget, 'lclwidget');
       // DebugLn('TGtk3WidgetSet.GetActiveWindow found window from data ...',dbgsName(TGtk3Widget(AData).LCLObject));
-      exit(HWND(AData));
+      exit({%H-}HWND(AData));
     end;
     for i := 0 to Screen.FormCount - 1 do
     begin
@@ -1950,11 +1916,11 @@ begin
     end;
 
     HORZSIZE : { Horizontal size in millimeters }
-      Result := RoundToInt((GetDeviceCaps(DC, HORZRES) * 100) /
+      Result := LazUtilities.RoundToInt((GetDeviceCaps(DC, HORZRES) * 100) /
                     (GetDeviceCaps(DC, LOGPIXELSX) * 25.4));
 
     VERTSIZE : { Vertical size in millimeters }
-      Result := RoundToInt((GetDeviceCaps(DC, VERTRES) * 100) /
+      Result := LazUtilities.RoundToInt((GetDeviceCaps(DC, VERTRES) * 100) /
                     (GetDeviceCaps(DC, LOGPIXELSY) * 25.4));
 
     BITSPIXEL:
@@ -1968,12 +1934,12 @@ begin
     SIZEPALETTE: Result := gdk_window_get_visual(gdk_get_default_root_window)^.get_colormap_size;
     LOGPIXELSX : { Logical pixels per inch in X }
     begin
-      Result := RoundToInt(gdk_screen_width / (gdk_screen_width_mm / 25.4));
+      Result := LazUtilities.RoundToInt(gdk_screen_width / (gdk_screen_width_mm / 25.4));
     end;
 
     LOGPIXELSY : { Logical pixels per inch in Y }
     begin
-      Result := RoundToInt(gdk_screen_height / (gdk_screen_height_mm / 25.4));
+      Result := LazUtilities.RoundToInt(gdk_screen_height / (gdk_screen_height_mm / 25.4));
     end;
   end;
 
@@ -2042,6 +2008,7 @@ begin
   dpiY:=round(25.4*h/h_mm);
 
   rr:=TGdkScreen.get_default^.get_resolution();
+
   Result:=0;
   //Result:=inherited GetDpiForMonitor(hmonitor, dpiType, dpiX, dpiY);
 end;
@@ -2641,7 +2608,6 @@ var
   APangoMetrics: PPangoFontMetrics;
   aRect: TPangoRectangle;
   APangoWeight: TPangoWeight;
-  AList: PPangoAttrList;
 begin
   Result := False;
   if IsValidDC(DC) then
@@ -2660,10 +2626,10 @@ begin
     FillChar(TM, SizeOf(TM), #0);
 
     TM.tmAveCharWidth := Max(1,
-               pango_font_metrics_get_approximate_char_width(APangoMetrics)
-               div PANGO_SCALE);
-    TM.tmAscent := APangoMetrics^.get_ascent div PANGO_SCALE;
-    TM.tmDescent := APangoMetrics^.get_descent div PANGO_SCALE;
+               PANGO_PIXELS(pango_font_metrics_get_approximate_char_width(APangoMetrics))
+               );
+    TM.tmAscent := PANGO_PIXELS(APangoMetrics^.get_ascent);
+    TM.tmDescent := PANGO_PIXELS(APangoMetrics^.get_descent);
 
     TM.tmHeight := TM.tmAscent + TM.tmDescent;
 
@@ -2801,21 +2767,31 @@ var
   AWidget: TGtk3Widget;
   APos: TPoint;
 begin
+  Left:=0;
+  Top:=0;
   if Handle = 0 then
     exit(False);
   AWidget := TGtk3Widget(Handle);
   Result := AWidget.GetPosition(APos);
+  Left:=APos.X;
+  Top:=APos.Y;
 end;
 
 function TGtk3WidgetSet.GetWindowSize(Handle: hwnd; var Width, Height: integer
   ): boolean;
+var
+  aWidget: PGtkWidget;
 begin
   Result := False;
   if Handle <> 0 then
   begin
-    Width := TGtk3Widget(Handle).Widget^.get_allocated_width;
-    Height := TGtk3Widget(Handle).Widget^.get_allocated_Height;
-    Result := True;
+    aWidget:= TGtk3Widget(Handle).Widget;
+    if aWidget<>nil then
+    begin
+      Width := aWidget^.get_allocated_width;
+      Height := aWidget^.get_allocated_Height;
+      Result := True;
+    end;
   end;
 end;
 
@@ -2967,6 +2943,16 @@ begin
   Result:=HMONITOR(nmon+1);
 end;
 
+function TGtk3WidgetSet.MonitorFromWindow(hWnd: HWND; dwFlags: DWord): HMONITOR;
+var
+  pscr:PGdkScreen;
+  nmon:gint;
+begin
+  pscr:=TGdkScreen.get_default;
+  nmon:=pscr^.get_monitor_at_window(TGtk3Widget(hWnd).GetWindow);
+  Result:=HMONITOR(nmon+1);
+end;
+
 function TGtk3WidgetSet.MoveToEx(DC: HDC; X, Y: Integer; OldPoint: PPoint
   ): Boolean;
 begin
@@ -3060,7 +3046,7 @@ begin
     AMsg := TCustomGtk3Message(user_data^);
     if AMsg.Handle <> 0 then
     begin
-      FillChar(AMessage, SizeOf(AMessage), #0);
+      FillChar(AMessage{%H-}, SizeOf(AMessage), #0);
       AMessage.Msg := AMsg.Msg;
       AMessage.WParam := AMsg.AwParam;
       AMessage.LParam := AMsg.AlParam;
@@ -3199,6 +3185,7 @@ begin
   Result := AWidget <> nil;
   if Result then
   begin
+    if AWidget.Widget = nil then exit;
     if AWidget.GetContainerWidget^.has_grab then
       gtk_grab_remove(AWidget.GetContainerWidget)
     else
@@ -3267,50 +3254,15 @@ begin
 end;
 
 function TGtk3WidgetSet.ScreenToClient(Handle: HWND; var P: TPoint): Integer;
-var
-  AWidget: TGtk3Widget;
-  AGtkWidget: PGtkWidget;
-  AWindow: PGdkWindow;
-  X,Y: Integer;
-  Allocation: TGtkAllocation;
 begin
-  Result := -1;
-  X := 0;
-  Y := 0;
+  Result := 0;
   {$ifdef VerboseGtk3WinApi}
   DebugLn('Trace:> [TGtk3WidgetSet.ScreenToClient] ',dbgs(P));
   {$endif}
   if not IsValidHandle(Handle) then
     exit;
 
-  AWidget := TGtk3Widget(Handle);
-  AGtkWidget := TGtk3Widget(Handle).GetContainerWidget;
-  if Assigned(AGtkWidget) and Gtk3IsGdkWindow(AGtkWidget^.window) then
-  begin
-    AWindow := AGtkWidget^.window;
-    PGdkWindow(AWindow)^.get_origin(@X, @Y);
-    AGtkWidget^.get_allocation(@Allocation);
-    if not AGtkWidget^.get_has_window and (AGtkWidget^.get_parent <> nil) then
-    begin
-      AGtkWidget^.get_allocation(@Allocation);
-      P.X := P.X - X - Allocation.x;
-      P.Y := P.Y - Y - Allocation.y;
-      exit;
-    end;
-  end else
-  if Gtk3IsGdkWindow(AWidget.Widget^.window) then
-  begin
-    AWindow := AWidget.Widget^.window;
-    PGdkWindow(AWindow)^.get_origin(@X, @Y);
-  end else
-  begin
-    AWidget.Widget^.get_allocation(@Allocation);
-    P.X := P.X - X - Allocation.x;
-    P.Y := P.Y - Y - Allocation.y;
-    exit;
-  end;
-  dec(P.X, X);
-  dec(P.Y, Y);
+  Result := TGtk3Widget(Handle).ScreenToClient(P);
 end;
 
 function TGtk3WidgetSet.ScrollWindowEx(hWnd: HWND; dx, dy: Integer; prcScroll,
@@ -3418,7 +3370,7 @@ begin
     if IsValidHandle(AHandle) then
     begin
       TGtk3Widget(AHandle).SetCapture;
-      if (Result <> 0) then
+      //if (Result <> 0) then
       begin
         Message.Msg := 0;
         FillChar(Message, SizeOf(Message), 0);
@@ -3898,7 +3850,15 @@ begin
   {$IFDEF GTK3DEBUGNOTIMPLEMENTED}
   DebugLn('WARNING: TGtk3WidgetSet.ShowWindow not implemented ...');
   {$ENDIF}
-  Result := False;
+  Result := IsValidHandle(Hwnd);
+  if not result then exit;
+  if TObject(hWnd) is TGtk3Window then
+    Result:=TGtk3Window(hWnd).ShowState(nCmdShow)
+  else
+  begin
+    TGtk3Widget(hWnd).Show;
+    Result:=true;
+  end;
 end;
 
 function TGtk3WidgetSet.StretchBlt(DestDC: HDC; X, Y, Width, Height: Integer;

@@ -11,6 +11,7 @@
 unit DockedAnchorDesigner;
 
 {$mode objfpc}{$H+}
+{ $define DEBUGDOCKEDFORMEDITOR}
 
 interface
 
@@ -23,7 +24,7 @@ uses
   PropEdits,
   // DockedFormEditor
   DockedDesignForm, DockedBasicAnchorDesigner, DockedAnchorControl,
-  DockedOptionsIDE, DockedAnchorGrip, DockedTools, DockedStrConsts;
+  DockedOptionsIDE, DockedGrip, DockedTools, DockedStrConsts;
 
 type
 
@@ -50,6 +51,8 @@ type
     FTargetControl: TAnchorControl;
     FTargetHorzSide: TAnchorSideReference;
     FTargetVertSide: TAnchorSideReference;
+    FUndoList: TAnchorControls;
+    FUndoIndex: Integer;
     procedure AdjustGrips;
     procedure AnchorControlMouseDown(Sender: TObject; {%H-}Button: TMouseButton; Shift: TShiftState; {%H-}X, {%H-}Y: Integer);
     procedure AnchorControlMouseMove(Sender: TObject; Shift: TShiftState; {%H-}X, {%H-}Y: Integer);
@@ -78,15 +81,21 @@ type
     procedure SelectedAnchorNewTarget(AKind: TAnchorKind);
     procedure SetSelectedControl(AValue: TAnchorControl);
     procedure ShowPreviousHint;
+    procedure UndoAdd;
+    procedure UndoClear;
   public
     constructor Create(ADesignForm: TDesignForm; AParent: TWinControl);
     destructor Destroy; override;
     procedure Abort; override;
     procedure BeginUpdate; override;
+    function  CanRedo: Boolean; override;
+    function  CanUndo: Boolean; override;
     procedure EndUpdate; override;
     procedure Invalidate; override;
+    function  Redo: Boolean; override;
     procedure Refresh; override;
     procedure SetParent(AValue: TWinControl); override;
+    function  Undo: Boolean; override;
   public
     property SelectedControl: TAnchorControl read FSelectedControl write SetSelectedControl;
     property State: TAnchorStates read FState write FState;
@@ -119,6 +128,8 @@ end;
 
 procedure TAnchorDesigner.AnchorControlMouseDown(Sender: TObject;
   Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+var
+  LSelectedControl: TAnchorControl;
 begin
   PopupMenuAdapt(Sender);
   if not (State = []) then Exit;
@@ -129,7 +140,11 @@ begin
     Invalidate;
     Exit;
   end;
-  SelectedControl := TAnchorControl(Sender);
+  LSelectedControl := TAnchorControl(Sender);
+  if LSelectedControl.IsChildControl then
+    SelectedControl := TAnchorControl(LSelectedControl.Parent)
+  else
+    SelectedControl := LSelectedControl;
   Invalidate;
   if not (Shift = [ssLeft]) and not (Shift = [ssCtrl, ssLeft]) then Exit;
   GetCursorPos(FMousePos);
@@ -197,7 +212,7 @@ begin
 
   if not State.IsMoving then
   begin
-    GlobalDesignHook.SelectOnlyThis(TAnchorControl(Sender).RootControl);
+    GlobalDesignHook.SelectOnlyThis(SelectedControl.RootControl);
     Exit;
   end;
   Exclude(FState, asMoving);
@@ -209,7 +224,7 @@ begin
   end;
   FPreviewHint.Hide;
   FSelectedControl.AssignToRoot_Full;
-  FreeAndNil(FPreviousControl);
+  UndoAdd;
 
   Screen.Cursor := crDefault;
   {$IF Defined(LCLWin32) or Defined(LCLWin64)}
@@ -218,7 +233,7 @@ begin
 
   FState := [];
   GlobalDesignHook.Modified(Self, 'Anchors');
-  GlobalDesignHook.SelectOnlyThis(TAnchorControl(Sender).RootControl);
+  GlobalDesignHook.SelectOnlyThis(SelectedControl.RootControl);
 end;
 
 procedure TAnchorDesigner.AnchorControlMouseWheel(Sender: TObject;
@@ -353,7 +368,7 @@ begin
 
   if Assigned(FTargetControl) then FTargetControl.Color := DockedOptions.AnchorControlColor;
   FTargetControl := nil;
-  FreeAndNil(FPreviousControl);
+  UndoAdd;
 
   Screen.Cursor := crDefault;
   {$IF Defined(LCLWin32) or Defined(LCLWin64)}
@@ -391,11 +406,14 @@ var
   LWinControl: TWinControl;
   i, LIndex: Integer;
 begin
+  if csNoDesignSelectable in AControl.ControlStyle then
+    Exit;
   LIndex := FAnchorControls.IndexOf(AControl);
   if LIndex >= 0 then
   begin
     LAnchorControl := FAnchorControls[LIndex];
   end else begin
+    UndoClear;
     LAnchorControl := TAnchorControl.Create(AParent, AControl);
     LAnchorControl.OnMouseDown  := @AnchorControlMouseDown;
     LAnchorControl.OnMouseMove  := @AnchorControlMouseMove;
@@ -407,7 +425,8 @@ begin
   end;
   LAnchorControl.Validate;
   LAnchorControl.Visible := True;
-  if AControl is TWinControl then
+  if (AControl is TWinControl)
+  and not (csOwnedChildrenNotSelectable in AControl.ControlStyle) then
   begin
     LWinControl := TWinControl(AControl);
     for i := 0 to LWinControl.ControlCount - 1 do
@@ -453,6 +472,7 @@ end;
 
 function TAnchorDesigner.FindNearestControl(APoint: TPoint): TAnchorControl;
 var
+  LAnchorControl: TAnchorControl;
   LRect: TRect;
   LBestDist, LDist: TPoint;
   i: Integer;
@@ -468,11 +488,13 @@ begin
 
   for i := 0 to FSelectedControl.Parent.ControlCount - 1 do
   begin
-    if (FSelectedControl.Parent.Controls[i] = FSelectedControl)
-    or (FSelectedControl.Parent.Controls[i] = FPreviousControl)
-    or (FSelectedControl.Parent.Controls[i] = FBorderControl) then
+    if not (FSelectedControl.Parent.Controls[i] is TAnchorControl) then Continue;
+    LAnchorControl := TAnchorControl(FSelectedControl.Parent.Controls[i]);
+    if (LAnchorControl = FSelectedControl)
+    or (LAnchorControl = FPreviousControl)
+    or not LAnchorControl.Visible then
       Continue;
-    LRect := CalculateRect(FSelectedControl.Parent.Controls[i]);
+    LRect := CalculateRect(LAnchorControl);
 
     if (APoint.x >= LRect.Left) and (APoint.x <= LRect.Right) then
       LDist.x := 0
@@ -487,7 +509,7 @@ begin
     if LDist.x + LDist.y < LBestDist.x + LBestDist.y then
     begin
       LBestDist := LDist;
-      Result := TAnchorControl(FSelectedControl.Parent.Controls[i]);
+      Result := LAnchorControl;
     end;
   end;
 end;
@@ -750,6 +772,12 @@ begin
   LMouseOffset := MouseOffset;
   LMouseOffset.x := LMouseOffset.x div DockedOptions.MouseBorderFactor;
   LMouseOffset.y := LMouseOffset.y div DockedOptions.MouseBorderFactor;
+  // if control is clicked, change BorderSpacing.Around (x = y!)
+  if not State.IsAnchoring then
+  begin
+    LMouseOffset.x := (LMouseOffset.x + LMouseOffset.y) div 2;
+    LMouseOffset.y := LMouseOffset.x;
+  end;
 
   if not DockedOptions.TreatBorder and not State.IsAnchoring then
   begin
@@ -865,6 +893,11 @@ begin
   if FSelectedControl = AValue then Exit;
   if Assigned(FSelectedControl) then
     FSelectedControl.State := [acsNone];
+  if Assigned(AValue) and AValue.IsChildControl then
+  begin
+    FSelectedControl := nil;
+    Exit;
+  end;
   FSelectedControl := AValue;
   if Assigned(FSelectedControl) then
   begin
@@ -914,23 +947,31 @@ begin
     then
       s := LinedString(s, FSelectedControl.AnchorSideStr(LKind));
 
-  LRect := FPreviewHint.CalcHintRect(Screen.Width div 4, s, nil);
-  LRect.Left   := LPos.x;
-  LRect.Top    := LPos.y;
-  LRect.Right  := LRect.Right  + LPos.x;
-  LRect.Bottom := LRect.Bottom + LPos.y;
-  FPreviewHint.Caption := s;
-  FPreviewHint.SetBounds(LRect.Left, LRect.Top, LRect.Width, LRect.Height);
-  if s.IsEmpty then
-    FPreviewHint.Hide
-  else begin
-    FPreviewHint.Show;
-    FPreviewHint.Invalidate;
-  end;
+  LRect := FPreviewHint.CalcHintRect(0, s, nil);  //no maxwidth
+  LRect.Left := LPos.x + 15;
+  LRect.Top  := LPos.y + 15;
+  LRect.Right  := LRect.Left + LRect.Right;
+  LRect.Bottom := LRect.Top  + LRect.Bottom;
+  FPreviewHint.ActivateHint(LRect, s);
+end;
+
+procedure TAnchorDesigner.UndoAdd;
+begin
+  FUndoList.DeleteIndexAndAbove(FUndoIndex);
+  FUndoList.Add(FPreviousControl);
+  FUndoIndex := FUndoList.Count;
+  FPreviousControl := nil;
+end;
+
+procedure TAnchorDesigner.UndoClear;
+begin
+  FUndoIndex := 0;
+  FUndoList.DeleteIndexAndAbove(0);
 end;
 
 constructor TAnchorDesigner.Create(ADesignForm: TDesignForm; AParent: TWinControl);
 begin
+  inherited Create;
   FState := [];
   FDesignForm := ADesignForm;
   Parent := AParent;
@@ -939,13 +980,19 @@ begin
   FAnchorControls := TAnchorControls.Create;
   FBorderControl := TBorderControl.Create(nil);
   FPreviewHint := THintWindow.Create(nil);
+  FPreviewHint.Visible := False;
+  FPreviewHint.HideInterval := 4000;
+  FPreviewHint.AutoHide := True;
   CreateBackGround;
   CreateAnchorGrips;
   CreatePopupMenu;
+  FUndoList := TAnchorControls.Create;
+  FUndoIndex := 0;
 end;
 
 destructor TAnchorDesigner.Destroy;
 begin
+  FUndoList.Free;
   FPreviewHint.Free;
   FBorderControl.Free;
   FAnchorGrips.Free;
@@ -981,6 +1028,16 @@ begin
   FBackGround.Invalidate;
 end;
 
+function TAnchorDesigner.CanRedo: Boolean;
+begin
+  Result := FUndoIndex < FUndoList.Count - 1;
+end;
+
+function TAnchorDesigner.CanUndo: Boolean;
+begin
+  Result := FUndoIndex > 0;
+end;
+
 procedure TAnchorDesigner.EndUpdate;
 begin
   if not Parent.Visible then Exit;
@@ -996,6 +1053,17 @@ begin
   FBackGround.Invalidate;
 end;
 
+function TAnchorDesigner.Redo: Boolean;
+begin
+  Result := CanRedo;
+  {$IFDEF DEBUGDOCKEDFORMEDITOR} DebugLn('TAnchorDesigner.Redo ', Result.ToString(TUseBoolStrs.True)); {$ENDIF}
+  if not Result then Exit;
+  Inc(FUndoIndex);
+  FUndoList[FUndoIndex].AssignToRoot_Full;
+  GlobalDesignHook.Modified(Self, 'Anchors');
+  GlobalDesignHook.SelectOnlyThis(FUndoList[FUndoIndex].RootControl);
+end;
+
 procedure TAnchorDesigner.Refresh;
 var
   i: Integer;
@@ -1006,7 +1074,8 @@ begin
   for i := 0 to FDesignControl.ControlCount - 1 do
     CreateAnchorControl(FDesignControl.Controls[i], FBackGround);
   FAnchorControls.CheckParents;
-  FAnchorControls.RemoveInvalid;
+  if FAnchorControls.RemoveInvalid then
+    UndoClear;
   FAnchorControls.CheckProperties;
   FAnchorControls.CheckAnchors;
   Invalidate;
@@ -1017,6 +1086,25 @@ begin
   inherited SetParent(AValue);
   if Assigned(FBackGround) then FBackGround.Parent := Parent;
   if Assigned(FAnchorGrips) then FAnchorGrips.Parent := Parent;
+end;
+
+function TAnchorDesigner.Undo: Boolean;
+begin
+  Result := CanUndo;
+  {$IFDEF DEBUGDOCKEDFORMEDITOR} DebugLn('TAnchorDesigner.Undo ', Result.ToString(TUseBoolStrs.True)); {$ENDIF}
+  if not Result then Exit;
+  if FUndoIndex = FUndoList.Count then
+  begin
+    FPreviousControl := TAnchorControl.Create(FSelectedControl.Parent, FSelectedControl.RootControl);
+    FPreviousControl.Visible := False;
+    FPreviousControl.AssignFull(FSelectedControl);
+    UndoAdd;
+    Dec(FUndoIndex);
+  end;
+  Dec(FUndoIndex);
+  FUndoList[FUndoIndex].AssignToRoot_Full;
+  GlobalDesignHook.Modified(Self, 'Anchors');
+  GlobalDesignHook.SelectOnlyThis(FUndoList[FUndoIndex].RootControl);
 end;
 
 end.

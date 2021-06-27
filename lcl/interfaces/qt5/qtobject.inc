@@ -194,6 +194,10 @@ var
 begin
   WakeMainThread := @OnWakeMainThread;
 
+  {issue #38319 - since Qt-4.7 there's no way to set RTL over widgets}
+  if Application.BidiMode = bdRightToLeft then
+    QGuiApplication_setLayoutDirection(QtRightToLeft);
+
   {
     check whether this hook crashes on linux & darwin and why it is so
     we need this hook to catch release messages
@@ -1280,6 +1284,7 @@ begin
     lcTextHint: Result := LCL_CAPABILITY_YES;
     lcNativeTaskDialog: Result := {$ifdef MSWINDOWS} LCL_CAPABILITY_NO {$else} LCL_CAPABILITY_YES {$endif};
     lcAllowChildControlsInNativeControls: Result := LCL_CAPABILITY_YES;
+    lcAccessibilitySupport: Result := {$IFDEF QTACCESSIBILITY}LCL_CAPABILITY_YES{$ELSE}LCL_CAPABILITY_NO{$ENDIF};
   else
     Result := inherited GetLCLCapability(ACapability);
   end;

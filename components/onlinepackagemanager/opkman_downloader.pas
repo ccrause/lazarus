@@ -158,6 +158,7 @@ type
     procedure DoOnPackageDownloadCompleted(Sender: TObject);
     procedure DoOnPackageUpdateProgress(Sender: TObject; AUPackageName, AUPackageURL: String; ACnt, ATotCnt: Integer; AUTyp: Integer; AUErrMsg: String);
     procedure DoOnPackageUpdateCompleted(Sender: TObject; AUSuccess: Boolean);
+    procedure DoOnTerminate(Sender: TObject);
   public
     constructor Create(const ARemoteRepository: String);
     destructor Destroy; override;
@@ -254,7 +255,7 @@ end;
 
 procedure TThreadDownload.DoOnJSONDownloadCompleted;
 var
-  JSON: TJSONStringType;
+  JSON: TJSONStringType = '';
   JSONFile: String;
 begin
   if Assigned(FOnJSONComplete) then
@@ -390,14 +391,17 @@ begin
     begin
       if FNeedToBreak then
         Break;
-      if (SerializablePackages.Items[I].Checked) and (Trim(SerializablePackages.Items[I].DownloadZipURL) <> '') then
+      if (SerializablePackages.Items[I].Checked) then
       begin
         Inc(FCnt);
         FUpackageName := SerializablePackages.Items[I].Name;
-        FUPackageURL := SerializablePackages.Items[I].DownloadZipURL;
+        if SerializablePackages.Items[I].IsDependencyPackage then
+          FUPackageURL := Options.RemoteRepository[Options.ActiveRepositoryIndex] + SerializablePackages.Items[I].RepositoryFileName
+        else
+          FUPackageURL := SerializablePackages.Items[I].DownloadZipURL;
         FUTyp := 0;
         Synchronize(@DoOnPackageUpdateProgress);
-        UpdateSize := GetUpdateSize(SerializablePackages.Items[I].DownloadZipURL, FUErrMsg);
+        UpdateSize := GetUpdateSize(FUPackageURL, FUErrMsg);
         if UpdateSize > -1 then
         begin
           if UpdateSize = 0 then
@@ -434,11 +438,13 @@ begin
       begin
         if NeedToBreak then
           Break;
-        if (SerializablePackages.Items[I].Checked) and (Trim(SerializablePackages.Items[I].DownloadZipURL) <> '') and
-           (SerializablePackages.Items[I].UpdateSize > -1) and (not (psError in  SerializablePackages.Items[I].PackageStates)) then
+        if (SerializablePackages.Items[I].Checked) and (SerializablePackages.Items[I].UpdateSize > -1) and (not (psError in  SerializablePackages.Items[I].PackageStates)) then
         begin
           Inc(FCnt);
-          FFrom := FixProtocol(SerializablePackages.Items[I].DownloadZipURL);
+          if SerializablePackages.Items[I].IsDependencyPackage then
+            FFrom := Options.RemoteRepository[Options.ActiveRepositoryIndex] + SerializablePackages.Items[I].RepositoryFileName
+          else
+            FFrom := FixProtocol(SerializablePackages.Items[I].DownloadZipURL);
           FTo := FDownloadTo + SerializablePackages.Items[I].RepositoryFileName;
           FCurSize := SerializablePackages.Items[I].UpdateSize;
           DS := TDownloadStream.Create(TFileStream.Create(FTo, fmCreate));
@@ -583,7 +589,7 @@ begin
   FTotCnt := 0;
   FTotSize := 0;
   for I := 0 to SerializablePackages.Count - 1 do
-    if (SerializablePackages.Items[I].Checked) and (Trim(SerializablePackages.Items[I].DownloadZipURL) <> '') then
+    if (SerializablePackages.Items[I].Checked) then
       Inc(FTotCnt);
   if (Assigned(LazarusIDE) and LazarusIDE.IDEStarted and (not LazarusIDE.IDEIsClosing)) then
     Start;
@@ -666,6 +672,7 @@ begin
   FDownload := TThreadDownload.Create;
   FDownload.OnJSONProgress := @DoOnJSONProgress;
   FDownload.OnJSONDownloadCompleted := @DoOnJSONDownloadCompleted;
+  FDownload.OnTerminate := @DoOnTerminate;
   FDownload.DownloadJSON(ATimeOut, ASilent);
 end;
 
@@ -675,6 +682,7 @@ begin
   FDownload.OnPackageDownloadProgress := @DoOnPackageDownloadProgress;
   FDownload.OnPackageDownloadError := @DoOnPackageDownloadError;
   FDownload.OnPackageDownloadCompleted := @DoOnPackageDownloadCompleted;
+  FDownload.OnTerminate := @DoOnTerminate;
   FDownload.DownloadPackages(ADownloadTo);
 end;
 
@@ -686,6 +694,7 @@ begin
   FDownload.OnPackageDownloadCompleted := @DoOnPackageDownloadCompleted;
   FDownload.OnPackageUpdateProgress := @DoOnPackageUpdateProgress;
   FDownload.OnPackageUpdateCompleted := @DoOnPackageUpdateCompleted;
+  FDownload.OnTerminate := @DoOnTerminate;
   FDownload.UpdatePackages(ADownloadTo);
 end;
 
@@ -697,6 +706,12 @@ begin
     FDownload.NeedToBreak := True;
   end;
 end;
+
+procedure TPackageDownloader.DoOnTerminate(Sender: TObject);
+begin
+  FDownload := nil;
+end;
+
 
 end.
 

@@ -165,7 +165,7 @@ type
     function UnIndentLine(const ACaret: TSynEditCaret; out CaretNewX: Integer): Boolean;
   public
     procedure Assign(Src: TPersistent); override;
-    // Retruns a 0-based position (even 0-based physical)
+    // Returns a 0-based position (even 0-based physical)
     function GetIndentForLine(Editor: TSynEditBase; const Line: string;
                         Physical: boolean): Integer;
     function GetDesiredIndentForLine
@@ -604,9 +604,9 @@ begin
     dec(BackCounter);
     Temp := GetLine(BackCounter);
     if Temp <> '' then begin
-      SetLength(Temp, GetIndentForLine(FCurrentEditor, Temp, False));
+      Temp := copy(Temp, 1, GetIndentForLine(FCurrentEditor, Temp, False));
       PhysLen := GetIndentForLine(FCurrentEditor, Temp, True);
-      if (PhysLen > KnownPhysLen) and StartsStr(BasedMix, Temp) then
+      if (PhysLen > KnownPhysLen) and LazStartsStr(BasedMix, Temp) then
       begin
         KnownMix := Temp;
         KnownPhysLen := PhysLen;
@@ -714,7 +714,7 @@ begin
   //  Temp := Lines[FoundLine-1]
   //else
   //  FoundLine := BackCounter + 1;
-  SetLength(Temp, GetIndentForLine(Editor, Temp, False));
+  Temp := copy(Temp, 1, GetIndentForLine(Editor, Temp, False));
 
   case FIndentType of
     sbitCopySpaceTab:

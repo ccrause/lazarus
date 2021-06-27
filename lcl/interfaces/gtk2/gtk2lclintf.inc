@@ -404,6 +404,14 @@ begin
 
           if ARawImage.Description.BitsPerPixel <> GetGdkImageBitsPerPixel(GdkImage)
           then begin
+            DebugLn('TGtk2WidgetSet.CreateBitmapFromRawImage GdkImage: ',
+              ' BytesPerLine=',dbgs(GdkImage^.bpl),
+              ' BitsPerPixel=',dbgs(GetGdkImageBitsPerPixel(GdkImage)),
+              ' ByteOrder=',dbgs(ord(GdkImage^.byte_order)),
+              ' Visual^.depth=',dbgs(Visual^.depth),
+              ' ImgDepth=',dbgs(ImgDepth),
+              ' ARawImage.Description.BitsPerPixel=',dbgs(ARawImage.Description.BitsPerPixel),
+              '');
             RaiseGDBException('TGtk2WidgetSet.CreateBitmapFromRawImage Incompatible BitsPerPixel');
           end;
           if ImgDataSize <> GdkImage^.bpl * ImgHeight
@@ -875,7 +883,7 @@ function gtk_message_dialog_get_message_area(Dialog:PGtkMessageDialog):PGtkWidge
 procedure set_message_text(Dialog:PGtkMessageDialog;const msg: string;const is_pango_markup:boolean=false);
 var
   ma:PGtkWidget;
-  mainList,ChildList:PgList;
+  mainList:PgList;
 begin
   if is_pango_markup then
     gtk_message_dialog_set_markup(Dialog, PGChar(msg))

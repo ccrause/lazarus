@@ -35,14 +35,15 @@
 unit FpDbgDwarfDataClasses;
 
 {$mode objfpc}{$H+}
+{$ModeSwitch advancedrecords}
 //{$INLINE OFF}
 {off $DEFINE USE_ABBREV_TMAP}
 
 interface
 
 uses
-  Classes, Types, SysUtils, contnrs, Math,
-  Maps, LazClasses, LazFileUtils, LazLoggerBase, LazUTF8,
+  Classes, Types, SysUtils, contnrs, Math, Maps, LazClasses, LazFileUtils,
+  LazLoggerDummy, LazUTF8, lazCollections,
   // FpDebug
   FpDbgUtil, FpDbgInfo, FpDbgDwarfConst,
   FpDbgLoader, FpImgReaderBase, FpdMemoryTools, FpErrorMessages, DbgIntfBaseTypes;
@@ -163,7 +164,7 @@ type
   { TLEB128PreFixTree }
 
   TLEB128PreFixTree = class
-  private
+  strict private
     FTableList: Array of TLeb128TableEntry;
     FTableListGaps: Array of record LeadTable, EndTable: Byte; end;
     FTableListNextFreeIndex: Cardinal;
@@ -174,11 +175,11 @@ type
     FEndTableNextFreeIndex: Cardinal;
 
     FDataGrowStep, FTableListGrowStep: Cardinal;
-  protected
-  public
+  strict protected
+    function AddLeb128FromPointer(APointer: Pointer; const AData: TDwarfAbbrev): Pointer;
     procedure SetCapacity(ACapacity: integer);
     procedure Finish;
-    function AddLeb128FromPointer(APointer: Pointer; const AData: TDwarfAbbrev): Pointer;
+  public
     function FindLe128bFromPointer(APointer: Pointer; out AData: PDwarfAbbrev): Pointer; // returnns pointer to first address after LEB128
     function FindLe128bFromPointer(APointer: Pointer; out AData: TDwarfAbbrev): Pointer; inline; // returnns pointer to first address after LEB128
   end;
@@ -186,14 +187,13 @@ type
   { TDwarfAbbrevList }
 
   TDwarfAbbrevList = class{$IFnDEF USE_ABBREV_TMAP}(TLEB128PreFixTree){$Endif}
-  private
+  strict private
     FAbbrDataEnd: Pointer;
     {$IFDEF USE_ABBREV_TMAP}
     FMap: TMap;  // Abbrevs
     {$Endif}
     FDefinitions: array of TDwarfAbbrevEntry;
     function GetEntryPointer(AIndex: Integer): PDwarfAbbrevEntry; inline;
-  protected
     procedure LoadAbbrevs(AnAbbrevDataPtr: Pointer);
   public
     constructor Create(AnAbbrData, AnAbbrDataEnd: Pointer; AnAbbrevOffset, AInfoLen: QWord);
@@ -233,19 +233,15 @@ type
     NameHash: Word;
   end;
   PDwarfScopeInfoRec = ^TDwarfScopeInfoRec;
-
   TDwarfScopeArray = Array of TDwarfScopeInfoRec;
-  TDwarfScopeList = record
-    List: TDwarfScopeArray;
-    HighestKnown: Integer;
-  end;
+
   PDwarfScopeList = ^TDwarfScopeList;
 
   { TDwarfScopeInfo }
 
   TDwarfScopeInfo = object
   private
-    FScopeList: PDwarfScopeList;
+    FScopeListPtr: PDwarfScopeList;
     FIndex: Integer;
     function GetChild: TDwarfScopeInfo; inline;
     function GetChildIndex: Integer; inline;
@@ -256,11 +252,8 @@ type
     function GetParent: TDwarfScopeInfo; inline;
     function GetParentIndex: Integer;
     procedure SetIndex(AIndex: Integer);
-    function CreateScopeForEntry(AEntry: Pointer; ALink: Integer): Integer; inline;
   public
-    procedure Init(AScopeList: PDwarfScopeList);
-    function CreateNextForEntry(AEntry: Pointer): Integer; inline;
-    function CreateChildForEntry(AEntry: Pointer): Integer; inline;
+    procedure Init(AScopeListPtr: PDwarfScopeList);
 
     function IsValid: Boolean; inline;
     property Index: Integer read FIndex write SetIndex;
@@ -281,6 +274,29 @@ type
     property NextIndex: Integer read GetNextIndex;
     property Child: TDwarfScopeInfo read GetChild;
     property ChildIndex: Integer read GetChildIndex;
+    property ScopeListPtr: PDwarfScopeList read FScopeListPtr;
+  end;
+
+  { TDwarfScopeList }
+
+  TDwarfScopeList = record
+  strict private
+    FList: TDwarfScopeArray;
+    FHighestKnown: Integer;
+    function CreateScopeForEntry(AEntry: Pointer; ALink: Integer): Integer; inline;
+    function CreateNextForEntry(AScope: TDwarfScopeInfo; AEntry: Pointer): Integer; inline;
+    function CreateChildForEntry(AScope: TDwarfScopeInfo; AEntry: Pointer): Integer; inline;
+  private
+    (* BuildList:
+       Once the complete list is scanned, all access is readonly.
+       TDwarfScopeList can be accessed from multiple threads  (once build)
+    *)
+    function BuildList(AnAbbrevList: TDwarfAbbrevList; AnInfoData: Pointer;
+      ALength: QWord; AnAddressSize: Byte; AnIsDwarf64: Boolean; AVersion: Word;
+      AnUntilTagFound: Cardinal = 0): TDwarfScopeInfo;
+  public
+    property HighestKnown: Integer read FHighestKnown;
+    property List: TDwarfScopeArray read FList; // NameHash will be updated by a thread
   end;
 
   { TDwarfInformationEntry }
@@ -552,18 +568,25 @@ type
   { TFpThreadWorkerScanAll }
 
   TFpThreadWorkerScanAll = class(TFpThreadWorkerItem)
-  protected
+  strict private
     FCU: TDwarfCompilationUnit;
+    FScanScopeList: TDwarfScopeList;
     FCompNameHashWorker: TFpThreadWorkerComputeNameHashes;
+  protected
     procedure DoExecute; override;
   public
     constructor Create(CU: TDwarfCompilationUnit; ACompNameHashWorker: TFpThreadWorkerComputeNameHashes);
+    function FindCompileUnit: TDwarfScopeInfo; // To be called ONLY before the thread starts
   end;
 
   { TDwarfCompilationUnit }
 
   TDwarfCompilationUnitClass = class of TDwarfCompilationUnit;
   TDwarfCompilationUnit = class
+  strict private
+    FWaitForScopeScanSection: TWaitableSection;
+    FWaitForComputeHashesSection: TWaitableSection;
+    FBuildAddressMapSection: TWaitableSection;
   private
     FOwner: TFpDwarfInfo;
     FDebugFile: PDwarfDebugFile;
@@ -615,13 +638,17 @@ type
     
     FMinPC: QWord;  // the min and max PC value found in this unit.
     FMaxPC: QWord;  //
-    FScope: TDwarfScopeInfo;
+    FFirstScope: TDwarfScopeInfo;
     FScopeList: TDwarfScopeList;
+    FCompUnitScope: TDwarfScopeInfo;
     FKnownNameHashes: TKnownNameHashesArray;
 
     FScanAllWorker: TFpThreadWorkerScanAll;
     FComputeNameHashesWorker: TFpThreadWorkerComputeNameHashes;
 
+    function GetFirstScope: TDwarfScopeInfo; inline;
+    procedure DoWaitForScopeScan;
+    procedure DoWaitForComputeHashes;
     procedure BuildAddressMap;
     function GetAddressMap: TMap;
     function GetKnownNameHashes: PKnownNameHashesArray; inline;
@@ -629,7 +656,6 @@ type
     function  ReadTargetAddressFromDwarfSection(var AData: Pointer; AIncPointer: Boolean = False): TFpDbgMemLocation;
     function  ReadDwarfSectionOffsetOrLenFromDwarfSection(var AData: Pointer; AIncPointer: Boolean = False): TFpDbgMemLocation;
   protected
-    function LocateEntry(ATag: Cardinal; out AResultScope: TDwarfScopeInfo): Boolean;
     function InitLocateAttributeList(AEntry: Pointer; var AList: TAttribPointerList): Boolean;
     function LocateAttribute(AEntry: Pointer; AAttribute: Cardinal; var AList: TAttribPointerList;
                              out AAttribPtr: Pointer; out AForm: Cardinal): Boolean;
@@ -680,7 +706,7 @@ type
     property DebugFile: PDwarfDebugFile read FDebugFile;
 
     property DwarfSymbolClassMap: TFpSymbolDwarfClassMap read FDwarfSymbolClassMap;
-    property FirstScope: TDwarfScopeInfo read FScope;
+    property FirstScope: TDwarfScopeInfo read GetFirstScope;
 
     // public for FpDbgDwarfVerbosePrinter
     property InfoData: Pointer read FInfoData;
@@ -693,12 +719,13 @@ type
   { TFpDwarfInfo }
 
   TFpDwarfInfo = class(TDbgInfo)
-  private
+  strict private
+    FCompilationUnits: TList; // any access must be guarded by Item[n].WaitForScopeScan
     FWorkQueue: TFpGlobalThreadWorkerQueue;
-    FCompilationUnits: TList;
-    FImageBase: QWord;
     FFiles: array of TDwarfDebugFile;
-    function GetCompilationUnit(AIndex: Integer): TDwarfCompilationUnit;
+  private
+    FImageBase: QWord;
+    function GetCompilationUnit(AIndex: Integer): TDwarfCompilationUnit; inline;
   protected
     function GetCompilationUnitClass: TDwarfCompilationUnitClass; virtual;
     function FindCompilationUnitByOffs(AOffs: QWord): TDwarfCompilationUnit;
@@ -714,7 +741,7 @@ type
     function GetLineAddressMap(const AFileName: String): PDWarfLineMap;
     function LoadCompilationUnits: Integer;
     function PointerFromRVA(ARVA: QWord): Pointer;
-    function CompilationUnitsCount: Integer;
+    function CompilationUnitsCount: Integer; inline;
     property CompilationUnits[AIndex: Integer]: TDwarfCompilationUnit read GetCompilationUnit;
 
     property ImageBase: QWord read FImageBase;
@@ -800,6 +827,7 @@ var
 
 var
   TheDwarfSymbolClassMapList: TFpSymbolDwarfClassMapList;
+  CachedRtlEvent: PRTLEvent = nil;
 
 const
   SCOPE_ALLOC_BLOCK_SIZE = 4096; // Increase scopelist in steps of
@@ -1595,10 +1623,10 @@ end;
 
 { TDwarfScopeInfo }
 
-procedure TDwarfScopeInfo.Init(AScopeList: PDwarfScopeList);
+procedure TDwarfScopeInfo.Init(AScopeListPtr: PDwarfScopeList);
 begin
   FIndex := -1;
-  FScopeList := AScopeList;
+  FScopeListPtr := AScopeListPtr;
 end;
 
 function TDwarfScopeInfo.IsValid: Boolean;
@@ -1612,16 +1640,16 @@ var
   p: PDwarfScopeInfoRec;
 begin
   Result := -1;
-  if (not IsValid) or (FScopeList^.HighestKnown = FIndex) then exit;
+  if (not IsValid) or (FScopeListPtr^.HighestKnown = FIndex) then exit;
   // Use pointer, to avoid calculating the index twice
-  p := @FScopeList^.List[FIndex + 1];
+  p := @FScopeListPtr^.List[FIndex + 1];
   Result := p^.Link;
-  assert(Result <= FScopeList^.HighestKnown);
+  assert(Result <= FScopeListPtr^.HighestKnown);
   if (Result > FIndex + 1) then       // Index+1 is First Child, with pointer to Next
     exit;
 
   l := (p-1)^.Link; // GetParent  (or -1 for toplevel)
-  assert(l <= FScopeList^.HighestKnown);
+  assert(l <= FScopeListPtr^.HighestKnown);
   if l > Index then l := Index - 1;   // This is a first child, make l = parent
   if (Result = l) then begin          // Index + 1 has same parent
     Result := Index + 1;
@@ -1633,7 +1661,7 @@ end;
 
 function TDwarfScopeInfo.GetNext: TDwarfScopeInfo;
 begin
-  Result.Init(FScopeList);
+  Result.Init(FScopeListPtr);
   if IsValid then
     Result.Index := GetNextIndex;
 end;
@@ -1642,24 +1670,24 @@ function TDwarfScopeInfo.GetEntry: Pointer;
 begin
   Result := nil;
   if IsValid then
-    Result := FScopeList^.List[FIndex].Entry;
+    Result := FScopeListPtr^.List[FIndex].Entry;
 end;
 
 function TDwarfScopeInfo.HasChild: Boolean;
 var
   l2: Integer;
 begin
-  Result := (IsValid) and (FScopeList^.HighestKnown > FIndex);
+  Result := (IsValid) and (FScopeListPtr^.HighestKnown > FIndex);
   if not Result then exit;
-  l2 := FScopeList^.List[FIndex + 1].Link;
-  assert(l2 <= FScopeList^.HighestKnown);
+  l2 := FScopeListPtr^.List[FIndex + 1].Link;
+  assert(l2 <= FScopeListPtr^.HighestKnown);
   Result := (l2 > FIndex + 1) or        // Index+1 is First Child, with pointer to Next
             (l2 = FIndex);              // Index+1 is First Child, with pointer to parent (self)
 end;
 
 function TDwarfScopeInfo.GetChild: TDwarfScopeInfo;
 begin
-  Result.Init(FScopeList);
+  Result.Init(FScopeListPtr);
   if HasChild then begin
     Result.Index := FIndex + 1;
     assert(Result.Parent.Index = FIndex, 'child has self as parent');
@@ -1678,17 +1706,17 @@ function TDwarfScopeInfo.GetCurrent: PDwarfScopeInfoRec;
 begin
   Result := nil;
   if IsValid then
-    Result := @FScopeList^.List[FIndex];
+    Result := @FScopeListPtr^.List[FIndex];
 end;
 
 function TDwarfScopeInfo.GetParent: TDwarfScopeInfo;
 var
   l: Integer;
 begin
-  Result.Init(FScopeList);
+  Result.Init(FScopeListPtr);
   if not IsValid then exit;
-  l := FScopeList^.List[FIndex].Link; // GetParent  (or -1 for toplevel)
-  assert(l <= FScopeList^.HighestKnown);
+  l := FScopeListPtr^.List[FIndex].Link; // GetParent  (or -1 for toplevel)
+  assert(l <= FScopeListPtr^.HighestKnown);
   if l > Index then
     l := Index - 1;   // This is a first child, make l = parent
   Result.Index := l;
@@ -1698,30 +1726,18 @@ function TDwarfScopeInfo.GetParentIndex: Integer;
 begin
   Result := -1;
   if not IsValid then exit;
-  Result := FScopeList^.List[FIndex].Link; // GetParent  (or -1 for toplevel)
-  assert(Result <= FScopeList^.HighestKnown);
+  Result := FScopeListPtr^.List[FIndex].Link; // GetParent  (or -1 for toplevel)
+  assert(Result <= FScopeListPtr^.HighestKnown);
   if Result > Index then
     Result := Index - 1;   // This is a first child, make l = parent
 end;
 
 procedure TDwarfScopeInfo.SetIndex(AIndex: Integer);
 begin
-  if (AIndex >= 0) and (AIndex <= FScopeList^.HighestKnown) then
+  if (AIndex >= 0) and (AIndex <= FScopeListPtr^.HighestKnown) then
     FIndex := AIndex
   else
     FIndex := -1;
-end;
-
-function TDwarfScopeInfo.CreateScopeForEntry(AEntry: Pointer; ALink: Integer): Integer;
-begin
-  inc(FScopeList^.HighestKnown);
-  Result := FScopeList^.HighestKnown;
-  if Result >= Length(FScopeList^.List) then
-    SetLength(FScopeList^.List, Result + SCOPE_ALLOC_BLOCK_SIZE);
-  with FScopeList^.List[Result] do begin
-    Entry := AEntry;
-    Link := ALink;
-  end;
 end;
 
 function TDwarfScopeInfo.HasParent: Boolean;
@@ -1730,8 +1746,8 @@ var
 begin
   Result := (IsValid);
   if not Result then exit;
-  l := FScopeList^.List[FIndex].Link;
-  assert(l <= FScopeList^.HighestKnown);
+  l := FScopeListPtr^.List[FIndex].Link;
+  assert(l <= FScopeListPtr^.HighestKnown);
   Result := (l >= 0);
 end;
 
@@ -1739,16 +1755,16 @@ function TDwarfScopeInfo.HasNext: Boolean;
 var
   l, l2: Integer;
 begin
-  Result := (IsValid) and (FScopeList^.HighestKnown > FIndex);
+  Result := (IsValid) and (FScopeListPtr^.HighestKnown > FIndex);
   if not Result then exit;
-  l2 := FScopeList^.List[FIndex + 1].Link;
-  assert(l2 <= FScopeList^.HighestKnown);
+  l2 := FScopeListPtr^.List[FIndex + 1].Link;
+  assert(l2 <= FScopeListPtr^.HighestKnown);
   Result := (l2 > FIndex + 1);        // Index+1 is First Child, with pointer to Next
   if Result then
     exit;
 
-  l := FScopeList^.List[FIndex].Link; // GetParent  (or -1 for toplevel)
-  assert(l <= FScopeList^.HighestKnown);
+  l := FScopeListPtr^.List[FIndex].Link; // GetParent  (or -1 for toplevel)
+  assert(l <= FScopeListPtr^.HighestKnown);
   if l > Index then
     l := Index - 1;   // This is a first child, make l = parent
   Result := (l2 = l);                 // Index + 1 has same parent
@@ -1759,8 +1775,8 @@ var
   l: Integer;
 begin
   if not IsValid then exit;
-  l := FScopeList^.List[FIndex].Link; // GetParent  (or -1 for toplevel)
-  assert(l <= FScopeList^.HighestKnown);
+  l := FScopeListPtr^.List[FIndex].Link; // GetParent  (or -1 for toplevel)
+  assert(l <= FScopeListPtr^.HighestKnown);
   if l > Index then
     l := Index - 1;   // This is a first child, make l = parent
   FIndex := l;
@@ -1779,25 +1795,154 @@ begin
     FIndex := -1;
 end;
 
-function TDwarfScopeInfo.CreateNextForEntry(AEntry: Pointer): Integer;
+{ TDwarfScopeList }
+
+function TDwarfScopeList.CreateScopeForEntry(AEntry: Pointer; ALink: Integer
+  ): Integer;
+begin
+  inc(FHighestKnown);
+  Result := HighestKnown;
+  if Result >= Length(List) then
+    SetLength(FList, Result + SCOPE_ALLOC_BLOCK_SIZE);
+  FList[Result].Entry := AEntry;
+  FList[Result].Link := ALink;
+end;
+
+function TDwarfScopeList.CreateNextForEntry(AScope: TDwarfScopeInfo;
+  AEntry: Pointer): Integer;
 var
   l: Integer;
 begin
-  assert(IsValid, 'Creating Child for invalid scope');
-  assert(NextIndex<0, 'Next already set');
-  l := FScopeList^.List[FIndex].Link; // GetParent (or -1 for toplevel)
-  assert(l <= FScopeList^.HighestKnown);
-  if l > Index then l := Index - 1;   // This is a first child, make l = parent
+  assert(AScope.IsValid, 'Creating Child for invalid scope');
+  assert(AScope.NextIndex < 0, 'Next already set');
+  l := List[AScope.Index].Link; // GetParent (or -1 for toplevel)
+  assert(l <= HighestKnown);
+  if l > AScope.Index then l := AScope.Index - 1;   // This is a first child, make l = parent
   Result := CreateScopeForEntry(AEntry, l);
-  if Result > FIndex + 1 then  // We have children
-    FScopeList^.List[FIndex+1].Link := Result;
+  if Result > AScope.Index + 1 then  // We have children
+    FList[AScope.Index+1].Link := Result;
 end;
 
-function TDwarfScopeInfo.CreateChildForEntry(AEntry: Pointer): Integer;
+function TDwarfScopeList.CreateChildForEntry(AScope: TDwarfScopeInfo;
+  AEntry: Pointer): Integer;
 begin
-  assert(IsValid, 'Creating Child for invalid scope');
-  assert(FIndex=FScopeList^.HighestKnown, 'Cannot creating Child.Not at end of list');
-  Result := CreateScopeForEntry(AEntry, FIndex); // First Child, but no parent.next yet
+  //assert(AScope.IsValid, 'Creating Child for invalid scope');
+  assert(AScope.Index = HighestKnown, 'Cannot creating Child.Not at end of list');
+  Result := CreateScopeForEntry(AEntry, AScope.Index); // First Child, but no parent.next yet
+end;
+
+function TDwarfScopeList.BuildList(AnAbbrevList: TDwarfAbbrevList;
+  AnInfoData: Pointer; ALength: QWord; AnAddressSize: Byte;
+  AnIsDwarf64: Boolean; AVersion: Word; AnUntilTagFound: Cardinal
+  ): TDwarfScopeInfo;
+
+  function ParseAttribs(const ADef: PDwarfAbbrev; var p: Pointer): Boolean;
+  var
+    idx: Integer;
+    ADefs: PDwarfAbbrevEntry;
+    AddrSize: Byte;
+  begin
+    ADefs := AnAbbrevList.EntryPointer[ADef^.Index];
+    AddrSize := AnAddressSize;
+    for idx := 0 to ADef^.Count - 1 do
+    begin
+      if not SkipEntryDataForForm(p, ADefs^.Form, AddrSize, AnIsDwarf64, AVersion) then
+        exit(False);
+      inc(ADefs);
+    end;
+    Result := True;
+  end;
+
+var
+  Abbrev: Cardinal;
+  Def: PDwarfAbbrev;
+  p, EntryDataPtr, NextEntryDataPtr, AMaxData: Pointer;
+  BuildScope: TDwarfScopeInfo;
+  ni: Integer;
+  AppendAsChild: Boolean;
+begin
+  if FList = nil then begin
+    SetLength(FList, Min(SCOPE_ALLOC_BLOCK_SIZE, ALength div 2 + 1));
+    FHighestKnown := 0;
+    FList[0].Link := -1;
+    FList[0].Entry  := AnInfoData;
+  end;
+  assert(FList[0].Entry = AnInfoData, 'TDwarfScopeList.BuildList: FList[0].Entry = AnInfoData');
+
+  Result.Index := -1; // invalid
+  BuildScope.Init(@Self);
+  BuildScope.Index := FHighestKnown; // last known Buildscope
+
+  // "last rounds" NextEntryDataPtr
+  AMaxData := AnInfoData + ALength;
+  NextEntryDataPtr := BuildScope.Entry;
+  while (NextEntryDataPtr < AMaxData) do
+  begin
+    EntryDataPtr := NextEntryDataPtr;
+
+    NextEntryDataPtr := AnAbbrevList.FindLe128bFromPointer(EntryDataPtr, Def);
+    if NextEntryDataPtr = nil then begin
+      Abbrev := ULEB128toOrdinal(EntryDataPtr);
+      DebugLn(FPDBG_DWARF_WARNINGS, ['Error: Abbrev not found: ', Abbrev]);
+          // TODO shorten array
+      exit;
+    end;
+
+    if (AnUntilTagFound <> 0) and (Def^.tag = AnUntilTagFound) then begin
+      Result := BuildScope;
+      Break;
+    end;
+
+    if not ParseAttribs(Def, NextEntryDataPtr) then begin
+      DebugLn(FPDBG_DWARF_WARNINGS, ['Error: data not parsed:']);
+      exit;
+    end;
+    // NextEntryDataPtr is now at next Buildscope
+
+    if NextEntryDataPtr >= AMaxData then
+      break;
+
+    p := NextEntryDataPtr;
+    Abbrev := ULEB128toOrdinal(p);
+    if Abbrev = 0 then begin      // no more sibling
+      AppendAsChild := False;     // children already done
+      if (dafHasChildren in Def^.flags) then begin  // current has 0 children
+        NextEntryDataPtr := p;
+        if NextEntryDataPtr >= AMaxData then
+          break;
+        Abbrev := ULEB128toOrdinal(p);
+      end;
+      while (Abbrev = 0) do begin
+        NextEntryDataPtr := p;
+        if NextEntryDataPtr >= AMaxData then
+          break;
+        BuildScope.GoParent;
+        if not BuildScope.IsValid then begin
+          DebugLn(FPDBG_DWARF_WARNINGS, ['Error: Abbrev not found: ', Abbrev]);
+          // TODO shorten array
+          exit;
+        end;
+        Abbrev := ULEB128toOrdinal(p);
+      end;
+      if NextEntryDataPtr >= AMaxData then
+        break;
+    end
+    else
+      AppendAsChild := (dafHasChildren in Def^.flags);
+
+    if AppendAsChild then
+      ni := CreateChildForEntry(BuildScope, NextEntryDataPtr)
+    else
+      ni := CreateNextForEntry(BuildScope, NextEntryDataPtr);
+
+    BuildScope.FIndex := ni; // skip check, index was just created / must exist
+  end;
+
+  if (NextEntryDataPtr >= AMaxData) then begin
+    if (EntryDataPtr > AMaxData) then
+      debugln(FPDBG_DWARF_WARNINGS, ['BuildList went past end of memory: ', EntryDataPtr-AMaxData]);
+    SetLength(FList, FHighestKnown + 1);
+  end;
 end;
 
 { TDwarfLocationStack }
@@ -2588,7 +2733,7 @@ begin
 
   NextTopLevel := 0;
   dec(FScope.FIndex);
-  while (FScope.Index < FScope.FScopeList^.HighestKnown) do begin
+  while (FScope.Index < FScope.ScopeListPtr^.HighestKnown) do begin
     inc(FScope.FIndex);
     ScopeChanged;
     PrepareAbbrev;
@@ -3000,6 +3145,8 @@ end;
 function TDwarfInformationEntry.DoReadReference(
   InfoIdx: Integer; InfoData: pointer; out AValue: Pointer; out
   ACompUnit: TDwarfCompilationUnit): Boolean;
+const
+  CU_HEADER_SIZE: array [boolean] of QWord = (SizeOf(TDwarfCUHeader32), SizeOf(TDwarfCUHeader64));
 var
   Form: Cardinal;
   Offs: QWord;
@@ -3022,9 +3169,14 @@ begin
     if not Result then
       exit;
     ACompUnit := FCompUnit;
-    if ACompUnit.FIsDwarf64
-    then AValue := ACompUnit.FScope.Entry + Offs - SizeOf(TDwarfCUHeader64)
-    else AValue := ACompUnit.FScope.Entry + Offs - SizeOf(TDwarfCUHeader32);
+    {$PUSH}{$R-}
+    AValue := ACompUnit.FirstScope.Entry - CU_HEADER_SIZE[ACompUnit.FIsDwarf64] + Offs;
+    {$POP}
+    if (AValue < ACompUnit.FInfoData) or (AValue >= ACompUnit.FInfoData + ACompUnit.FLength) then begin
+      DebugLn(FPDBG_DWARF_ERRORS, 'Error: Reference to invalid location. Offset %d is outsize the CU of size %d', [Offs, ACompUnit.FLength]);
+      AValue := nil;
+      Result := False;
+    end;
   end
   else
   if (Form = DW_FORM_ref_addr) then begin
@@ -3494,7 +3646,6 @@ var
   n: Integer;
   CU: TDwarfCompilationUnit;
   MinMaxSet: boolean;
-  Scope: TDwarfScopeInfo;
 begin
   Result := nil;
   for n := 0 to FCompilationUnits.Count - 1 do
@@ -3506,10 +3657,10 @@ begin
     if (not MinMaxSet) or ((AAddress < CU.FMinPC) or (AAddress > CU.FMaxPC))
     then Continue;
 
-    if not CU.LocateEntry(DW_TAG_compile_unit, Scope) then
+    if not CU.Valid then // implies FCompUnitScope is ok
       break;
 
-    Result := Cu.DwarfSymbolClassMap.CreateUnitSymbol(CU, TDwarfInformationEntry.Create(CU, Scope), Self);
+    Result := Cu.DwarfSymbolClassMap.CreateUnitSymbol(CU, TDwarfInformationEntry.Create(CU, CU.FCompUnitScope), Self);
     break;
   end;
 end;
@@ -3554,6 +3705,7 @@ var
   CUClass: TDwarfCompilationUnitClass;
   inf: TDwarfSectionInfo;
   i: integer;
+  DataOffs, DataLen: QWord;
 begin
   CUClass := GetCompilationUnitClass;
   for i := 0 to high(FFiles) do
@@ -3567,11 +3719,17 @@ begin
       then begin
         if CU64^.Version < 3 then
           DebugLn(FPDBG_DWARF_WARNINGS, ['Unexpected 64 bit signature found for DWARF version 2']); // or version 1...
+        DataOffs := PtrUInt(CU64 + 1) - PtrUInt(inf.RawData);
+        DataLen := CU64^.Length - SizeOf(CU64^) + SizeOf(CU64^.Signature) + SizeOf(CU64^.Length);
+        if DataOffs + DataLen > inf.Size then begin
+          DebugLn(FPDBG_DWARF_ERRORS, 'Error: Invalid size for compilation unit at offest %d with size %d exceeds section size %d', [DataOffs, DataLen, inf.Size]);
+          break; // Do not process invalid data
+        end;
         CU := CUClass.Create(
                 Self,
                 @FFiles[i],
-                PtrUInt(CU64 + 1) - PtrUInt(inf.RawData),
-                CU64^.Length - SizeOf(CU64^) + SizeOf(CU64^.Signature) + SizeOf(CU64^.Length),
+                DataOffs,
+                DataLen,
                 CU64^.Version,
                 CU64^.AbbrevOffset,
                 CU64^.AddressSize,
@@ -3580,11 +3738,17 @@ begin
       end
       else begin
         if CU32^.Length = 0 then Break;
+        DataOffs := PtrUInt(CU32 + 1) - PtrUInt(inf.RawData);
+        DataLen := CU32^.Length - SizeOf(CU32^) + SizeOf(CU32^.Length);
+        if DataOffs + DataLen > inf.Size then begin
+          DebugLn(FPDBG_DWARF_ERRORS, 'Error: Invalid size for compilation unit at offest %d with size %d exceeds section size %d', [DataOffs, DataLen, inf.Size]);
+          break; // Do not process invalid data
+        end;
         CU := CUClass.Create(
                 Self,
                 @FFiles[i],
-                PtrUInt(CU32 + 1) - PtrUInt(inf.RawData),
-                CU32^.Length - SizeOf(CU32^) + SizeOf(CU32^.Length),
+                DataOffs,
+                DataLen,
                 CU32^.Version,
                 CU32^.AbbrevOffset,
                 CU32^.AddressSize,
@@ -3883,10 +4047,16 @@ end;
 { TFpThreadWorkerScanAll }
 
 procedure TFpThreadWorkerScanAll.DoExecute;
-var
-  ResultScope: TDwarfScopeInfo;
 begin
-  FCU.LocateEntry(0, ResultScope);
+  FScanScopeList.BuildList(FCU.FAbbrevList, FCU.FInfoData, FCU.FLength,
+    FCU.FAddressSize, FCU.IsDwarf64, FCU.Version);
+
+  // The other thread does WaitForScopeScan (if all is correct)
+  // We must write them now, for the CompNameHashWorker
+  FCU.FScopeList := FScanScopeList;
+  FCU.FFirstScope.Init(@FCU.FScopeList);
+  FCU.FFirstScope.Index := 0;
+
   FCompNameHashWorker.MarkReadyToRun;
 end;
 
@@ -3895,6 +4065,12 @@ constructor TFpThreadWorkerScanAll.Create(CU: TDwarfCompilationUnit;
 begin
   FCU := CU;
   FCompNameHashWorker := ACompNameHashWorker;
+end;
+
+function TFpThreadWorkerScanAll.FindCompileUnit: TDwarfScopeInfo;
+begin
+  Result := FScanScopeList.BuildList(FCU.FAbbrevList, FCU.FInfoData, FCU.FLength,
+    FCU.FAddressSize, FCU.IsDwarf64, FCU.Version, DW_TAG_compile_unit);
 end;
 
 { TFpThreadWorkerComputeNameHashes }
@@ -4029,22 +4205,48 @@ begin
   Result := FAbbrevList.FindLe128bFromPointer(AAbbrevPtr, ADefinition) <> nil;
 end;
 
+procedure TDwarfCompilationUnit.DoWaitForScopeScan;
+begin
+  if FWaitForScopeScanSection.EnterOrWait(CachedRtlEvent) then begin
+    if FScanAllWorker <> nil then begin
+      FOwner.WorkQueue.WaitForItem(FScanAllWorker);
+      FScanAllWorker.DecRef;
+      FScanAllWorker := nil;
+    end;
+    FWaitForScopeScanSection.Leave;
+  end;
+  assert(FScanAllWorker=nil, 'TDwarfCompilationUnit.DoWaitForScopeScan: FScanAllWorker=nil');
+end;
+
+procedure TDwarfCompilationUnit.DoWaitForComputeHashes;
+begin
+  if FWaitForComputeHashesSection.EnterOrWait(CachedRtlEvent) then begin
+    if FComputeNameHashesWorker <> nil then begin
+      FOwner.WorkQueue.WaitForItem(FComputeNameHashesWorker);
+      FComputeNameHashesWorker.DecRef;
+      FComputeNameHashesWorker := nil;
+    end;
+    FWaitForComputeHashesSection.Leave;
+  end;
+  assert(FComputeNameHashesWorker=nil, 'TDwarfCompilationUnit.DoWaitForComputeHashes: FComputeNameHashesWorker=nil');
+end;
+
 procedure TDwarfCompilationUnit.WaitForScopeScan;
 begin
-  if FScanAllWorker <> nil then begin
-    FOwner.WorkQueue.WaitForItem(FScanAllWorker);
-    FScanAllWorker.DecRef;
-  end;
-  FScanAllWorker := nil;
+  if FScanAllWorker <> nil then
+    DoWaitForScopeScan;
 end;
 
 procedure TDwarfCompilationUnit.WaitForComputeHashes;
 begin
-  if FComputeNameHashesWorker <> nil then begin
-    FOwner.WorkQueue.WaitForItem(FComputeNameHashesWorker);
-    FComputeNameHashesWorker.DecRef;
-  end;
-  FComputeNameHashesWorker := nil;
+  if FComputeNameHashesWorker <> nil then
+    DoWaitForComputeHashes;
+end;
+
+function TDwarfCompilationUnit.GetFirstScope: TDwarfScopeInfo;
+begin
+  Assert(FFirstScope.ScopeListPtr <> nil);
+  Result := FFirstScope;
 end;
 
 procedure TDwarfCompilationUnit.BuildAddressMap;
@@ -4059,57 +4261,65 @@ var
 begin
   if FAddressMapBuild then Exit;
 
-  Scope := FScope;
-  ScopeIdx := Scope.Index;
+  if FBuildAddressMapSection.EnterOrWait(CachedRtlEvent) then begin
+    if not FAddressMapBuild then begin
 
-  while Scope.IsValid do
-  begin
-    if not GetDefinition(Scope.Entry, Abbrev) then begin
-      inc(ScopeIdx);
-      Scope.Index := ScopeIdx; // Child or Next, or parent.next
-      continue;
+      Scope := FirstScope;
+      ScopeIdx := Scope.Index;
 
-      //DebugLn(FPDBG_DWARF_WARNINGS, ['No abbrev found']);
-      //break;
-    end;
+      while Scope.IsValid do
+      begin
+        if not GetDefinition(Scope.Entry, Abbrev) then begin
+          inc(ScopeIdx);
+          Scope.Index := ScopeIdx; // Child or Next, or parent.next
+          continue;
 
-    if Abbrev.tag = DW_TAG_subprogram then begin
-      AttribList.EvalCount := 0;
-      Info.ScopeIndex := Scope.Index;
-      Info.ScopeList := Scope.FScopeList;
-      // TODO: abstract origin
-      if InitLocateAttributeList(Scope.Entry, AttribList) then begin // TODO: error if not
-        if (dafHasLowAddr in AttribList.Abbrev^.flags) and
-           LocateAttribute(Scope.Entry, DW_AT_low_pc, AttribList, Attrib, Form)
-        then begin
-          ReadAddressValue(Attrib, Form, Info.StartPC);
+          //DebugLn(FPDBG_DWARF_WARNINGS, ['No abbrev found']);
+          //break;
+        end;
 
-          if LocateAttribute(Scope.Entry, DW_AT_high_pc, AttribList, Attrib, Form)
-          then ReadAddressValue(Attrib, Form, Info.EndPC)
-          else Info.EndPC := Info.StartPC;
+        if Abbrev.tag = DW_TAG_subprogram then begin
+          AttribList.EvalCount := 0;
+          Info.ScopeIndex := Scope.Index;
+          Info.ScopeList := Scope.ScopeListPtr;
+          // TODO: abstract origin
+          if InitLocateAttributeList(Scope.Entry, AttribList) then begin // TODO: error if not
+            if (dafHasLowAddr in AttribList.Abbrev^.flags) and
+               LocateAttribute(Scope.Entry, DW_AT_low_pc, AttribList, Attrib, Form)
+            then begin
+              ReadAddressValue(Attrib, Form, Info.StartPC);
 
-          // TODO (dafHasName in Abbrev.flags)
-          if (dafHasName in AttribList.Abbrev^.flags) and
-             LocateAttribute(Scope.Entry, DW_AT_name, AttribList, Attrib, Form)
-          then ReadValue(Attrib, Form, Info.Name)
-          else Info.Name := 'undefined';
+              if LocateAttribute(Scope.Entry, DW_AT_high_pc, AttribList, Attrib, Form)
+              then ReadAddressValue(Attrib, Form, Info.EndPC)
+              else Info.EndPC := Info.StartPC;
 
-          Info.StateMachine := nil;
-          if Info.StartPC <> 0
-          then begin
-            if FAddressMap.HasId(Info.StartPC)
-            then DebugLn(FPDBG_DWARF_WARNINGS, ['WARNING duplicate start address: ', IntToHex(Info.StartPC, FAddressSize * 2)])
-            else FAddressMap.Add(Info.StartPC, Info);
+              // TODO (dafHasName in Abbrev.flags)
+              if (dafHasName in AttribList.Abbrev^.flags) and
+                 LocateAttribute(Scope.Entry, DW_AT_name, AttribList, Attrib, Form)
+              then ReadValue(Attrib, Form, Info.Name)
+              else Info.Name := 'undefined';
+
+              Info.StateMachine := nil;
+              if Info.StartPC <> 0
+              then begin
+                if FAddressMap.HasId(Info.StartPC)
+                then DebugLn(FPDBG_DWARF_WARNINGS, ['WARNING duplicate start address: ', IntToHex(Info.StartPC, FAddressSize * 2)])
+                else FAddressMap.Add(Info.StartPC, Info);
+              end;
+            end;
           end;
         end;
+
+        inc(ScopeIdx);
+        Scope.Index := ScopeIdx; // Child or Next, or parent.next
       end;
+
+      FAddressMapBuild := True;
     end;
 
-    inc(ScopeIdx);
-    Scope.Index := ScopeIdx; // Child or Next, or parent.next
+    FBuildAddressMapSection.Leave;
   end;
-
-  FAddressMapBuild := True;
+  assert(FAddressMapBuild, 'TDwarfCompilationUnit.BuildAddressMap: FAddressMapBuild');
 end;
 
 constructor TDwarfCompilationUnit.Create(AOwner: TFpDwarfInfo; ADebugFile: PDwarfDebugFile; ADataOffset: QWord; ALength: QWord; AVersion: Word; AAbbrevOffset: QWord; AAddressSize: Byte; AIsDwarf64: Boolean);
@@ -4247,26 +4457,20 @@ begin
   FLineNumberMap.Sorted := True;
   FLineNumberMap.Duplicates := dupError;
 
-  SetLength(FScopeList.List, Min(SCOPE_ALLOC_BLOCK_SIZE, FLength div 2 + 1));
-  FScopeList.List[0].Link := -1;
-  FScopeList.List[0].Entry  := FInfoData;
-  FScopeList.HighestKnown := 0;
-  FScope.Init(@FScopeList);
-  FScope.Index := 0;
-  // retrieve some info about this unit
-  if not LocateEntry(DW_TAG_compile_unit, Scope)
-  then begin
+  FFirstScope.Init(nil); // invalid
+
+  FComputeNameHashesWorker := TFpThreadWorkerComputeNameHashes.Create(Self);
+  FComputeNameHashesWorker.AddRef;
+  FScanAllWorker := TFpThreadWorkerScanAll.Create(Self, FComputeNameHashesWorker);
+  FScanAllWorker.AddRef;
+
+  Scope := FScanAllWorker.FindCompileUnit;
+  if not Scope.IsValid then begin
     DebugLn(FPDBG_DWARF_WARNINGS, ['WARNING compilation unit has no compile_unit tag']);
     Exit;
   end;
   FValid := True;
-
-  FComputeNameHashesWorker := TFpThreadWorkerComputeNameHashes.Create(Self);
-  FComputeNameHashesWorker.AddRef;
-
-  FScanAllWorker := TFpThreadWorkerScanAll.Create(Self, FComputeNameHashesWorker);
-  FScanAllWorker.AddRef;
-  FOwner.WorkQueue.PushItem(FScanAllWorker);
+  FCompUnitScope := Scope;
 
   AttribList.EvalCount := 0;
   /// TODO: (dafHasName in Abbrev.flags)
@@ -4312,6 +4516,9 @@ begin
 
   if FMinPC = 0 then FMinPC := FMaxPC;
   if FMaxPC = 0 then FMAxPC := FMinPC;
+
+  // FScope and FScopeList  *MUST NOT*  be accessed while the worker is running
+  FOwner.WorkQueue.PushItem(FScanAllWorker);
 end;
 
 destructor TDwarfCompilationUnit.Destroy;
@@ -4514,121 +4721,6 @@ begin
     end;
   end;
   Result := False;
-end;
-
-//----------------------------------------
-// Params
-//   ATag: a tag to search for
-//   AStartScope: a startpoint in the data
-//   ACurrentOnly: if set, process only current entry
-//   AResultScope: the located scope info
-//----------------------------------------
-function TDwarfCompilationUnit.LocateEntry(ATag: Cardinal; out
-  AResultScope: TDwarfScopeInfo): Boolean;
-
-  function ParseAttribs(const ADef: PDwarfAbbrev; var p: Pointer): Boolean;
-  var
-    idx: Integer;
-    ADefs: PDwarfAbbrevEntry;
-    AddrSize: Byte;
-  begin
-    ADefs := FAbbrevList.EntryPointer[ADef^.Index];
-    AddrSize := FAddressSize;
-    for idx := 0 to ADef^.Count - 1 do
-    begin
-      if not SkipEntryDataForForm(p, ADefs^.Form, AddrSize, IsDwarf64, Version) then
-        exit(False);
-      inc(ADefs);
-    end;
-    Result := True;
-  end;
-
-var
-  Abbrev: Cardinal;
-  Def: PDwarfAbbrev;
-  MaxData: Pointer;
-  p, EntryDataPtr, NextEntryDataPtr: Pointer;
-  Scope: TDwarfScopeInfo;
-  ni: Integer;
-  AppendAsChild: Boolean;
-begin
-  Result := False;
-  if not FScope.IsValid then Exit;
-  MaxData := FInfoData + FLength;
-  Scope := FScope;
-  Scope.Index := FScopeList.HighestKnown; // last known scope
-
-  // "last rounds" NextEntryDataPtr
-  NextEntryDataPtr := Scope.Entry;
-  while (NextEntryDataPtr < MaxData) do
-  begin
-    EntryDataPtr := NextEntryDataPtr;
-
-    NextEntryDataPtr := FAbbrevList.FindLe128bFromPointer(EntryDataPtr, Def);
-    if NextEntryDataPtr = nil then begin
-      Abbrev := ULEB128toOrdinal(EntryDataPtr);
-      DebugLn(FPDBG_DWARF_WARNINGS, ['Error: Abbrev not found: ', Abbrev]);
-          // TODO shorten array
-      exit;
-    end;
-
-    if (ATag <> 0) and (Def^.tag = ATag) then begin
-      Result := True;
-      AResultScope := Scope;
-      Break;
-    end;
-
-    if not ParseAttribs(Def, NextEntryDataPtr) then begin
-      DebugLn(FPDBG_DWARF_WARNINGS, ['Error: data not parsed:']);
-      exit;
-    end;
-    // NextEntryDataPtr is now at next scope
-
-    if NextEntryDataPtr >= MaxData then
-      break;
-
-    p := NextEntryDataPtr;
-    Abbrev := ULEB128toOrdinal(p);
-    if Abbrev = 0 then begin      // no more sibling
-      AppendAsChild := False;     // children already done
-      if (dafHasChildren in Def^.flags) then begin  // current has 0 children
-        NextEntryDataPtr := p;
-        if NextEntryDataPtr >= MaxData then
-          break;
-        Abbrev := ULEB128toOrdinal(p);
-      end;
-      while (Abbrev = 0) do begin
-        NextEntryDataPtr := p;
-        if NextEntryDataPtr >= MaxData then
-          break;
-        Scope.GoParent;
-        if not Scope.IsValid then begin
-          DebugLn(FPDBG_DWARF_WARNINGS, ['Error: Abbrev not found: ', Abbrev]);
-          // TODO shorten array
-          exit;
-        end;
-        Abbrev := ULEB128toOrdinal(p);
-      end;
-      if NextEntryDataPtr >= MaxData then
-        break;
-    end
-    else
-      AppendAsChild := (dafHasChildren in Def^.flags);
-
-    if AppendAsChild then
-      ni := Scope.CreateChildForEntry(NextEntryDataPtr)
-    else
-      ni := Scope.CreateNextForEntry(NextEntryDataPtr);
-
-    Scope.FIndex := ni; // skip check, index was just created / must exist
-  end;
-
-  if (NextEntryDataPtr >= MaxData) then begin
-    if (EntryDataPtr > MaxData) then
-      debugln(FPDBG_DWARF_WARNINGS, ['LocateEntry went past end of memory: ', EntryDataPtr-MaxData]);
-    SetLength(FScopeList.List, FScopeList.HighestKnown + 1);
-  end;
-
 end;
 
 function TDwarfCompilationUnit.ReadTargetAddressFromDwarfSection(var AData: Pointer;
@@ -4937,5 +5029,7 @@ initialization
 
 finalization
   FreeAndNil(TheDwarfSymbolClassMapList);
+  if CachedRtlEvent <> nil then
+    RTLEventDestroy(CachedRtlEvent);
 end.
 

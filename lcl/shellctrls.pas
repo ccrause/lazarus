@@ -75,6 +75,7 @@ type
     procedure SetShellListView(const Value: TCustomShellListView);
     procedure SetUseBuiltinIcons(const AValue: Boolean);
   protected
+    class procedure WSRegisterClass; override;
     procedure DoCreateNodeClass(var NewNodeClass: TTreeNodeClass); override;
     procedure Loaded; override;
     function CreateNode: TTreeNode; override;
@@ -84,15 +85,8 @@ type
     procedure DoSelectionChanged; override;
     procedure DoAddItem(const ABasePath: String; const AFileInfo: TSearchRec; var CanAdd: Boolean);
     function CanExpand(Node: TTreeNode): Boolean; override;
-
-  {$ifdef mswindows}
-  private
-    FBuiltinIconSize: TSize;
-  protected
     function DrawBuiltInIcon(ANode: TTreeNode; ARect: TRect): TSize; override;
     function GetBuiltinIconSize: TSize; override;
-  {$endif}
-
   public
     { Basic methods }
     constructor Create(AOwner: TComponent); override;
@@ -219,6 +213,7 @@ type
     FObjectTypes: TObjectTypes;
     FRoot: string;
     FShellTreeView: TCustomShellTreeView;
+    FUseBuiltInIcons: Boolean;
     FOnAddItem: TAddItemEvent;
     FOnFileAdded: TCSLVFileAddedEvent;
     { Setters and getters }
@@ -228,9 +223,11 @@ type
     procedure SetRoot(const Value: string);
   protected
     { Methods specific to Lazarus }
+    class procedure WSRegisterClass; override;
     procedure PopulateWithRoot();
     procedure Resize; override;
     procedure DoAddItem(const ABasePath: String; const AFileInfo: TSearchRec; var CanAdd: Boolean);
+    function GetBuiltinImageIndex(const AFileName: String; ALargeImage: Boolean): Integer;
     property OnFileAdded: TCSLVFileAddedEvent read FOnFileAdded write FOnFileAdded;
   public
     { Basic methods }
@@ -244,6 +241,7 @@ type
     property ObjectTypes: TObjectTypes read FObjectTypes write FObjectTypes;
     property Root: string read FRoot write SetRoot;
     property ShellTreeView: TCustomShellTreeView read FShellTreeView write SetShellTreeView;
+    property UseBuiltInIcons: Boolean read FUseBuiltinIcons write FUseBuiltInIcons default true;
     property OnAddItem: TAddItemEvent read FOnAddItem write FOnAddItem;
     { Protected properties which users may want to access, see bug 15374 }
     property Items;
@@ -280,6 +278,7 @@ type
 //    property HotTrackStyles;
 //    property HoverTime;
     property LargeImages;
+    property LargeImagesWidth;
     property Mask;
     property MaskCaseSensitivity;
     property MultiSelect;
@@ -296,6 +295,7 @@ type
     property ShowHint;
 //    property ShowWorkAreas;
     property SmallImages;
+    property SmallImagesWidth;
     property SortColumn;
     property SortType;
     property StateImages;
@@ -374,9 +374,10 @@ procedure Register;
 
 implementation
 
+uses WSShellCtrls
 {$ifdef windows}
-uses Windows, ShellApi;
-{$endif}
+  ,Windows, ShellApi
+{$endif};
 
 const
   //no need to localize, it's a message for the programmer
@@ -677,7 +678,7 @@ var
   FindResult, i: Integer;
   IsDirectory, IsValidDirectory, IsHidden, AddFile, UseMaskList: Boolean;
   SearchStr, ShortFilename: string;
-  MaskList: TMaskList;
+  MaskList: TMaskList = nil;
   Files: TList;
   FileItem: TFileItem;
   MaskOptions: TMaskOptions;
@@ -996,64 +997,21 @@ begin
     FOnAddItem(Self, ABasePath, AFileInfo, CanAdd);
 end;
 
-{$ifdef mswindows}
-{ Extracts the windows shell icon of the specified file. }
-function GetShellIcon(const AFileName: WideString): TIcon;
-var
-  FileInfo: TSHFileInfoW;
-  imgHandle: DWORD_PTR;
-begin
-  imgHandle := SHGetFileInfoW(PWideChar(AFileName), 0, FileInfo, SizeOf(FileInfo),
-    SHGFI_ICON + SHGFI_SMALLICON + SHGFI_SYSICONINDEX);
-  if imgHandle <> 0 then
-  begin
-    Result := TIcon.Create;
-    Result.Handle := FileInfo.hIcon;
-  end else
-    Result := nil;
-end;
-
 function TCustomShellTreeView.DrawBuiltinIcon(ANode: TTreeNode; ARect: TRect): TSize;
-var
-  filename: widestring;
-  ico: TIcon;
 begin
   if FUseBuiltinIcons then
-  begin
-    fileName := widestring(GetPathFromNode(ANode));
-    ico := GetShellIcon(fileName);
-    try
-      Canvas.Draw(ARect.Left, (ARect.Top + ARect.Bottom - ico.Height) div 2, ico);
-      Result := Types.Size(ico.Width, ico.Height);
-    finally
-      ico.Free;
-    end;
-  end else
-    Result := Types.Size(0, 0);
+    Result := TWSCustomShellTreeViewClass(WidgetSetClass).DrawBuiltinIcon(Self, ANode, ARect)
+  else
+    Result := inherited;
 end;
 
 function TCustomShellTreeView.GetBuiltinIconSize: TSize;
-var
-  ico: TIcon;
 begin
   if FUseBuiltinIcons then
-  begin
-    if (FBuiltinIconSize.CX > 0) and (FBuiltinIconSize.CY > 0) then
-      Result := FBuiltinIconSize
-    else
-    begin
-      ico := GetShellIcon(WideString('C:'));
-      try
-        Result := Types.Size(ico.Width, ico.Height);
-        FBuiltinIconSize := Result;
-      finally
-        ico.Free;
-      end;
-    end;
-  end else
-    Result := Types.Size(0, 0);
+    Result := TWSCustomShellTreeViewClass(WidgetsetClass).GetBuiltinIconSize
+  else
+    Result := inherited;
 end;
-{$endif}
 
 function TCustomShellTreeView.GetPathFromNode(ANode: TTreeNode): string;
 begin
@@ -1296,7 +1254,7 @@ begin
 
   if (not IsRelpath) or ((RelPath <> '') and ((Length(RelPath) > 1) and (RelPath[1] = '.') and (RelPath[2] = '.'))) then
   begin
-    // CreateRelativePath retruns a string beginning with ..
+    // CreateRelativePath returns a string beginning with ..
     // so AValue is not a subdirectory of FRoot
     Raise EInvalidPath.CreateFmt(sShellCtrlsInvalidPathRelative,[AValue, FQRootPath]);
   end;
@@ -1403,6 +1361,12 @@ begin
   end;
 end;
 
+class procedure TCustomShellTreeView.WSRegisterClass;
+begin
+  inherited WSRegisterClass;
+  RegisterCustomShellTreeView;
+end;
+
 
 { TCustomShellListView }
 
@@ -1499,6 +1463,8 @@ constructor TCustomShellListView.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
 
+  FUseBuiltInIcons := true;
+
   // Initial property values
   ViewStyle := vsReport;
   ObjectTypes := [otNonFolders];
@@ -1518,6 +1484,14 @@ destructor TCustomShellListView.Destroy;
 begin
   ShellTreeView := nil;
   inherited Destroy;
+end;
+
+function TCustomShellListView.GetBuiltinImageIndex(const AFileName: String;
+  ALargeImage: Boolean): Integer;
+begin
+  Result := TWSCustomShellListViewClass(WidgetsetClass).GetBuiltInImageIndex(
+    self, AFileName, ALargeImage
+  );
 end;
 
 procedure TCustomShellListView.PopulateWithRoot();
@@ -1564,6 +1538,14 @@ begin
           NewItem.SubItems.Add(Format(sShellCtrlsMB, [IntToStr(CurFileSize div (1024 * 1024))]));
         // Third column - Type
         NewItem.SubItems.Add(ExtractFileExt(CurFileName));
+        // Image index
+        if FUseBuiltInIcons then
+        begin
+          if (ViewStyle = vsIcon) and (LargeImages = nil) then
+            NewItem.ImageIndex := GetBuiltInImageIndex(CurFilePath, true)
+          else if (ViewStyle <> vsIcon) and (SmallImages = nil) then
+            NewItem.ImageIndex := GetBuiltinImageIndex(CurFilePath, false);
+        end;
         if Assigned(FOnFileAdded) then FOnFileAdded(Self,NewItem);
       end;
     end;
@@ -1619,6 +1601,12 @@ end;
 function TCustomShellListView.GetPathFromItem(ANode: TListItem): string;
 begin
   Result := IncludeTrailingPathDelimiter(FRoot) + ANode.Caption;
+end;
+
+class procedure TCustomShellListView.WSRegisterClass;
+begin
+  inherited WSRegisterClass;
+  RegisterCustomShellListView;
 end;
 
 procedure Register;

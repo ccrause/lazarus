@@ -869,7 +869,7 @@ end;
 
 procedure TCustomListView.QueuedShowEditor(Data: PtrInt);
 begin
-  if fShowEditorQueued then
+  if fShowEditorQueued and IsVisible then
   begin
     fShowEditorQueued:=false;
     ShowEditor;
@@ -1345,66 +1345,10 @@ end;
 
 function TCustomListView.GetNextItem(StartItem: TListItem;
   Direction: TSearchDirection; States: TListItemStates): TListItem;
-var
-  ACount: Integer;
-  AIndex: Integer;
-
-  {TODO: create public property States which reads states of item}
-  function GetItemStatesInternal(AItem: TListItem): TListItemStates;
-  begin
-    Result := [];
-    if AItem.GetState(Ord(lisCut)) then ;
-    if AItem.GetState(Ord(lisDropTarget)) then ;
-    if AItem.GetState(Ord(lisSelected)) then ;
-    if AItem.GetState(Ord(lisFocused)) then ;
-    Result := AItem.FStates;
-  end;
-
 begin
   Result := nil;
-  if Assigned(StartItem) then
-  begin
-    AIndex := StartItem.Index;
-    ACount := Items.Count;
-    case Direction of
-      sdAbove:
-        while AIndex>0 do
-        begin
-          dec(AIndex);
-          if States <= GetItemStatesInternal(Items[AIndex]) then
-          begin
-            Result := Items[AIndex];
-            exit;
-         end;
-        end;
-      sdBelow:
-        while AIndex < ACount-1 do
-        begin
-          inc(AIndex);
-          if States <= GetItemStatesInternal(Items[AIndex]) then
-          begin
-            Result := Items[AIndex];
-            exit;
-          end;
-        end;
-      sdAll:
-        while True do
-        begin
-          inc(AIndex);
-          if AIndex = StartItem.Index then Exit;
-          if AIndex > ACount-1 then
-          begin
-            AIndex := -1;
-            continue;
-          end;
-          if States <= GetItemStatesInternal(Items[AIndex]) then
-          begin
-            Result := Items[AIndex];
-            exit;
-          end;
-        end;
-    end;
-  end;
+  if HandleAllocated then
+     Result := TWSCustomListViewClass(WidgetSetClass).GetNextItem(Self, StartItem, Direction, States);
 end;
 
 procedure TCustomListView.ClearSelection;

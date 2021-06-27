@@ -48,6 +48,7 @@ type
     procedure TestEditTabs;
     procedure TestEditEcChar;
     procedure TestPhysicalLogical; // TODO adjust to char tests
+    procedure TestPhysicalLogicalCaretMove;
     procedure TestLogicalAdjust;
     procedure TestCaretObject;
     procedure TestCaretAutoMove;
@@ -794,6 +795,38 @@ begin
   TestPhysLog('bidi line (mixed arab/latin)',2, 15,      4, 0,   24, 0,   24, 0,    4, 0);
 end;
 
+procedure TTestBasicSynEdit.TestPhysicalLogicalCaretMove;
+begin
+  SetLines([
+'//',
+'// X あｓｆ//',
+'//😁X あｓｆ//',
+'//',
+''
+  ]);
+
+  SynEdit.Options := SynEdit.Options + [eoKeepCaretX] - [eoScrollPastEol];
+
+  SetCaretPhys(8, 2);
+  TestIsCaretPhys('(1st)', 8, 2);
+  TestIsCaret('(1st)', 9, 2);
+
+  SynEdit.CommandProcessor(ecDown, '', nil);
+  TestIsCaretPhys('(1st)', 7, 3);
+  TestIsCaret('(1st)', 9, 3);
+  SynEdit.CommandProcessor(ecDown, '', nil);
+  TestIsCaretPhys('(1st)', 3, 4);
+
+  SynEdit.CommandProcessor(ecUp, '', nil);
+  TestIsCaretPhys('(1st)', 7, 3);
+  TestIsCaret('(1st)', 9, 3);
+  SynEdit.CommandProcessor(ecUp, '', nil);
+  TestIsCaretPhys('(1st)', 8, 2);
+  TestIsCaret('(1st)', 9, 2);
+
+
+end;
+
 procedure TTestBasicSynEdit.TestLogicalAdjust;
 var
   tb: TSynEditStrings;
@@ -1498,6 +1531,22 @@ var
 
 begin
   FPersistSel := False;
+  //(*
+  TestOrder := 6;
+  UseLock := True;
+  UseAdjustToNextChar := False;
+  UseIncAdjustToNextChar := False;
+  UseAllowPastEOL := False;
+  UseIncAllowPastEOL := False;
+  UseKeepCaretX := True;
+  UseChangeOnTouch := False;
+  UseIncAutoMoveOnEdit := False;
+  UseSkipTabs := False;
+  UseMaxLeft := False;
+  DoTests;
+  exit;
+  //*)
+
   for TestOrder := 0 to 11 do // CheckAtPos (8) only runs first 4
     for UseLock := low(Boolean) to high(Boolean) do
       for UseAdjustToNextChar := low(Boolean) to high(Boolean) do

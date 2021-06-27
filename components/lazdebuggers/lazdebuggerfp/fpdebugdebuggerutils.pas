@@ -30,8 +30,7 @@ unit FpDebugDebuggerUtils;
 interface
 
 uses
-  FpDbgUtil, FpdMemoryTools, LazLoggerBase, DbgIntfDebuggerBase, sysutils,
-  // CmdLineDebuggerBase
+  FpDbgUtil, FpdMemoryTools, {$ifdef FORCE_LAZLOGGER_DUMMY} LazLoggerDummy {$else} LazLoggerBase {$endif}, DbgIntfDebuggerBase, sysutils,
   DebuggerPropertiesBase,
   Classes, syncobjs, Forms;
 
@@ -168,6 +167,7 @@ type
 type
 
   TFpThreadWorkerPriority = (
+    twpModify, // this is a user actions
     twpUser,
     twpThread, twpStack, twpLocal, twpWatch,
     twpContinue

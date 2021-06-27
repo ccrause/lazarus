@@ -27,7 +27,9 @@ uses
   Classes, SysUtils, FileUtil, LazFileUtils, Forms, Controls, Graphics, Dialogs,
   StdCtrls, CheckLst, Buttons, ExtCtrls, ComCtrls, Types,
   LCLType, LazUTF8,
-  {$IFnDEF POCHECKERSTANDALONE}
+  {$IFDEF POCHECKERSTANDALONE}
+  LCLTranslator,
+  {$ELSE}
   MenuIntf,
   {$ENDIF}
   PoFamilies, ResultDlg, pocheckerconsts, PoCheckerSettings,
@@ -108,6 +110,7 @@ procedure ShowPoCheckerForm();
 begin
   if not Assigned(PoCheckerForm) then
     PoCheckerForm := TPoCheckerForm.Create(Application);
+  PoCheckerForm.PixelsPerInch := Screen.PixelsPerInch;
   PoCheckerForm.Show;
 end;
 
@@ -115,6 +118,8 @@ end;
 { TPoCheckerForm }
 
 procedure TPoCheckerForm.FormCreate(Sender: TObject);
+var
+  MonPPI: Integer;
 begin
   FPoCheckerSettings := TPoCheckerSettings.Create;
   FPoCheckerSettings.LoadConfig;
@@ -128,6 +133,12 @@ begin
   FillTestListBox;
   ClearStatusBar;
   PopulateLangFilter;
+
+  MonPPI := Monitor.PixelsPerInch;
+  AutoAdjustLayout(lapAutoAdjustForDPI, PixelsPerInch, MonPPI,
+                   MulDiv(Width, MonPPI, PixelsPerInch),
+                   MulDiv(Height, MonPPI, PixelsPerInch));
+
   ApplyConfig;
   LangFilter.Invalidate; //Items[0] may have been changed
 end;
@@ -518,10 +529,7 @@ var
 begin
   ARect := FPoCheckerSettings.MainFormGeometry;
   if not IsDefaultRect(ARect) and IsValidRect(ARect) then
-  begin
-    ARect := FitToRect(ARect, Screen.WorkAreaRect);
-    BoundsRect := ARect;
-  end;
+    BoundsRect := FitToRect(ARect, Screen.WorkAreaRect);
   SetTestTypeCheckBoxes(FPoCheckerSettings.TestTypes);
   SelectDirectoryDialog.Filename := FPoCheckerSettings.SelectDirectoryFilename;
   Abbr := FPoCheckerSettings.LangFilterLanguageAbbr;
@@ -541,6 +549,7 @@ begin
   FPoCheckerSettings.LangFilterLanguageAbbr := LanguageAbbr[ID];
   FPoCheckerSettings.TestTypes := GetTestTypesFromListBox;
   FPoCheckerSettings.MainFormWindowState := WindowState;
+  // Store main form size in config at 96 ppi to avoid double scaling
   if (WindowState = wsNormal) then
     FPoCheckerSettings.MainFormGeometry := BoundsRect
   else

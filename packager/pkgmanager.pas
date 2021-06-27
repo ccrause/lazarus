@@ -284,18 +284,18 @@ type
                                   ADependency: TPkgDependency): TModalResult; override;
     function AddProjectDependencies(AProject: TProject; const Packages: string;
                                   OnlyTestIfPossible: boolean = false): TModalResult; override;
-    function OnProjectInspectorAddDependency(Sender: TObject;
+    function ProjectInspectorAddDependency(Sender: TObject;
                            ADependency: TPkgDependency): TModalResult; override;
-    function OnProjectInspectorRemoveDependency(Sender: TObject;
+    function ProjectInspectorRemoveDependency(Sender: TObject;
                            ADependency: TPkgDependency): TModalResult; override;
-    function OnProjectInspectorReAddDependency(Sender: TObject;
+    function ProjectInspectorReAddDependency(Sender: TObject;
                            ADependency: TPkgDependency): TModalResult; override;
-    procedure OnProjectInspectorDragDropTreeView(Sender, Source: TObject;
+    procedure ProjectInspectorDragDropTreeView(Sender, Source: TObject;
       X, Y: Integer); override;
-    function OnProjectInspectorDragOverTreeView(Sender, Source: TObject;
+    function ProjectInspectorDragOverTreeView(Sender, Source: TObject;
       X, Y: Integer; out TargetTVNode: TTreeNode;
       out TargetTVType: TTreeViewInsertMarkType): boolean; override;
-    procedure OnProjectInspectorCopyMoveFiles(Sender: TObject); override;
+    procedure ProjectInspectorCopyMoveFiles(Sender: TObject); override;
 
     // package editors
     function CanClosePackageEditor(APackage: TLazPackage): TModalResult; override;
@@ -323,6 +323,7 @@ type
     function WarnAboutMissingPackageFiles(APackage: TLazPackage): TModalResult;
     function AddPackageDependency(APackage: TLazPackage; const ReqPackage: string;
                                   OnlyTestIfPossible: boolean = false): TModalResult; override;
+    function ApplyDependency(CurDependency: TPkgDependency): TModalResult; override;
     function GetPackageOfEditorItem(Sender: TObject): TIDEPackage; override;
 
     // package compilation
@@ -408,6 +409,9 @@ var
   LazPackageDescriptors: TLazPackageDescriptors;
 
 implementation
+
+const
+  constNewPackageName = 'NewPackage'; //must be valid Pascal identifier, thus should not be allowed to be translated
 
 { TPkgManager }
 
@@ -2238,7 +2242,6 @@ var
     CurFiles: TStrings;
     OutFilename: String;
     CurUnitName: String;
-    Ext: String;
     S2SItem: PStringToStringItem;
     OldFilename: String;
     SeparateOutDir: Boolean;
@@ -3277,10 +3280,21 @@ function TPkgManager.OpenProjectDependencies(AProject: TProject;
 var
   BrokenDependencies: TFPList;
   OpmRes: TModalResult;
+  Dependency: TPkgDependency;
+  IgnorePackage: TLazPackage;
 begin
   Result := mrOk;
   OpmRes := mrOk;
-  PackageGraph.OpenRequiredDependencyList(AProject.FirstRequiredDependency);
+
+  Dependency:=AProject.FirstRequiredDependency;
+  while Dependency<>nil do begin
+    IgnorePackage:=PackageGraph.FindPackageWithName(Dependency.PackageName,nil);
+    if (IgnorePackage<>nil) and Dependency.IsCompatible(IgnorePackage) then
+      IgnorePackage:=nil;
+    PackageGraph.OpenDependency(Dependency,false,IgnorePackage);
+    Dependency:=Dependency.NextRequiresDependency;
+  end;
+
   if ReportMissing then begin
     BrokenDependencies := PackageGraph.FindAllBrokenDependencies(nil,
                                                AProject.FirstRequiredDependency);
@@ -3352,6 +3366,7 @@ begin
   Result:=mrOk;
   AProject.AddRequiredDependency(ADependency);
   PackageGraph.OpenDependency(ADependency,false);
+  Project1.DefineTemplates.AllChanged(false);
   if (ADependency.RequiredPackage<>nil)
   and (not ADependency.RequiredPackage.Missing)
   and ADependency.RequiredPackage.AddToProjectUsesSection
@@ -3448,7 +3463,7 @@ var
 begin
   Result:=mrCancel;
   // create a new package with standard dependencies
-  NewPackage:=PackageGraph.CreateNewPackage(ExtractPasIdentifier(lisPkgMangNewPackage,true));
+  NewPackage:=PackageGraph.CreateNewPackage(constNewPackageName);
   PackageGraph.AddDependencyToPackage(NewPackage,
                 PackageGraph.FCLPackage.CreateDependencyWithOwner(NewPackage));
   NewPackage.Modified:=false;
@@ -4441,6 +4456,8 @@ begin
   try
     Result:=GetUnitsAndDepsForComps(ComponentClasses, Dependencies, UnitNames);
     if Result<>mrOk then exit;
+    // TODO: Frame instances are not registered components, UnitNames is not assigned
+    if (UnitNames=nil) then exit(mrCancel);
 
     if (Dependencies<>nil) then
     begin
@@ -5268,7 +5285,7 @@ begin
   if APackage=nil then begin
     // create new package
     // create a new package with standard dependencies
-    APackage:=PackageGraph.CreateNewPackage(ExtractPasIdentifier(lisPkgMangNewPackage,true));
+    APackage:=PackageGraph.CreateNewPackage(constNewPackageName);
     PackageGraph.AddDependencyToPackage(APackage,
                   PackageGraph.IDEIntfPackage.CreateDependencyWithOwner(APackage));
     APackage.Modified:=false;
@@ -5368,6 +5385,34 @@ begin
   finally
     NewDependency.Free;
   end;
+end;
+
+function TPkgManager.ApplyDependency(CurDependency: TPkgDependency
+  ): TModalResult;
+// apply
+var
+  OldPkg: TLazPackage;
+  PkgEdit: TPackageEditorForm;
+begin
+  Result:=mrOk;
+  OldPkg:=CurDependency.RequiredPackage;
+  if (OldPkg<>nil) and CurDependency.IsCompatible(OldPkg) then
+    exit(mrOk);
+
+  PkgEdit:=PackageEditors.FindEditor(OldPkg);
+  if PkgEdit<>nil then
+  begin
+    if PkgEdit.CanCloseEditor<>mrOk then
+      exit(mrCancel);
+  end;
+
+  // Try to load the package again. Min/max version may have changed.
+  CurDependency.LoadPackageResult := lprUndefined;
+  // This calls UpdateRequiredPackages from PackageGraph.OnEndUpdate,
+  //  and also updates all package editors which is useless here.
+  if PackageGraph.OpenDependency(CurDependency, False, OldPkg)<>lprSuccess then
+    Result:=mrCancel;
+  //fForcedFlags:=[pefNeedUpdateRequiredPkgs];
 end;
 
 function TPkgManager.GetPackageOfEditorItem(Sender: TObject): TIDEPackage;
@@ -6370,13 +6415,13 @@ begin
   end;
 end;
 
-function TPkgManager.OnProjectInspectorAddDependency(Sender: TObject;
+function TPkgManager.ProjectInspectorAddDependency(Sender: TObject;
   ADependency: TPkgDependency): TModalResult;
 begin
   Result:=AddProjectDependency(Project1,ADependency);
 end;
 
-function TPkgManager.OnProjectInspectorRemoveDependency(Sender: TObject;
+function TPkgManager.ProjectInspectorRemoveDependency(Sender: TObject;
   ADependency: TPkgDependency): TModalResult;
 var
   ShortUnitName: String;
@@ -6385,6 +6430,7 @@ begin
   Result:=mrOk;
   Project1.RemoveRequiredDependency(ADependency);
   //debugln('TPkgManager.OnProjectInspectorRemoveDependency A');
+  Project1.DefineTemplates.AllChanged(false);
   if (Project1.MainUnitID>=0)
   and (pfMainUnitIsPascalSource in Project1.Flags)
   then begin
@@ -6405,7 +6451,7 @@ begin
   end;
 end;
 
-function TPkgManager.OnProjectInspectorReAddDependency(Sender: TObject;
+function TPkgManager.ProjectInspectorReAddDependency(Sender: TObject;
   ADependency: TPkgDependency): TModalResult;
 begin
   Result:=mrOk;
@@ -6417,7 +6463,7 @@ begin
   end;
 end;
 
-procedure TPkgManager.OnProjectInspectorDragDropTreeView(Sender, Source: TObject;
+procedure TPkgManager.ProjectInspectorDragDropTreeView(Sender, Source: TObject;
   X, Y: Integer);
 begin
   {$IFDEF VerbosePkgEditDrag}
@@ -6429,7 +6475,7 @@ begin
   {$ENDIF}
 end;
 
-function TPkgManager.OnProjectInspectorDragOverTreeView(Sender,
+function TPkgManager.ProjectInspectorDragOverTreeView(Sender,
   Source: TObject; X, Y: Integer; out TargetTVNode: TTreeNode; out
   TargetTVType: TTreeViewInsertMarkType): boolean;
 var
@@ -6446,7 +6492,7 @@ begin
     aFileCount, aDependencyCount, aDirectoryCount, TargetTVNode, TargetTVType);
 end;
 
-procedure TPkgManager.OnProjectInspectorCopyMoveFiles(Sender: TObject);
+procedure TPkgManager.ProjectInspectorCopyMoveFiles(Sender: TObject);
 begin
   CopyMoveFiles(Sender);
 end;

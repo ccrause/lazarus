@@ -542,12 +542,10 @@ end;
 {------------------------------------------------------------------------------}
 {   TListItem GetState                                                         }
 {------------------------------------------------------------------------------}
-function TListItem.GetState(const ALisOrd: Integer): Boolean;
+function TListItem.GetState(AState: TListItemState): Boolean;
 var
-  AState: TListItemState;
   LV: TCustomListView;
 begin
-  AState := TListItemState(ALisOrd);
   LV := FOwner.FOwner;
 
   if WSUpdateAllowed
@@ -559,6 +557,30 @@ begin
     else Exclude(FStates, AState);
   end
   else Result := AState in FStates;
+end;
+
+{------------------------------------------------------------------------------}
+{   TListItem GetStates                                                        }
+{------------------------------------------------------------------------------}
+function TListItem.GetStates: TListItemStates;
+var
+  States: TListItemStates;
+  LV: TCustomListView;
+begin
+  LV := FOwner.FOwner;
+
+  if TWSCustomListViewClass(LV.WidgetSetClass).ItemGetStates(LV, GetIndex, States)
+  then
+    Result := States
+  else
+  begin
+    Result := [];
+    if GetState(lisCut) then ;
+    if GetState(lisDropTarget) then ;
+    if GetState(lisSelected) then ;
+    if GetState(lisFocused) then ;
+    Result := FStates;
+  end;
 end;
 
 function TListItem.GetLeft: Integer;
@@ -722,13 +744,10 @@ end;
 {------------------------------------------------------------------------------}
 {   TListItem SetState                                                         }
 {------------------------------------------------------------------------------}
-procedure TListItem.SetState(const ALisOrd: Integer; const AIsSet: Boolean);
+procedure TListItem.SetState(AState: TListItemState; AIsSet: Boolean);
 var
-  AState: TListItemState;
   LV: TCustomListView;
 begin
-  AState := TListItemState(ALisOrd);
-
   if (AState in FStates) = AIsSet then Exit;
 
   if AIsSet then

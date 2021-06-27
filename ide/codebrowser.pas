@@ -39,6 +39,7 @@
 unit CodeBrowser;
 
 {$mode objfpc}{$H+}
+{$modeswitch typehelpers}
 
 {off $DEFINE VerboseCodeBrowser}
 
@@ -158,7 +159,29 @@ type
     cbwsUpdateTreeView,
     cbwsFinished
     );
-    
+
+const
+  SCodeBrowserWorkStage: array[TCodeBrowserWorkStage] of String = (
+    'GetScopeOptions',
+    'GatherPackages',
+    'FreeUnusedPackages',
+    'AddNewPackages',
+    'GatherFiles',
+    'GatherOutdatedFiles',
+    'UpdateUnits',
+    'GetViewOptions',
+    'UpdateTreeView',
+    'Finished'
+    );
+
+type
+
+  { TCodeBrowserWorkStageHelper }
+
+  TCodeBrowserWorkStageHelper = type helper for TCodeBrowserWorkStage
+    function ToString: String;
+  end;
+
   TExpandableNodeType = (
     entPackage,
     entUnit,
@@ -218,9 +241,10 @@ type
     UnitFilterBeginsSpeedButton: TSpeedButton;
     UnitFilterContainsSpeedButton: TSpeedButton;
     UnitFilterEdit: TEdit;
-    procedure BrowseTreeViewMouseMove(Sender: TObject; {%H-}Shift: TShiftState; {%H-}X,
-      {%H-}Y: Integer);
+    procedure BrowseTreeViewMouseMove(Sender: TObject; {%H-}Shift: TShiftState;
+      {%H-}X,{%H-}Y: Integer);
     procedure FormActivate(Sender: TObject);
+    procedure FormClose(Sender: TObject; var {%H-}CloseAction: TCloseAction);
     procedure FormDeactivate(Sender: TObject);
     procedure UseIdentifierInCurUnitMenuItemClick(Sender: TObject);
     procedure UsePkgInCurUnitMenuItemClick(Sender: TObject);
@@ -456,6 +480,12 @@ begin
   CodeBrowserView.SetFilterToSimpleIdentifier(Identifier);
 end;
 
+{ TCodeBrowserWorkStageHelper }
+
+function TCodeBrowserWorkStageHelper.ToString: String;
+begin
+  Result := SCodeBrowserWorkStage[Self];
+end;
 
 { TCodeBrowserView }
 
@@ -527,6 +557,23 @@ begin
   FreeAndNil(FOptions);
   FreeAndNil(FHintManager);
   IdleConnected:=false;
+end;
+
+procedure TCodeBrowserView.FormDeactivate(Sender: TObject);
+begin
+  CloseHintWindow;
+end;
+
+procedure TCodeBrowserView.FormClose(Sender: TObject; var CloseAction: TCloseAction);
+// CloseAction=caHide by default
+begin
+  IdleConnected:=false;
+end;
+
+procedure TCodeBrowserView.BrowseTreeViewMouseMove(Sender: TObject;
+  Shift: TShiftState; X, Y: Integer);
+begin
+  CloseHintWindow;
 end;
 
 procedure TCodeBrowserView.IdleTimer1Timer(Sender: TObject);
@@ -1087,6 +1134,9 @@ var
   OldStage: TCodeBrowserWorkStage;
 begin
   OldStage:=fStage;
+  {$IFDEF VerboseCodeBrowser}
+  debugln('TCodeBrowserView.Work ', fStage.ToString);
+  {$ENDIF}
   case fStage of
   cbwsGetScopeOptions:     WorkGetScopeOptions;
   cbwsGatherPackages:      WorkGatherPackages;
@@ -1103,6 +1153,7 @@ begin
     Done:=true;
     ProgressBar1.Position:=ProgressTotal;
     ProgressBar1.Visible:=false;
+    IdleConnected:=false;
     exit;
   end;
   if ord(OldStage)<ord(cbwsFinished) then begin
@@ -1873,18 +1924,17 @@ begin
   //DebugLn(['TCodeBrowserView.GetCodeTool END ',AnUnit.Filename,' ',Result<>nil]);
 end;
 
+function Shorten(const s: string): string;
+const
+  MAX_LEN=100;
+begin
+  Result:=DbgStr(s);
+  if Length(Result)>MAX_LEN then
+    Result:=LeftStr(Result, MAX_LEN)+'...';
+end;
+
 procedure TCodeBrowserView.GetNodeIdentifier(Tool: TStandardCodeTool;
   CTNode: TCodeTreeNode; out Identifier: string);
-
-  function Shorten(const s: string): string;
-  const
-    MAX_LEN=100;
-  begin
-    Result:=DbgStr(s);
-    if Length(Result)>MAX_LEN then
-      Result:=LeftStr(Result, MAX_LEN)+'...';
-  end;
-
 begin
   if CTNode.StartPos>=CTNode.EndPos then begin
     Identifier:='';
@@ -1920,16 +1970,6 @@ end;
 
 procedure TCodeBrowserView.GetNodeDescription(Tool: TStandardCodeTool;
   CTNode: TCodeTreeNode; Identifier: string; out Description: string);
-
-  function Shorten(const s: string): string;
-  const
-    MAX_LEN=100;
-  begin
-    Result:=DbgStr(s);
-    if Length(Result)>MAX_LEN then
-      Result:=LeftStr(Result, MAX_LEN)+'...';
-  end;
-
 const
   NodeFlags = [];
 var
@@ -2061,7 +2101,6 @@ var
       ChildDescription, ChildIdentifier: string;
       NewCodePos: TCodePosition;
     begin
-      //DebugLn(['AddChildNode ',ChildCTNode.DescAsString,' ',ChildDescription]);
       if ShownIdentifierCount>=CodeBrowserMaxTVIdentifiers then exit;
 
       if (CTNode.Parent.Desc=ctnClassPrivate) and (not ShowPrivate) then
@@ -2075,6 +2114,7 @@ var
         inc(ShownIdentifierCount);
         GetNodeDescription(CTTool,CTNode,ChildIdentifier,ChildDescription);
         NewChildNode:=ParentBrowserNode.AddNode(ChildDescription,ChildIdentifier);
+        //DebugLn(['AddChildNode ',CTNode.DescAsString,' ',ChildDescription]);
         if NewChildNode<>nil then begin
           NewChildNode.Desc:=CTNode.Desc;
           CTTool.CleanPosToCodePos(CTNode.StartPos,NewCodePos);
@@ -2103,7 +2143,7 @@ var
       if DestUnit=nil then
         DestUnit:=TCodeBrowserUnit.Create('');
       CurUnit:=TCodeBrowserUnit(DestUnit);
-      //DebugLn(['AddIdentifierNode ',CTNode.DescAsString,' Description="',Description,'"']);
+      //DebugLn(['AddIdentifierNode ',CTNode.DescAsString]);
       GetNodeIdentifier(CTTool,CTNode,Identifier);
       NewNode:=CurUnit.AddNode('',Identifier);
       {$IFDEF VerboseCodeBrowser}
@@ -2115,7 +2155,7 @@ var
       NewNode.Desc:=CTNode.Desc;
       CTTool.CleanPosToCodePos(CTNode.StartPos,NewCodePos);
       NewNode.CodePos:=NewCodePos;
-      //DebugLn(['AddIdentifierNode Code=',NewNode.FCodePos.Code<>nil,' P=',NewNode.FCodePos.P]);
+      //DebugLn(['AddIdentifierNode Code=',NewNode.CodePos.Code<>nil,' P=',NewNode.CodePos.P]);
       
       if (CTNode.Desc in [ctnTypeDefinition,ctnGenericType])
       and (CTNode.FirstChild<>nil)
@@ -3080,17 +3120,6 @@ end;
 procedure TCodeBrowserView.UseIdentifierInCurUnitMenuItemClick(Sender: TObject);
 begin
   UseUnitInSrcEditor(true);
-end;
-
-procedure TCodeBrowserView.BrowseTreeViewMouseMove(Sender: TObject;
-  Shift: TShiftState; X, Y: Integer);
-begin
-  CloseHintWindow;
-end;
-
-procedure TCodeBrowserView.FormDeactivate(Sender: TObject);
-begin
-  CloseHintWindow;
 end;
 
 { TCodeBrowserViewOptions }

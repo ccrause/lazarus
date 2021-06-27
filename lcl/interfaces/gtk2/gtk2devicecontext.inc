@@ -875,7 +875,7 @@ function TGtkDeviceContext.CreateGC: PGdkGC;
 begin
   // create GC
 
-  if Drawable <> nil then
+  if (Drawable <> nil) and (Drawable^.parent_instance.ref_count>0) then
   begin
     if FWithChildWindows then
     begin
@@ -1223,10 +1223,10 @@ begin
 
   // Paul Ishenin: I compared patterns with windows
   case PenStyle of
-    PS_DASH:       SetDashes([3,1]);
-    PS_DOT:        SetDashes([1,1]);
-    PS_DASHDOT:    SetDashes([3,1,1,1]);
-    PS_DASHDOTDOT: SetDashes([3,1,1,1,1,1]);
+    PS_DASH:       SetDashes([4,2]);
+    PS_DOT:        SetDashes([1,2]);
+    PS_DASHDOT:    SetDashes([4,2,1,2]);
+    PS_DASHDOTDOT: SetDashes([4,2,1,2,1,2]);
     PS_USERSTYLE:  laz_gdk_gc_set_dashes(GC, 0, CurrentPen^.GDIPenDashes, CurrentPen^.GDIPenDashesCount);
   end;
   {$IFDEF DebugGDK}EndGDKErrorTrap;{$ENDIF}

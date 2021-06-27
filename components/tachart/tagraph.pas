@@ -225,6 +225,7 @@ type
     FActiveToolIndex: Integer;
     FAutoFocus: Boolean;
     FBroadcaster: TBroadcaster;
+    FClipRectBroadcaster: TBroadcaster;
     FBuiltinToolset: TBasicChartToolset;
     FClipRect: TRect;
     FCurrentExtent: TDoubleRect;
@@ -244,6 +245,7 @@ type
     FScale: TDoublePoint;    // Coordinates transformation
     FScalingValid: Boolean;
     FMultiPassScalingNeeded: Boolean;
+    FOldClipRect: TRect;
     FSavedClipRect: TRect;
     FClipRectLock: Integer;
 
@@ -384,6 +386,7 @@ type
     property ChartHeight: Integer read GetChartHeight;
     property ChartWidth: Integer read GetChartWidth;
     property ClipRect: TRect read FClipRect;
+    property ClipRectBroadcaster: TBroadcaster read FClipRectBroadcaster;
     property CurrentExtent: TDoubleRect read FCurrentExtent;
     property ExtentBroadcaster: TBroadcaster read FExtentBroadcaster;
     property FullExtentBroadcaster: TBroadcaster read FFullExtentBroadcaster;
@@ -708,6 +711,7 @@ begin
   inherited Create(AOwner);
 
   FBroadcaster := TBroadcaster.Create;
+  FClipRectBroadcaster := TBroadcaster.Create;
   FExtentBroadcaster := TBroadcaster.Create;
   FFullExtentBroadcaster := TBroadcaster.Create;
   FAllowZoom := true;
@@ -791,6 +795,7 @@ begin
   FreeAndNil(FMarginsExternal);
   FreeAndNil(FBuiltinToolset);
   FreeAndNil(FBroadcaster);
+  FreeAndNil(FClipRectBroadcaster);
   FreeAndNil(FExtentBroadcaster);
   FreeAndNil(FFullExtentBroadcaster);
   FreeAndNil(FDefaultGUIConnector);
@@ -1012,6 +1017,12 @@ begin
     if Assigned(OnExtentChanged) then
       OnExtentChanged(Self);
     FPrevLogicalExtent := FLogicalExtent;
+  end;
+
+  if FClipRect <> FOldClipRect then
+  begin
+    FClipRectBroadcaster.Broadcast(Self);
+    FOldClipRect := FClipRect;
   end;
 
   // Undo changes made by the drawer (mainly for printing). The user may print
@@ -1521,7 +1532,7 @@ begin
   CalculateTransformationCoeffs(scSeriesMargins, scChartMargins, scMinDataSpace);
   cr := FClipRect;
   for tries := 1 to 10 do begin
-    axisMargin := AxisList.Measure(CurrentExtent, scDepth);
+    axisMargin := AxisList.Measure(CurrentExtent, FClipRect, scDepth);
     axisMargin[calLeft] := Max(axisMargin[calLeft], scDepth);
     axisMargin[calBottom] := Max(axisMargin[calBottom], scDepth);
     FClipRect := cr;

@@ -63,14 +63,17 @@ uses
   TreeFilterEdit,
   // LazUtils
   FileUtil, LazFileUtils, LazUtilities, LazLoggerBase, LazTracer, LazFileCache,
+  // Codetools
+  CodeToolsStructs, CodeToolManager, FileProcs, CodeCache, CodeTree, FindDeclarationTool,
   // BuildIntf
   ProjectIntf, PackageIntf, PackageLinkIntf, PackageDependencyIntf,
   // IDEIntf
   IDEHelpIntf, IDECommands, IDEDialogs, IDEImagesIntf, LazIDEIntf, ToolBarIntf,
   // IDE
-  LazarusIDEStrConsts, MainBase, IDEProcs, DialogProcs, IDEOptionDefs, Project, InputHistory,
-  EnvironmentOpts, AddToProjectDlg, AddPkgDependencyDlg, AddFPMakeDependencyDlg,
-  ProjPackChecks, ProjPackEditing, ProjPackFilePropGui, PackageDefs, PackageSystem, BuildManager;
+  LazarusIDEStrConsts, MainBase, IDEProcs, DialogProcs, IDEOptionDefs, Project,
+  InputHistory, TransferMacros, EnvironmentOpts, BuildManager, BasePkgManager,
+  ProjPackChecks, ProjPackEditing, ProjPackFilePropGui, PackageDefs,
+  AddToProjectDlg, AddPkgDependencyDlg, AddFPMakeDependencyDlg, LResources;
 
 type
   TOnAddUnitToProject =
@@ -277,9 +280,132 @@ var
   ProjInspector: TProjectInspectorForm = nil;
 
 
+function UpdateUnitInfoResourceBaseClass(AnUnitInfo: TUnitInfo; Quiet: boolean): boolean;
+
+
 implementation
 
 {$R *.lfm}
+
+function UpdateUnitInfoResourceBaseClass(AnUnitInfo: TUnitInfo; Quiet: boolean): boolean;
+var
+  LFMFilename, LFMType, Ancestor, LFMClassName, LFMComponentName: String;
+  LFMCode, Code: TCodeBuffer;
+  LoadFileFlags: TLoadBufferFlags;
+  ClearOldInfo: Boolean;
+  Tool: TCodeTool;
+  Node: TCodeTreeNode;
+  ListOfPFindContext: TFPList;
+  i: Integer;
+  Context: PFindContext;
+begin
+  Result:=false;
+  if AnUnitInfo.Component<>nil then
+    exit(true); // a loaded resource is always uptodate
+  if AnUnitInfo.IsVirtual then
+    exit(true); // a new unit is always uptodate
+  ListOfPFindContext:=nil;
+  ClearOldInfo:=true;
+  try
+    // find lfm file
+    if not FilenameIsPascalUnit(AnUnitInfo.Filename) then
+      exit(true); // not a unit -> clear info
+    LFMFilename:=AnUnitInfo.UnitResourceFileformat.GetUnitResourceFilename(
+      AnUnitInfo.Filename,true);
+    if (LFMFilename='') or not FileExistsCached(LFMFilename) then
+      exit(true); // no lfm -> clear info
+  finally
+    if ClearOldInfo then begin
+      AnUnitInfo.ResourceBaseClass:=pfcbcNone;
+      AnUnitInfo.ComponentName:='';
+      AnUnitInfo.ComponentResourceName:='';
+    end;
+  end;
+  try
+    if not FilenameExtIs(LFMFilename,'lfm',true) then
+      exit(true);          // no lfm format -> keep old info
+    // clear old info
+    AnUnitInfo.ResourceBaseClass:=pfcbcNone;
+    AnUnitInfo.ComponentName:='';
+    AnUnitInfo.ComponentResourceName:='';
+    // load lfm
+    LoadFileFlags:=[lbfUpdateFromDisk,lbfCheckIfText];
+    if Quiet then
+      Include(LoadFileFlags,lbfQuiet);
+    if LoadCodeBuffer(LFMCode,LFMFilename,LoadFileFlags,false)<>mrOk then
+      exit; // lfm read error
+    // read lfm header
+    ReadLFMHeader(LFMCode.Source,LFMType,LFMComponentName,LFMClassName);
+    if LFMClassName='' then
+      exit; // lfm syntax error
+
+    // LFM component name
+    AnUnitInfo.ComponentName:=LFMComponentName;
+    AnUnitInfo.ComponentResourceName:=LFMComponentName;
+
+    // check ancestors
+    if LoadCodeBuffer(Code,AnUnitInfo.Filename,LoadFileFlags,false)<>mrOk then
+      exit; // pas read error
+    CodeToolBoss.Explore(Code,Tool,false,true);
+    if Tool=nil then
+      exit; // pas load error
+    try
+      Node:=Tool.FindDeclarationNodeInInterface(LFMClassName,true);
+      if Node=nil then
+        exit(Tool.FindImplementationNode<>nil); // class not found, reliable if whole interface was read
+
+      if (Node.Desc<>ctnTypeDefinition)
+      or (Node.FirstChild=nil) or (Node.FirstChild.Desc<>ctnClass) then
+        exit(true); // this is not a class
+      Tool.FindClassAndAncestors(Node.FirstChild,ListOfPFindContext,false);
+      if ListOfPFindContext=nil then
+        exit; // ancestor not found -> probably syntax error
+
+      for i:=0 to ListOfPFindContext.Count-1 do begin
+        Context:=PFindContext(ListOfPFindContext[i]);
+        Ancestor:=UpperCase(Context^.Tool.ExtractClassName(Context^.Node,false));
+        if (Ancestor='TFORM') then begin
+          AnUnitInfo.ResourceBaseClass:=pfcbcForm;
+          Result:=true;
+          Break;
+        end else if (Ancestor='TCUSTOMFORM') then begin
+          AnUnitInfo.ResourceBaseClass:=pfcbcCustomForm;
+          Result:=true;
+          Break;
+        end else if Ancestor='TDATAMODULE' then begin
+          AnUnitInfo.ResourceBaseClass:=pfcbcDataModule;
+          Result:=true;
+          Break;
+        end else if (Ancestor='TFRAME') or (Ancestor='TCUSTOMFRAME') then begin
+          AnUnitInfo.ResourceBaseClass:=pfcbcFrame;
+          Result:=true;
+          Break;
+        end else if Ancestor='TCOMPONENT' then begin
+          Result:=true;
+          Break;
+        end;
+      end;
+    except
+      exit; // syntax error or unit not found
+    end;
+    if not Result then exit;
+
+    // Maybe auto-create it
+    //   (pfMainUnitHasCreateFormStatements in Project1.Flags)
+    //   and Project1.AutoCreateForms are checked by caller.
+    if (AnUnitInfo.ResourceBaseClass in [pfcbcForm,pfcbcCustomForm,pfcbcDataModule])
+    and (LFMComponentName<>'')
+    and (IDEMessageDialog(lisAddToStartupComponents,
+                          Format(lisShouldTheComponentBeAutoCreatedWhenTheApplicationS,
+                                 [LFMComponentName]),
+                          mtInformation,[mbYes,mbNo])=mrYes)
+    then
+      Project1.AddCreateFormToProjectFile(LFMClassName,LFMComponentName);
+  finally
+    FreeListOfPFindContext(ListOfPFindContext);
+  end;
+end;
+
 
 { TProjectInspectorForm }
 
@@ -477,26 +603,25 @@ end;
 
 function TProjectInspectorForm.AddOneFile(aFilename: string): TModalResult;
 var
-  NewFile: TUnitInfo;
-  NewFN: String;
+  NewUnit: TUnitInfo;
 begin
   Result := mrOK;
-  NewFN:=CleanAndExpandFilename(aFilename);
-  Assert(NewFN=aFilename, 'TProjectInspectorForm.AddOneFile: '+aFilename+' is not clean.');
-  NewFile:=LazProject.UnitInfoWithFilename(aFilename);
-  if NewFile<>nil then begin
-    if NewFile.IsPartOfProject then Exit(mrIgnore);
+  NewUnit:=LazProject.UnitInfoWithFilename(aFilename);
+  if NewUnit<>nil then begin
+    if NewUnit.IsPartOfProject then Exit(mrIgnore);
   end else begin
-    NewFile:=TUnitInfo.Create(nil);
-    NewFile.Filename:=aFilename;
-    LazProject.AddFile(NewFile,false);
+    NewUnit:=TUnitInfo.Create(nil);
+    NewUnit.Filename:=aFilename;
+    if LazProject.AutoCreateForms and FilenameIsPascalUnit(NewUnit.Filename)
+    and (pfMainUnitHasCreateFormStatements in LazProject.Flags) then
+      UpdateUnitInfoResourceBaseClass(NewUnit, true);
+    LazProject.AddFile(NewUnit,false);
   end;
-  NewFile.IsPartOfProject:=true;
   if Assigned(OnAddUnitToProject) then begin
-    Result:=OnAddUnitToProject(Self,NewFile);
+    Result:=OnAddUnitToProject(Self,NewUnit);
     if Result<>mrOK then Exit;
   end;
-  FNextSelectedPart:=NewFile;
+  FNextSelectedPart:=NewUnit;
 end;
 
 procedure TProjectInspectorForm.AddMenuItemClick(Sender: TObject);
@@ -1090,13 +1215,8 @@ begin
   CurDependency:=GetSingleSelectedDependency;
   if (LazProject=nil) or (CurDependency=nil)
   or not FPropGui.CheckApplyDependency(CurDependency) then exit;
-  // Try to load the package again. Min/max version may have changed.
-  CurDependency.LoadPackageResult := lprUndefined;
-  // This calls UpdateRequiredPackages from PackageGraph.OnEndUpdate,
-  //  and also updates all package editors which is useless here.
-  PackageGraph.OpenDependency(CurDependency, False);
-  //fForcedFlags:=[pefNeedUpdateRequiredPkgs];
   LazProject.Modified:=True;
+  PkgBoss.ApplyDependency(CurDependency);
 end;
 
 function TProjectInspectorForm.CreateToolButton(AName, ACaption, AHint, AImageName: String;
@@ -1311,7 +1431,7 @@ end;
 
 procedure TProjectInspectorForm.PackageListAvailable(Sender: TObject);
 begin
-  DebugLn(['TProjectInspectorForm.PackageListAvailable: ', LazProject.Title]);
+  //DebugLn(['TProjectInspectorForm.PackageListAvailable: ', LazProject.Title]);
   UpdateRequiredPackages;
 end;
 
@@ -1747,6 +1867,8 @@ begin
   end;
 
   Project1.ActiveBuildMode := NewMode;
+  Project1.DefineTemplates.AllChanged(false);
+  IncreaseCompilerParseStamp;
   MainBuildBoss.SetBuildTargetProject1(false);
   MainIDE.UpdateCaption;
   if Assigned(ProjInspector) then

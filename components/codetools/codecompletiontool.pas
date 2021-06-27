@@ -1942,7 +1942,8 @@ begin
           Params,Params.NewNode);
         OrigExprContext:=ExprType.Context.Tool.FindBaseTypeOfNode(
           Params,ExprType.Context.Node);
-        if (ResExprContext.Tool <> OrigExprContext.Tool) then // the "source" types are different -> add unit to the type
+        if (ResExprContext.Tool <> OrigExprContext.Tool)
+        and (ResExprContext.Tool.ExtractSourceName <> 'objpas') then // the "source" types are different -> add unit to the type
           NewType := ExprType.Context.Tool.ExtractSourceName + '.' + NewType
         else
         begin // the "source" types are the same -> set ExprType to found Params.New* so that unit adding is avoided (with MissingUnit)
@@ -2033,8 +2034,8 @@ function TCodeCompletionCodeTool.CompleteEventAssignment(CleanCursorPos,
       AddrOperatorPos:=-1;
     // check assignment operator :=
     if not AtomIs(':=') then exit;
+    AssignmentOperator:=CurPos.StartPos;
     ReadPriorAtom;
-    AssignmentOperator:=CurPos.EndPos;
     // check event name
     if not AtomIsIdentifier then exit;
     PropVarAtom:=CurPos;
@@ -9415,7 +9416,7 @@ function TCodeCompletionCodeTool.CompleteCode(CursorPos: TCodeXYPosition;
     end;
   end;
 
-  function TryFirstLocalIdentOccurence(CursorNode: TCodeTreeNode;
+  function TryFirstLocalIdentOccurrence(CursorNode: TCodeTreeNode;
     OrigCleanCursorPos, CleanCursorPos: Integer): boolean;
   var
     AtomContextNode, StatementNode: TCodeTreeNode;
@@ -9451,7 +9452,7 @@ function TCodeCompletionCodeTool.CompleteCode(CursorPos: TCodeXYPosition;
 
     UpIdentifier := GetUpAtom;
 
-    //find first occurence of UpIdentifier from procedure begin until CleanCursorPos
+    //find first occurrence of UpIdentifier from procedure begin until CleanCursorPos
     //we are interested only in local variables/identifiers
     //  --> the UpIdentifier must not be preceded by a point ("MyObject.I" - if we want to complete I)
     //      and then do another check if it is not available with the "with" command, e.g.
@@ -9474,7 +9475,7 @@ function TCodeCompletionCodeTool.CompleteCode(CursorPos: TCodeXYPosition;
             FCompletingCursorNode:=CursorNode;
             try
               if not CleanPosToCodePos(OrigCleanCursorPos,OldCodePos) then
-                RaiseException(20170421201838,'TCodeCompletionCodeTool.TryFirstLocalIdentOccurence CleanPosToCodePos');
+                RaiseException(20170421201838,'TCodeCompletionCodeTool.TryFirstLocalIdentOccurrence CleanPosToCodePos');
               CompleteCode:=TryCompleteLocalVar(LastCurPos.StartPos,AtomContextNode);
               AdjustCursor(OldCodePos,OldTopLine,NewPos,NewTopLine);
               exit(true);
@@ -9590,9 +9591,9 @@ begin
       if TryComplete(CursorNode, CleanCursorPos) then
         exit(true);
 
-      { Find the first occurence of the (local) identifier at cursor in current
+      { Find the first occurrence of the (local) identifier at cursor in current
         procedure body and try again. }
-      if TryFirstLocalIdentOccurence(CursorNode,OrigCleanCursorPos,CleanCursorPos) then
+      if TryFirstLocalIdentOccurrence(CursorNode,OrigCleanCursorPos,CleanCursorPos) then
         exit(true);
     except
       on E: ECodeToolError do

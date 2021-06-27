@@ -54,7 +54,7 @@ uses
 {$IFDEF UNIX}
    Unix, BaseUnix, termio,
 {$ENDIF}
-  Classes, SysUtils, strutils, math, fgl, Variants, process,
+  Classes, SysUtils, StrUtils, Math, fgl, Variants, process,
   // LCL
   Controls, Dialogs, Forms,
   // LazUtils
@@ -120,7 +120,8 @@ type
     dfForceBreak,        // Debugger supports insertion of not yet known brekpoints
     dfForceBreakDetected,
     dfSetBreakFailed,
-    dfSetBreakPending
+    dfSetBreakPending,
+    dfIgnoreInternalError
   );
 
   TTargetRegisterIdent = (r0, r1, r2, rBreakErrNo);
@@ -137,7 +138,9 @@ type
   PGDBMITargetInfo = ^TGDBMITargetInfo;
 
   TConvertToGDBPathType = (cgptNone, cgptCurDir, cgptExeName);
+  TCharsetToGDBType = (cctEnv, cctExeArgs, cctExeFileName, cctCurDirPath, cctUnknown);
 
+  TGDBMIDebuggerCharsetEncoding = (gdceDefault, gdceLocale, gdceUtf8);
   TGDBMIDebuggerFilenameEncoding = (
     gdfeNone, gdfeDefault, gdfeEscSpace, gdfeQuote
   );
@@ -183,6 +186,10 @@ type
 
   TGDBMIDebuggerPropertiesBase = class(TCommonDebuggerProperties)
   private
+    FEncodingForEnvironment: TGDBMIDebuggerCharsetEncoding;
+    FEncodingForExeArgs: TGDBMIDebuggerCharsetEncoding;
+    FEncodingForExeFileName: TGDBMIDebuggerCharsetEncoding;
+    FEncodingForCurrentDirPath: TGDBMIDebuggerCharsetEncoding;
     FEventProperties: TGDBMIDebuggerGdbEventPropertiesBase;
     FAssemblerStyle: TGDBMIDebuggerAssemblerStyle;
     FCaseSensitivity: TGDBMIDebuggerCaseSensitivity;
@@ -243,6 +250,14 @@ type
              read FEncodeCurrentDirPath write FEncodeCurrentDirPath default gdfeDefault;
     property EncodeExeFileName: TGDBMIDebuggerFilenameEncoding
              read FEncodeExeFileName write FEncodeExeFileName default gdfeDefault;
+    property EncodingForEnvironment: TGDBMIDebuggerCharsetEncoding
+             read FEncodingForEnvironment write FEncodingForEnvironment default gdceDefault;
+    property EncodingForExeArgs: TGDBMIDebuggerCharsetEncoding
+             read FEncodingForExeArgs write FEncodingForExeArgs default gdceDefault;
+    property EncodingForExeFileName: TGDBMIDebuggerCharsetEncoding
+             read FEncodingForExeFileName write FEncodingForExeFileName default gdceDefault;
+    property EncodingForCurrentDirPath: TGDBMIDebuggerCharsetEncoding
+             read FEncodingForCurrentDirPath write FEncodingForCurrentDirPath default gdceDefault;
     property InternalStartBreak: TGDBMIDebuggerStartBreak
              read FInternalStartBreak write FInternalStartBreak default gdsbDefault;
     property UseAsyncCommandMode: Boolean read FUseAsyncCommandMode write FUseAsyncCommandMode;
@@ -296,6 +311,10 @@ type
     property WarnOnInternalError;
     property EncodeCurrentDirPath;
     property EncodeExeFileName;
+    property EncodingForEnvironment;
+    property EncodingForExeArgs;
+    property EncodingForExeFileName;
+    property EncodingForCurrentDirPath;
     property InternalStartBreak;
     property UseAsyncCommandMode;
     property UseNoneMiRunCommands;
@@ -684,6 +703,7 @@ type
     FRunToSrc: String;
     FRunToLine: Integer;
     FStepBreakPoint: Integer;
+    FForceContinueCheck: Boolean;
     FInitialFP: TDBGPtr;
     FStepOverFixNeeded: (sofNotNeeded, sofStepAgain, sofStepOut);
     FStepStartedInFinSub: (sfsNone, sfsStepStarted, sfsStepExited);
@@ -917,9 +937,11 @@ type
     // GDB info (move to ?)
     FGDBVersion: String;
     FGDBVersionMajor, FGDBVersionMinor, FGDBVersionRev: Integer;
+    FGDBFullTarget: String;
     FGDBCPU: String;
     FGDBPtrSize: integer; // PointerSize of the GDB-cpu
     FGDBOS: String;
+    FIsCygWin, FIsUnicodeBuild: Boolean;
 
     // Target info (move to record ?)
     FTargetInfo: TGDBMITargetInfo;
@@ -989,7 +1011,9 @@ type
     procedure QueueCommand(const ACommand: TGDBMIDebuggerCommand; ForceQueue: Boolean = False);
     procedure UnQueueCommand(const ACommand: TGDBMIDebuggerCommand);
 
+    function ConvertPathFromGdbToLaz(APath: string; UnEscapeBackslash: Boolean = True): string;
     function ConvertToGDBPath(APath: string; ConvType: TConvertToGDBPathType = cgptNone): string;
+    function EncodeCharsetForGDB(AString: string; ConvType: TCharsetToGDBType): string;
     function  ChangeFileName: Boolean; override;
     function  CreateBreakPoints: TDBGBreakPoints; override;
     function  CreateLocals: TLocalsSupplier; override;
@@ -1563,6 +1587,7 @@ type
 
   TGDBMIDisassembleResultList = class(TGDBMINameValueBasedList)
   private
+    FDbg: TGDBMIDebuggerBase;
     FCount: Integer;
     FHasSourceInfo: Boolean;
     FItems: array of record
@@ -1589,7 +1614,8 @@ type
     function SortByAddress: Boolean;
   public
     // only valid as long a src object exists, and not modified
-    constructor CreateSubList(ASource: TGDBMIDisassembleResultList; AStartIdx, ACount: Integer);
+    constructor Create(AResult: TGDBMIExecResult; ADbg: TGDBMIDebuggerBase);
+    constructor CreateSubList(ASource: TGDBMIDisassembleResultList; AStartIdx, ACount: Integer; ADbg: TGDBMIDebuggerBase);
     procedure   InitSubList(ASource: TGDBMIDisassembleResultList; AStartIdx, ACount: Integer);
   end;
 
@@ -1612,7 +1638,7 @@ type
                        ALastSubListEndAddr: TDBGPtr;
                        AnAddressToLocate, AnAddForLineAfterCounter: TDBGPtr);
     function EOL: Boolean;
-    function NextSubList(var AResultList: TGDBMIDisassembleResultList): Boolean;
+    function NextSubList(var AResultList: TGDBMIDisassembleResultList; ADbg: TGDBMIDebuggerBase): Boolean;
 
     // Current SubList
     function IsFirstSubList: Boolean;
@@ -2827,13 +2853,16 @@ begin
   HadTimeout := HadTimeout and LastExecwasTimeOut;
   if R.State <> dsError
   then begin
-    if StartsStr('type = ^Exception', R.Values)
+    if LazStartsStr('type = ^Exception', R.Values)
     then include(TargetInfo^.TargetFlags, tfFlagMaybeDwarf3);
     if LazStartsText('type = ^EXCEPTION', R.Values)
     then include(TargetInfo^.TargetFlags, tfExceptionIsPointer);
   end;
-  CheckHasType('Shortstring', tfFlagHasTypeShortstring);
-  HadTimeout := HadTimeout and LastExecwasTimeOut;
+  if FTheDebugger.FGDBVersionMajor < 10 then begin
+    // causes internal error in gdb 10  // Maybe use dfIgnoreInternalError
+    CheckHasType('Shortstring', tfFlagHasTypeShortstring);
+    HadTimeout := HadTimeout and LastExecwasTimeOut;
+  end;
   //CheckHasType('PShortstring', tfFlagHasTypePShortString);
   //HadTimeout := HadTimeout and LastExecwasTimeOut;
   CheckHasType('pointer', tfFlagHasTypePointer);
@@ -3073,9 +3102,9 @@ var
   begin
     DebugLn(DBG_VERBOSE, '[Debugger] Log output: ', Line);
     Warning := Line;
-    if StartsStr('&"', Warning) then
+    if LazStartsStr('&"', Warning) then
       Delete(Warning, 1, 2);
-    if EndsStr('\n"', Warning) then
+    if LazEndsStr('\n"', Warning) then
       SetLength(Warning, Length(Warning) - 3);
     if InLogWarning then
     begin
@@ -3332,9 +3361,17 @@ function TGDBMIDebuggerBase.ConvertToGDBPath(APath: string; ConvType: TConvertTo
 var
   esc: TGDBMIDebuggerFilenameEncoding;
 begin
-  Result := UTF8ToWinCP(APath);
   // no need to process empty filename
+  Result := APath;
   if Result = '' then exit;
+
+  case ConvType of
+    cgptNone:    Result := EncodeCharsetForGDB(APath, cctUnknown);
+    cgptCurDir:  Result := EncodeCharsetForGDB(APath, cctCurDirPath);
+    cgptExeName: Result := EncodeCharsetForGDB(APath, cctExeArgs);
+    else         Result := EncodeCharsetForGDB(APath, cctUnknown);
+  end;
+
 
   case ConvType of
     cgptNone: esc := gdfeNone;
@@ -3377,6 +3414,37 @@ begin
   if esc = gdfeQuote
   then Result := '\"' + Result + '\"';
   Result := '"' + Result + '"';
+end;
+
+function TGDBMIDebuggerBase.EncodeCharsetForGDB(AString: string;
+  ConvType: TCharsetToGDBType): string;
+var
+  ct: TGDBMIDebuggerCharsetEncoding;
+begin
+  ct := gdceDefault;
+  case ConvType of
+    cctEnv:         ct := TGDBMIDebuggerPropertiesBase(GetProperties).EncodingForEnvironment;
+    cctExeArgs:     ct := TGDBMIDebuggerPropertiesBase(GetProperties).EncodingForExeArgs;
+    cctExeFileName: ct := TGDBMIDebuggerPropertiesBase(GetProperties).EncodingForExeFileName;
+    cctCurDirPath:  ct := TGDBMIDebuggerPropertiesBase(GetProperties).EncodingForCurrentDirPath;
+  end;
+
+  if ct = gdceDefault then begin
+    {$IFDEF WINDOWS}
+    if FIsCygWin or FIsUnicodeBuild then
+      ct := gdceUtf8
+    else
+      ct := gdceLocale;
+    {$ELSE}
+    ct := gdceUtf8;
+    {$ENDIF}
+  end;
+
+  case ct of
+    gdceDefault: Result := AString;
+    gdceLocale:  Result := UTF8ToWinCP(AString);
+    gdceUtf8:    Result := AString;
+  end;
 end;
 
 { TGDBMIDebuggerCommandChangeFilename }
@@ -3452,6 +3520,32 @@ function TGDBMIDebuggerCommandInitDebugger.DoExecute: Boolean;
     FTheDebugger.FGDBVersionRev := StrToIntDef(copy(s,1,i-1), -1);
   end;
 
+  procedure ParseTarget;
+  var
+    S, S2: String;
+  begin
+    S := FTheDebugger.FGDBFullTarget;
+    S2 := GetPart('', '-', S);
+    if (S2 <> '') and
+       ( (strlicomp(PChar(S2), 'mingw', 5) = 0) or
+         (strlicomp(PChar(S2), 'w32-mingw', 9) = 0) or
+         (strlicomp(PChar(S2), 'w64-mingw', 9) = 0) or
+         (strlicomp(PChar(S2), 'cygwin', 6) = 0) or
+         (strlicomp(PChar(S2), 'pc-cygwin', 9) = 0)
+       )
+    then begin
+      FTheDebugger.FGDBOS := S2;
+      exit;
+    end;
+
+    FTheDebugger.FGDBCPU := S2;
+
+    //GetPart('-', '-', S); // TODO strip vendor
+    if (S <> '') and (S[1] = '-') then
+      Delete(S, 1, 1);
+    FTheDebugger.FGDBOS := S; // GetPart(['-'], ['-', ''], S);
+  end;
+
   function ParseGDBVersionMI: Boolean;
   var
     R: TGDBMIExecResult;
@@ -3465,11 +3559,8 @@ function TGDBMIDebuggerCommandInitDebugger.DoExecute: Boolean;
     List := TGDBMINameValueList.Create(R);
 
     FTheDebugger.FGDBVersion := List.Values['version'];
-    S := List.Values['target'];
-
-    FTheDebugger.FGDBCPU := GetPart('', '-', S);
-    GetPart('-', '-', S); // strip vendor
-    FTheDebugger.FGDBOS := GetPart(['-'], ['-', ''], S);
+    FTheDebugger.FGDBFullTarget := List.Values['target'];
+    ParseTarget;
 
     List.Free;
 
@@ -3477,12 +3568,25 @@ function TGDBMIDebuggerCommandInitDebugger.DoExecute: Boolean;
     then exit;
 
     // maybe a none MI result
-    S := GetPart(['configured as \"'], ['\"'], R.Values, False, False);
-    if Pos('--target=', S) <> 0 then
-      S := GetPart('--target=', '', S);
-    FTheDebugger.FGDBCPU := GetPart('', '-', S);
-    GetPart('-', '-', S); // strip vendor
-    FTheDebugger.FGDBOS := GetPart('-', '-', S);
+    FTheDebugger.FGDBFullTarget := GetPart(['configured as \"'], ['\"'], R.Values, False, False);
+    if Pos('--target=', FTheDebugger.FGDBFullTarget) <> 0 then
+      FTheDebugger.FGDBFullTarget := GetPart('--target=', '', S);
+    ParseTarget;
+
+
+    FTheDebugger.FIsUnicodeBuild := False;
+    {$IFDEF WINDOWS}
+    FTheDebugger.FGDBVersion := GetPart(['GNU gdb unicode (GDB)'], [#10, #13], R.Values, False, False);
+    if FTheDebugger.FGDBVersion <> '' then
+      FTheDebugger.FIsUnicodeBuild := True;
+    {$ENDIF}
+    if StoreGdbVersionAsNumber then Exit;
+
+    FTheDebugger.FGDBVersion := GetPart(['GNU gdb (GDB)'], [#10, #13], R.Values, False, False);
+    if StoreGdbVersionAsNumber then Exit;
+
+    FTheDebugger.FGDBVersion := GetPart(['GNU gdb '], [#10, #13], R.Values, False, False);
+    if StoreGdbVersionAsNumber then Exit;
 
     FTheDebugger.FGDBVersion := GetPart(['('], [')'], R.Values, False, False);
     if StoreGdbVersionAsNumber then Exit;
@@ -3521,6 +3625,11 @@ begin
   ExecuteCommand('set width 50000', []);
 
   ParseGDBVersionMI;
+  {$IFDEF WINDOWS}
+  FTheDebugger.FIsCygWin := PosI('cygwin', FTheDebugger.FGDBFullTarget) > 0;
+  {$ELSE}
+  FTheDebugger.FIsCygWin := False;
+  {$ENDIF}
   DoSetInternalError;
 
   FTheDebugger.FAsyncModeEnabled := False;
@@ -3791,8 +3900,8 @@ begin
       EList.SetPath('frame');
       addr := StrToQWordDef(EList.Values['addr'], 0);
       func := EList.Values['func'];
-      filename := ConvertGdbPathAndFile(EList.Values['file']);
-      fullname := ConvertGdbPathAndFile(EList.Values['fullname']);
+      filename := FTheDebugger.ConvertPathFromGdbToLaz(EList.Values['file']);
+      fullname := FTheDebugger.ConvertPathFromGdbToLaz(EList.Values['fullname']);
       line := StrToIntDef(EList.Values['line'], 0);
 
       EList.SetPath('args');
@@ -3982,10 +4091,19 @@ begin
   HasItemPointerList := True;
 end;
 
-constructor TGDBMIDisassembleResultList.CreateSubList(ASource: TGDBMIDisassembleResultList;
-  AStartIdx, ACount: Integer);
+constructor TGDBMIDisassembleResultList.Create(AResult: TGDBMIExecResult;
+  ADbg: TGDBMIDebuggerBase);
 begin
-  Create;
+  FDbg := ADbg;
+  inherited Create(AResult);
+end;
+
+constructor TGDBMIDisassembleResultList.CreateSubList(
+  ASource: TGDBMIDisassembleResultList; AStartIdx, ACount: Integer;
+  ADbg: TGDBMIDebuggerBase);
+begin
+  FDbg := ADbg;
+  inherited Create();
   InitSubList(ASource, AStartIdx, ACount);
 end;
 
@@ -4020,7 +4138,7 @@ begin
   then exit;
   AsmList := TGDBMINameValueList.Create(FItems[Index].AsmEntry);
 
-  FItems[Index].ParsedInfo.SrcFileName := ConvertGdbPathAndFile(PCLenToString(FItems[Index].SrcFile, True));
+  FItems[Index].ParsedInfo.SrcFileName := FDbg.ConvertPathFromGdbToLaz(PCLenToString(FItems[Index].SrcFile, True));
   FItems[Index].ParsedInfo.SrcFileLine := PCLenToInt(FItems[Index].SrcLine, 0);
   // SrcStatementIndex, SrcStatementCount are already set
 
@@ -4091,8 +4209,9 @@ begin
   Result := FStartIdx > FMaxIdx ;
 end;
 
-function TGDBMIDisassembleResultFunctionIterator.NextSubList
-  (var AResultList: TGDBMIDisassembleResultList): Boolean;
+function TGDBMIDisassembleResultFunctionIterator.NextSubList(
+  var AResultList: TGDBMIDisassembleResultList; ADbg: TGDBMIDebuggerBase
+  ): Boolean;
 var
   WasBeforeStart: Boolean;
   HasPrcName: Boolean;
@@ -4153,7 +4272,7 @@ begin
   end;
 
   if AResultList = nil
-  then AResultList := TGDBMIDisassembleResultList.CreateSubList(FList, FStartIdx, NextIdx - FStartIdx)
+  then AResultList := TGDBMIDisassembleResultList.CreateSubList(FList, FStartIdx, NextIdx - FStartIdx, ADbg)
   else AResultList.InitSubList(FList, FStartIdx, NextIdx - FStartIdx);
   FStartIdx := NextIdx;
 
@@ -4445,7 +4564,7 @@ function TGDBMIDebuggerCommandDisassemble.DoExecute: Boolean;
     ExecuteCommand('-data-disassemble -s %u -e %u -- %d', [AStartAddr, AnEndAddr, WS], R);
     if Result <> nil
     then Result.Init(R)
-    else Result := TGDBMIDisassembleResultList.Create(R);
+    else Result := TGDBMIDisassembleResultList.Create(R, FTheDebugger);
     if ACutBeforeEndAddr and Result.HasSourceInfo
     then Result.SortByAddress;
     while ACutBeforeEndAddr and (Result.Count > 0) and (Result.LastItem^.Addr >= AnEndAddr)
@@ -4732,7 +4851,7 @@ function TGDBMIDebuggerCommandDisassemble.DoExecute: Boolean;
         // add without source
         while not DisAssIterator.EOL
         do begin
-          DisAssIterator.NextSubList(DisAssListCurrentSub);
+          DisAssIterator.NextSubList(DisAssListCurrentSub, FTheDebugger);
           // ignore StopAfterNumLines, until we have at least the source;
 
           if (not DisAssIterator.IsFirstSubList) and (DisAssListCurrentSub.Item[0]^.Offset <> 0)
@@ -4854,7 +4973,7 @@ function TGDBMIDebuggerCommandDisassemble.DoExecute: Boolean;
       while not DisAssIterator.EOL
       do begin
         if (dcsCanceled in SeenStates) then break;
-        DisAssIterator.NextSubList(DisAssListCurrentSub);
+        DisAssIterator.NextSubList(DisAssListCurrentSub, FTheDebugger);
         CopyToRange(DisAssListCurrentSub, NewRange, 0, DisAssListCurrentSub.Count); // Do not add the Sourcelist as last param, or it will get re-sorted
 
         // check for gap
@@ -4961,7 +5080,7 @@ function TGDBMIDebuggerCommandDisassemble.DoExecute: Boolean;
     while not DisAssIterator.EOL
     do begin
       if (dcsCanceled in SeenStates) then break;
-      BlockOk := DisAssIterator.NextSubList(DisAssListCurrentSub);
+      BlockOk := DisAssIterator.NextSubList(DisAssListCurrentSub, FTheDebugger);
 
       // Do we have enough lines (without the current block)?
       if (DisAssIterator.CountLinesAfterCounterAddr > StopAfterNumLines)
@@ -5156,6 +5275,16 @@ function TGDBMIDebuggerCommandDisassemble.DebugText: String;
 begin
   Result := Format('%s: FromAddr=%u ToAddr=%u LinesBefore=%d LinesAfter=%d',
                    [ClassName, FStartAddr, FEndAddr, FLinesBefore, FLinesAfter]);
+end;
+
+function RemoveLineBreaks(AInput: string): string;
+(* Linebreaks can not be passed to gdb.
+   So next best thing => pass spaces / act as separator
+ *)
+begin
+  Result := StringReplace(AInput, LineEnding, ' ', [rfReplaceAll]);
+  Result := StringReplace(Result, #10, ' ', [rfReplaceAll]);
+  Result := StringReplace(Result, #13, ' ', [rfReplaceAll]);
 end;
 
 { TGDBMIDebuggerCommandStartDebugging }
@@ -5366,9 +5495,9 @@ function TGDBMIDebuggerCommandStartDebugging.DoExecute: Boolean;
         StoppedAtEntryPoint := Result = FTheDebugger.FMainAddrBreak.BreakId[iblCustomAddr];
         List.SetPath('frame');
         StoppedAddr := StrToInt64Def(List.Values['addr'], -1);
-        StoppedFile := List.Values['fullname'];
+        StoppedFile := FTheDebugger.ConvertPathFromGdbToLaz(List.Values['fullname']);
         if StoppedFile = '' then
-          StoppedFile := List.Values['file'];
+          StoppedFile := FTheDebugger.ConvertPathFromGdbToLaz(List.Values['file']);
         StoppedLine := List.Values['line'];
       end;
     except
@@ -5612,7 +5741,8 @@ begin
 
     // also call execute -exec-arguments if there are no arguments in this run
     // so the possible arguments of a previous run are cleared
-    ExecuteCommand('-exec-arguments %s', [UTF8ToWinCP(FTheDebugger.Arguments)], [cfCheckState]);
+    ExecuteCommand('-exec-arguments %s',
+      [FTheDebugger.EncodeCharsetForGDB(RemoveLineBreaks(FTheDebugger.Arguments), cctExeArgs)], [cfCheckState]);
 
     {$IF defined(UNIX) or defined(DBG_ENABLE_TERMINAL)}
     InitConsole;
@@ -6078,7 +6208,7 @@ function TGDBMIDebuggerCommandExecute.ProcessStopped(const AParams: String;
         if ExecuteCommand('info line *%s', [S], R)
         then begin
             Result.SrcLine := StrToIntDef(GetPart('Line ', ' of', R.Values), -1);
-            Result.SrcFile := ConvertGdbPathAndFile(GetPart('\"', '\"', R.Values));
+            Result.SrcFile := FTheDebugger.ConvertPathFromGdbToLaz(GetPart('\"', '\"', R.Values));
         end;
       end;
 
@@ -6692,6 +6822,7 @@ begin
     if Reason = 'function-finished'
     then begin
       CheckSehFinallyExited(List.Values['frame']);
+      Result := Result or FForceContinueCheck;
       if not Result then begin
         SetDebuggerState(dsPause);
         ProcessFrame(List.Values['frame'], False);
@@ -7204,7 +7335,11 @@ var
           DisablePopCatches;
           i := FindStackFrame(Fp, 0, 1); // -2 already stepped out of the desired frame, enter dsPause
           if (i in [0, 1]) or (i = -2) then begin
-            FCurrentExecCmd := ectStepOut; // ecStepOut will not offer a chance to ContinueStepping (there should be no breakpoint that can be hit before)
+            FForceContinueCheck := (FExecType = ectStepOut) and (i=1);
+            if FForceContinueCheck and (FStepBreakPoint > 0) then
+              FCurrentExecCmd := ectContinue
+            else
+              FCurrentExecCmd := ectStepOut; // ecStepOut will not offer a chance to ContinueStepping (there should be no breakpoint that can be hit before)
             Result := True;
             exit;
           end;
@@ -7383,7 +7518,7 @@ var
     then
       exit;
 
-    DisAsm := TGDBMIDisassembleResultList.Create(R);
+    DisAsm := TGDBMIDisassembleResultList.Create(R, FTheDebugger);
     try
       if (FExecType in [ectStepOver, ectStepInto, ectStepOut]) and
          IsSehFinallyFuncName(DisAsm.Item[0]^.FuncName)
@@ -7425,6 +7560,7 @@ begin
   FCanKillNow := False;
   FDidKillNow := False;
   FStepOverFixNeeded := sofNotNeeded;
+  FForceContinueCheck := False;
   FNextExecQueued := False;
   FP := 0;
   FInitialFP := FP;
@@ -7541,6 +7677,7 @@ begin
       ContinueStep := False;
       if StoppedParams <> ''
       then ContinueExecution := ProcessStopped(StoppedParams, FTheDebugger.PauseWaitState in [pwsInternal, pwsInternalCont]);
+      FForceContinueCheck := False;
 
       // FFpcSpecificHandlerCallFin was either hit, or the handler was exited
       FTheDebugger.FFpcSpecificHandlerCallFin.Clear(Self);
@@ -7767,8 +7904,8 @@ var
       Val(AFrameInfo.Values['addr'], addr, e);
       if e=0 then ;
       func := AFrameInfo.Values['func'];
-      filename := ConvertGdbPathAndFile(AFrameInfo.Values['file']);
-      fullname := ConvertGdbPathAndFile(AFrameInfo.Values['fullname']);
+      filename := FTheDebugger.ConvertPathFromGdbToLaz(AFrameInfo.Values['file']);
+      fullname := FTheDebugger.ConvertPathFromGdbToLaz(AFrameInfo.Values['fullname']);
       line := AFrameInfo.Values['line'];
     end;
 
@@ -7779,7 +7916,9 @@ func="_$CODETEMPLATESDLG$_Ld98"
 func="??"
     *)
 
-    j := pos('$', func);
+    j := 0;
+    if (filename = '') and (fullname = '') then
+      j := pos('$', func);
     if j > 1 then begin
       un := '';
       cl := '';
@@ -8285,6 +8424,10 @@ begin
   FWarnOnInternalError := TGDBMIDebuggerShowWarning.OncePerRun;
   FEncodeCurrentDirPath := gdfeDefault;
   FEncodeExeFileName := gdfeDefault;
+  FEncodingForEnvironment := gdceDefault;
+  FEncodingForExeArgs := gdceDefault;
+  FEncodingForExeFileName := gdceDefault;
+  FEncodingForCurrentDirPath := gdceDefault;
   FInternalStartBreak := gdsbDefault;
   FUseAsyncCommandMode := False;
   FDisableLoadSymbolsForLibraries := False;
@@ -8327,6 +8470,10 @@ begin
     FWarnOnInternalError  := TGDBMIDebuggerPropertiesBase(Source).FWarnOnInternalError;
     FEncodeCurrentDirPath := TGDBMIDebuggerPropertiesBase(Source).FEncodeCurrentDirPath;
     FEncodeExeFileName := TGDBMIDebuggerPropertiesBase(Source).FEncodeExeFileName;
+    FEncodingForEnvironment := TGDBMIDebuggerPropertiesBase(Source).FEncodingForEnvironment;
+    FEncodingForExeArgs := TGDBMIDebuggerPropertiesBase(Source).FEncodingForExeArgs;
+    FEncodingForExeFileName := TGDBMIDebuggerPropertiesBase(Source).FEncodingForExeFileName;
+    FEncodingForCurrentDirPath := TGDBMIDebuggerPropertiesBase(Source).FEncodingForCurrentDirPath;
     FInternalStartBreak := TGDBMIDebuggerPropertiesBase(Source).FInternalStartBreak;
     FUseAsyncCommandMode := TGDBMIDebuggerPropertiesBase(Source).FUseAsyncCommandMode;
     FDisableLoadSymbolsForLibraries := TGDBMIDebuggerPropertiesBase(Source).FDisableLoadSymbolsForLibraries;
@@ -8759,7 +8906,7 @@ function TGDBMIDebuggerBase.CheckForInternalError(ALine, ACurCommandText: String
 
   function IsErrorLine(const L: String): Boolean;
   begin
-    Result := (PosI('internal-error:', L) > 0) or
+    Result := (PosI('internal-error:', L) > 0)or
               (PosI('internal to gdb has been detected', L) > 0) or
               (PosI('further debugging may prove unreliable', L) > 0) or
               (PosI('command aborted.', L) > 0);
@@ -8779,7 +8926,7 @@ var
   S: String;
   i: Integer;
 begin
-  Result := IsErrorLine(ALine);
+  Result := IsErrorLine(ALine) ;
   if Result then begin
     FNeedReset := True;
 
@@ -8791,6 +8938,9 @@ begin
       dec(i);
       S := ReadLine(True, 50);
     end;
+
+    if (dfIgnoreInternalError in FDebuggerFlags) then
+      exit;
 
     DoDbgEvent(ecDebugger, etDefault, Format(gdbmiEventLogGDBInternalError, [ALine]));
     if (TGDBMIDebuggerProperties(GetProperties).WarnOnInternalError = TGDBMIDebuggerShowWarning.True) or
@@ -8853,7 +9003,7 @@ begin
   // input: =library-loaded,id="C:\\Windows\\system32\\ntdll.dll",target-name="C:\\Windows\\system32\\ntdll.dll",host-name="C:\\Windows\\system32\\ntdll.dll",symbols-loaded="0",thread-group="i1"
   List := TGDBMINameValueList.Create(S);
   ThreadGroup := List.Values['thread-group'];
-  Result := Format('Module Load: "%s". %s. Thread Group: %s (%s)', [ConvertGdbPathAndFile(List.Values['id']), DebugInfo[List.Values['symbols-loaded'] = '1'], ThreadGroup, FThreadGroups.Values[ThreadGroup]]);
+  Result := Format('Module Load: "%s". %s. Thread Group: %s (%s)', [ConvertPathFromGdbToLaz(List.Values['id']), DebugInfo[List.Values['symbols-loaded'] = '1'], ThreadGroup, FThreadGroups.Values[ThreadGroup]]);
   List.Free;
 end;
 
@@ -8865,7 +9015,7 @@ begin
   // input: =library-unloaded,id="C:\\Windows\\system32\\advapi32.dll",target-name="C:\\Windows\\system32\\advapi32.dll",host-name="C:\\Windows\\system32\\advapi32.dll",thread-group="i1"
   List := TGDBMINameValueList.Create(S);
   ThreadGroup := List.Values['thread-group'];
-  Result := Format('Module Unload: "%s". Thread Group: %s (%s)', [ConvertGdbPathAndFile(List.Values['id']), ThreadGroup, FThreadGroups.Values[ThreadGroup]]);
+  Result := Format('Module Unload: "%s". Thread Group: %s (%s)', [ConvertPathFromGdbToLaz(List.Values['id']), ThreadGroup, FThreadGroups.Values[ThreadGroup]]);
   List.Free;
 end;
 
@@ -9206,6 +9356,28 @@ begin
   FCommandQueue.Remove(ACommand);
 end;
 
+function TGDBMIDebuggerBase.ConvertPathFromGdbToLaz(APath: string;
+  UnEscapeBackslash: Boolean): string;
+begin
+  if UnEscapeBackslash then
+    Result := UnEscapeBackslashed(APath, [uefOctal])
+  else
+    Result := APath;
+  Result := AnsiToUtf8(Result);
+
+  if FIsCygWin then begin
+    if (Length(APath) >= 12) and
+       (strlicomp(PChar(APath), '/cygdrive/', 10) = 0) and
+       (APath[12] = '/') and
+       (APath[11] in ['a'..'z', 'A'..'Z'])
+    then begin
+      Result := APath[11] + ':\' + StringReplace(copy(APath, 13, Length(APath)), '/', '\', [rfReplaceAll]);
+    end;
+  end;
+
+  Result := ConvertPathDelims(Result);
+end;
+
 procedure TGDBMIDebuggerBase.CancelAllQueued;
 var
   i: Integer;
@@ -9308,38 +9480,6 @@ begin
   Result := 0;
 end;
 
-function EscapeGDBCommand(const AInput: string): string;
-var
-  lPiece: string;
-  I, lPos, len: integer;
-begin
-  lPos := 1;
-  Result := '';
-  repeat
-    I := PosSetEx(#9#10#13, AInput, lPos);
-    { copy unmatched characters }
-    if I > 0 then
-      len := I-lPos
-    else
-      len := Length(AInput)+1-lPos;
-    Result := Result + Copy(AInput, lPos, len);
-    { replace a matched character or be done }
-    if I > 0 then
-    begin
-      case AInput[I] of
-        #9:  lPiece := '\t';
-        #10: lPiece := '\n';
-        #13: lPiece := '\r';
-      else
-        lPiece := '';
-      end;
-      Result := Result + lPiece;
-      lPos := I+1;
-    end else
-      exit;
-  until false;
-end;
-
 function TGDBMIDebuggerBase.GDBDisassemble(AAddr: TDbgPtr; ABackward: Boolean;
   out ANextAddr: TDbgPtr; out ADump, AStatement, AFile: String; out ALine: Integer): Boolean;
 var
@@ -9399,12 +9539,12 @@ begin
 
   if State = dsRun
   then GDBPause(True, True);
+
+  S := EncodeCharsetForGDB(RemoveLineBreaks(AVariable), cctEnv);
   if ASet then
   begin
-    S := EscapeGDBCommand(AVariable);
     ExecuteCommand('-gdb-set env %s', [S], [cfscIgnoreState, cfNoThreadContext]);
   end else begin
-    S := AVariable;
     ExecuteCommand('unset env %s', [GetPart([], ['='], S, False, False)], [cfscIgnoreState, cfNoThreadContext]);
   end;
 end;
@@ -11818,14 +11958,14 @@ begin
     if (s = '') or (s = '#') then
       continue;
 
-    if StartsStr('#!', s) then begin
+    if LazStartsStr('#!', s) then begin
       delete(s, 1, 2);
       s := LowerCase(Trim(s));
-      if StartsStr(OptTimeout, s) then begin
+      if LazStartsStr(OptTimeout, s) then begin
         t := StrToIntDef(copy(s, 1+length(OptTimeout), MaxInt), DefaultTimeOut);
       end;
 
-      if StartsStr(OptTimeoutWarn, s) then begin
+      if LazStartsStr(OptTimeoutWarn, s) then begin
         if copy(s, 1+length(OptTimeout), MaxInt) = 'true' then
           f := []
         else
@@ -12579,8 +12719,8 @@ begin
   Val(Frame.Values['addr'], Result.Address, e);
   if e=0 then ;
   Result.FuncName := Frame.Values['func'];
-  Result.SrcFile := ConvertGdbPathAndFile(Frame.Values['file']);
-  Result.SrcFullName := ConvertGdbPathAndFile(Frame.Values['fullname']);
+  Result.SrcFile := FTheDebugger.ConvertPathFromGdbToLaz(Frame.Values['file']);
+  Result.SrcFullName := FTheDebugger.ConvertPathFromGdbToLaz(Frame.Values['fullname']);
   Result.SrcLine := StrToIntDef(Frame.Values['line'], -1);
 
   Frame.Free;
@@ -12613,6 +12753,7 @@ end;
 
 constructor TGDBMIDebuggerCommand.Create(AOwner: TGDBMIDebuggerBase);
 begin
+  inherited Create;
   FQueueRunLevel := -1;
   FState := dcsNone;
   FTheDebugger := AOwner;
@@ -12760,9 +12901,9 @@ begin
   FBreaks[ALoc].BreakGdbId    := StrToIntDef(ResultList.Values['number'], -1);
   FBreaks[ALoc].BreakAddr     := StrToQWordDef(ResultList.Values['addr'], 0);
   FBreaks[ALoc].BreakFunction := ResultList.Values['func'];
-  FBreaks[ALoc].BreakFile     := ResultList.Values['fullname'];
+  FBreaks[ALoc].BreakFile     := ACmd.FTheDebugger.ConvertPathFromGdbToLaz(ResultList.Values['fullname']);
   if FBreaks[ALoc].BreakFile = '' then
-    FBreaks[ALoc].BreakFile     := ResultList.Values['file'];
+    FBreaks[ALoc].BreakFile     := ACmd.FTheDebugger.ConvertPathFromGdbToLaz(ResultList.Values['file']);
   FBreaks[ALoc].BreakLine     := ResultList.Values['line'];
   ResultList.Free;
 end;
@@ -14104,7 +14245,7 @@ var
         Val(addrtxt, addr, e);
         if e <> 0 then
           Exit;
-        //AnExpression := Lowercase(ResultInfo.TypeName);
+        AnExpression := Lowercase(ResultInfo.TypeName);
         case StringCase(ResultInfo.TypeName,
                         ['char', 'character', 'ansistring', '__vtbl_ptr_type',
                          'wchar', 'widechar', 'widestring', 'unicodestring',

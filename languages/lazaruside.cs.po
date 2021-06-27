@@ -1695,6 +1695,10 @@ msgstr "Soubory"
 msgid "Grid"
 msgstr "Mřížka"
 
+#: lazarusidestrconsts.dlgenvidestartup
+msgid "IDE Startup"
+msgstr ""
+
 #: lazarusidestrconsts.dlgenvlanguage
 msgctxt "lazarusidestrconsts.dlgenvlanguage"
 msgid "Language"
@@ -1748,6 +1752,10 @@ msgstr "Dodatečné mezery řádku"
 #| msgid "Use external gdb debug symbols file"
 msgid "Use external debug symbols file"
 msgstr "Používat externí soubor ladících symbolů GDB"
+
+#: lazarusidestrconsts.dlgfileassociationinos
+msgid "Opening Files from OS"
+msgstr ""
 
 #: lazarusidestrconsts.dlgfileexts
 msgid "File extensions"
@@ -2466,6 +2474,10 @@ msgstr "Poslední (např. na konci zdrojového kódu)"
 msgid "Lazarus directory (default for all projects)"
 msgstr "Adresář Lazarusu (výchozí pro všechny projekty)"
 
+#: lazarusidestrconsts.dlglazarusinstances
+msgid "Lazarus instances"
+msgstr ""
+
 #: lazarusidestrconsts.dlglefttopclr
 msgid "Guide lines Left,Top"
 msgstr "Vodící čáry Vlevo, Nahoře"
@@ -3081,10 +3093,6 @@ msgstr "Kurzorové klávesy přesouvají všechny kurzory"
 msgid "Enable multi-caret for column selection"
 msgstr "Povolit více vsuvek pro výběr sloupce"
 
-#: lazarusidestrconsts.dlgmultipleinstances
-msgid "Multiple Lazarus instances"
-msgstr "Více instancí Lazarusu"
-
 #: lazarusidestrconsts.dlgmultipleinstances_alwaysstartnew
 msgid "always start a new instance"
 msgstr "vždy startovat novou instanci"
@@ -3137,6 +3145,10 @@ msgstr "Pojmenování"
 msgid "New desktop ..."
 msgstr "Nová plocha ..."
 
+#: lazarusidestrconsts.dlgnewprojecttype
+msgid "New Project Type"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnoautomaticrenaming
 msgid "No automatic renaming"
 msgstr "Automaticky nepřejmenovávat"
@@ -3149,6 +3161,10 @@ msgstr "Žádná dostupná jednotka k přidání."
 msgid "No Highlight"
 msgstr "Bez zvýrazňování"
 
+#: lazarusidestrconsts.dlgnonformbackgroundcolor
+msgid "Other Designer background color (e. g. TDataModule)"
+msgstr ""
+
 #: lazarusidestrconsts.dlgnotebooktabpos
 msgid "Source notebook tabs position"
 msgstr "Umístění záložky zdrojového zápisníku"
@@ -3160,6 +3176,10 @@ msgstr "Nerozdělovat řádek po"
 #: lazarusidestrconsts.dlgnotsplitlinefront
 msgid "Do not split line in front of"
 msgstr "Nerozdělovat řádek před"
+
+#: lazarusidestrconsts.dlgnsprincipalclass
+msgid "NSPrincipalClass"
+msgstr ""
 
 #: lazarusidestrconsts.dlgobjinsp
 msgctxt "lazarusidestrconsts.dlgobjinsp"
@@ -3449,6 +3469,10 @@ msgstr "Volby projektu"
 #, object-pascal-format
 msgid "Options for Project: %s"
 msgstr "Volby pro projekt %s"
+
+#: lazarusidestrconsts.dlgprojecttoopenorcreate
+msgid "Project to Open or Create"
+msgstr ""
 
 #: lazarusidestrconsts.dlgprojfiles
 msgid "Project Files"
@@ -4983,7 +5007,7 @@ msgstr "Ukotvit horní okraj ke spodnímu okraji sourozence. Udržovaná vzdále
 msgid "Anchor top side to top side of sibling. Use BorderSpacing to set a distance. BorderSpacing of sibling is ignored."
 msgstr "Ukotvit horní okraj k hornímu okraji sourozence. Použijte BorderSpacing pro nastavení vzdálenosti. BorderSpacing sourozence je ignorováno."
 
-#: lazarusidestrconsts.lisanerroroccuredatlaststartupwhileloadingloadthispro
+#: lazarusidestrconsts.lisanerroroccurredatlaststartupwhileloadingloadthispro
 #, object-pascal-format
 msgid "An error occurred at last startup while loading %s!%sLoad this project again?"
 msgstr "Při posledním startu došlo k chybě při načítání %s!%sNačíst znovu tento projekt?"
@@ -5870,7 +5894,7 @@ msgstr "Proměnné"
 msgid "Wrong indentation"
 msgstr "Nesprávné odsazení"
 
-#: lazarusidestrconsts.liscfeanexceptionoccuredduringdeletionof
+#: lazarusidestrconsts.liscfeanexceptionoccurredduringdeletionof
 #, object-pascal-format
 msgid "An exception occurred during deletion of%s\"%s:%s\"%s%s"
 msgstr "Došlo k výjimce během mazání%s\"%s:%s\"%s%s"
@@ -8411,9 +8435,17 @@ msgstr "Přidat výjimku"
 msgid "Additional search path"
 msgstr "Doplňující prohledávací cesty"
 
+#: lazarusidestrconsts.lisdebugoptionsfrmallowfunctioncalls
+msgid "BETA: Allow function calls in watches (if supported by backend)"
+msgstr ""
+
 #: lazarusidestrconsts.lisdebugoptionsfrmautocloseasm
 msgid "Automatically close the assembler window, after source not found"
 msgstr "Automaticky zavři okno assembleru, až není zdrojový soubor nalezen"
+
+#: lazarusidestrconsts.lisdebugoptionsfrmautoinstanceclass
+msgid "Automatically set \"use instance class type\" for new watches"
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmbackend
 msgid "Debugger backend"
@@ -8447,6 +8479,14 @@ msgstr "Speciální nastavení pro ladič (záleží na typu ladiče)"
 #: lazarusidestrconsts.lisdebugoptionsfrmduplicateexceptionname
 msgid "Duplicate Exception name"
 msgstr "Zdvojený název výjimky"
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclass
+msgid "Change type"
+msgstr ""
+
+#: lazarusidestrconsts.lisdebugoptionsfrmeditclasswarn
+msgid "Changing the type for the current debugger backend. Use \"Add\" or \"Copy\" to create a new backend with a new type."
+msgstr ""
 
 #: lazarusidestrconsts.lisdebugoptionsfrmenterexceptionname
 msgid "Enter the name of the exception"
@@ -9922,15 +9962,6 @@ msgctxt "lazarusidestrconsts.lisfatal"
 msgid "Fatal"
 msgstr "Fatální"
 
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidle
-msgid "Reduce designer painting"
-msgstr "Redukovat vykreslování návrháře"
-
-#: lazarusidestrconsts.lisfepaintdesigneritemsonidlehint
-msgctxt "lazarusidestrconsts.lisfepaintdesigneritemsonidlehint"
-msgid "Paint designer items only on idle (reduce overhead for slow computers)"
-msgstr "Vykreslovat prvky návrháře pouze při nečinnosti (snižuje zatížení u pomalých počítačů)"
-
 #: lazarusidestrconsts.lisfile
 msgctxt "lazarusidestrconsts.lisfile"
 msgid "File"
@@ -11241,6 +11272,12 @@ msgstr "V sezení"
 msgid "&Inspect"
 msgstr "&Zkoumat"
 
+#: lazarusidestrconsts.lisinspectaddwatch
+#, fuzzy
+msgctxt "lazarusidestrconsts.lisinspectaddwatch"
+msgid "Add watch"
+msgstr "Přidat sledování"
+
 #: lazarusidestrconsts.lisinspectclassinherit
 #, object-pascal-format
 msgid "%s: class %s inherits from %s"
@@ -11574,6 +11611,7 @@ msgid "Add Data/WatchPoint"
 msgstr "Přidat data/kukátko"
 
 #: lazarusidestrconsts.liskmaddwatch
+msgctxt "lazarusidestrconsts.liskmaddwatch"
 msgid "Add watch"
 msgstr "Přidat sledování"
 
@@ -16322,10 +16360,6 @@ msgstr "Neplatné jméno balíčku"
 #, object-pascal-format
 msgid "Loading package %s will replace package %s%sfrom file %s.%sThe old package is modified.%sSave old package %s?"
 msgstr "Načtení balíčku %s nahradí balíček %s%sze souboru %s.%sStarý balíček je upraven.%sUložit starý balíček %s?"
-
-#: lazarusidestrconsts.lispkgmangnewpackage
-msgid "NewPackage"
-msgstr "Nový balíček"
 
 #: lazarusidestrconsts.lispkgmangpackage
 #, object-pascal-format

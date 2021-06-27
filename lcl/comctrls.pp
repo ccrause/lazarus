@@ -527,6 +527,7 @@ type
     property PageControl: TPageControl read GetPageControl write SetPageControl;
     property TabIndex: Integer read GetTabIndex;
   published
+    property AutoSize;
     property BorderWidth;
     property BiDiMode;
     property Caption;
@@ -606,6 +607,7 @@ type
     
     property Align;
     property Anchors;
+    property AutoSize;
     property BorderSpacing;
     property BiDiMode;
     property Constraints;
@@ -724,6 +726,7 @@ type
   protected
     FHandleCreated: TNotifyEvent;
     procedure CreateHandle; override;
+    procedure AdjustXY(var X, Y: Integer);
     procedure DoStartDrag(var DragObject: TDragObject); override;
     procedure DragDrop(Source: TObject; X, Y: Integer); override;
     procedure DragOver(Source: TObject; X,Y: Integer; State: TDragState;
@@ -1013,7 +1016,7 @@ type
     function GetLeft: Integer;
     function GetListView: TCustomListView;
     function GetPosition: TPoint;
-    function GetState(const ALisOrd: Integer): Boolean;
+    function GetState(AState: TListItemState): Boolean;
     function GetImageIndex: TImageIndex; virtual;
     function GetIndex: Integer; virtual;
     function GetStateIndex: TImageIndex; virtual;
@@ -1028,7 +1031,7 @@ type
     procedure WSUpdateState;
 
     procedure SetChecked(AValue: Boolean);
-    procedure SetState(const ALisOrd: Integer; const AIsSet: Boolean);
+    procedure SetState(AState: TListItemState; AIsSet: Boolean);
     procedure SetData(const AValue: Pointer);
     procedure SetImageIndex(const AValue: TImageIndex); virtual;
     procedure SetLeft(Value: Integer);
@@ -1053,20 +1056,21 @@ type
     function DisplayRect(Code: TDisplayCode): TRect;
     function DisplayRectSubItem(subItem: integer;Code: TDisplayCode): TRect;
     function EditCaption: Boolean;
+    function GetStates: TListItemStates;
 
     property Caption : String read GetCaption write SetCaption;
     property Checked : Boolean read GetChecked write SetChecked;
-    property Cut: Boolean index Ord(lisCut) read GetState write SetState;
+    property Cut: Boolean index lisCut read GetState write SetState;
     property Data: Pointer read FData write SetData;
-    property DropTarget: Boolean index Ord(lisDropTarget) read GetState write SetState;
-    property Focused: Boolean index Ord(lisFocused) read GetState write SetState;
+    property DropTarget: Boolean index lisDropTarget read GetState write SetState;
+    property Focused: Boolean index lisFocused read GetState write SetState;
     property Index: Integer read GetIndex;
     property ImageIndex: TImageIndex read GetImageIndex write SetImageIndex default -1;
     property Left: Integer read GetLeft write SetLeft;
     property ListView: TCustomListView read GetListView;
     property Owner: TListItems read FOwner;
     property Position: TPoint read GetPosition write SetPosition;
-    property Selected: Boolean index Ord(lisSelected) read GetState write SetState;
+    property Selected: Boolean index lisSelected read GetState write SetState;
     property StateIndex: TImageIndex read GetStateIndex write SetStateIndex;
     property SubItems: TStrings read GetSubItems write SetSubItems;
     property SubItemImages[const AIndex: Integer]: Integer read GetSubItemImages write SetSubItemImages;
@@ -3191,7 +3195,6 @@ type
     function GetCount: Integer;
     function GetOwner: TPersistent; override;
     procedure SetItem(Index: Integer; AValue: TTreeNode);
-    procedure SetUpdateState(Updating: Boolean);
   public
     constructor Create(AnOwner: TCustomTreeView);
     destructor Destroy; override;
@@ -3267,7 +3270,7 @@ type
     tvsIsEditing,
     tvsStateChanging,
     tvsManualNotify,
-    tvsUpdating,
+    tvsUpdating,   // NOTE: This state is deprecated and has no functionality after r64855
     tvsPainting,
     tvoFocusedPainting,
     tvsDblClicked,
