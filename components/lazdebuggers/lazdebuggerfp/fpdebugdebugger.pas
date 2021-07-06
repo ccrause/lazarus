@@ -1946,7 +1946,6 @@ var
   ARegisterValue: TRegisterValue;
   thr: TDbgThread;
   frm: TDbgCallstackEntry;
-  tmp: string;
 begin
   if not TFpDebugDebugger(Debugger).IsPausedAndValid then begin
     ARegisters.DataValidity:=ddsInvalid;
@@ -1976,14 +1975,17 @@ begin
   for i := 0 to ARegisterList.Count-1 do
     begin
     ARegisterValue := ARegisters.EntriesByName[ARegisterList[i].Name];
-    tmp := ARegisterValue.Value;
     ARegisterValue.ValueObj.SetAsNum(ARegisterList[i].NumValue, ARegisterList[i].Size);
     ARegisterValue.ValueObj.SetAsText(ARegisterList[i].StrValue);
     ARegisterValue.DataValidity:=ddsValid;
-    if tmp = ARegisterValue.Value then
-      ARegisterValue.Modified := False
-    else
-      ARegisterValue.Modified := True;
+
+    // Working in current frame, compare cached values aganst current for changed values
+    // Assume sequence of registers didn't change
+    if ARegisters.StackFrame = 0 then
+      if (i <= high(thr.CachedRegisterValues)) and (thr.CachedRegisterValues[i] <> ARegisterList[i].NumValue) then
+        ARegisterValue.Modified := true
+      else
+        ARegisterValue.Modified := false;
     end;
   ARegisters.DataValidity:=ddsValid;
 end;

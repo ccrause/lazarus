@@ -182,6 +182,7 @@ type
 
   { TDbgThread }
   TFpInternalBreakpoint = class;
+  TFpDbgRegisterValuesArray = array of TDBGPtr;
 
   TDbgThread = class(TObject)
   private
@@ -198,6 +199,8 @@ type
     FCallStackEntryList: TDbgCallstackEntryList;
     FRegisterValueListValid: boolean;
     FRegisterValueList: TDbgRegisterValueList;
+    // Use this cache to determine which register values between current and previous views
+    FCachedRegisterValues: TFpDbgRegisterValuesArray;
     FStoreStepSrcFilename, FStoreStepFuncName: string;
     FStoreStepStartAddr, FStoreStepEndAddr: TDBGPtr;
     FStoreStepSrcLineNo: integer;
@@ -252,6 +255,7 @@ type
     property Handle: THandle read FHandle;
     property NextIsSingleStep: boolean read FNextIsSingleStep write FNextIsSingleStep;
     property RegisterValueList: TDbgRegisterValueList read GetRegisterValueList;
+    property CachedRegisterValues: TFpDbgRegisterValuesArray read FCachedRegisterValues;
     property CallStackEntryList: TDbgCallstackEntryList read FCallStackEntryList;
     property StoreStepFuncName: String read FStoreStepFuncName;
     property PausedAtHardcodeBreakPoint: Boolean read FPausedAtHardcodeBreakPoint;
@@ -2766,11 +2770,18 @@ begin
 end;
 
 procedure TDbgThread.BeforeContinue;
+var
+  i: integer;
 begin
   // On Windows this is only called, if this was the signalled thread
   FPausedAtHardcodeBreakPoint := False;
   FPausedAtRemovedBreakPointState := rbUnknown;
   FPausedAtRemovedBreakPointAddress := 0;
+
+  // Copy register values to cache
+  SetLength(FCachedRegisterValues, FRegisterValueList.Count);
+  for i := 0 to FRegisterValueList.Count-1 do
+    FCachedRegisterValues[i] := FRegisterValueList[i].NumValue;
 end;
 
 procedure TDbgThread.ApplyWatchPoints(AWatchPointData: TFpWatchPointData);
