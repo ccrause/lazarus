@@ -1223,7 +1223,7 @@
         <short>Handles the CM_HITTEST control  message.</short>
         <descr>
           <p>
-            CMHitTest checks the type for the Parent control to determine whether the Message is ignored or forwarded to the inherited method. When Parent is a TCustomTabControl descendant, the class instance must be the active page in the parent control. When it is not, the Message result is set to 0 and the message is ignored. Otherwise, the inherited method is called to handle the Messsage.
+            CMHitTest checks the type for the Parent control to determine whether the Message is ignored or forwarded to the inherited method. When Parent is a TCustomTabControl descendant, the class instance must be the active page in the parent control. When it is not, the Message result is set to 0 and the message is ignored. Otherwise, the inherited method is called to handle the Message.
           </p>
         </descr>
         <seealso>
@@ -3549,6 +3549,23 @@
 
       <element name="TPageControl.FPageToUndock"/>
 
+      <element name="TPageControl.Clear">
+        <short>
+          Clears the list of tab names of the control, and causes the associated tab sheets or pages to be freed.
+        </short>
+        <descr>
+          <p>
+            By calling the <var>Clear</var> method of the protected <var>Tabs</var> property in the <var>TCustomTabControl</var> ancestor, this method removes all tab sheets from the PageControl. The <var>TPageControl.PageCount</var> is <var>0</var> afterwards.
+          </p>
+          <p>
+            Note, however, that the controls on the tab sheets are only destroyed when their <var>Owner</var> is one of the tabsheets. Otherwise they still exist on the form, but their <var>Parent</var> has been set to <var>nil</var>.
+          </p>
+        </descr>
+        <seealso>
+          <link id="TCustomTabControl.Tabs"/>
+        </seealso>
+      </element>
+
       <element name="TPageControl.GetActivePageIndex">
         <short>Gets the value for the ActivePageIndex property.</short>
         <descr/>
@@ -5311,7 +5328,7 @@
         <seealso/>
       </element>
       <element name="TTabControl.RowCount.Result">
-        <short></short>
+        <short/>
       </element>
 
       <element name="TTabControl.ScrollTabs">
@@ -7192,7 +7209,7 @@
       </element>
 
       <element name="TSortIndicator">
-        <short></short>
+        <short/>
         <descr>
           <p>
             <var>TSortIndicator</var> is an enumerated type with values that represent the sort indicators available in the <var>TListColumn</var> class. TSortIndicator is the type used to implement the <var>SortIndicator</var> property in <var>TListColumn</var>.
@@ -9217,7 +9234,7 @@
       <element name="TCustomListView.WSRegisterClass" link="#lcl.lclclasses.TLCLComponent.WSRegisterClass"/>
 
       <element name="TCustomListView.GetControlClassDefaultSize">
-        <short/>
+        <short>Gets the default size for new instances of the class.</short>
         <descr/>
         <seealso/>
       </element>
@@ -9250,21 +9267,23 @@
       <element name="TCustomListView.BeginAutoDrag" link="#lcl.controls.TControl.BeginAutoDrag"/>
 
       <element name="TCustomListView.CreateListItem">
-        <short/>
+        <short>
+          Signals the OnCreateItemClass event handler (when assigned) to get the class type used for new list items, and creates a new list item.
+        </short>
         <descr/>
         <seealso/>
       </element>
       <element name="TCustomListView.CreateListItem.Result">
-        <short/>
+        <short>List item created in the method.</short>
       </element>
 
       <element name="TCustomListView.CreateListItems">
-        <short/>
+        <short>Creates a new TListItems instance.</short>
         <descr/>
         <seealso/>
       </element>
       <element name="TCustomListView.CreateListItems.Result">
-        <short/>
+        <short>TListItems instance created in the method.</short>
       </element>
 
       <element name="TCustomListView.CanEdit">
@@ -9446,8 +9465,14 @@
       </element>
 
       <element name="TCustomListView.DoEndEdit">
-        <short/>
-        <descr/>
+        <short>
+          Performs actions when editing has been completed for an item in the control.
+        </short>
+        <descr>
+          <p>
+            Calls an overridden Edit method when available, or signals the OnEdited event handler (when assigned).
+          </p>
+        </descr>
         <seealso/>
       </element>
       <element name="TCustomListView.DoEndEdit.AItem">
@@ -9458,12 +9483,14 @@
       </element>
 
       <element name="TCustomListView.Edit">
-        <short/>
+        <short>
+          Signals OnEdited to validate the editor text, and updates the caption for the specified list item.
+        </short>
         <descr/>
         <seealso/>
       </element>
       <element name="TCustomListView.Edit.AItem">
-        <short/>
+        <short>List item updated in the method.</short>
       </element>
 
       <element name="TCustomListView.ImageChanged">
@@ -9675,7 +9702,7 @@
       </element>
 
       <element name="TCustomListView.DoOwnerDataHint">
-        <short/>
+        <short>Signals the OnDataHint event handler (when assigned).</short>
         <descr/>
         <seealso/>
       </element>
@@ -9690,7 +9717,7 @@
       </element>
 
       <element name="TCustomListView.DoOwnerDataStateChange">
-        <short/>
+        <short>Signals the OnDataStateChange event handler (when assigned).</short>
         <descr/>
         <seealso/>
       </element>
@@ -9831,9 +9858,11 @@
       </element>
 
       <element name="TCustomListView.LargeImagesWidth">
-        <short/>
+        <short>Contains the Width for the large images used in the list view.</short>
         <descr>
-          LargeImagesWidth is an Integer property used to access the width for large images in the list view. Reading and writing a value to the property accesses an internal array with width values for the image list using the TListViewImageList enumeration value. The default value for the property is zero (<b>0</b>).
+          <p>
+            LargeImagesWidth is an Integer property used to access the width for large images in the list view. Reading and writing a value to the property accesses an internal array with width values for the image list using the TListViewImageList enumeration value. The default value for the property is zero (<b>0</b>).
+          </p>
         </descr>
         <seealso/>
       </element>
@@ -10006,13 +10035,17 @@
       </element>
 
       <element name="TCustomListView.OnEdited">
-        <short/>
+        <short>
+          Event handler signalled when editing has been completed for an item in the control.
+        </short>
         <descr/>
         <seealso/>
       </element>
 
       <element name="TCustomListView.OnEditing">
-        <short/>
+        <short>
+          Event handler signalled to determine if editing can be started for an item in the control.
+        </short>
         <descr/>
         <seealso/>
       </element>
@@ -10100,10 +10133,10 @@
       </element>
 
       <element name="TCustomListView.Destroy">
-        <short>
-          <var>Destroy</var> - destructor for <var>TCustomListView</var>: frees Canvas, calls inherited <var>Destroy</var> and frees columns, links and list items.
-        </short>
-        <descr/>
+        <short>Destructor for the class instance.</short>
+        <descr>
+          <var>Destroy</var> is the destructor for <var>TCustomListView</var>. It frees the Canvas, calls the inherited <var>Destroy</var>, and frees the columns and list items.
+        </descr>
         <seealso>
           <link id="#lcl.controls.TWinControl.Destroy">TWinControl.Destroy</link>
           <link id="#rtl.classes.TComponent.Destroy">TComponent.Destroy</link>
@@ -10111,22 +10144,22 @@
       </element>
 
       <element name="TCustomListView.AddItem">
-        <short/>
+        <short>Adds a list item with the specified caption and optional object.</short>
         <descr/>
         <seealso/>
       </element>
       <element name="TCustomListView.AddItem.Item">
-        <short/>
+        <short>Caption for the new list item.</short>
       </element>
       <element name="TCustomListView.AddItem.AObject">
-        <short/>
+        <short>Optional object instance for the list item.</short>
       </element>
 
       <element name="TCustomListView.AlphaSort">
-        <short/>
+        <short>Sorts the first column for the list view in ascending order.</short>
         <descr>
-        Always sorts column 0 in sdAscending order.
-      </descr>
+          Always sorts column 0 in sdAscending order.
+        </descr>
         <seealso/>
       </element>
       <element name="TCustomListView.AlphaSort.Result">
@@ -10134,13 +10167,17 @@
       </element>
 
       <element name="TCustomListView.Sort">
-        <short/>
+        <short>
+          Sorts the values in Items when SortType is not stNone and SortColumn is valid.
+        </short>
         <descr/>
         <seealso/>
       </element>
 
       <element name="TCustomListView.CustomSort">
-        <short/>
+        <short>
+          Sorts the Items for the control using the specified procedure or the OnCompare event handler.
+        </short>
         <descr/>
         <seealso/>
       </element>
@@ -10164,7 +10201,7 @@
 
       <element name="TCustomListView.Clear">
         <short>
-          <var>Clear</var> - the stringlist.
+          Clears the Items for the list view.
         </short>
         <descr/>
         <seealso/>
@@ -10172,14 +10209,14 @@
 
       <element name="TCustomListView.EndUpdate">
         <short>
-          <var>EndUpdate</var> - finish updating the list view.
+          Finishes an active update for the list view.
         </short>
         <descr/>
         <seealso/>
       </element>
 
       <element name="TCustomListView.Repaint">
-        <short/>
+        <short>Updates the OwnerData (when used), and repaints the control.</short>
         <descr/>
         <seealso/>
       </element>
@@ -10205,7 +10242,7 @@
       </element>
 
       <element name="TCustomListView.FindData">
-        <short/>
+        <short>Locates the specified list item data in the Items for the control.</short>
         <descr/>
         <seealso/>
       </element>
@@ -10226,7 +10263,9 @@
       </element>
 
       <element name="TCustomListView.GetHitTestInfoAt">
-        <short/>
+        <short>
+          Gets hit text information from the widgetset class when its Handle has been assigned.
+        </short>
         <descr/>
         <seealso/>
       </element>
@@ -10256,7 +10295,7 @@
       </element>
 
       <element name="TCustomListView.GetNearestItem">
-        <short/>
+        <short>Locates the list item closest to the specified position.</short>
         <descr>
           <p>
             GetNearestItem is used to locate a list item from a position specified in pixel coordinates relative to the top left corner of the list view. It starts looking at the position specified by the Point parameter, and moves in the direction indicated by the Direction parameter until it locates a list item.If no item is found Nil is returned.
@@ -10275,7 +10314,7 @@
       </element>
 
       <element name="TCustomListView.GetNextItem">
-        <short/>
+        <short>Gets the next list item in the given direction from the starting item.</short>
         <descr>
           <p>
             GetNextItem is a TListItem function used to find the next list item after StartItem in the direction given by the Direction parameter. Only items in the state indicated by the States parameter are considered. If no item is found, Nil is returned.
@@ -10297,19 +10336,19 @@
       </element>
 
       <element name="TCustomListView.ClearSelection">
-        <short/>
+        <short>Clears single or multi-selections in the control.</short>
         <descr/>
         <seealso/>
       </element>
 
       <element name="TCustomListView.SelectAll">
-        <short/>
+        <short>Selects all items in the control when MultiSelect has been enabled.</short>
         <descr/>
         <seealso/>
       </element>
 
       <element name="TCustomListView.IsEditing">
-        <short/>
+        <short>Indicates if the list view editor is active.</short>
         <descr>
           Delphi compatible function which returns if our listview editor is active.
         </descr>
@@ -10363,7 +10402,7 @@
       </element>
 
       <element name="TCustomListView.ColumnCount">
-        <short/>
+        <short>The number of defined Columns for the control.</short>
         <descr>
           ColumnCount is a read-only Integer property which indicates the number of columns displayed for the list view.
         </descr>
@@ -10371,7 +10410,7 @@
       </element>
 
       <element name="TCustomListView.DropTarget">
-        <short/>
+        <short>The list item that is the drop target on the control.</short>
         <descr/>
         <seealso/>
       </element>
@@ -10385,7 +10424,7 @@
       </element>
 
       <element name="TCustomListView.FullDrag">
-        <short/>
+        <short>Indicates whether column headers are redrawn when they are dragged.</short>
         <descr/>
         <seealso/>
       </element>
@@ -10450,7 +10489,7 @@
       </element>
 
       <element name="TCustomListView.ItemIndex">
-        <short/>
+        <short>Contains the position for the selected item in the control.</short>
         <descr/>
         <seealso/>
       </element>
@@ -12294,7 +12333,7 @@
         <short>Default width for tool buttons using the divider style.</short>
       </element>
       <element name="TToolButton.cDefButtonDropDecArrowWidth">
-        <short>Defaulrt width the drop-down indicator in tools buttons.</short>
+        <short>Default width the drop-down indicator in tools buttons.</short>
       </element>
 
       <element name="TToolButton.FToolBar">
@@ -12772,7 +12811,7 @@
             Adjacent check box-style buttons (and their separators / dividers) with their Grouped property set to True are considered to be in the same group. GroupAllUpAllowed examines the adjacent tool buttons on the Parent tool bar to determine whether any of the grouped buttons have the AllowAllUp property set to True. When one grouped check-box button has AllowAllUp set, the remaining buttons in the group are treated in the same manner.
           </p>
           <remark>
-            Change the Grouped property to False on a separator or divider to force the preceeding or subseqent check-box buttons to be treated as a different group.
+            Change the Grouped property to False on a separator or divider to force the preceeding or subsequent check-box buttons to be treated as a different group.
           </remark>
         </descr>
         <seealso>
@@ -12894,7 +12933,7 @@
             <var>ArrowClick</var> is a method used to execute the <var>OnArrowClick</var> event handler (when assigned) for the tool button. ArrowClick is called from the <var>MouseDown</var> method when the left mouse button has been clicked on the drop-down indicator and the <var>DropDownMenu</var> for the button is not already visible.
           </p>
           <p>
-            See <var>Click</var> for informtion about the actions performed when the button has been clicked, instead of its drop-down indicator.
+            See <var>Click</var> for information about the actions performed when the button has been clicked, instead of its drop-down indicator.
           </p>
         </descr>
         <seealso>
@@ -13598,7 +13637,7 @@
         <short>Registers the tool bar class in the widgetset.</short>
         <descr>
           <p>
-            Calls the inherited method on entry. Calls RegisterToolBar in the widgetset class to ensure that the TToolBar compoenent is registered with the factory methods (when needed).
+            Calls the inherited method on entry. Calls RegisterToolBar in the widgetset class to ensure that the TToolBar component is registered with the factory methods (when needed).
           </p>
         </descr>
         <seealso>
@@ -14208,7 +14247,7 @@ AToolbar.ButtonHeight := 30;
             <var>DisabledImages </var> is a <var>TCustomImageList</var> property with icon images displayed on tool buttons when they are not Enabled. Use <var>Images</var> for the images displayed when the tool button are enabled but not hovered. Use <var>HotImages</var> for the images displayed when tool buttons are hovered under the mouse cursor.
           </p>
           <p>
-            The image position for a tool button is stored in the ImageIndex proprerty in the TToolButton instance.This requires the image at a given position in the image lists to target the same button on the tool bar control.
+            The image position for a tool button is stored in the ImageIndex property in the TToolButton instance.This requires the image at a given position in the image lists to target the same button on the tool bar control.
           </p>
           <p>
             The image list should contain images which uses the sames width and height, and appropriately sized for the ButtonWidth and ButtonHeight for the tool bar. Use <var>ImagesWidth</var> to specify the size needed for tool button icons independent of the actual image size stored in the image lists.
@@ -14217,7 +14256,7 @@ AToolbar.ButtonHeight := 30;
             When a new image list is assigned to the property, the tool bar is redrawn.
           </p>
           <p>
-            The image lists are used when the tool butons get the current icon drawn in the Paint method.
+            The image lists are used when the tool buttons get the current icon drawn in the Paint method.
           </p>
         </descr>
         <seealso>
@@ -14307,7 +14346,7 @@ AToolbar.ButtonHeight := 30;
             <var>HotImages</var> is a <var>TCustomImageList</var> property with icon images displayed on tool buttons when the mouse is hovered over the controls. Use <var>Images</var> for the images displayed when the tool button are enabled but not hovered. Use <var>DisabledImages</var> for the images displayed when tool buttons are not enabled.
           </p>
           <p>
-            The image position for a tool button is stored in the ImageIndex proprerty in the TToolButton instance.This requires the image at a given position in the image lists to target the same button on the tool bar control.
+            The image position for a tool button is stored in the ImageIndex property in the TToolButton instance.This requires the image at a given position in the image lists to target the same button on the tool bar control.
           </p>
           <p>
             The image list should contain images which uses the sames width and height, and appropriately sized for the ButtonWidth and ButtonHeight for the tool bar. Use <var>ImagesWidth</var> to specify the size needed for tool button icons independent of the actual image size stored in the image lists.
@@ -14316,7 +14355,7 @@ AToolbar.ButtonHeight := 30;
             When a new image list is assigned to the property, the tool bar is redrawn.
           </p>
           <p>
-            The image lists are used when the tool butons get the current icon drawn in the Paint method.
+            The image lists are used when the tool buttons get the current icon drawn in the Paint method.
           </p>
         </descr>
         <seealso>
@@ -14336,7 +14375,7 @@ AToolbar.ButtonHeight := 30;
             <var>Images</var> is a <var>TCustomImageList</var> property with icon images displayed on tool buttons when they are enabled. Use <var>DisabledImages</var> for the images displayed when the tool button are not enabled. Use <var>HotImages</var> for the images displayed when tool buttons are enabled and hovered under the mouse cursor.
           </p>
           <p>
-            The image position for a tool button is stored in the ImageIndex proprerty in the TToolButton instance.This requires the image at a given position in the image lists to target the same button on the tool bar control.
+            The image position for a tool button is stored in the ImageIndex property in the TToolButton instance.This requires the image at a given position in the image lists to target the same button on the tool bar control.
           </p>
           <p>
             The image list should contain images which uses the sames width and height, and appropriately sized for the ButtonWidth and ButtonHeight for the tool bar. Use <var>ImagesWidth</var> to specify the size needed for tool button icons independent of the actual image size stored in the image lists.
@@ -14345,7 +14384,7 @@ AToolbar.ButtonHeight := 30;
             When a new image list is assigned to the property, the tool bar is redrawn.
           </p>
           <p>
-            The image lists are used when the tool butons get the current icon drawn in the Paint method.
+            The image lists are used when the tool buttons get the current icon drawn in the Paint method.
           </p>
         </descr>
         <seealso>
@@ -14389,7 +14428,7 @@ AToolbar.ButtonHeight := 30;
             Indent is used in the <var>AdjustClientRect</var> method to increment the left edge of the display area for tool buttons on the control.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <element name="TToolBar.List">
@@ -14410,7 +14449,7 @@ AToolbar.ButtonHeight := 30;
             Set <var>ShowCaptions</var> to <b>True</b> to enable Caption text on the tool bar buttons.
           </p>
         </descr>
-        <seealso></seealso>
+        <seealso/>
       </element>
 
       <element name="TToolBar.ParentColor" link="#lcl.controls.TControl.ParentColor"/>
@@ -21062,16 +21101,16 @@ AToolbar.ButtonHeight := 30;
       </element>
 
       <element name="TCustomTreeView.TripleClick" link="#lcl.controls.TControl.TripleClick">
-        <short></short>
-        <descr></descr>
+        <short/>
+        <descr/>
         <seealso>
           <link id="#lcl.controls.TControl.TripleClick">TControl.TripleClick</link>
         </seealso>
       </element>
 
       <element name="TCustomTreeView.QuadClick" link="#lcl.controls.TControl.QuadClick">
-        <short></short>
-        <descr></descr>
+        <short/>
+        <descr/>
         <seealso>
           <link id="#lcl.controls.TControl.QuadClick">TControl.QuadClick</link>
         </seealso>
@@ -23387,7 +23426,7 @@ OldExpanded.Free;
       </element>
 
       <element name="TTreeNodeExpandedState.OnGetNodeText">
-        <short>Event handler signalled to get the text for the specififed tree node.</short>
+        <short>Event handler signalled to get the text for the specified tree node.</short>
         <descr>
           <p>
             OnGetNodeText is a TTVGetNodeText property with the event handler signalled to get the text for the tree node passed as an argument.  It is signalled from the CreateChildNodes method when the tree node has a parent node, or when expanding its  child nodes. It is also signalled from the Apply method to get the text for an expanded child node.
@@ -23591,7 +23630,7 @@ OldExpanded.Free;
         </seealso>
       </element>
       <element name="THeaderSection.Assign.Source">
-        <short></short>
+        <short/>
       </element>
 
       <element name="THeaderSection.Left">
@@ -23848,16 +23887,16 @@ OldExpanded.Free;
         </short>
       </element>
       <element name="TCustomSectionTrackEvent.HeaderControl">
-        <short></short>
+        <short/>
       </element>
       <element name="TCustomSectionTrackEvent.Section">
-        <short></short>
+        <short/>
       </element>
       <element name="TCustomSectionTrackEvent.Width">
-        <short></short>
+        <short/>
       </element>
       <element name="TCustomSectionTrackEvent.State">
-        <short></short>
+        <short/>
       </element>
 
       <element name="TSectionDragEvent">
@@ -24557,7 +24596,8 @@ OldExpanded.Free;
           <p>
             Register is a procedure used to register components in the <file>comctrls.pp</file> unit in the Lazarus IDE. Register adds the following components:
           </p>
-          <p><b>Common Controls Tab</b></p>
+          <p><b>Common Controls Tab</b>
+          </p>
           <ul>
             <li>TTrackbar</li>
             <li>TProgressBar</li>

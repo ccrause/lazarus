@@ -806,8 +806,8 @@
       <element name="TShellTreeView.ExpandSignType" link="#lcl.comctrls.TCustomTreeView.ExpandSignType"/>
       <element name="TShellTreeView.Font" link="#lcl.controls.TControl.Font"/>
       <element name="TShellTreeView.FileSortType" link="#lcl.shellctrls.TCustomShellTreeView.FileSortType"/>
-      <element name="TShellTreeView.HideSelection" link="#lcl.comctrls.TTreeView.HideSelection"/>
-      <element name="TShellTreeView.HotTrack" link="#lcl.comctrls.TTreeView.HotTrack"/>
+      <element name="TShellTreeView.HideSelection" link="#lcl.comctrls.TCustomTreeView.HideSelection"/>
+      <element name="TShellTreeView.HotTrack" link="#lcl.comctrls.TCustomTreeView.HotTrack"/>
       <element name="TShellTreeView.Images" link="#lcl.comctrls.TCustomTreeView.Images"/>
       <element name="TShellTreeView.Indent" link="#lcl.comctrls.TCustomTreeView.Indent"/>
       <element name="TShellTreeView.MultiSelectStyle" link="#lcl.comctrls.TCustomTreeView.MultiSelectStyle"/>
@@ -828,7 +828,20 @@
       <element name="TShellTreeView.StateImages" link="#lcl.comctrls.TCustomTreeView.StateImages"/>
       <element name="TShellTreeView.TabStop" link="#lcl.controls.TWinControl.TabStop"/>
       <element name="TShellTreeView.TabOrder" link="#lcl.controls.TWinControl.TabOrder"/>
-      <element name="TShellTreeView.Tag" link="#rtl.classes.TComponent.Tag"/>
+
+      <!-- Link attribute to TComponent.Tag does not find the topic using fpdoc in 3.2.2. So I am duplicating the content here temporarily. TODO: Remove this and restore link. -->
+      <element name="TShellTreeView.Tag">
+        <short>Tag value for the component.</short>
+        <descr>
+          <p>
+            <var>Tag</var> can be used to store an integer value in the component. This value is streamed together with all other published properties. It can be used for instance to quickly identify a component in an event handler.
+          </p>
+        </descr>
+        <seealso>
+          <link id="#rtl.classes.TComponent">TComponent</link>
+        </seealso>
+      </element>
+
       <element name="TShellTreeView.ToolTips" link="#lcl.comctrls.TCustomTreeView.ToolTips"/>
       <element name="TShellTreeView.Visible" link="#lcl.controls.TControl.Visible"/>
       <element name="TShellTreeView.OnAddItem" link="#lcl.shellctrls.TCustomShellTreeView.OnAddItem"/>
@@ -844,8 +857,8 @@
       <element name="TShellTreeView.OnDblClick" link="#lcl.controls.TControl.OnDblClick"/>
       <element name="TShellTreeView.OnEdited" link="#lcl.comctrls.TCustomTreeView.OnEdited"/>
       <element name="TShellTreeView.OnEditing" link="#lcl.comctrls.TCustomTreeView.OnEditing"/>
-      <element name="TShellTreeView.OnEnter" link="#lcl.comctrls.TCustomTreeView.OnEnter"/>
-      <element name="TShellTreeView.OnExit" link="#lcl.comctrls.TCustomTreeView.OnExit"/>
+      <element name="TShellTreeView.OnEnter" link="#lcl.controls.TWinControl.OnEnter"/>
+      <element name="TShellTreeView.OnExit" link="#lcl.controls.TWinControl.OnExit"/>
       <element name="TShellTreeView.OnExpanded" link="#lcl.comctrls.TCustomTreeView.OnExpanded"/>
       <element name="TShellTreeView.OnExpanding" link="#lcl.comctrls.TCustomTreeView.OnExpanding"/>
       <element name="TShellTreeView.OnGetImageIndex" link="#lcl.comctrls.TCustomTreeView.OnGetImageIndex"/>
@@ -1434,7 +1447,7 @@
       <element name="TShellListView.TabOrder" link="#lcl.controls.TWinControl.TabOrder"/>
       <element name="TShellListView.ToolTips" link="#lcl.comctrls.TCustomListView.ToolTips"/>
       <element name="TShellListView.Visible" link="#lcl.controls.TControl.Visible"/>
-      <element name="TShellListView.ViewStyle" link="#lcl.controls.TCustomListView.ViewStyle"/>
+      <element name="TShellListView.ViewStyle" link="#lcl.comctrls.TCustomListView.ViewStyle"/>
       <element name="TShellListView.OnChange" link="#lcl.comctrls.TCustomListView.OnChange"/>
       <element name="TShellListView.OnClick" link="#lcl.controls.TControl.OnClick"/>
       <element name="TShellListView.OnColumnClick" link="#lcl.comctrls.TCustomListView.OnColumnClick"/>
@@ -1444,6 +1457,8 @@
       <element name="TShellListView.OnDeletion" link="#lcl.comctrls.TCustomListView.OnDeletion"/>
       <element name="TShellListView.OnDragDrop" link="#lcl.controls.TControl.OnDragDrop"/>
       <element name="TShellListView.OnDragOver" link="#lcl.controls.TControl.OnDragOver"/>
+      <element name="TShellListView.OnEdited" link="#lcl.comctrls.TCustomListView.OnEdited"/>
+      <element name="TShellListView.OnEditing" link="#lcl.comctrls.TCustomListView.OnEditing"/>
       <element name="TShellListView.OnEndDrag" link="#lcl.controls.TControl.OnEndDrag"/>
       <element name="TShellListView.OnKeyDown" link="#lcl.controls.TWinControl.OnKeyDown"/>
       <element name="TShellListView.OnKeyPress" link="#lcl.controls.TWinControl.OnKeyPress"/>
@@ -1573,7 +1588,7 @@
       </element>
 
       <element name="EShellCtrl">
-        <short>Exception raised for errors occuring in shell controls.</short>
+        <short>Exception raised for errors occurring in shell controls.</short>
         <descr>
           <var>EShellCtrl</var> is a <var>Exception</var> descendant raised when errors occur in shell controls.
         </descr>

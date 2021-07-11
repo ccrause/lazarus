@@ -101,13 +101,14 @@ var
   w: double;
   i: Integer;
   ymin, ymax: Double;
+  ygmin, ygmax: Double;
+  ser: TChartSeries;
 begin
   if not FChart.ScalingValid then
     exit;
 
   fext := FChart.GetFullExtent();
   lext := FChart.LogicalExtent;
-  w := lext.b.x - lext.a.x;
   if FViewportSize = 0 then
     w := lext.b.x - lext.a.x
   else
@@ -121,15 +122,34 @@ begin
   case FExtentY of
     lveAuto:
       begin
+        ygmin := Infinity;
+        ygmax := -Infinity;
         ymin := Infinity;
         ymax := -Infinity;
         for i := 0 to FChart.SeriesCount-1 do
           if FChart.Series[i] is TChartSeries then
-            TChartSeries(FChart.Series[i]).FindYRange(lext.a.x, lext.b.x, ymin, ymax);
-        if (ymin <> Infinity) and (ymax <> -Infinity) then
+          begin
+            ser := TChartSeries(FChart.Series[i]);
+            ser.FindYRange(lext.a.x, lext.b.x, ymin, ymax);
+            ygmin := Min(ygmin, ser.AxisToGraphY(ymin));
+            ygmax := Max(ygmax, ser.AxisToGraphY(ymax));
+          end;
+        if not IsInfinite(ygmin) and not IsInfinite(-ygmax) then
         begin
-          lext.a.y := ymin;
-          lext.b.y := ymax;
+          if ygmin = ygmax then
+          begin
+            if ygmin = 0 then
+            begin
+              ygmin := -1;
+              ygmax := +1;
+            end else
+            begin
+              ygmin := 0.9*ygmin;
+              ygmax := 1.1*ygmax;
+            end;
+          end;
+          lext.a.y := ygmin;
+          lext.b.y := ygmax;
         end;
       end;
     lveFull:
