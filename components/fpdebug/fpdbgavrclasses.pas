@@ -923,13 +923,8 @@ begin
       end;
     until FStatus <> 0;   // should probably wait at lower level...
 
-  if FStatus <> 0 then
-  begin
-    if FStatus in [SIGINT, SIGTRAP] then
-    begin
-      RestoreTempBreakInstructionCodes;
-    end;
-  end;
+  if FStatus in [SIGINT, SIGTRAP] then
+    RestoreTempBreakInstructionCodes;
 
   result := true;
 end;
